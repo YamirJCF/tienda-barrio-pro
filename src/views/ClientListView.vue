@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router';
 import { Search, Plus, AlertTriangle, QrCode } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
+
+const router = useRouter();
 
 const clients = [
   { id: 1, name: 'Maria Perez', cc: '1.020.304', debt: 120000, initials: 'MP', color: 'bg-blue-100 text-blue-600' },
@@ -8,13 +11,26 @@ const clients = [
   { id: 3, name: 'Luisa Mendoza', cc: '52.190.876', debt: 0, initials: 'LM', color: 'bg-emerald-100 text-emerald-600' },
   { id: 4, name: 'Carlos Rodriguez', cc: '79.444.111', debt: 15500, initials: 'CR', color: 'bg-orange-100 text-orange-600' },
 ];
+
+const goToDashboard = () => {
+  router.push('/');
+};
 </script>
 
 <template>
   <div class="flex flex-col h-screen bg-background-light dark:bg-background-dark pb-24">
     <header class="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 pb-2">
       <div class="flex items-center px-4 pt-4 pb-2 justify-between">
-        <h2 class="text-slate-900 dark:text-white text-xl font-bold">Cartera de Clientes</h2>
+        <div class="flex items-center gap-2">
+          <button
+            @click="goToDashboard"
+            aria-label="Volver al Dashboard"
+            class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <span class="material-symbols-outlined">arrow_back</span>
+          </button>
+          <h2 class="text-slate-900 dark:text-white text-xl font-bold">Cartera de Clientes</h2>
+        </div>
         <div class="bg-red-100 dark:bg-red-900/30 px-3 py-1.5 rounded-full flex items-center gap-1.5">
           <AlertTriangle :size="16" class="text-red-600 dark:text-red-400" />
           <span class="text-red-700 dark:text-red-300 text-xs font-bold whitespace-nowrap">Total: $180.500</span>

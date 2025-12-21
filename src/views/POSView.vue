@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
 import { useInventoryStore } from '../stores/inventory';
 import { useSalesStore } from '../stores/sales';
@@ -7,6 +8,7 @@ import { Decimal } from 'decimal.js';
 import CheckoutModal from '../components/CheckoutModal.vue';
 import BottomNav from '../components/BottomNav.vue';
 
+const router = useRouter();
 const cartStore = useCartStore();
 const inventoryStore = useInventoryStore();
 const salesStore = useSalesStore();
@@ -25,6 +27,10 @@ const searchQuery = ref('');
 const formattedTotal = computed(() => cartStore.formattedTotal);
 
 // Methods
+const goToDashboard = () => {
+  router.push('/');
+};
+
 const handleNumpad = (value: string) => {
   if (value === 'backspace') {
     pluInput.value = pluInput.value.slice(0, -1);
@@ -91,9 +97,18 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
     <section class="flex flex-col flex-1 min-h-0 relative">
       <!-- Header -->
       <div class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between shrink-0 border-b border-gray-200/50">
-        <h2 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-tight flex-1">
-          Ticket #001
-        </h2>
+        <div class="flex items-center gap-2">
+          <button
+            @click="goToDashboard"
+            aria-label="Volver al Dashboard"
+            class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <span class="material-symbols-outlined">arrow_back</span>
+          </button>
+          <h2 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-tight">
+            Ticket #001
+          </h2>
+        </div>
         <button
           aria-label="Clear Ticket"
           class="flex items-center justify-center rounded-xl size-10 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

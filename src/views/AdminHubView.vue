@@ -13,7 +13,7 @@ const isStoreClosed = ref(false);
 
 // Methods
 const goBack = () => {
-  router.back();
+  router.push('/');
 };
 
 const toggleStoreStatus = () => {

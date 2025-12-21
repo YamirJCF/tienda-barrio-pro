@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useInventoryStore } from '../stores/inventory';
 import ProductFormModal from '../components/ProductFormModal.vue';
 import BottomNav from '../components/BottomNav.vue';
 import { Decimal } from 'decimal.js';
 
+const router = useRouter();
 const inventoryStore = useInventoryStore();
 
 // Initialize inventory
@@ -43,6 +45,10 @@ const filteredProducts = computed(() => {
 });
 
 // Methods
+const goToDashboard = () => {
+  router.push('/');
+};
+
 const formatCurrency = (val: Decimal) => {
   return val.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
@@ -74,6 +80,13 @@ const getCategoryLabel = (category: string) => {
     <!-- Header with Search -->
     <header class="sticky top-0 z-30 bg-white dark:bg-surface-dark border-b border-gray-200 dark:border-gray-800 shadow-sm">
       <div class="px-4 py-3 flex items-center gap-3">
+        <button
+          @click="goToDashboard"
+          aria-label="Volver al Dashboard"
+          class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <span class="material-symbols-outlined">arrow_back</span>
+        </button>
         <div class="relative flex-1">
           <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <span class="material-symbols-outlined text-gray-400 text-[20px]">search</span>
