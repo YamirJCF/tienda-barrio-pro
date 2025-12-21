@@ -119,7 +119,7 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
       </div>
 
       <!-- Ticket List (Scrollable) -->
-      <div class="flex-1 overflow-y-auto ticket-scroll bg-background-light dark:bg-background-dark px-2 pb-24">
+      <div class="flex-1 overflow-y-auto ticket-scroll bg-background-light dark:bg-background-dark px-2 pb-20">
         <!-- Cart Items -->
         <div
           v-for="item in cartStore.items"
@@ -162,7 +162,7 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
     </section>
 
     <!-- ZONA INFERIOR: COMANDOS (Fixed Height) -->
-    <section class="bg-surface-light dark:bg-gray-900 shadow-[0_-5px_15px_rgba(0,0,0,0.08)] z-20 rounded-t-3xl relative">
+    <section class="bg-surface-light dark:bg-gray-900 shadow-[0_-5px_15px_rgba(0,0,0,0.08)] z-20 rounded-t-3xl relative pb-safe">
       <!-- PLU Display (Input Feedback) -->
       <div class="w-full bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-1.5 flex justify-center items-center rounded-t-3xl">
         <p class="text-gray-600 dark:text-gray-300 text-xs font-mono font-medium tracking-wide">
@@ -170,7 +170,7 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
         </p>
       </div>
 
-      <div class="px-3 pt-3 pb-2 flex flex-col gap-2">
+      <div class="px-3 pt-3 pb-4 flex flex-col gap-2">
         <!-- Extra Toolbar -->
         <div class="grid grid-cols-2 gap-2 mb-1">
           <button class="flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 h-10 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95 transition-transform">
@@ -268,9 +268,6 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
         </button>
       </div>
     </section>
-
-    <!-- Bottom Navigation -->
-    <BottomNav />
 
     <!-- Checkout Modal -->
     <CheckoutModal
