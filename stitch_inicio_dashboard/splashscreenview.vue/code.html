@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SplashScreenView</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0d59f2",
+                        "background-light": "#f5f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px" },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                },
+            },
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        /* Custom spinner animation */
+        @keyframes spin-slow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .spinner {
+            animation: spin-slow 1.5s linear infinite;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased text-[#0d121c] dark:text-white">
+<!-- Main Container: Full screen, flex center for vertical/horizontal alignment -->
+<main class="relative flex h-screen w-full flex-col items-center justify-between overflow-hidden p-6">
+<!-- Top Spacer for Visual Balance (pushes content slightly up from true center) -->
+<div class="flex-1"></div>
+<!-- Center Content: Logo & Loading State -->
+<div class="flex w-full max-w-xs flex-col items-center justify-center gap-8">
+<!-- Brand Logo Area -->
+<!-- Using a div with background image as requested in components, styled for branding -->
+<div class="group relative flex flex-col items-center gap-4">
+<div class="flex h-32 w-32 items-center justify-center rounded-3xl bg-white p-6 shadow-xl shadow-primary/5 dark:bg-[#1a2333]">
+<!-- Placeholder Icon representing the store logo -->
+<span class="material-symbols-outlined text-[64px] text-primary">storefront</span>
+</div>
+<!-- Brand Name / Headline -->
+<h1 class="text-center text-3xl font-bold tracking-tight text-[#0d121c] dark:text-white">
+                    Tienda de Barrio
+                </h1>
+</div>
+<!-- Loading State -->
+<div class="flex w-full flex-col items-center gap-3">
+<!-- Text feedback -->
+<p class="text-center text-sm font-medium text-[#49659c] dark:text-gray-400">
+                    Cargando tu inventario...
+                </p>
+<!-- Progress Bar Component -->
+<div class="h-1.5 w-32 overflow-hidden rounded-full bg-[#ced7e8] dark:bg-gray-700">
+<div class="h-full w-1/2 animate-[shimmer_1.5s_infinite] rounded-full bg-primary" style="width: 45%;"></div>
+</div>
+</div>
+</div>
+<!-- Bottom Spacer & Footer Info -->
+<div class="flex flex-1 flex-col justify-end pb-8">
+<div class="flex flex-col items-center gap-2">
+<p class="text-center text-xs font-medium text-[#49659c]/60 dark:text-gray-500">
+                    Potenciando tu negocio
+                </p>
+<p class="text-center text-[10px] font-normal text-[#49659c]/40 dark:text-gray-600">
+                    v1.0.0
+                </p>
+</div>
+</div>
+<!-- Decorative Background Elements (Subtle) -->
+<!-- Top Right Blob -->
+<div class="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/5 blur-3xl"></div>
+<!-- Bottom Left Blob -->
+<div class="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-primary/5 blur-3xl"></div>
+</main>
+</body></html>

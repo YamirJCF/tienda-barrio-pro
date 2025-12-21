@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Onboarding - Tu Tiendita Digital</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0d59f2",
+                        "background-light": "#f5f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-white antialiased">
+<!-- Main Container -->
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+<!-- Content Wrapper -->
+<div class="flex flex-1 flex-col justify-between px-4 py-6 md:px-6 md:py-8 max-w-md mx-auto w-full h-full">
+<!-- Top Section: Logo & Welcome -->
+<div class="flex flex-col items-center pt-4 sm:pt-10">
+<!-- Logo / Hero Image -->
+<div class="mb-8 w-full max-w-[240px] aspect-square relative rounded-full bg-white dark:bg-slate-800 shadow-lg flex items-center justify-center p-8 overflow-hidden">
+<div class="absolute inset-0 bg-primary/10 rounded-full animate-pulse"></div>
+<div class="w-full h-full bg-center bg-contain bg-no-repeat" data-alt="Illustration of a friendly digital shop or store logo" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB97gv-2TcCdfdY4N43KomliMjfRm9kTZGU6BBmOs6_BK11Iosp1-2UShYggv__iYtKsAqYp8RUBvoLQ8xFaL1ajA_ecvFFoA_ffCmsj0Ot_WaHLWLHCAL9Xb-CfLjIHpObkyWhk8gdzjpfb0oDQfB2pILCMDZ7HCkfqXPweubQIArQnUFVmPx4oV2l9l1O9uFfMILUXBBhtpAZ-G_B0GIgBZeMgCxK6ZKpXRZeQwtK0iZy7vVypOcP2Gph_SEbWdRW0B6zxVhQ16s");'>
+</div>
+</div>
+<!-- Headline -->
+<h1 class="text-slate-900 dark:text-white tracking-tight text-[32px] sm:text-[36px] font-bold leading-[1.2] text-center mb-4">
+                    ¡Bienvenido a Tu<br/>Tiendita Digital!
+                </h1>
+<!-- Body Text -->
+<p class="text-slate-600 dark:text-slate-300 text-base sm:text-lg font-normal leading-relaxed text-center px-2">
+                    Gestiona tu inventario, registra ventas y controla tu negocio al alcance de tu mano.
+                </p>
+</div>
+<!-- Middle Section: Benefits Carousel -->
+<div class="w-full py-8">
+<!-- Carousel Container -->
+<div class="flex overflow-x-auto gap-4 py-2 px-1 [-ms-scrollbar-style:none] [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden snap-x snap-mandatory">
+<!-- Card 1 -->
+<div class="snap-center shrink-0 flex flex-col gap-3 rounded-xl bg-white dark:bg-slate-800 p-4 shadow-sm border border-slate-100 dark:border-slate-700 w-[160px] sm:w-[180px]">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-1">
+<span class="material-symbols-outlined text-[28px]">point_of_sale</span>
+</div>
+<div>
+<p class="text-slate-900 dark:text-white text-base font-bold leading-tight mb-1">Vende más fácil</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-normal leading-snug">Registra ventas en segundos</p>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="snap-center shrink-0 flex flex-col gap-3 rounded-xl bg-white dark:bg-slate-800 p-4 shadow-sm border border-slate-100 dark:border-slate-700 w-[160px] sm:w-[180px]">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-1">
+<span class="material-symbols-outlined text-[28px]">inventory_2</span>
+</div>
+<div>
+<p class="text-slate-900 dark:text-white text-base font-bold leading-tight mb-1">Controla stock</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-normal leading-snug">Inventario siempre actualizado</p>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="snap-center shrink-0 flex flex-col gap-3 rounded-xl bg-white dark:bg-slate-800 p-4 shadow-sm border border-slate-100 dark:border-slate-700 w-[160px] sm:w-[180px]">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-1">
+<span class="material-symbols-outlined text-[28px]">monitoring</span>
+</div>
+<div>
+<p class="text-slate-900 dark:text-white text-base font-bold leading-tight mb-1">Reportes claros</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-normal leading-snug">Entiende tus ganancias</p>
+</div>
+</div>
+<!-- Spacer for easier scrolling on right side -->
+<div class="w-2 shrink-0"></div>
+</div>
+<!-- Simple Dots Indicator (Optional visual cue) -->
+<div class="flex justify-center gap-2 mt-4">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<div class="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+<div class="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+</div>
+</div>
+<!-- Bottom Section: CTA -->
+<div class="pb-6 pt-2">
+<button class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-xl h-14 px-5 bg-primary hover:bg-blue-700 active:scale-[0.98] transition-all duration-200 text-white text-lg font-bold leading-normal tracking-wide shadow-lg shadow-primary/25">
+<span class="truncate">Empezar ahora</span>
+<span class="material-symbols-outlined ml-2 text-[20px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</body></html>

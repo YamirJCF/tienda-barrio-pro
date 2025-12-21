@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Password Update Success</title>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#0d59f2",
+              "background-light": "#f5f6f8",
+              "background-dark": "#101622",
+              "emerald": {
+                500: "#10b981", 
+                600: "#059669",
+              }
+            },
+            fontFamily: {
+              "display": ["Work Sans", "Noto Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-[#0d121c] dark:text-white font-display antialiased selection:bg-primary/30 selection:text-primary">
+<div class="relative flex min-h-screen w-full flex-col justify-center items-center overflow-hidden px-6 py-10 transition-colors duration-300">
+<div class="flex w-full max-w-[480px] flex-col items-center gap-8">
+<div class="relative flex items-center justify-center">
+<div class="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl scale-150 animate-pulse"></div>
+<div class="relative flex h-24 w-24 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/10 border-4 border-emerald-500/20">
+<span class="material-symbols-outlined text-emerald-500 text-[64px]" style="font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 48;">
+                        check_circle
+                    </span>
+</div>
+</div>
+<div class="flex flex-col items-center gap-3 text-center">
+<h1 class="text-[#0d121c] dark:text-white text-3xl font-bold leading-tight tracking-tight">
+                    ¡Contraseña Actualizada con Éxito!
+                </h1>
+<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal max-w-[320px]">
+                    Ya puedes iniciar sesión con tu nueva contraseña.
+                </p>
+</div>
+<button class="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl h-14 px-6 bg-primary hover:bg-blue-700 active:bg-blue-800 text-white text-lg font-bold leading-normal tracking-[0.015em] shadow-lg shadow-primary/25 transition-all active:scale-[0.98]" onclick="window.location.href='/home'">
+<span class="truncate">Entrar</span>
+</button>
+</div>
+</div>
+</body></html>

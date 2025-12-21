@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Employee Manager Design</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1e293b",
+                        "text-primary-light": "#0d141b",
+                        "text-primary-dark": "#f8fafc",
+                        "text-secondary-light": "#4c739a",
+                        "text-secondary-dark": "#94a3b8",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "2xl": "2rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom scrollbar hide for cleaner mobile look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-text-primary-light dark:text-text-primary-dark antialiased">
+<div class="relative flex h-screen w-full flex-col overflow-hidden">
+<!-- Header -->
+<header class="flex items-center justify-between px-4 py-4 bg-surface-light dark:bg-surface-dark border-b border-gray-100 dark:border-gray-800 shrink-0 z-10">
+<button aria-label="Volver" class="flex size-10 items-center justify-center rounded-full active:bg-gray-100 dark:active:bg-gray-800 transition-colors">
+<span class="material-symbols-outlined text-text-primary-light dark:text-text-primary-dark text-2xl">arrow_back</span>
+</button>
+<h1 class="flex-1 text-center text-lg font-bold tracking-tight">Administrar Empleados</h1>
+<div class="size-10"></div> <!-- Spacer for visual balance -->
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 overflow-y-auto no-scrollbar pb-24 px-4 pt-4">
+<!-- Employee List -->
+<div class="flex flex-col gap-3">
+<!-- Employee Card 1: Active -->
+<div class="group flex items-center justify-between p-4 bg-surface-light dark:bg-surface-dark rounded-lg shadow-sm border border-transparent hover:border-gray-100 dark:hover:border-gray-700 transition-all">
+<div class="flex items-center gap-4 flex-1 min-w-0">
+<div class="relative shrink-0">
+<div class="size-12 rounded-full bg-cover bg-center" data-alt="Portrait of a male employee smiling" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCYBBOpi473mMrUA1DisuXwGBECWKTfB9qNsc_Mvjucswwuko9OHpMs72eDL5mTZc9UO63pyxTmJ2OlbKNpAY-0vhiW4kek4vkDG7Yn4qsclREkPM97V5pym3iBtq4sRKEXFA2bYmpzVZVhcqXVKNWqFERxK9iPwHQ7IAqa7gZ6NBMeWNFCRSGSrgv_nKyowFo64g4GRhxvsPjeyZpT6LBm0GyrTTC77ACbakMlkL2fQ5MPtRwJvXY20N_3anPNcsO24QH3ePINTtY");'></div>
+<div class="absolute bottom-0 right-0 size-3 rounded-full bg-green-500 border-2 border-white dark:border-surface-dark"></div>
+</div>
+<div class="flex flex-col justify-center min-w-0">
+<p class="text-base font-semibold truncate text-text-primary-light dark:text-text-primary-dark">Carlos Perez</p>
+<p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark truncate">Vendedor</p>
+</div>
+</div>
+<div class="flex items-center gap-3 shrink-0 ml-2">
+<!-- Edit PIN Button -->
+<button aria-label="Editar PIN" class="flex size-10 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+<span class="material-symbols-outlined text-[20px]">key</span>
+</button>
+<!-- Toggle Switch -->
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+<span class="sr-only">Estado Activo</span>
+</label>
+</div>
+</div>
+<!-- Employee Card 2: Inactive -->
+<div class="group flex items-center justify-between p-4 bg-surface-light dark:bg-surface-dark rounded-lg shadow-sm opacity-80">
+<div class="flex items-center gap-4 flex-1 min-w-0">
+<div class="relative shrink-0">
+<div class="size-12 rounded-full bg-cover bg-center grayscale" data-alt="Portrait of a female employee" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDYCvOorovHquTkMakWRjqkKGrqKxID0uWJwZ8Stvxb787ujqqcg02PoYumzayOSNzZEGhxVK1tvXGCSdBEU3-9Mck4N5ofTrm1038V79AwBiWCeBmywGGYsAYPyCKX08u_yl52lWfTgNEgYcHTKJPtby7dNlnVy4N87Wd5glvU084YYpvz8e2e3JoeAg0qZuantS5mt5B1niYloVqvhTV-VY4Q0x6VaQEGkhwxb97o8gY0FcKffLArnyZkoRZ02lOeQS1M5Xc1IjE");'></div>
+</div>
+<div class="flex flex-col justify-center min-w-0">
+<p class="text-base font-semibold truncate text-gray-500 dark:text-gray-400">Maria Rodriguez</p>
+<p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark truncate">Cajera</p>
+</div>
+</div>
+<div class="flex items-center gap-3 shrink-0 ml-2">
+<button aria-label="Editar PIN" class="flex size-10 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+<span class="material-symbols-outlined text-[20px]">key</span>
+</button>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<!-- Employee Card 3: Active -->
+<div class="group flex items-center justify-between p-4 bg-surface-light dark:bg-surface-dark rounded-lg shadow-sm">
+<div class="flex items-center gap-4 flex-1 min-w-0">
+<div class="relative shrink-0">
+<!-- Initials Avatar -->
+<div class="flex size-12 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 font-bold text-lg">
+                                JG
+                            </div>
+</div>
+<div class="flex flex-col justify-center min-w-0">
+<p class="text-base font-semibold truncate text-text-primary-light dark:text-text-primary-dark">Juan Gomez</p>
+<p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark truncate">Repartidor</p>
+</div>
+</div>
+<div class="flex items-center gap-3 shrink-0 ml-2">
+<button aria-label="Editar PIN" class="flex size-10 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+<span class="material-symbols-outlined text-[20px]">key</span>
+</button>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</div>
+<!-- Empty state filler to show scroll -->
+<div class="h-20"></div>
+</main>
+<!-- FAB (Positioned behind modal overlay in this design view, but conceptually on the screen) -->
+<div class="absolute bottom-[88px] right-4 z-10">
+<button aria-label="Nuevo Empleado" class="flex items-center justify-center size-14 rounded-2xl bg-primary text-white shadow-lg hover:bg-blue-600 transition-transform active:scale-95">
+<span class="material-symbols-outlined text-[28px]">add</span>
+</button>
+</div>
+<!-- Bottom Navigation -->
+<nav class="shrink-0 flex items-center justify-between border-t border-gray-200 dark:border-gray-800 bg-surface-light dark:bg-surface-dark px-2 py-2 pb-safe z-10">
+<a class="flex flex-1 flex-col items-center justify-center gap-1 py-1 text-text-secondary-light dark:text-text-secondary-dark active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined text-[24px]">storefront</span>
+<span class="text-[10px] font-medium">Vender</span>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 py-1 text-text-secondary-light dark:text-text-secondary-dark active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined text-[24px]">sell</span>
+<span class="text-[10px] font-medium">Productos</span>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 py-1 text-text-secondary-light dark:text-text-secondary-dark active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined text-[24px]">group</span>
+<span class="text-[10px] font-medium">Clientes</span>
+</a>
+<a class="flex flex-1 flex-col items-center justify-center gap-1 py-1 text-primary active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined text-[24px] font-variation-settings-'FILL'1">admin_panel_settings</span>
+<span class="text-[10px] font-medium">Admin</span>
+</a>
+</nav>
+<!-- Modal Overlay (Simulated Open State) -->
+<!-- Using a semi-transparent backdrop to focus on the modal "sheet" at the bottom -->
+<div class="absolute inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-[2px] transition-opacity">
+<!-- Modal Content (Bottom Sheet) -->
+<div class="w-full max-w-md bg-surface-light dark:bg-surface-dark rounded-t-2xl shadow-2xl animate-slide-up flex flex-col max-h-[90vh]">
+<!-- Handle -->
+<div class="flex justify-center pt-3 pb-1 cursor-grab">
+<div class="h-1 w-12 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+</div>
+<!-- Modal Header -->
+<div class="px-6 pb-4 pt-2 border-b border-gray-100 dark:border-gray-800">
+<h2 class="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">Datos del Colaborador</h2>
+</div>
+<!-- Scrollable Form Area -->
+<div class="overflow-y-auto p-6 space-y-6">
+<!-- Basic Info -->
+<div class="space-y-4">
+<div class="space-y-1.5">
+<label class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">Nombre Completo</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400 text-[20px]">person</span>
+<input class="w-full h-12 rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 pl-10 pr-4 text-sm focus:border-primary focus:ring-primary dark:text-white dark:placeholder-gray-500" placeholder="Ej: Juan Pérez" type="text"/>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">Usuario de Acceso</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400 text-[20px]">badge</span>
+<input class="w-full h-12 rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 pl-10 pr-4 text-sm focus:border-primary focus:ring-primary dark:text-white dark:placeholder-gray-500" placeholder="Ej: juan01" type="text"/>
+</div>
+</div>
+</div>
+<!-- Security Section -->
+<div class="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 space-y-3">
+<div class="flex items-center gap-2 text-primary font-medium">
+<span class="material-symbols-outlined text-[20px]">lock</span>
+<span class="text-sm">Seguridad</span>
+</div>
+<div class="space-y-1.5">
+<label class="text-xs font-medium uppercase tracking-wider text-text-secondary-light dark:text-text-secondary-dark">Asignar PIN (4 dígitos)</label>
+<input class="w-full h-12 rounded-lg border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-center text-lg tracking-[0.5em] font-bold focus:border-primary focus:ring-primary dark:text-white" maxlength="4" pattern="[0-9]*" placeholder="••••" type="tel"/>
+<p class="text-xs text-text-secondary-light dark:text-text-secondary-dark">El empleado usará este PIN para entrar.</p>
+</div>
+</div>
+<!-- Permissions -->
+<div class="space-y-3">
+<label class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark block mb-2">Permisos</label>
+<label class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+<input checked="" class="size-5 rounded border-gray-300 text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark">Puede Vender</span>
+</label>
+<label class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+<input class="size-5 rounded border-gray-300 text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark">Puede ver Reportes</span>
+</label>
+<label class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-800/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+<input class="size-5 rounded border-gray-300 text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark">Puede fiar</span>
+</label>
+</div>
+</div>
+<!-- Modal Actions -->
+<div class="p-6 pt-2 pb-8 flex gap-3 border-t border-gray-100 dark:border-gray-800 bg-surface-light dark:bg-surface-dark">
+<button class="flex-1 h-12 rounded-xl text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        Cancelar
+                    </button>
+<button class="flex-1 h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all hover:bg-blue-600">
+                        Guardar
+                    </button>
+</div>
+</div>
+</div>
+</div>
+</body></html>

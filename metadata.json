@@ -1,0 +1,7 @@
+{
+  "name": "Tienda de Barrio",
+  "description": "A comprehensive PWA for small business management, including POS, Inventory, and Customer tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

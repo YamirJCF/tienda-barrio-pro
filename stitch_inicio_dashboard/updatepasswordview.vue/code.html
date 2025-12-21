@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Update Password - PWA</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0bda73",
+                        "primary-dark": "#09af5c",
+                        "background-light": "#f5f8f7",
+                        "background-dark": "#102219",
+                        "card-light": "#ffffff",
+                        "card-dark": "#162e22",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(11, 218, 115, 0.1)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: "Work Sans", sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Custom scrollbar hide for cleaner mobile look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen flex flex-col items-center justify-start transition-colors duration-300">
+<!-- Top Navigation Bar -->
+<nav class="w-full max-w-md px-4 py-4 flex items-center justify-between sticky top-0 z-10 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm">
+<button aria-label="Volver" class="flex items-center justify-center w-12 h-12 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors focus:outline-none focus:ring-2 focus:ring-primary">
+<span class="material-symbols-outlined text-gray-900 dark:text-white text-[24px]">arrow_back</span>
+</button>
+<h2 class="flex-1 text-center text-lg font-bold text-gray-900 dark:text-white pr-12">
+            Recuperación
+        </h2>
+</nav>
+<!-- Main Content Area -->
+<main class="w-full max-w-md flex-1 flex flex-col px-4 pb-8">
+<!-- Illustration/Spacer -->
+<div class="h-4"></div>
+<!-- Central Card -->
+<div class="bg-card-light dark:bg-card-dark rounded-xl shadow-soft p-6 flex flex-col gap-6 w-full animate-fade-in">
+<!-- Header Section inside Card -->
+<div class="text-center flex flex-col items-center">
+<div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-primary text-[32px]">lock_reset</span>
+</div>
+<h1 class="text-gray-900 dark:text-white text-2xl font-bold leading-tight mb-2">
+                    Crear Nueva Contraseña
+                </h1>
+<p class="text-gray-600 dark:text-gray-300 text-base font-normal leading-relaxed max-w-[280px]">
+                    Tu nueva contraseña debe tener al menos 6 caracteres.
+                </p>
+</div>
+<!-- Form Section -->
+<form class="flex flex-col gap-5 w-full" onsubmit="event.preventDefault();">
+<!-- Input 1: New Password -->
+<div class="flex flex-col gap-2">
+<label class="text-gray-900 dark:text-white text-sm font-medium ml-1" for="new-password">
+                        Nueva Contraseña
+                    </label>
+<div class="relative flex items-center">
+<input class="form-input w-full rounded-xl border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark text-gray-900 dark:text-white h-14 px-4 pr-12 text-base focus:border-primary focus:ring-primary transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500" id="new-password" minlength="6" placeholder="••••••" required="" type="password"/>
+<button aria-label="Mostrar contraseña" class="absolute right-0 h-full w-12 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-primary transition-colors focus:outline-none rounded-r-xl" type="button">
+<span class="material-symbols-outlined text-[24px]">visibility_off</span>
+</button>
+</div>
+</div>
+<!-- Input 2: Confirm Password -->
+<div class="flex flex-col gap-2 group">
+<label class="text-gray-900 dark:text-white text-sm font-medium ml-1" for="confirm-password">
+                        Confirmar Contraseña
+                    </label>
+<div class="relative flex items-center">
+<!-- Example of error state class usage: border-red-500 focus:border-red-500 focus:ring-red-500 -->
+<input class="form-input w-full rounded-xl border-gray-300 dark:border-gray-600 bg-background-light dark:bg-background-dark text-gray-900 dark:text-white h-14 px-4 pr-12 text-base focus:border-primary focus:ring-primary transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500" id="confirm-password" minlength="6" placeholder="••••••" required="" type="password"/>
+<button aria-label="Mostrar contraseña" class="absolute right-0 h-full w-12 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-primary transition-colors focus:outline-none rounded-r-xl" type="button">
+<span class="material-symbols-outlined text-[24px]">visibility_off</span>
+</button>
+</div>
+<!-- Validation Message Container (Hidden by default, can be toggled via Vue) -->
+<p class="hidden text-red-500 text-xs mt-1 ml-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">error</span>
+                        Las contraseñas no coinciden
+                    </p>
+</div>
+<!-- Action Button -->
+<div class="pt-4">
+<button class="w-full h-14 bg-primary hover:bg-primary-dark active:bg-primary-dark text-white font-bold text-lg rounded-xl shadow-md hover:shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 group/btn" type="submit">
+<span>Actualizar y Entrar</span>
+<span class="material-symbols-outlined text-[20px] group-hover/btn:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</div>
+</form>
+</div>
+<!-- Helpful footer/info (Optional context for shopkeepers) -->
+<div class="mt-8 text-center px-6">
+<p class="text-xs text-gray-400 dark:text-gray-500">
+                ¿Necesitas ayuda? <a class="text-primary font-medium underline" href="#">Contactar soporte</a>
+</p>
+</div>
+</main>
+</body></html>

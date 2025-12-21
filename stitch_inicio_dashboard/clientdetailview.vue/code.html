@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Detalle de Cliente</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0bda99",
+                        "background-light": "#f5f8f7",
+                        "background-dark": "#10221c",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        /* Custom safe area spacing for iOS */
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .pt-safe {
+            padding-top: env(safe-area-inset-top);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 selection:bg-emerald-100 overflow-x-hidden">
+<!-- Hero Header Section -->
+<div class="relative bg-slate-800 rounded-b-[2rem] shadow-xl overflow-hidden z-10">
+<!-- Abstract Pattern Background -->
+<div class="absolute inset-0 opacity-10 pointer-events-none" data-alt="Subtle dot pattern overlay on dark background" style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 24px 24px;"></div>
+<div class="relative flex flex-col p-6 pt-safe pb-8">
+<!-- Navigation -->
+<div class="flex items-center justify-between mb-6">
+<button aria-label="Volver" class="flex items-center justify-center size-12 -ml-3 text-white rounded-full hover:bg-white/10 active:bg-white/20 transition-colors">
+<span class="material-symbols-outlined text-[28px]">arrow_back_ios_new</span>
+</button>
+<div class="flex gap-4">
+<button aria-label="Opciones" class="flex items-center justify-center size-10 text-slate-300 rounded-full hover:bg-white/10 active:bg-white/20 transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Client Info -->
+<div class="flex flex-col items-center text-center">
+<h2 class="text-white text-xl font-semibold tracking-wide mb-1">Juan Pérez</h2>
+<p class="text-slate-400 text-sm font-medium tracking-wide">C.C. 1.098.223.441</p>
+</div>
+<!-- Gigantic Balance -->
+<div class="flex flex-col items-center mt-6 mb-8">
+<span class="text-emerald-400 text-sm font-bold uppercase tracking-widest mb-2">Saldo Pendiente</span>
+<h1 class="text-white text-[56px] leading-none font-bold tracking-tight drop-shadow-sm">$150.000</h1>
+</div>
+<!-- Credit Limit Progress Bar -->
+<div class="bg-slate-700/50 rounded-xl p-4 border border-white/5 backdrop-blur-sm">
+<div class="flex justify-between items-end mb-2">
+<p class="text-slate-200 text-sm font-medium">Cupo de Crédito</p>
+<p class="text-emerald-400 text-xs font-bold">Disponibles: $350.000</p>
+</div>
+<!-- Progress Track -->
+<div class="relative h-3 w-full bg-slate-900/50 rounded-full overflow-hidden">
+<!-- Progress Fill -->
+<div class="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500 to-primary rounded-full" style="width: 30%;"></div>
+</div>
+<div class="flex justify-between mt-2">
+<p class="text-slate-400 text-xs">Uso: $150.000</p>
+<p class="text-slate-400 text-xs">Total: $500.000</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Main Content: Transaction History -->
+<main class="relative z-0 px-4 pt-6 pb-32 flex flex-col gap-4">
+<div class="flex items-center justify-between px-2">
+<h3 class="text-slate-800 dark:text-white text-lg font-bold">Movimientos Recientes</h3>
+<button class="text-emerald-600 text-sm font-semibold hover:underline">Ver todo</button>
+</div>
+<!-- Transaction List -->
+<div class="flex flex-col gap-3">
+<!-- Purchase Item (Debt Increase) -->
+<article class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 active:scale-[0.98] transition-transform duration-150 touch-manipulation">
+<div class="shrink-0 flex items-center justify-center size-12 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+<span class="material-symbols-outlined">shopping_cart</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-slate-900 dark:text-white text-base font-bold truncate">Compra #101</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">12 Oct, 2:30 PM</p>
+</div>
+<div class="shrink-0 text-right">
+<p class="text-red-600 dark:text-red-400 text-lg font-bold">+$20.000</p>
+<p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Deuda</p>
+</div>
+</article>
+<!-- Payment Item (Debt Decrease) -->
+<article class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 active:scale-[0.98] transition-transform duration-150 touch-manipulation">
+<div class="shrink-0 flex items-center justify-center size-12 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+<span class="material-symbols-outlined">payments</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-slate-900 dark:text-white text-base font-bold truncate">Abono Efectivo</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">10 Oct, 9:00 AM</p>
+</div>
+<div class="shrink-0 text-right">
+<p class="text-emerald-600 dark:text-emerald-400 text-lg font-bold">-$50.000</p>
+<p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Pago</p>
+</div>
+</article>
+<!-- Purchase Item -->
+<article class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 active:scale-[0.98] transition-transform duration-150 touch-manipulation">
+<div class="shrink-0 flex items-center justify-center size-12 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+<span class="material-symbols-outlined">local_drink</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-slate-900 dark:text-white text-base font-bold truncate">Bebidas y Snacks</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">08 Oct, 4:15 PM</p>
+</div>
+<div class="shrink-0 text-right">
+<p class="text-red-600 dark:text-red-400 text-lg font-bold">+$15.000</p>
+</div>
+</article>
+<!-- Purchase Item -->
+<article class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 active:scale-[0.98] transition-transform duration-150 touch-manipulation">
+<div class="shrink-0 flex items-center justify-center size-12 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+<span class="material-symbols-outlined">shopping_bag</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-slate-900 dark:text-white text-base font-bold truncate">Granos y Arroz</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">05 Oct, 10:20 AM</p>
+</div>
+<div class="shrink-0 text-right">
+<p class="text-red-600 dark:text-red-400 text-lg font-bold">+$45.000</p>
+</div>
+</article>
+<!-- Payment Item -->
+<article class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 active:scale-[0.98] transition-transform duration-150 touch-manipulation">
+<div class="shrink-0 flex items-center justify-center size-12 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-slate-900 dark:text-white text-base font-bold truncate">Abono Parcial</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">01 Oct, 6:45 PM</p>
+</div>
+<div class="shrink-0 text-right">
+<p class="text-emerald-600 dark:text-emerald-400 text-lg font-bold">-$30.000</p>
+<p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Pago</p>
+</div>
+</article>
+<!-- Date Divider -->
+<div class="flex items-center gap-4 py-2">
+<div class="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
+<span class="text-xs text-slate-400 font-medium">SEPTIEMBRE 2023</span>
+<div class="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
+</div>
+<!-- Old Purchase Item -->
+<article class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 opacity-60">
+<div class="shrink-0 flex items-center justify-center size-12 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500">
+<span class="material-symbols-outlined">inventory_2</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-slate-900 dark:text-white text-base font-bold truncate">Compra #98</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">28 Sep, 1:15 PM</p>
+</div>
+<div class="shrink-0 text-right">
+<p class="text-slate-600 dark:text-slate-300 text-lg font-bold">+$150.000</p>
+</div>
+</article>
+</div>
+</main>
+<!-- Sticky Footer Action -->
+<div class="fixed bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-4 pb-safe z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+<button class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-lg font-bold rounded-lg shadow-lg shadow-emerald-200 dark:shadow-none flex items-center justify-center gap-2 transition-all transform active:scale-[0.99] touch-manipulation">
+<span class="material-symbols-outlined">add_circle</span>
+            REGISTRAR ABONO
+        </button>
+</div>
+</body></html>

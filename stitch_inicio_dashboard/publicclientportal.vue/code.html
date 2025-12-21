@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Public Client Portal</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "primary-dark": "#0b5db0",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1c2630",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "sans": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "2xl": "2rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        /* CSS-only transition for simulating view navigation */
+        .view-transition {
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+        }
+        
+        /* Hide scrollbar for cleaner mobile look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased selection:bg-primary/30">
+<!-- State Management Checkbox (Pure CSS Toggle) -->
+<input autocomplete="off" class="peer hidden" id="state-toggle" type="checkbox"/>
+<!-- Main Container -->
+<div class="relative min-h-screen w-full overflow-hidden flex flex-col items-center justify-center max-w-md mx-auto bg-background-light dark:bg-background-dark shadow-2xl">
+<!-- STATE A: LOGIN VIEW -->
+<div class="absolute inset-0 w-full h-full flex flex-col p-6 transition-all duration-500 ease-in-out transform peer-checked:-translate-x-full peer-checked:opacity-0 bg-background-light dark:bg-background-dark z-20">
+<!-- Spacer for vertical centering -->
+<div class="flex-1"></div>
+<!-- Content -->
+<div class="flex flex-col items-center w-full max-w-sm mx-auto space-y-8">
+<!-- Brand / Logo -->
+<div class="flex flex-col items-center gap-4 animate-fade-in-down">
+<div class="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-2">
+<span class="material-symbols-outlined text-5xl">storefront</span>
+</div>
+<div class="text-center space-y-2">
+<h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                            Consulta tu Saldo
+                        </h1>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium">
+                            Tienda La Esquina
+                        </p>
+</div>
+</div>
+<!-- Input Field -->
+<div class="w-full space-y-2">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1" for="cedula">
+                        Cédula de Ciudadanía
+                    </label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-slate-400">badge</span>
+</div>
+<input class="block w-full rounded-xl border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark pl-12 pr-4 py-4 text-lg font-medium text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-primary placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-colors" id="cedula" pattern="[0-9]*" placeholder="Ej: 1020304050" type="tel"/>
+</div>
+</div>
+<!-- Action Button (Acts as label for checkbox to switch view) -->
+<label class="group w-full cursor-pointer relative" for="state-toggle">
+<div class="flex w-full items-center justify-center rounded-xl bg-primary py-4 px-6 text-white shadow-lg shadow-primary/30 transition-all active:scale-[0.98] hover:bg-primary-dark hover:shadow-primary/40">
+<span class="text-lg font-bold tracking-wide">Consultar</span>
+<span class="material-symbols-outlined ml-2 transition-transform group-hover:translate-x-1">arrow_forward</span>
+</div>
+</label>
+</div>
+<!-- Footer Help -->
+<div class="flex-1 flex flex-col justify-end pb-4 items-center">
+<p class="text-xs text-slate-400 dark:text-slate-500 text-center">
+                    ¿No recuerdas tu número? <br/> Consulta en tu documento de identidad.
+                </p>
+</div>
+</div>
+<!-- STATE B: DASHBOARD VIEW -->
+<div class="absolute inset-0 w-full h-full flex flex-col transition-all duration-500 ease-in-out transform translate-x-full opacity-0 peer-checked:translate-x-0 peer-checked:opacity-100 bg-background-light dark:bg-background-dark z-10 overflow-hidden">
+<!-- Top Navigation -->
+<div class="flex items-center justify-between px-5 pt-12 pb-4 bg-surface-light dark:bg-surface-dark sticky top-0 z-30 shadow-sm">
+<label class="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer transition-colors" for="state-toggle">
+<span class="material-symbols-outlined block">arrow_back</span>
+</label>
+<span class="font-semibold text-slate-900 dark:text-white text-base">Mi Cuenta</span>
+<div class="w-10"></div> <!-- Spacer for visual balance -->
+</div>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto no-scrollbar p-5 space-y-8 pb-10">
+<!-- Greeting -->
+<div>
+<h2 class="text-2xl font-bold text-slate-900 dark:text-white">Hola, Juan</h2>
+<p class="text-slate-500 dark:text-slate-400">Bienvenido de nuevo</p>
+</div>
+<!-- Balance Card -->
+<div class="relative w-full overflow-hidden rounded-2xl bg-gradient-to-br from-[#137fec] to-[#0b5db0] p-6 shadow-xl shadow-blue-500/20 text-white">
+<!-- Background decoration -->
+<div class="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
+<div class="absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-black/10 blur-3xl"></div>
+<div class="relative flex flex-col h-full justify-between gap-6">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-blue-100 text-sm font-medium mb-1">Saldo Disponible</p>
+<p class="text-blue-200 text-xs">Tienda La Esquina</p>
+</div>
+<span class="material-symbols-outlined text-blue-200/50 text-4xl">account_balance_wallet</span>
+</div>
+<div>
+<h3 class="text-4xl font-bold tracking-tight mb-2">$150.000</h3>
+<div class="flex items-center gap-1.5 text-blue-100 bg-white/10 w-fit px-2 py-1 rounded-md backdrop-blur-sm">
+<span class="material-symbols-outlined text-[14px]">update</span>
+<span class="text-xs font-medium">Actualizado hace 5 min</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Recent Activity List -->
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<h3 class="text-lg font-bold text-slate-900 dark:text-white">Actividad Reciente</h3>
+<button class="text-sm font-semibold text-primary hover:text-primary-dark">Ver todo</button>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Item 1 -->
+<div class="flex items-center justify-between p-4 bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-xl">shopping_cart</span>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-slate-900 dark:text-white">Compra de víveres</span>
+<span class="text-xs text-slate-500 dark:text-slate-400">12 Oct • 4:30 PM</span>
+</div>
+</div>
+<span class="text-sm font-bold text-slate-900 dark:text-white">- $35.000</span>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center justify-between p-4 bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-xl">payments</span>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-slate-900 dark:text-white">Abono a deuda</span>
+<span class="text-xs text-slate-500 dark:text-slate-400">10 Oct • 10:15 AM</span>
+</div>
+</div>
+<span class="text-sm font-bold text-green-600 dark:text-green-400">+ $50.000</span>
+</div>
+<!-- Item 3 -->
+<div class="flex items-center justify-between p-4 bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-xl">bakery_dining</span>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-slate-900 dark:text-white">Gaseosas y pan</span>
+<span class="text-xs text-slate-500 dark:text-slate-400">08 Oct • 6:45 PM</span>
+</div>
+</div>
+<span class="text-sm font-bold text-slate-900 dark:text-white">- $12.000</span>
+</div>
+</div>
+</div>
+<!-- Helper Footer -->
+<div class="pt-4 pb-2">
+<div class="flex items-start gap-3 p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
+<span class="material-symbols-outlined text-slate-400 mt-0.5">help</span>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-slate-700 dark:text-slate-300">¿Tienes dudas con tu saldo?</span>
+<span class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                                Acércate a la caja de la tienda para revisar tus movimientos en detalle.
+                            </span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body></html>

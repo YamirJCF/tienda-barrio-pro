@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CashControlView - PWA Design</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "primary-dark": "#0b5ec2",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                        "success": "#16a34a",
+                        "danger": "#dc2626",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom styles for mobile optimization */
+        .tap-highlight-transparent {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Hide scrollbar for cleaner mobile view simulation */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-gray-200 font-display antialiased text-slate-900 tap-highlight-transparent">
+<div class="flex flex-wrap justify-center gap-8 p-4 min-h-screen items-start">
+<!-- ========================================== -->
+<!-- ESTADO 1: APERTURA DE CAJA (OPENING)       -->
+<!-- ========================================== -->
+<div class="relative flex h-[844px] w-full max-w-[390px] flex-col bg-background-light dark:bg-background-dark overflow-hidden shadow-2xl rounded-[3rem] border-[8px] border-slate-900 box-content">
+<!-- Notch simulation -->
+<div class="absolute top-0 left-1/2 -translate-x-1/2 h-7 w-32 bg-slate-900 rounded-b-2xl z-50"></div>
+<!-- Header -->
+<div class="flex items-center bg-background-light dark:bg-background-dark p-4 pt-12 justify-between sticky top-0 z-10">
+<button aria-label="Volver" class="text-slate-900 dark:text-white flex size-12 shrink-0 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<h2 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-12">Control de Caja</h2>
+</div>
+<!-- Content -->
+<div class="flex-1 flex flex-col items-center justify-center px-6 gap-8 pb-20">
+<!-- Hero Icon -->
+<div class="flex flex-col items-center gap-6 animate-fade-in">
+<div class="size-24 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-yellow-500 text-[64px] fill-1">wb_sunny</span>
+</div>
+<div class="text-center space-y-2">
+<h1 class="text-slate-900 dark:text-white tracking-tight text-3xl font-black leading-tight">
+                            Iniciar Jornada
+                        </h1>
+<p class="text-slate-500 dark:text-slate-400 text-base font-normal leading-relaxed max-w-[280px]">
+                            ¡Buenos días! Ingresa el dinero base para comenzar las ventas.
+                        </p>
+</div>
+</div>
+<!-- Input Field -->
+<div class="w-full max-w-xs space-y-3">
+<label class="text-slate-700 dark:text-slate-300 text-sm font-semibold pl-1 block" for="initial-base">
+                        Base / Sencillo Inicial ($)
+                    </label>
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="text-slate-400 dark:text-slate-500 font-bold text-xl">$</span>
+</div>
+<input class="block w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-4 pl-10 pr-4 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:border-primary focus:ring-2 focus:ring-primary/20 text-2xl font-bold tracking-wide shadow-sm transition-all" id="initial-base" inputmode="decimal" placeholder="0" type="number"/>
+</div>
+</div>
+</div>
+<!-- Bottom Action -->
+<div class="p-4 pb-8 bg-background-light dark:bg-background-dark border-t border-slate-100 dark:border-slate-800">
+<button class="flex w-full cursor-pointer items-center justify-center rounded-xl h-14 px-6 bg-primary hover:bg-primary-dark text-white text-lg font-bold leading-normal tracking-[0.015em] shadow-lg shadow-primary/30 transition-all active:scale-[0.98]">
+                    Abrir Caja
+                </button>
+</div>
+</div>
+<!-- ========================================== -->
+<!-- ESTADO 2: CIERRE / ARQUEO (CLOSING)        -->
+<!-- ========================================== -->
+<div class="relative flex h-[844px] w-full max-w-[390px] flex-col bg-background-light dark:bg-background-dark overflow-hidden shadow-2xl rounded-[3rem] border-[8px] border-slate-900 box-content">
+<!-- Notch simulation -->
+<div class="absolute top-0 left-1/2 -translate-x-1/2 h-7 w-32 bg-slate-900 rounded-b-2xl z-50"></div>
+<!-- Header -->
+<div class="flex items-center bg-background-light dark:bg-background-dark p-4 pt-12 justify-between sticky top-0 z-10 shadow-sm border-b border-slate-100 dark:border-slate-800/50">
+<button aria-label="Volver" class="text-slate-900 dark:text-white flex size-12 shrink-0 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<h2 class="text-slate-900 dark:text-white text-lg font-bold leading-tight flex-1 text-center pr-12">Arqueo de Caja</h2>
+</div>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-6">
+<!-- Title Section -->
+<div class="flex items-center gap-3 px-1">
+<div class="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-400">inventory_2</span>
+</div>
+<h1 class="text-slate-900 dark:text-white text-2xl font-black">Cierre de Turno</h1>
+</div>
+<!-- Summary Card (Read Only) -->
+<div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700/50 flex flex-col gap-3">
+<h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Resumen del Sistema</h3>
+<div class="flex justify-between items-center text-sm">
+<span class="text-slate-600 dark:text-slate-300">Base Inicial</span>
+<span class="text-success font-semibold font-mono">+ $50.000</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-slate-600 dark:text-slate-300">Ventas Efectivo</span>
+<span class="text-success font-semibold font-mono">+ $400.000</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<span class="text-slate-600 dark:text-slate-300">Salidas / Gastos</span>
+<span class="text-danger font-semibold font-mono">- $20.000</span>
+</div>
+<div class="my-2 h-px bg-slate-100 dark:bg-slate-700 border-dashed"></div>
+<div class="flex justify-between items-end">
+<span class="text-slate-900 dark:text-white font-bold text-base pb-1">Debe haber en Cajón</span>
+<span class="text-slate-900 dark:text-white font-black text-xl font-mono">$430.000</span>
+</div>
+</div>
+<!-- Real Count Input -->
+<div class="flex flex-col gap-4">
+<label class="text-slate-900 dark:text-white text-lg font-bold px-1" for="real-count">
+                        ¿Cuánto contaste?
+                    </label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+<span class="text-slate-400 dark:text-slate-500 font-bold text-2xl">$</span>
+</div>
+<input class="block w-full rounded-2xl border-2 border-danger/30 bg-white dark:bg-slate-800 py-5 pl-12 pr-4 text-slate-900 dark:text-white placeholder:text-slate-300 focus:outline-none focus:border-danger focus:ring-4 focus:ring-danger/10 text-3xl font-black tracking-wide shadow-sm transition-all" id="real-count" inputmode="decimal" placeholder="0" type="number" value="420000"/>
+<!-- Status Icon inside input -->
+<div class="absolute inset-y-0 right-0 pr-5 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-danger text-[28px] animate-pulse">error</span>
+</div>
+</div>
+</div>
+<!-- Feedback Message: Error State (Simulated) -->
+<div class="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 rounded-xl p-4 flex items-start gap-3 animate-bounce-short">
+<div class="mt-0.5 text-danger bg-red-100 dark:bg-red-900/40 rounded-full p-1">
+<span class="material-symbols-outlined text-[20px] block">warning</span>
+</div>
+<div class="flex-1">
+<p class="text-danger font-bold text-base">Hay una diferencia</p>
+<p class="text-red-700 dark:text-red-300 text-sm">Faltante: <span class="font-mono font-bold text-base">-$10.000</span></p>
+</div>
+</div>
+<!-- Example of Success State (Hidden by default, uncomment to see design) -->
+<!-- 
+                <div class="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/50 rounded-xl p-4 flex items-center gap-3">
+                    <div class="text-success bg-green-100 dark:bg-green-900/40 rounded-full p-1">
+                        <span class="material-symbols-outlined text-[20px] block">check</span>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-success font-bold text-base">¡Caja Cuadrada! Perfecto</p>
+                    </div>
+                </div>
+                -->
+</div>
+<!-- Bottom Action -->
+<div class="p-4 pb-8 bg-background-light dark:bg-background-dark border-t border-slate-100 dark:border-slate-800 z-20">
+<button class="flex w-full cursor-pointer items-center justify-center rounded-xl h-14 px-6 bg-primary hover:bg-primary-dark text-white text-lg font-bold leading-normal tracking-[0.015em] shadow-lg shadow-primary/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+<span class="material-symbols-outlined mr-2 text-[20px]">save</span>
+                    Cerrar Turno y Guardar
+                </button>
+</div>
+</div>
+</div>
+</body></html>

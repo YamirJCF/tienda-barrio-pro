@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Checkout Modal</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#0df2aa",
+                        "background-light": "#f5f8f7",
+                        "background-dark": "#10221c",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1a2c26",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"],
+                        "body": ["Work Sans", "sans-serif"],
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "2xl": "2rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for cleanliness */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-gray-900/40 font-display flex flex-col justify-end min-h-screen antialiased select-none">
+<!-- Modal Container -->
+<div class="relative w-full bg-surface-light dark:bg-surface-dark rounded-t-2xl shadow-2xl flex flex-col h-[85vh] md:h-[75vh] max-h-[800px] overflow-hidden animate-slide-up">
+<!-- Drag Handle -->
+<div class="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing">
+<div class="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+</div>
+<!-- 1. Header (Total Summary) -->
+<header class="flex flex-col items-center justify-center py-4 bg-gray-50 dark:bg-background-dark border-b border-gray-100 dark:border-gray-800">
+<h3 class="text-gray-500 dark:text-gray-400 text-sm font-semibold tracking-wide uppercase mb-1">Total a Pagar</h3>
+<div class="flex items-baseline gap-1">
+<span class="text-3xl font-bold text-gray-800 dark:text-white">$</span>
+<span class="text-4xl font-black text-gray-900 dark:text-primary tracking-tight">16.400</span>
+</div>
+</header>
+<!-- 2. Payment Method Tabs -->
+<div class="grid grid-cols-3 w-full border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-surface-dark">
+<!-- Active Tab: Efectivo -->
+<button class="relative flex flex-col items-center justify-center py-3 gap-1 group">
+<span class="material-symbols-outlined text-emerald-600 dark:text-primary text-[28px]">payments</span>
+<span class="text-emerald-800 dark:text-emerald-100 text-xs font-bold tracking-wide">Efectivo</span>
+<!-- Active Indicator -->
+<div class="absolute bottom-0 w-full h-[4px] bg-emerald-500 dark:bg-primary rounded-t-full"></div>
+<div class="absolute inset-0 bg-emerald-50/50 dark:bg-primary/5 opacity-100"></div>
+</button>
+<!-- Inactive Tab: Nequi -->
+<button class="flex flex-col items-center justify-center py-3 gap-1 group opacity-60 hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-gray-400 dark:text-gray-500 text-[28px]">smartphone</span>
+<span class="text-gray-500 dark:text-gray-400 text-xs font-bold tracking-wide">Nequi</span>
+</button>
+<!-- Inactive Tab: Fiado -->
+<button class="flex flex-col items-center justify-center py-3 gap-1 group opacity-60 hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-gray-400 dark:text-gray-500 text-[28px]">menu_book</span>
+<span class="text-gray-500 dark:text-gray-400 text-xs font-bold tracking-wide">Fiado</span>
+</button>
+</div>
+<!-- 3. Dynamic Body Content -->
+<main class="flex-1 overflow-y-auto p-4 flex flex-col">
+<!-- Scenario A: Efectivo (Active) -->
+<div class="flex flex-1 flex-col gap-4 h-full">
+<div class="grid grid-cols-12 gap-4 flex-1">
+<!-- Left Column: Input & Feedback -->
+<div class="col-span-5 flex flex-col gap-3 justify-center">
+<label class="block">
+<span class="text-gray-600 dark:text-gray-300 text-sm font-medium mb-1.5 block ml-1">Dinero Recibido</span>
+<!-- Input Display Box -->
+<div class="relative flex items-center w-full h-16 px-3 bg-white dark:bg-background-dark border-[3px] border-sky-500 rounded-xl shadow-sm ring-4 ring-sky-100 dark:ring-sky-900/20">
+<span class="text-gray-400 text-xl font-bold mr-1">$</span>
+<span class="text-2xl font-bold text-gray-900 dark:text-white truncate">20.000</span>
+<span class="absolute right-3 w-2 h-6 bg-sky-500 animate-pulse"></span> <!-- Caret -->
+</div>
+</label>
+<!-- Feedback Box (Calculated Change) -->
+<div class="w-full bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 flex flex-col items-start justify-center animate-pulse">
+<span class="text-emerald-700 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider">Vueltos a dar</span>
+<div class="text-xl font-black text-emerald-800 dark:text-emerald-300 mt-0.5">$ 3.600</div>
+</div>
+<!-- Quick Action for exact cash (Optional helper for UX) -->
+<button class="mt-auto py-2 px-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-center">
+                            Usar monto exacto
+                        </button>
+</div>
+<!-- Right Column: Numpad -->
+<div class="col-span-7 pl-2">
+<div class="grid grid-cols-3 gap-2.5 h-full max-h-[320px]">
+<!-- Row 1 -->
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">1</button>
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">2</button>
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">3</button>
+<!-- Row 2 -->
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">4</button>
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">5</button>
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">6</button>
+<!-- Row 3 -->
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">7</button>
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">8</button>
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">9</button>
+<!-- Row 4 -->
+<button class="flex items-center justify-center rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-lg font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation tracking-tighter">000</button>
+<button class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">0</button>
+<button class="flex items-center justify-center rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation">
+<span class="material-symbols-outlined">backspace</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Scenario B: Nequi (Hidden in this view, but structure ready) -->
+<div class="hidden flex-col items-center justify-center gap-6 h-full py-8 text-center">
+<div class="w-24 h-24 bg-pink-100 dark:bg-pink-900/20 rounded-full flex items-center justify-center mb-2">
+<span class="material-symbols-outlined text-pink-600 dark:text-pink-400 text-[48px]">qr_code_2</span>
+</div>
+<div>
+<h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Pago con Nequi / Daviplata</h4>
+<p class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed">
+                        Solicita al cliente el pago exacto de <strong class="text-gray-900 dark:text-white">$16.400</strong>.
+                    </p>
+</div>
+<div class="w-full max-w-xs mt-4">
+<label class="block text-left mb-1 text-xs font-semibold text-gray-500 uppercase">Referencia (Opcional)</label>
+<input class="w-full h-12 rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-center text-lg font-medium focus:ring-pink-500 focus:border-pink-500" placeholder="Últimos 4 dígitos" type="number"/>
+</div>
+</div>
+</main>
+<!-- 4. Footer (Action) -->
+<footer class="p-4 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800">
+<button class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none flex items-center justify-between px-6 transition-all duration-200">
+<span class="text-emerald-100 text-sm font-medium">Completar Venta</span>
+<div class="flex flex-col items-end leading-none">
+<span class="text-white text-lg font-bold tracking-wide">CONFIRMAR</span>
+<span class="text-emerald-200 text-xs font-medium">Vueltos: $3.600</span>
+</div>
+<span class="material-symbols-outlined text-white">check_circle</span>
+</button>
+</footer>
+</div>
+</body></html>
