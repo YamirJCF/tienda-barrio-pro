@@ -11,6 +11,8 @@ const clientsStore = useClientsStore();
 // State
 const paymentAmount = ref('');
 const showPaymentModal = ref(false);
+const showOptionsMenu = ref(false);
+const showDeleteConfirm = ref(false);
 
 // Get client ID from route
 const clientId = computed(() => Number(route.params.id));
@@ -55,6 +57,25 @@ const goBack = () => {
   router.push('/clients');
 };
 
+const toggleOptionsMenu = () => {
+  showOptionsMenu.value = !showOptionsMenu.value;
+};
+
+const closeOptionsMenu = () => {
+  showOptionsMenu.value = false;
+};
+
+const confirmDelete = () => {
+  showOptionsMenu.value = false;
+  showDeleteConfirm.value = true;
+};
+
+const deleteClient = () => {
+  clientsStore.deleteClient(clientId.value);
+  showDeleteConfirm.value = false;
+  router.push('/clients');
+};
+
 const registerPayment = () => {
   if (!paymentAmount.value || !client.value) return;
   
@@ -88,11 +109,38 @@ onMounted(() => {
           >
             <span class="material-symbols-outlined text-[28px]">arrow_back_ios_new</span>
           </button>
-          <div class="flex gap-4">
-            <button aria-label="Opciones" class="flex items-center justify-center size-10 text-slate-300 rounded-full hover:bg-white/10 active:bg-white/20 transition-colors">
+          <div class="flex gap-4 relative">
+            <button 
+              @click="toggleOptionsMenu"
+              aria-label="Opciones" 
+              class="flex items-center justify-center size-10 text-slate-300 rounded-full hover:bg-white/10 active:bg-white/20 transition-colors"
+            >
               <span class="material-symbols-outlined">more_vert</span>
             </button>
+            
+            <!-- Dropdown Menu -->
+            <Transition name="dropdown">
+              <div 
+                v-if="showOptionsMenu" 
+                class="absolute right-0 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden min-w-[180px] z-50"
+              >
+                <button 
+                  @click="confirmDelete"
+                  class="w-full px-4 py-3 flex items-center gap-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
+                >
+                  <span class="material-symbols-outlined text-[20px]">delete</span>
+                  <span class="font-medium">Eliminar cliente</span>
+                </button>
+              </div>
+            </Transition>
           </div>
+          
+          <!-- Click outside to close -->
+          <div 
+            v-if="showOptionsMenu" 
+            class="fixed inset-0 z-40" 
+            @click="closeOptionsMenu"
+          ></div>
         </div>
 
         <!-- Client Info -->
@@ -239,6 +287,42 @@ onMounted(() => {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Delete Confirmation Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div 
+          v-if="showDeleteConfirm"
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          @click.self="showDeleteConfirm = false"
+        >
+          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-scale-in">
+            <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
+              <span class="material-symbols-outlined text-red-600 text-[28px]">warning</span>
+            </div>
+            <h3 class="text-xl font-bold text-slate-900 dark:text-white text-center mb-2">¿Eliminar cliente?</h3>
+            <p class="text-slate-500 dark:text-slate-400 text-sm text-center mb-6">
+              Esta acción eliminará al cliente y todo su historial de transacciones. No se puede deshacer.
+            </p>
+            <div class="flex gap-3">
+              <button 
+                @click="showDeleteConfirm = false"
+                class="flex-1 h-12 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                @click="deleteClient"
+                class="flex-1 h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                <span class="material-symbols-outlined text-[20px]">delete</span>
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -251,6 +335,17 @@ onMounted(() => {
 .modal-enter-from,
 .modal-leave-to {
   opacity: 0;
+}
+
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: all 0.15s ease;
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .animate-scale-in {
