@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Client Form Modal</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#245feb",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111621",
+                    },
+                    fontFamily: {
+                        "display": ["Work Sans", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "2xl": "2rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-gray-900 dark:text-white h-screen overflow-hidden relative">
+<!-- Background Content (Blurred Context) -->
+<!-- This section simulates the 'underlying' view of the client list -->
+<div aria-hidden="true" class="h-full w-full flex flex-col p-4 opacity-50 blur-[2px] pointer-events-none select-none">
+<header class="flex justify-between items-center mb-6 pt-2">
+<div>
+<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Mis Clientes</h1>
+<p class="text-sm text-gray-500">Gestiona tus deudores</p>
+</div>
+<div class="h-10 w-10 bg-white dark:bg-gray-800 rounded-full shadow flex items-center justify-center">
+<span class="material-symbols-outlined text-gray-600">search</span>
+</div>
+</header>
+<!-- Mock List -->
+<div class="space-y-4">
+<div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center gap-4">
+<div class="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">JD</div>
+<div class="flex-1">
+<h3 class="font-semibold">Juan Diaz</h3>
+<p class="text-xs text-gray-500">ID: 10203040</p>
+</div>
+<div class="text-right">
+<p class="text-red-500 font-bold">-$50.000</p>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center gap-4">
+<div class="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold">MP</div>
+<div class="flex-1">
+<h3 class="font-semibold">María Pérez</h3>
+<p class="text-xs text-gray-500">ID: 98765432</p>
+</div>
+<div class="text-right">
+<p class="text-gray-400 font-medium">$0</p>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm flex items-center gap-4">
+<div class="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold">CR</div>
+<div class="flex-1">
+<h3 class="font-semibold">Carlos Ruiz</h3>
+<p class="text-xs text-gray-500">ID: 11223344</p>
+</div>
+<div class="text-right">
+<p class="text-red-500 font-bold">-$12.000</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Modal Backdrop -->
+<div class="absolute inset-0 bg-black/40 z-40 backdrop-blur-sm transition-opacity"></div>
+<!-- Bottom Sheet Modal -->
+<div class="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end h-[92vh] sm:h-auto sm:max-w-md sm:mx-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl">
+<div class="bg-white dark:bg-[#1A202C] w-full h-full sm:h-auto rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden transform transition-transform duration-300 ease-out translate-y-0">
+<!-- Handle & Header -->
+<div class="flex-none pt-3 px-6 pb-2 bg-white dark:bg-[#1A202C]">
+<!-- Drag Handle -->
+<div class="w-full flex justify-center mb-4 sm:hidden">
+<div class="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+</div>
+<!-- Title Row -->
+<div class="flex justify-between items-center">
+<h2 class="text-xl font-bold text-gray-900 dark:text-white tracking-tight">Datos del Cliente</h2>
+<button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-2 -mr-2 rounded-full">
+<span class="material-symbols-outlined text-2xl">close</span>
+</button>
+</div>
+<div class="h-[1px] w-full bg-gray-100 dark:bg-gray-700 mt-4"></div>
+</div>
+<!-- Scrollable Form Content -->
+<div class="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+<!-- Field 1: Name -->
+<div class="flex flex-col gap-2">
+<label class="text-gray-700 dark:text-gray-300 text-sm font-semibold leading-normal">
+                        Nombre Completo
+                    </label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+<span class="material-symbols-outlined text-[20px]">person</span>
+</span>
+<input class="form-input flex w-full rounded-xl text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-1 focus:ring-primary h-12 pl-11 pr-4 text-base font-normal placeholder:text-gray-400 transition-all" placeholder="Ej. María Pérez" type="text"/>
+</div>
+</div>
+<!-- Field 2: ID (Critical) -->
+<div class="flex flex-col gap-2">
+<label class="text-gray-700 dark:text-gray-300 text-sm font-semibold leading-normal flex justify-between">
+<span>Número de Identificación (Cédula)</span>
+<span class="text-xs font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full">Requerido</span>
+</label>
+<div class="relative group">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-primary group-focus-within:text-primary">
+<span class="material-symbols-outlined text-[20px]">badge</span>
+</span>
+<input class="form-input flex w-full rounded-xl text-gray-900 dark:text-white border-2 border-primary/30 dark:border-primary/40 bg-white dark:bg-gray-800 focus:border-primary focus:ring-0 h-14 pl-11 pr-4 text-lg font-medium placeholder:text-gray-400 shadow-sm transition-all" inputmode="numeric" pattern="[0-9]*" placeholder="Ej. 1020304050" type="tel"/>
+<p class="text-xs text-gray-500 mt-1.5 ml-1">Único identificador válido para deudas.</p>
+</div>
+</div>
+<!-- Row for Phone and Limit on larger screens, stacked on mobile -->
+<div class="grid grid-cols-1 gap-5">
+<!-- Field 3: Phone -->
+<div class="flex flex-col gap-2">
+<label class="text-gray-700 dark:text-gray-300 text-sm font-semibold leading-normal">
+                            Teléfono <span class="text-gray-400 font-normal">(Opcional)</span>
+</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+<span class="material-symbols-outlined text-[20px]">call</span>
+</span>
+<input class="form-input flex w-full rounded-xl text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-1 focus:ring-primary h-12 pl-11 pr-4 text-base font-normal placeholder:text-gray-400 transition-all" placeholder="300 123 4567" type="tel"/>
+</div>
+</div>
+<!-- Field 4: Credit Limit -->
+<div class="flex flex-col gap-2">
+<label class="text-gray-700 dark:text-gray-300 text-sm font-semibold leading-normal">
+                            Cupo Máximo
+                        </label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-green-600 dark:text-green-400 font-bold text-lg">
+                                $
+                            </span>
+<input class="form-input flex w-full rounded-xl text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-1 focus:ring-primary h-12 pl-10 pr-4 text-base font-normal placeholder:text-gray-400 transition-all" placeholder="0" type="number"/>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+<span class="material-symbols-outlined text-[20px]">credit_score</span>
+</div>
+</div>
+<p class="text-xs text-gray-500 ml-1">Límite de crédito permitido para fiar.</p>
+</div>
+</div>
+<!-- Extra spacer for scrolling past keyboard if needed -->
+<div class="h-4"></div>
+</div>
+<!-- Footer / Action Bar -->
+<div class="flex-none p-6 bg-white dark:bg-[#1A202C] border-t border-gray-100 dark:border-gray-700">
+<div class="flex gap-4">
+<button class="flex-1 h-12 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold text-base hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-200">
+                        Cancelar
+                    </button>
+<button class="flex-[2] h-12 rounded-xl bg-primary hover:bg-blue-700 text-white font-semibold text-base shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+<span class="material-symbols-outlined text-[20px]">save</span>
+                        Guardar Cliente
+                    </button>
+</div>
+</div>
+</div>
+</div>
+</body></html>

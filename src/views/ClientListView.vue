@@ -1,20 +1,80 @@
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { Search, Plus, AlertTriangle, QrCode } from 'lucide-vue-next';
+import { useClientsStore } from '../stores/clients';
 import BottomNav from '../components/BottomNav.vue';
+import ClientFormModal from '../components/ClientFormModal.vue';
+import { Decimal } from 'decimal.js';
 
 const router = useRouter();
+const clientsStore = useClientsStore();
 
-const clients = [
-  { id: 1, name: 'Maria Perez', cc: '1.020.304', debt: 120000, initials: 'MP', color: 'bg-blue-100 text-blue-600' },
-  { id: 2, name: 'Jorge Villamizar', cc: '98.765.432', debt: 45000, initials: 'JV', color: 'bg-purple-100 text-purple-600' },
-  { id: 3, name: 'Luisa Mendoza', cc: '52.190.876', debt: 0, initials: 'LM', color: 'bg-emerald-100 text-emerald-600' },
-  { id: 4, name: 'Carlos Rodriguez', cc: '79.444.111', debt: 15500, initials: 'CR', color: 'bg-orange-100 text-orange-600' },
-];
+// State
+const searchQuery = ref('');
+const showClientModal = ref(false);
+const editingClientId = ref<number | undefined>(undefined);
+
+// Computed
+const filteredClients = computed(() => {
+  return clientsStore.searchClients(searchQuery.value);
+});
+
+const totalDebt = computed(() => {
+  return clientsStore.totalDebt;
+});
+
+// Generate initials and color from name
+const getInitials = (name: string) => {
+  const parts = name.split(' ');
+  if (parts.length >= 2) {
+    return parts[0][0] + parts[1][0];
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+const getColor = (name: string) => {
+  const colors = [
+    'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+    'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+    'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
+    'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+    'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
+    'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
+  ];
+  const index = name.charCodeAt(0) % colors.length;
+  return colors[index];
+};
+
+// Methods
+const formatCurrency = (val: Decimal) => {
+  return `$${val.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+};
+
+const formatCedula = (cedula: string) => {
+  // Format as 1.020.304
+  return cedula.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
 
 const goToDashboard = () => {
   router.push('/');
 };
+
+const openNewClient = () => {
+  editingClientId.value = undefined;
+  showClientModal.value = true;
+};
+
+const openClientDetail = (clientId: number) => {
+  router.push(`/clients/${clientId}`);
+};
+
+const handleClientSaved = () => {
+  showClientModal.value = false;
+};
+
+onMounted(() => {
+  clientsStore.initializeSampleData();
+});
 </script>
 
 <template>
@@ -31,47 +91,115 @@ const goToDashboard = () => {
           </button>
           <h2 class="text-slate-900 dark:text-white text-xl font-bold">Cartera de Clientes</h2>
         </div>
-        <div class="bg-red-100 dark:bg-red-900/30 px-3 py-1.5 rounded-full flex items-center gap-1.5">
-          <AlertTriangle :size="16" class="text-red-600 dark:text-red-400" />
-          <span class="text-red-700 dark:text-red-300 text-xs font-bold whitespace-nowrap">Total: $180.500</span>
+        <div 
+          v-if="totalDebt.gt(0)"
+          class="bg-red-100 dark:bg-red-900/30 px-3 py-1.5 rounded-full flex items-center gap-1.5"
+        >
+          <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[16px]">warning</span>
+          <span class="text-red-700 dark:text-red-300 text-xs font-bold whitespace-nowrap">
+            Total: {{ formatCurrency(totalDebt) }}
+          </span>
         </div>
       </div>
       <div class="px-4 py-2">
         <div class="relative">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search class="text-gray-400" :size="20" />
+            <span class="material-symbols-outlined text-gray-400 text-[20px]">search</span>
           </div>
-          <input type="text" class="block w-full rounded-xl border-none bg-white dark:bg-slate-800 py-3 pl-10 pr-4 text-sm text-slate-900 dark:text-white shadow-sm placeholder-slate-400 focus:ring-2 focus:ring-primary" placeholder="Buscar por nombre o cédula..." />
+          <input 
+            v-model="searchQuery"
+            type="text" 
+            class="block w-full rounded-xl border-none bg-white dark:bg-slate-800 py-3 pl-10 pr-4 text-sm text-slate-900 dark:text-white shadow-sm placeholder-slate-400 focus:ring-2 focus:ring-primary" 
+            placeholder="Buscar por nombre o cédula..." 
+          />
         </div>
       </div>
     </header>
 
-    <main class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-      <div v-for="client in clients" :key="client.id" class="relative flex items-center gap-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-3 border-l-[6px] overflow-hidden" :class="client.debt > 0 ? 'border-red-500' : 'border-emerald-500'">
-        <div class="h-12 w-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg" :class="client.color">
-          {{ client.initials }}
+    <!-- Empty State -->
+    <div 
+      v-if="filteredClients.length === 0" 
+      class="flex-1 flex flex-col items-center justify-center px-4 text-center"
+    >
+      <div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4">
+        <span class="material-symbols-outlined text-[32px]">person_search</span>
+      </div>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
+        {{ searchQuery ? 'No se encontraron clientes' : 'Sin clientes registrados' }}
+      </h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
+        {{ searchQuery ? 'Intenta con otro término de búsqueda' : 'Agrega tu primer cliente para comenzar' }}
+      </p>
+      <button 
+        v-if="!searchQuery"
+        @click="openNewClient"
+        class="mt-6 px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center gap-2"
+      >
+        <span class="material-symbols-outlined">person_add</span>
+        Agregar Cliente
+      </button>
+    </div>
+
+    <!-- Client List -->
+    <main v-else class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      <div 
+        v-for="client in filteredClients" 
+        :key="client.id" 
+        class="relative flex items-center gap-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-3 border-l-[6px] overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.99]"
+        :class="client.balance.gt(0) ? 'border-red-500' : 'border-emerald-500'"
+        @click="openClientDetail(client.id)"
+      >
+        <div 
+          class="h-12 w-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg" 
+          :class="getColor(client.name)"
+        >
+          {{ getInitials(client.name) }}
         </div>
         <div class="flex flex-1 flex-col justify-center min-w-0">
           <p class="text-slate-900 dark:text-white text-base font-bold truncate">{{ client.name }}</p>
-          <p class="text-gray-500 text-xs font-medium truncate">CC: {{ client.cc }}</p>
+          <p class="text-gray-500 text-xs font-medium truncate">CC: {{ formatCedula(client.cedula) }}</p>
         </div>
         <div class="flex flex-col items-end gap-1">
-          <p class="text-base font-bold leading-tight" :class="client.debt > 0 ? 'text-red-600' : 'text-emerald-600'">
-            ${{ client.debt }}
+          <p 
+            class="text-base font-bold leading-tight" 
+            :class="client.balance.gt(0) ? 'text-red-600' : 'text-emerald-600'"
+          >
+            {{ client.balance.gt(0) ? '-' : '' }}{{ formatCurrency(client.balance.abs()) }}
           </p>
-          <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-slate-700 text-slate-800 dark:text-white hover:bg-gray-200 transition-colors">
-            <QrCode :size="18" />
-          </button>
+          <span 
+            v-if="client.balance.gt(0)"
+            class="text-[10px] text-red-500 font-medium uppercase"
+          >
+            Debe
+          </span>
+          <span 
+            v-else
+            class="text-[10px] text-emerald-600 font-medium uppercase"
+          >
+            Al día
+          </span>
         </div>
+        <span class="material-symbols-outlined text-gray-400">chevron_right</span>
       </div>
     </main>
 
+    <!-- FAB -->
     <div class="absolute bottom-24 right-4 z-40">
-      <button class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90">
-        <Plus :size="32" />
+      <button 
+        @click="openNewClient"
+        class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90"
+      >
+        <span class="material-symbols-outlined text-[32px]">add</span>
       </button>
     </div>
 
     <BottomNav />
+
+    <!-- Client Form Modal -->
+    <ClientFormModal
+      v-model="showClientModal"
+      :client-id="editingClientId"
+      @saved="handleClientSaved"
+    />
   </div>
 </template>
