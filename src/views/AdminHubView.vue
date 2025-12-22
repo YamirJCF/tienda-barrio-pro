@@ -146,7 +146,10 @@ const navigateTo = (route: string) => {
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Equipo y Tienda</h3>
         <div class="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
           <!-- Empleados y Permisos -->
-          <button class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group">
+          <button 
+            @click="navigateTo('/employees')"
+            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group"
+          >
             <div class="flex items-center gap-4">
               <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary">
                 <span class="material-symbols-outlined">group</span>

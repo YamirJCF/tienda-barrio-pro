@@ -6,6 +6,7 @@ import POSView from '../views/POSView.vue';
 import InventoryView from '../views/InventoryView.vue';
 import ClientListView from '../views/ClientListView.vue';
 import ClientDetailView from '../views/ClientDetailView.vue';
+import EmployeeManagerView from '../views/EmployeeManagerView.vue';
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -44,6 +45,11 @@ const router = createRouter({
       path: '/clients/:id',
       name: 'client-detail',
       component: ClientDetailView,
+    },
+    {
+      path: '/employees',
+      name: 'employees',
+      component: EmployeeManagerView,
     },
   ],
 });
