@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router';
+import ToastNotification from './components/ToastNotification.vue';
+import { useNetworkStatus } from './composables/useNetworkStatus';
+
+// Initialize network status monitoring
+useNetworkStatus();
 </script>
 
 <template>
@@ -9,6 +14,9 @@ import { RouterView } from 'vue-router';
         <component :is="Component" />
       </transition>
     </RouterView>
+    
+    <!-- Global Toast Notifications -->
+    <ToastNotification />
   </div>
 </template>
 

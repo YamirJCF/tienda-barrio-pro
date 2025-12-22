@@ -2,18 +2,20 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 
+export type MeasurementUnit = 'kg' | 'lb' | 'g' | 'un';
+
 export interface Product {
     id: number;
     name: string;
     brand?: string;
     category?: string;
     plu?: string;
-    price: Decimal;
+    price: Decimal;           // Si isWeighable: precio por unidad de medida (PUM)
     cost?: Decimal;
-    saleMode: 'unit' | 'weight'; // unit = por unidad, weight = por peso/valor
-    stock: number;
+    isWeighable: boolean;     // true = producto por peso, false = por unidad
+    measurementUnit: MeasurementUnit; // 'kg', 'lb', 'g', 'un'
+    stock: Decimal;           // Stock en decimales para soportar 0.5 lb, etc.
     minStock: number;
-    unit: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -24,6 +26,7 @@ function serializeProduct(product: Product) {
         ...product,
         price: product.price.toString(),
         cost: product.cost?.toString(),
+        stock: product.stock.toString(),
     };
 }
 
@@ -32,6 +35,7 @@ function deserializeProduct(data: any): Product {
         ...data,
         price: new Decimal(data.price),
         cost: data.cost ? new Decimal(data.cost) : undefined,
+        stock: new Decimal(data.stock || 0),
     };
 }
 
@@ -43,7 +47,7 @@ export const useInventoryStore = defineStore('inventory', () => {
     const totalProducts = computed(() => products.value.length);
 
     const lowStockProducts = computed(() =>
-        products.value.filter(p => p.stock <= p.minStock)
+        products.value.filter(p => p.stock.lte(p.minStock))
     );
 
     const productsByCategory = computed(() => {
@@ -113,119 +117,25 @@ export const useInventoryStore = defineStore('inventory', () => {
         });
     };
 
-    const updateStock = (id: number, quantity: number) => {
+    const updateStock = (id: number, quantity: number | Decimal) => {
         const product = products.value.find(p => p.id === id);
         if (product) {
-            product.stock += quantity;
+            const delta = quantity instanceof Decimal ? quantity : new Decimal(quantity);
+            product.stock = product.stock.plus(delta);
             product.updatedAt = new Date().toISOString();
             return product;
         }
         return null;
     };
 
-    // Initialize with some sample data if empty
+    // Initialize with sample data if empty
     const initializeSampleData = () => {
         if (products.value.length === 0) {
-            const sampleProducts = [
-                {
-                    name: 'Coca Cola 1.5L',
-                    brand: 'Coca Cola',
-                    category: 'Bebidas',
-                    plu: '101',
-                    price: new Decimal(4500),
-                    cost: new Decimal(3200),
-                    saleMode: 'unit' as const,
-                    stock: 24,
-                    minStock: 6,
-                    unit: 'un',
-                },
-                {
-                    name: 'Pan Bimbo Blanco',
-                    brand: 'Bimbo',
-                    category: 'Panadería',
-                    plu: '102',
-                    price: new Decimal(3800),
-                    cost: new Decimal(2800),
-                    saleMode: 'unit' as const,
-                    stock: 15,
-                    minStock: 5,
-                    unit: 'un',
-                },
-                {
-                    name: 'Huevos AA x12',
-                    brand: 'Santa Reyes',
-                    category: 'Lácteos y Huevos',
-                    plu: '103',
-                    price: new Decimal(600),
-                    cost: new Decimal(450),
-                    saleMode: 'unit' as const,
-                    stock: 30,
-                    minStock: 12,
-                    unit: 'un',
-                },
-                {
-                    name: 'Leche Entera 1L',
-                    brand: 'Alpina',
-                    category: 'Lácteos y Huevos',
-                    plu: '104',
-                    price: new Decimal(3200),
-                    cost: new Decimal(2400),
-                    saleMode: 'unit' as const,
-                    stock: 18,
-                    minStock: 6,
-                    unit: 'un',
-                },
-                {
-                    name: 'Arroz Diana 500g',
-                    brand: 'Diana',
-                    category: 'Despensa',
-                    plu: '105',
-                    price: new Decimal(2100),
-                    cost: new Decimal(1600),
-                    saleMode: 'unit' as const,
-                    stock: 20,
-                    minStock: 8,
-                    unit: 'un',
-                },
-                {
-                    name: 'Aceite Girasol 1L',
-                    brand: 'Gourmet',
-                    category: 'Despensa',
-                    plu: '106',
-                    price: new Decimal(8500),
-                    cost: new Decimal(6800),
-                    saleMode: 'unit' as const,
-                    stock: 12,
-                    minStock: 4,
-                    unit: 'un',
-                },
-                {
-                    name: 'Azúcar 1kg',
-                    brand: 'Manuelita',
-                    category: 'Despensa',
-                    plu: '107',
-                    price: new Decimal(3500),
-                    cost: new Decimal(2700),
-                    saleMode: 'unit' as const,
-                    stock: 25,
-                    minStock: 10,
-                    unit: 'un',
-                },
-                {
-                    name: 'Sal 500g',
-                    brand: 'Refisal',
-                    category: 'Despensa',
-                    plu: '108',
-                    price: new Decimal(1200),
-                    cost: new Decimal(900),
-                    saleMode: 'unit' as const,
-                    stock: 40,
-                    minStock: 15,
-                    unit: 'un',
-                },
-            ];
-
-            sampleProducts.forEach(product => addProduct(product));
+            // Import dynamically to avoid circular deps  
+            import('../data/sampleData').then(({ SAMPLE_PRODUCTS }) => {
+                SAMPLE_PRODUCTS.forEach(product => addProduct(product));
+                console.log('[Inventory] Initialized with', SAMPLE_PRODUCTS.length, 'sample products');
+            });
         }
     };
 

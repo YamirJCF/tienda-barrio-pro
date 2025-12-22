@@ -2,16 +2,20 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
-import { useInventoryStore } from '../stores/inventory';
+import { useInventoryStore, type Product } from '../stores/inventory';
 import { useSalesStore } from '../stores/sales';
+import { useNotifications } from '../composables/useNotifications';
 import { Decimal } from 'decimal.js';
 import CheckoutModal from '../components/CheckoutModal.vue';
-import BottomNav from '../components/BottomNav.vue';
+import ProductSearchModal from '../components/ProductSearchModal.vue';
+import QuickNoteModal from '../components/QuickNoteModal.vue';
+import WeightCalculatorModal from '../components/WeightCalculatorModal.vue';
 
 const router = useRouter();
 const cartStore = useCartStore();
 const inventoryStore = useInventoryStore();
 const salesStore = useSalesStore();
+const { showSaleSuccess, showSaleOffline } = useNotifications();
 
 // Initialize inventory with sample data if empty
 onMounted(() => {
@@ -21,10 +25,37 @@ onMounted(() => {
 // State
 const pluInput = ref('');
 const showCheckout = ref(false);
-const searchQuery = ref('');
+const showSearch = ref(false);
+const showNote = ref(false);
+const showWeightCalculator = ref(false);
+const selectedWeighableProduct = ref<Product | null>(null);
+
+// Quantity multiplier state - supports two flows:
+// Flow A: [cantidad] → CANT.× → [PLU] → AGREGAR
+// Flow B: [PLU] → CANT.× → [cantidad] → AGREGAR
+const pendingQuantity = ref(1);
+const pendingProduct = ref<Product | null>(null); // For Flow B: product waiting for quantity
+const isQuantityMode = ref(false);
+const isProductMode = ref(false); // Flow B: waiting for quantity after product selected
 
 // Computed
 const formattedTotal = computed(() => cartStore.formattedTotal);
+
+// Current ticket number (next sale ID)
+const ticketNumber = computed(() => {
+  return `#${salesStore.nextId.toString().padStart(3, '0')}`;
+});
+
+// Display helper for the badge
+const quantityBadge = computed(() => {
+  if (isProductMode.value && pendingProduct.value) {
+    return pendingProduct.value.plu || 'OK';
+  }
+  if (isQuantityMode.value) {
+    return `${pendingQuantity.value}×`;
+  }
+  return null;
+});
 
 // Methods
 const goToDashboard = () => {
@@ -37,22 +68,155 @@ const handleNumpad = (value: string) => {
   } else {
     pluInput.value += value;
   }
+  console.log('[Numpad] pluInput:', pluInput.value, '| mode:', isQuantityMode.value ? 'QTY' : isProductMode.value ? 'PROD' : 'NORMAL');
+};
+
+// Handle CANT. × button - supports two flows
+const handleQuantity = () => {
+  console.log('[CANT.×] Pressed. pluInput:', pluInput.value, '| isProductMode:', isProductMode.value);
+  
+  if (!pluInput.value) {
+    console.log('[CANT.×] No input');
+    return;
+  }
+
+  // Check if input is a valid PLU (product exists)
+  const productByPLU = inventoryStore.getProductByPLU(pluInput.value);
+  
+  if (productByPLU) {
+    // Check if product is weighable - open calculator immediately
+    if (productByPLU.isWeighable) {
+      console.log('[CANT.×] Product is weighable - opening calculator immediately');
+      selectedWeighableProduct.value = productByPLU;
+      showWeightCalculator.value = true;
+      pluInput.value = '';
+      resetModes();
+      return;
+    }
+    
+    // Flow B: Input is a PLU → save product, wait for quantity
+    console.log('[CANT.×] Flow B: Product found:', productByPLU.name, '- waiting for quantity');
+    pendingProduct.value = productByPLU;
+    isProductMode.value = true;
+    isQuantityMode.value = false;
+    pluInput.value = '';
+  } else {
+    // Flow A: Input is a quantity → save quantity, wait for PLU
+    const qty = parseInt(pluInput.value);
+    if (qty > 0 && qty <= 999) {
+      console.log('[CANT.×] Flow A: Quantity set to:', qty, '- waiting for PLU');
+      pendingQuantity.value = qty;
+      isQuantityMode.value = true;
+      isProductMode.value = false;
+      pendingProduct.value = null;
+      pluInput.value = '';
+    } else {
+      console.log('[CANT.×] Invalid number for quantity');
+    }
+  }
+};
+
+// Reset all modes
+const resetModes = () => {
+  console.log('[Reset] Clearing all modes');
+  pendingQuantity.value = 1;
+  pendingProduct.value = null;
+  isQuantityMode.value = false;
+  isProductMode.value = false;
 };
 
 const addProductByPLU = () => {
-  if (!pluInput.value) return;
+  console.log('[AGREGAR] pluInput:', pluInput.value, '| isProductMode:', isProductMode.value, '| pendingQuantity:', pendingQuantity.value);
+  
+  // Flow B: Product already selected, input is quantity
+  if (isProductMode.value && pendingProduct.value) {
+    const quantity = pluInput.value ? parseInt(pluInput.value) : 1;
+    if (quantity > 0) {
+      // Check if weighable - should use weight calculator
+      if (pendingProduct.value.isWeighable) {
+        console.log('[AGREGAR] Flow B: Product is weighable - opening calculator');
+        selectedWeighableProduct.value = pendingProduct.value;
+        showWeightCalculator.value = true;
+        pluInput.value = '';
+        resetModes();
+        return;
+      }
+      console.log('[AGREGAR] Flow B: Adding', quantity, 'x', pendingProduct.value.name);
+      cartStore.addItem({ ...pendingProduct.value, quantity });
+      inventoryStore.updateStock(pendingProduct.value.id, -quantity);
+      pluInput.value = '';
+      resetModes();
+      return;
+    }
+  }
+  
+  // Flow A: Normal flow - input is PLU
+  if (!pluInput.value) {
+    console.log('[AGREGAR] No PLU entered');
+    return;
+  }
   
   const product = inventoryStore.getProductByPLU(pluInput.value);
+  console.log('[AGREGAR] Product lookup:', product ? product.name : 'NOT FOUND');
+  
   if (product) {
-    cartStore.addItem({ ...product, quantity: 1 });
-    // Decrease stock
-    inventoryStore.updateStock(product.id, -1);
+    // Check if product is weighable - open calculator instead of adding directly
+    if (product.isWeighable) {
+      console.log('[AGREGAR] Product is weighable - opening weight calculator');
+      selectedWeighableProduct.value = product;
+      showWeightCalculator.value = true;
+      pluInput.value = '';
+      resetModes();
+      return;
+    }
+    
+    const quantity = pendingQuantity.value;
+    console.log('[AGREGAR] Flow A: Adding', quantity, 'x', product.name);
+    cartStore.addItem({ ...product, quantity });
+    inventoryStore.updateStock(product.id, -quantity);
     pluInput.value = '';
+    resetModes();
   } else {
-    // TODO: Show error toast
-    console.error('Product not found');
+    console.error('[AGREGAR] Product not found for PLU:', pluInput.value);
     pluInput.value = '';
   }
+};
+
+// Add product from search modal
+const addProductFromSearch = (product: Product) => {
+  const quantity = pendingQuantity.value;
+  cartStore.addItem({ ...product, quantity });
+  inventoryStore.updateStock(product.id, -quantity);
+  resetModes();
+};
+
+// Add note/custom item
+const addNoteItem = (item: { name: string; price: number }) => {
+  const quantity = pendingQuantity.value;
+  console.log('[NOTA] Adding custom item:', item.name, 'x', quantity, 'at $', item.price);
+  cartStore.addItem({
+    id: Date.now(), // Unique ID for custom items
+    name: item.name,
+    price: new Decimal(item.price),
+    quantity,
+    measurementUnit: 'un',
+    isWeighable: false,
+  });
+  resetModes();
+};
+
+// Handle weight calculator confirmation
+const handleWeightCalculatorConfirm = (data: { product: Product; quantity: Decimal; subtotal: Decimal }) => {
+  console.log('[WEIGHT] Adding weighable item:', data.product.name, 'qty:', data.quantity.toString(), 'subtotal:', data.subtotal.toString());
+  cartStore.addWeighableItem({
+    id: data.product.id,
+    name: data.product.name,
+    price: data.product.price,
+    quantity: data.quantity,
+    unit: data.product.measurementUnit,
+    subtotal: data.subtotal,
+  });
+  inventoryStore.updateStock(data.product.id, data.quantity.neg());
 };
 
 const formatCurrency = (val: Decimal) => {
@@ -65,13 +229,16 @@ const handleCheckout = () => {
 };
 
 const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
+  // Save current ticket number for notification
+  const currentTicket = ticketNumber.value;
+  
   // Create sale record
   const saleItems = cartStore.items.map(item => ({
     productId: item.id,
     productName: item.name,
-    quantity: item.quantity,
+    quantity: item.quantity.toNumber(), // Convert Decimal to number for SaleItem
     price: item.price,
-    subtotal: item.price.times(item.quantity),
+    subtotal: item.subtotal || item.price.times(item.quantity),
   }));
 
   const change = amountReceived ? amountReceived.minus(cartStore.total) : undefined;
@@ -87,8 +254,14 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
   // Clear cart
   cartStore.clearCart();
   showCheckout.value = false;
-};
 
+  // Show confirmation notification
+  if (navigator.onLine) {
+    showSaleSuccess(currentTicket);
+  } else {
+    showSaleOffline(currentTicket);
+  }
+};
 </script>
 
 <template>
@@ -106,7 +279,7 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
             <span class="material-symbols-outlined">arrow_back</span>
           </button>
           <h2 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-tight">
-            Ticket #001
+            Ticket {{ ticketNumber }}
           </h2>
         </div>
         <button
@@ -164,20 +337,43 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
     <!-- ZONA INFERIOR: COMANDOS (Fixed Height) -->
     <section class="bg-surface-light dark:bg-gray-900 shadow-[0_-5px_15px_rgba(0,0,0,0.08)] z-20 rounded-t-3xl relative pb-safe">
       <!-- PLU Display (Input Feedback) -->
-      <div class="w-full bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-1.5 flex justify-center items-center rounded-t-3xl">
+      <div class="w-full bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-1.5 flex justify-center items-center rounded-t-3xl gap-3">
+        <!-- Flow A Badge: Quantity mode (amber) -->
+        <span 
+          v-if="isQuantityMode" 
+          class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-xs font-bold"
+        >
+          {{ pendingQuantity }}×
+        </span>
+        <!-- Flow B Badge: Product mode (blue/green) -->
+        <span 
+          v-if="isProductMode && pendingProduct" 
+          class="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-bold"
+        >
+          {{ pendingProduct.plu || pendingProduct.name?.slice(0,8) }}
+        </span>
         <p class="text-gray-600 dark:text-gray-300 text-xs font-mono font-medium tracking-wide">
-          PLU: <span class="text-blue-600 dark:text-accent-green font-bold">{{ pluInput || '___' }}</span><span class="animate-pulse">|</span>
+          <!-- Different label based on mode -->
+          <span v-if="isProductMode">CANT:</span>
+          <span v-else>PLU:</span>
+          <span class="text-blue-600 dark:text-accent-green font-bold">{{ pluInput || '___' }}</span><span class="animate-pulse">|</span>
         </p>
       </div>
 
       <div class="px-3 pt-3 pb-4 flex flex-col gap-2">
         <!-- Extra Toolbar -->
         <div class="grid grid-cols-2 gap-2 mb-1">
-          <button class="flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 h-10 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95 transition-transform">
+          <button 
+            class="flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 h-10 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95 transition-transform"
+            @click="showSearch = true"
+          >
             <span class="material-symbols-outlined text-lg">search</span>
             Buscar
           </button>
-          <button class="flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 h-10 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95 transition-transform">
+          <button 
+            class="flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 h-10 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95 transition-transform"
+            @click="showNote = true"
+          >
             <span class="material-symbols-outlined text-lg">edit_note</span>
             Nota
           </button>
@@ -194,7 +390,14 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
           >
             {{ num }}
           </button>
-          <button class="h-14 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-center text-amber-700 dark:text-amber-400 active:bg-amber-100 dark:active:bg-amber-900/50 touch-manipulation">
+          <!-- CANT. × Button -->
+          <button 
+            class="h-14 border rounded-lg flex items-center justify-center active:scale-95 touch-manipulation transition-all"
+            :class="isQuantityMode 
+              ? 'bg-amber-500 border-amber-600 text-white' 
+              : 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'"
+            @click="handleQuantity"
+          >
             <span class="text-xs font-bold uppercase block w-full text-center leading-none">
               Cant.<br><span class="text-xl">×</span>
             </span>
@@ -269,10 +472,26 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
       </div>
     </section>
 
-    <!-- Checkout Modal -->
+    <!-- Modals -->
     <CheckoutModal
       v-model="showCheckout"
       @complete="completeSale"
+    />
+    
+    <ProductSearchModal
+      v-model="showSearch"
+      @select="addProductFromSearch"
+    />
+    
+    <QuickNoteModal
+      v-model="showNote"
+      @add="addNoteItem"
+    />
+    
+    <WeightCalculatorModal
+      v-model="showWeightCalculator"
+      :product="selectedWeighableProduct"
+      @confirm="handleWeightCalculatorConfirm"
     />
   </div>
 </template>

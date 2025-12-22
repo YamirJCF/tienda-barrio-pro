@@ -24,6 +24,7 @@ const formData = ref({
   category: '',
   plu: '',
   saleMode: 'unit' as 'unit' | 'weight',
+  measurementUnit: 'lb' as 'kg' | 'lb' | 'g',
   cost: '',
   price: '',
   stock: '',
@@ -40,9 +41,15 @@ const margin = computed(() => {
 });
 
 const isValid = computed(() => {
-  return formData.value.name.trim() !== '' &&
-         formData.value.price.trim() !== '' &&
-         parseFloat(formData.value.price) > 0;
+  const name = String(formData.value.name || '').trim();
+  const price = formData.value.price;
+  const priceNum = parseFloat(String(price));
+  
+  return name !== '' && 
+         price !== '' && 
+         price !== null && 
+         !isNaN(priceNum) && 
+         priceNum > 0;
 });
 
 
@@ -60,6 +67,7 @@ const resetForm = () => {
     category: '',
     plu: '',
     saleMode: 'unit',
+    measurementUnit: 'lb',
     cost: '',
     price: '',
     stock: '',
@@ -68,31 +76,43 @@ const resetForm = () => {
 };
 
 const save = () => {
-  if (!isValid.value) return;
+  console.log('[ProductForm] Save called');
+  console.log('[ProductForm] isValid:', isValid.value);
+  console.log('[ProductForm] formData:', formData.value);
+  
+  if (!isValid.value) {
+    console.log('[ProductForm] Form not valid, aborting');
+    return;
+  }
 
   const productData = {
     name: formData.value.name.trim(),
     brand: formData.value.brand.trim() || undefined,
     category: formData.value.category.trim() || undefined,
     plu: formData.value.plu.trim() || undefined,
-    saleMode: formData.value.saleMode,
+    isWeighable: formData.value.saleMode === 'weight',
+    measurementUnit: formData.value.saleMode === 'weight' ? formData.value.measurementUnit : 'un' as const,
     price: new Decimal(formData.value.price),
     cost: formData.value.cost ? new Decimal(formData.value.cost) : undefined,
-    stock: parseInt(formData.value.stock) || 0,
+    stock: new Decimal(formData.value.stock || 0),
     minStock: parseInt(formData.value.minStock) || 5,
-    unit: 'un', // Default unit
   };
+
+  console.log('[ProductForm] productData:', productData);
 
   let savedProduct: Product;
   
   if (props.productId) {
     // Update existing
+    console.log('[ProductForm] Updating product:', props.productId);
     savedProduct = inventoryStore.updateProduct(props.productId, productData)!;
   } else {
     // Create new
+    console.log('[ProductForm] Creating new product');
     savedProduct = inventoryStore.addProduct(productData);
   }
 
+  console.log('[ProductForm] Saved product:', savedProduct);
   emit('saved', savedProduct);
   close();
 };
@@ -252,6 +272,48 @@ watch(() => props.productId, (id) => {
                 </div>
               </div>
 
+              <!-- Selector de Unidad (solo si es por peso) -->
+              <div v-if="formData.saleMode === 'weight'" class="col-span-12">
+                <label class="block text-[10px] uppercase font-bold text-primary dark:text-primary-400 tracking-wider mb-1">
+                  Unidad de Medida
+                </label>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
+                    :class="formData.measurementUnit === 'kg' 
+                      ? 'bg-primary text-white border-primary' 
+                      : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'"
+                    @click="formData.measurementUnit = 'kg'"
+                  >
+                    kg
+                  </button>
+                  <button
+                    type="button"
+                    class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
+                    :class="formData.measurementUnit === 'lb' 
+                      ? 'bg-primary text-white border-primary' 
+                      : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'"
+                    @click="formData.measurementUnit = 'lb'"
+                  >
+                    Libras
+                  </button>
+                  <button
+                    type="button"
+                    class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
+                    :class="formData.measurementUnit === 'g' 
+                      ? 'bg-primary text-white border-primary' 
+                      : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'"
+                    @click="formData.measurementUnit = 'g'"
+                  >
+                    Gramos
+                  </button>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-1">
+                  El precio y stock se manejarán en la unidad seleccionada
+                </p>
+              </div>
+
               <!-- Costo y Precio -->
               <div class="col-span-6 pt-2">
                 <label class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1">
@@ -319,30 +381,29 @@ watch(() => props.productId, (id) => {
               </div>
 
               <!-- Spacer for scroll -->
-              <div class="col-span-12 h-4"></div>
+              <div class="col-span-12 h-20"></div>
+              
+              <!-- Sticky Footer (inside form) -->
+              <div class="col-span-12 fixed bottom-0 left-0 right-0 max-w-[480px] mx-auto bg-white dark:bg-background-dark border-t border-gray-200 dark:border-gray-700 p-4 z-30 pb-8">
+                <div class="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    class="h-11 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 font-bold text-sm tracking-wide hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    @click="close"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    class="h-11 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm tracking-wide shadow-lg shadow-primary/20 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="!isValid"
+                  >
+                    <span class="material-symbols-outlined text-[18px]">save</span>
+                    Guardar
+                  </button>
+                </div>
+              </div>
             </form>
-          </div>
-
-          <!-- Sticky Footer -->
-          <div class="flex-none absolute bottom-0 left-0 w-full bg-white dark:bg-background-dark border-t border-gray-200 dark:border-gray-700 p-4 z-30 pb-8">
-            <div class="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                class="h-11 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 font-bold text-sm tracking-wide hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                @click="close"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                class="h-11 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm tracking-wide shadow-lg shadow-primary/20 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="!isValid"
-                @click="save"
-              >
-                <span class="material-symbols-outlined text-[18px]">save</span>
-                Guardar
-              </button>
-            </div>
           </div>
         </div>
       </div>

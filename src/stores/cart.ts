@@ -1,36 +1,45 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
+import type { MeasurementUnit } from './inventory';
 
-export interface Product {
+export interface CartItem {
   id: number;
   name: string;
   price: Decimal;
-  quantity: number;
-  unit: string;
+  quantity: Decimal;           // Decimal to support fractional quantities (0.5 lb)
+  unit: MeasurementUnit;       // 'kg', 'lb', 'g', 'un'
+  isWeighable: boolean;        // true for weight-based products
+  subtotal?: Decimal;          // Pre-calculated subtotal for weighable items
 }
 
 // Helper functions for serialization
-function serializeProduct(product: Product) {
+function serializeItem(item: CartItem) {
   return {
-    ...product,
-    price: product.price.toString(),
+    ...item,
+    price: item.price.toString(),
+    quantity: item.quantity.toString(),
+    subtotal: item.subtotal?.toString(),
   };
 }
 
-function deserializeProduct(data: any): Product {
+function deserializeItem(data: any): CartItem {
   return {
     ...data,
     price: new Decimal(data.price),
+    quantity: new Decimal(data.quantity),
+    subtotal: data.subtotal ? new Decimal(data.subtotal) : undefined,
   };
 }
 
 export const useCartStore = defineStore('cart', () => {
-  const items = ref<Product[]>([]);
+  const items = ref<CartItem[]>([]);
 
   const total = computed(() => {
     return items.value.reduce((acc, item) => {
-      return acc.plus(item.price.times(item.quantity));
+      // Use subtotal if available (for weighable items), otherwise calculate
+      const itemTotal = item.subtotal || item.price.times(item.quantity);
+      return acc.plus(itemTotal);
     }, new Decimal(0));
   });
 
@@ -38,12 +47,59 @@ export const useCartStore = defineStore('cart', () => {
     return `$ ${total.value.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
   });
 
-  const addItem = (product: Product) => {
+  // Add regular item (integer quantity)
+  const addItem = (product: {
+    id: number;
+    name: string;
+    price: Decimal;
+    quantity: number;
+    measurementUnit?: MeasurementUnit;
+    isWeighable?: boolean;
+  }) => {
     const existing = items.value.find(i => i.id === product.id);
     if (existing) {
-      existing.quantity += 1;
+      // Add the quantity from the product
+      existing.quantity = existing.quantity.plus(product.quantity);
+      // Recalculate subtotal if weighable
+      if (existing.isWeighable) {
+        existing.subtotal = existing.price.times(existing.quantity);
+      }
     } else {
-      items.value.push({ ...product, quantity: 1 });
+      items.value.push({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: new Decimal(product.quantity),
+        unit: product.measurementUnit || 'un',
+        isWeighable: product.isWeighable || false,
+      });
+    }
+  };
+
+  // Add weighable item with Decimal quantity and pre-calculated subtotal
+  const addWeighableItem = (item: {
+    id: number;
+    name: string;
+    price: Decimal;
+    quantity: Decimal;
+    unit: MeasurementUnit;
+    subtotal: Decimal;
+  }) => {
+    const existing = items.value.find(i => i.id === item.id);
+    if (existing) {
+      // For weighable items, add quantity and subtotal
+      existing.quantity = existing.quantity.plus(item.quantity);
+      existing.subtotal = (existing.subtotal || new Decimal(0)).plus(item.subtotal);
+    } else {
+      items.value.push({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        unit: item.unit,
+        isWeighable: true,
+        subtotal: item.subtotal,
+      });
     }
   };
 
@@ -63,6 +119,7 @@ export const useCartStore = defineStore('cart', () => {
     total,
     formattedTotal,
     addItem,
+    addWeighableItem,
     removeItem,
     clearCart
   };
@@ -73,13 +130,13 @@ export const useCartStore = defineStore('cart', () => {
     serializer: {
       serialize: (state) => {
         return JSON.stringify({
-          items: state.items.map(serializeProduct),
+          items: state.items.map(serializeItem),
         });
       },
       deserialize: (value) => {
         const data = JSON.parse(value);
         return {
-          items: data.items.map(deserializeProduct),
+          items: data.items.map(deserializeItem),
         };
       },
     },
