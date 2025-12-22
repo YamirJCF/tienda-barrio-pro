@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import BottomNav from '../components/BottomNav.vue';
+import ReportsContent from '../components/ReportsContent.vue';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -232,14 +233,8 @@ const navigateTo = (route: string) => {
       </section>
 
       <!-- Reportes Tab Content -->
-      <section v-if="activeTab === 'reportes'" class="flex flex-col items-center justify-center py-12 text-center">
-        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4">
-          <span class="material-symbols-outlined text-[32px]">bar_chart</span>
-        </div>
-        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">Reportes</h3>
-        <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-          Los reportes de ventas, inventario y más estarán disponibles próximamente.
-        </p>
+      <section v-if="activeTab === 'reportes'">
+        <ReportsContent />
       </section>
 
       <div class="h-10"></div>

@@ -5,10 +5,9 @@ import AdminHubView from '../views/AdminHubView.vue';
 import POSView from '../views/POSView.vue';
 import InventoryView from '../views/InventoryView.vue';
 import ClientListView from '../views/ClientListView.vue';
-import ReportsView from '../views/ReportsView.vue';
 
 const router = createRouter({
-  history: createWebHashHistory(), // Hash mode for portability
+  history: createWebHashHistory(),
   routes: [
     {
       path: '/',
@@ -39,11 +38,6 @@ const router = createRouter({
       path: '/clients',
       name: 'clients',
       component: ClientListView,
-    },
-    {
-      path: '/reports',
-      name: 'reports',
-      component: ReportsView,
     },
   ],
 });

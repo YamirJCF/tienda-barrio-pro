@@ -118,25 +118,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="relative flex h-full w-full flex-col min-h-screen bg-gray-50 dark:bg-background-dark pb-24">
-    <!-- Header -->
-    <header class="bg-white dark:bg-background-dark pt-4 pb-2 px-6 flex justify-between items-center z-10">
-      <div class="flex items-center gap-3">
-        <button
-          @click="goBack"
-          class="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-        >
-          <span class="material-symbols-outlined text-slate-600 dark:text-slate-300">arrow_back</span>
-        </button>
-        <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Reportes</h1>
-      </div>
-      <button class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-        <span class="material-symbols-outlined text-slate-500">more_vert</span>
-      </button>
-    </header>
-
+  <div class="flex flex-col">
     <!-- Period Selector -->
-    <div class="sticky top-0 z-40 bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm shadow-sm border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+    <div class="px-4 pb-4">
       <div class="flex h-10 w-full items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
         <label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-[10px] px-2 transition-all duration-200"
           :class="selectedPeriod === 'today' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary font-medium' : 'text-slate-500 dark:text-slate-400'"
