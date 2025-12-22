@@ -21,15 +21,15 @@ const formData = ref({
   name: '',
   username: '',
   pin: '',
-  role: '',
   canSell: true,
+  canViewInventory: true,
   canViewReports: false,
   canFiar: false,
 });
 
 // Computed
 const isEdit = computed(() => !!props.employeeId);
-const modalTitle = computed(() => isEdit.value ? 'Editar Colaborador' : 'Datos del Colaborador');
+const modalTitle = computed(() => isEdit.value ? 'Editar Colaborador' : 'Nuevo Empleado');
 
 const isValid = computed(() => {
   return formData.value.name.trim() !== '' && 
@@ -43,8 +43,8 @@ const resetForm = () => {
     name: '',
     username: '',
     pin: '',
-    role: 'Vendedor',
     canSell: true,
+    canViewInventory: true,
     canViewReports: false,
     canFiar: false,
   };
@@ -62,9 +62,9 @@ const save = () => {
     name: formData.value.name.trim(),
     username: formData.value.username.trim(),
     pin: formData.value.pin,
-    role: formData.value.role.trim() || 'Vendedor',
     permissions: {
       canSell: formData.value.canSell,
+      canViewInventory: formData.value.canViewInventory,
       canViewReports: formData.value.canViewReports,
       canFiar: formData.value.canFiar,
     },
@@ -100,8 +100,8 @@ watch(() => [props.modelValue, props.employeeId], ([show, employeeId]) => {
         name: employee.name,
         username: employee.username,
         pin: employee.pin,
-        role: employee.role,
         canSell: employee.permissions.canSell,
+        canViewInventory: employee.permissions.canViewInventory,
         canViewReports: employee.permissions.canViewReports,
         canFiar: employee.permissions.canFiar,
       };
@@ -163,18 +163,6 @@ watch(() => [props.modelValue, props.employeeId], ([show, employeeId]) => {
                 </div>
               </div>
 
-              <div class="space-y-1.5">
-                <label class="text-sm font-medium text-gray-600 dark:text-gray-400">Rol</label>
-                <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-gray-400 text-[20px]">work</span>
-                  <input 
-                    v-model="formData.role"
-                    class="w-full h-12 rounded-lg border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 pl-10 pr-4 text-sm focus:border-primary focus:ring-primary text-gray-900 dark:text-white placeholder-gray-400" 
-                    placeholder="Ej: Vendedor, Cajero, Repartidor" 
-                    type="text"
-                  />
-                </div>
-              </div>
             </div>
 
             <!-- Security Section -->

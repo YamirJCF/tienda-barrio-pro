@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 
 export interface EmployeePermissions {
     canSell: boolean;
+    canViewInventory: boolean;
     canViewReports: boolean;
     canFiar: boolean;
 }
@@ -12,7 +13,6 @@ export interface Employee {
     name: string;
     username: string;
     pin: string; // 4-digit PIN
-    role: string;
     permissions: EmployeePermissions;
     isActive: boolean;
     createdAt: string;
@@ -104,24 +104,21 @@ export const useEmployeesStore = defineStore('employees', () => {
                 name: 'Carlos Pérez',
                 username: 'carlos01',
                 pin: '1234',
-                role: 'Vendedor',
-                permissions: { canSell: true, canViewReports: false, canFiar: false },
+                permissions: { canSell: true, canViewInventory: true, canViewReports: false, canFiar: false },
                 isActive: true,
             },
             {
                 name: 'María Rodriguez',
                 username: 'maria02',
                 pin: '5678',
-                role: 'Cajera',
-                permissions: { canSell: true, canViewReports: true, canFiar: true },
+                permissions: { canSell: true, canViewInventory: true, canViewReports: true, canFiar: true },
                 isActive: false,
             },
             {
                 name: 'Juan Gómez',
                 username: 'juan03',
                 pin: '9012',
-                role: 'Repartidor',
-                permissions: { canSell: true, canViewReports: false, canFiar: false },
+                permissions: { canSell: true, canViewInventory: true, canViewReports: false, canFiar: false },
                 isActive: true,
             },
         ];

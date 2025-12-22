@@ -151,7 +151,7 @@ onMounted(() => {
               >
                 {{ employee.name }}
               </p>
-              <p class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{{ employee.role }}</p>
+              <p class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Empleado</p>
             </div>
           </div>
           <div class="flex items-center gap-3 shrink-0 ml-2">
