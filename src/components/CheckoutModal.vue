@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useCartStore } from '../stores/cart';
+import { useClientsStore, type Client } from '../stores/clients';
 import Decimal from 'decimal.js';
 
 // Props
@@ -11,17 +12,25 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  'complete': [paymentMethod: string, amountReceived?: Decimal];
+  'complete': [paymentMethod: string, amountReceived?: Decimal, clientId?: number];
 }>();
 
 // Store
 const cartStore = useCartStore();
+const clientsStore = useClientsStore();
 
 // State
 type PaymentMethod = 'cash' | 'nequi' | 'fiado';
 const activeMethod = ref<PaymentMethod>('cash');
 const amountReceived = ref('');
 const nequiReference = ref('');
+const selectedClient = ref<Client | null>(null);
+const clientSearch = ref('');
+
+// Initialize clients
+onMounted(() => {
+  clientsStore.initializeSampleData();
+});
 
 // Computed
 const total = computed(() => cartStore.total);
@@ -48,7 +57,25 @@ const canComplete = computed(() => {
   if (activeMethod.value === 'cash') {
     return amountReceived.value && change.value.greaterThanOrEqualTo(0);
   }
+  if (activeMethod.value === 'fiado') {
+    return selectedClient.value !== null;
+  }
   return true;
+});
+
+// Filtered clients for fiado
+const filteredClients = computed(() => {
+  return clientsStore.searchClients(clientSearch.value);
+});
+
+// Get available credit for selected client
+const selectedClientCredit = computed(() => {
+  if (!selectedClient.value) return new Decimal(0);
+  return clientsStore.getAvailableCredit(selectedClient.value.id);
+});
+
+const hasEnoughCredit = computed(() => {
+  return selectedClientCredit.value.gte(total.value);
 });
 
 // Methods
@@ -75,6 +102,19 @@ const selectMethod = (method: PaymentMethod) => {
   if (method !== 'cash') {
     amountReceived.value = '';
   }
+  if (method !== 'fiado') {
+    selectedClient.value = null;
+    clientSearch.value = '';
+  }
+};
+
+const selectClient = (client: Client) => {
+  selectedClient.value = client;
+  clientSearch.value = '';
+};
+
+const clearSelectedClient = () => {
+  selectedClient.value = null;
 };
 
 const completeSale = () => {
@@ -84,11 +124,17 @@ const completeSale = () => {
     ? new Decimal(amountReceived.value) 
     : undefined;
   
-  emit('complete', activeMethod.value, receivedAmount);
+  const clientId = activeMethod.value === 'fiado' && selectedClient.value
+    ? selectedClient.value.id
+    : undefined;
+  
+  emit('complete', activeMethod.value, receivedAmount, clientId);
   
   // Reset
   amountReceived.value = '';
   nequiReference.value = '';
+  selectedClient.value = null;
+  clientSearch.value = '';
   activeMethod.value = 'cash';
   close();
 };
@@ -311,15 +357,91 @@ const completeSale = () => {
             </div>
 
             <!-- Fiado Payment View -->
-            <div v-else-if="activeMethod === 'fiado'" class="flex flex-col items-center justify-center gap-6 h-full py-8 text-center">
-              <div class="w-24 h-24 bg-amber-100 dark:bg-amber-900/20 rounded-full flex items-center justify-center mb-2">
-                <span class="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[48px]">menu_book</span>
-              </div>
-              <div>
-                <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Venta Fiada</h4>
-                <p class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed">
-                  Se registrará una deuda de <strong class="text-gray-900 dark:text-white">{{ formattedTotal }}</strong> para el cliente seleccionado.
+            <div v-else-if="activeMethod === 'fiado'" class="flex flex-col gap-4 h-full">
+              <!-- Selected Client Card -->
+              <div v-if="selectedClient" class="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-amber-200 dark:bg-amber-800 flex items-center justify-center text-amber-800 dark:text-amber-200 font-bold text-lg">
+                      {{ selectedClient.name.split(' ').map(n => n[0]).join('').substring(0, 2) }}
+                    </div>
+                    <div>
+                      <p class="font-bold text-gray-900 dark:text-white">{{ selectedClient.name }}</p>
+                      <p class="text-xs text-gray-500">C.C. {{ selectedClient.cedula }}</p>
+                    </div>
+                  </div>
+                  <button 
+                    @click="clearSelectedClient"
+                    class="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <span class="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+                <!-- Credit Info -->
+                <div class="mt-3 pt-3 border-t border-amber-200 dark:border-amber-700 flex justify-between text-sm">
+                  <span class="text-gray-600 dark:text-gray-400">Crédito disponible:</span>
+                  <span 
+                    class="font-bold"
+                    :class="hasEnoughCredit ? 'text-emerald-600' : 'text-red-500'"
+                  >
+                    ${{ selectedClientCredit.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") }}
+                  </span>
+                </div>
+                <p v-if="!hasEnoughCredit" class="mt-2 text-xs text-red-500 flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm">warning</span>
+                  El cliente excederá su límite de crédito
                 </p>
+              </div>
+
+              <!-- Client Search -->
+              <div v-if="!selectedClient">
+                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Seleccionar Cliente
+                </label>
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <span class="material-symbols-outlined text-[20px]">search</span>
+                  </span>
+                  <input
+                    v-model="clientSearch"
+                    type="text"
+                    class="w-full h-12 pl-10 pr-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                    placeholder="Buscar por nombre o cédula..."
+                  />
+                </div>
+              </div>
+
+              <!-- Client List -->
+              <div v-if="!selectedClient" class="flex-1 overflow-y-auto -mx-4 px-4">
+                <div v-if="filteredClients.length === 0" class="text-center py-8 text-gray-400">
+                  <span class="material-symbols-outlined text-4xl mb-2">person_search</span>
+                  <p class="text-sm">No se encontraron clientes</p>
+                </div>
+                <div v-else class="flex flex-col gap-2">
+                  <button
+                    v-for="client in filteredClients"
+                    :key="client.id"
+                    class="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-colors text-left"
+                    @click="selectClient(client)"
+                  >
+                    <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 font-bold text-sm">
+                      {{ client.name.split(' ').map(n => n[0]).join('').substring(0, 2) }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="font-semibold text-gray-900 dark:text-white truncate">{{ client.name }}</p>
+                      <p class="text-xs text-gray-500 truncate">C.C. {{ client.cedula }}</p>
+                    </div>
+                    <div class="text-right">
+                      <p 
+                        class="text-sm font-bold"
+                        :class="client.balance.gt(0) ? 'text-red-500' : 'text-emerald-600'"
+                      >
+                        ${{ client.balance.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") }}
+                      </p>
+                      <p class="text-[10px] text-gray-400 uppercase">{{ client.balance.gt(0) ? 'Debe' : 'Al día' }}</p>
+                    </div>
+                  </button>
+                </div>
               </div>
             </div>
           </main>

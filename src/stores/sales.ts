@@ -9,6 +9,7 @@ export interface Sale {
     paymentMethod: 'cash' | 'nequi' | 'fiado';
     amountReceived?: Decimal;
     change?: Decimal;
+    clientId?: number; // For fiado payments
     timestamp: string;
     date: string; // YYYY-MM-DD for grouping
 }

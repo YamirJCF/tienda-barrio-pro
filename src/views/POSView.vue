@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
 import { useInventoryStore, type Product } from '../stores/inventory';
 import { useSalesStore } from '../stores/sales';
+import { useClientsStore } from '../stores/clients';
 import { useNotifications } from '../composables/useNotifications';
 import { Decimal } from 'decimal.js';
 import CheckoutModal from '../components/CheckoutModal.vue';
@@ -15,6 +16,7 @@ const router = useRouter();
 const cartStore = useCartStore();
 const inventoryStore = useInventoryStore();
 const salesStore = useSalesStore();
+const clientsStore = useClientsStore();
 const { showSaleSuccess, showSaleOffline } = useNotifications();
 
 // Initialize inventory with sample data if empty
@@ -228,7 +230,7 @@ const handleCheckout = () => {
   showCheckout.value = true;
 };
 
-const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
+const completeSale = (paymentMethod: string, amountReceived?: Decimal, clientId?: number) => {
   // Save current ticket number for notification
   const currentTicket = ticketNumber.value;
   
@@ -249,7 +251,18 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal) => {
     paymentMethod: paymentMethod as 'cash' | 'nequi' | 'fiado',
     amountReceived,
     change,
+    clientId,
   });
+
+  // If fiado, register the debt in clients store
+  if (paymentMethod === 'fiado' && clientId) {
+    clientsStore.addPurchaseDebt(
+      clientId,
+      cartStore.total,
+      `Compra ${currentTicket}`,
+      salesStore.sales[salesStore.sales.length - 1]?.id
+    );
+  }
 
   // Clear cart
   cartStore.clearCart();
