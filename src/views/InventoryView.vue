@@ -143,46 +143,53 @@ const getCategoryLabel = (category: string) => {
         </button>
       </div>
 
-      <!-- Product Cards -->
-      <article
-        v-for="product in filteredProducts"
-        :key="product.id"
-        class="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3 active:scale-[0.99] transition-transform"
-        @click="openEditProduct(product.id)"
+      <!-- Product Cards with Virtual Scrolling -->
+      <RecycleScroller
+        v-if="filteredProducts.length > 0"
+        class="flex-1"
+        :items="filteredProducts"
+        :item-size="140"
+        key-field="id"
+        v-slot="{ item: product }"
       >
-        <div class="flex justify-between items-start gap-4">
-          <div class="flex-1">
-            <h3 class="text-slate-900 dark:text-white text-base font-bold leading-tight">{{ product.name }}</h3>
-            <div class="flex items-center gap-2 mt-1">
-              <span v-if="product.brand" class="text-slate-500 text-xs font-medium">{{ product.brand }}</span>
-              <span v-if="product.brand && product.plu" class="text-slate-300">|</span>
-              <span v-if="product.plu" class="text-slate-400 text-xs font-mono">PLU: {{ product.plu }}</span>
+        <article
+          class="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3 active:scale-[0.99] transition-transform mb-3 mx-4"
+          @click="openEditProduct(product.id)"
+        >
+          <div class="flex justify-between items-start gap-4">
+            <div class="flex-1">
+              <h3 class="text-slate-900 dark:text-white text-base font-bold leading-tight">{{ product.name }}</h3>
+              <div class="flex items-center gap-2 mt-1">
+                <span v-if="product.brand" class="text-slate-500 text-xs font-medium">{{ product.brand }}</span>
+                <span v-if="product.brand && product.plu" class="text-slate-300">|</span>
+                <span v-if="product.plu" class="text-slate-400 text-xs font-mono">PLU: {{ product.plu }}</span>
+              </div>
+              <span v-if="product.category" class="inline-block mt-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] font-medium rounded">
+                {{ product.category }}
+              </span>
             </div>
-            <span v-if="product.category" class="inline-block mt-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] font-medium rounded">
-              {{ product.category }}
-            </span>
+            <div class="text-right">
+              <span class="text-slate-900 dark:text-white font-bold text-sm bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded block w-fit ml-auto">
+                ${{ formatCurrency(product.price) }}
+              </span>
+            </div>
           </div>
-          <div class="text-right">
-            <span class="text-slate-900 dark:text-white font-bold text-sm bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded block w-fit ml-auto">
-              ${{ formatCurrency(product.price) }}
+          <div class="flex items-center justify-between pt-2 border-t border-gray-50 dark:border-gray-800">
+            <span
+              :class="product.stock.lte ? product.stock.lte(product.minStock) ? 'text-red-500' : 'text-primary' : product.stock <= product.minStock ? 'text-red-500' : 'text-primary'"
+              class="font-bold text-lg leading-none"
+            >
+              {{ product.stock.toFixed ? product.stock.toFixed(1) : product.stock }} <span class="text-xs font-medium opacity-70">{{ product.measurementUnit || 'un' }}</span>
             </span>
+            <button
+              class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              @click.stop="deleteProduct(product.id)"
+            >
+              <span class="material-symbols-outlined text-[20px]">delete</span>
+            </button>
           </div>
-        </div>
-        <div class="flex items-center justify-between pt-2 border-t border-gray-50 dark:border-gray-800">
-          <span
-            :class="product.stock.lte ? product.stock.lte(product.minStock) ? 'text-red-500' : 'text-primary' : product.stock <= product.minStock ? 'text-red-500' : 'text-primary'"
-            class="font-bold text-lg leading-none"
-          >
-            {{ product.stock.toFixed ? product.stock.toFixed(1) : product.stock }} <span class="text-xs font-medium opacity-70">{{ product.measurementUnit || 'un' }}</span>
-          </span>
-          <button
-            class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            @click.stop="deleteProduct(product.id)"
-          >
-            <span class="material-symbols-outlined text-[20px]">delete</span>
-          </button>
-        </div>
-      </article>
+        </article>
+      </RecycleScroller>
     </main>
 
     <!-- FAB (Floating Action Button) -->
