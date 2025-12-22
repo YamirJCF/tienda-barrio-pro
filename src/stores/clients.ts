@@ -210,6 +210,8 @@ export const useClientsStore = defineStore('clients', () => {
     return {
         clients,
         transactions,
+        nextClientId,
+        nextTransactionId,
         totalDebt,
         clientsWithDebt,
         addClient,
