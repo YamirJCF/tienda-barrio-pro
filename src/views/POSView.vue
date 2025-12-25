@@ -231,13 +231,20 @@ const handleCheckout = () => {
 const completeSale = (paymentMethod: string, amountReceived?: Decimal, clientId?: number) => {
   const currentTicket = ticketNumber.value;
   
-  const saleItems = cartStore.items.map(item => ({
-    productId: item.id,
-    productName: item.name,
-    quantity: typeof item.quantity === 'object' && item.quantity.toNumber ? item.quantity.toNumber() : item.quantity,
-    price: item.price,
-    subtotal: item.subtotal || item.price.times(item.quantity),
-  }));
+  const saleItems = cartStore.items.map(item => {
+    // Ensure quantity is always a number
+    const qty = typeof item.quantity === 'object' && 'toNumber' in item.quantity 
+      ? (item.quantity as Decimal).toNumber() 
+      : Number(item.quantity);
+    
+    return {
+      productId: item.id,
+      productName: item.name,
+      quantity: qty,
+      price: item.price,
+      subtotal: item.subtotal || item.price.times(item.quantity),
+    };
+  });
 
   const change = amountReceived ? amountReceived.minus(cartStore.total) : undefined;
 
