@@ -195,9 +195,8 @@ const addProductFromSearch = (product: Product) => {
 // Add note/custom item
 const addNoteItem = (item: { name: string; price: number }) => {
   const quantity = pendingQuantity.value;
-  console.log('[NOTA] Adding custom item:', item.name, 'x', quantity, 'at $', item.price);
   cartStore.addItem({
-    id: Date.now(), // Unique ID for custom items
+    id: Date.now(),
     name: item.name,
     price: new Decimal(item.price),
     quantity,
@@ -209,7 +208,6 @@ const addNoteItem = (item: { name: string; price: number }) => {
 
 // Handle weight calculator confirmation
 const handleWeightCalculatorConfirm = (data: { product: Product; quantity: Decimal; subtotal: Decimal }) => {
-  console.log('[WEIGHT] Adding weighable item:', data.product.name, 'qty:', data.quantity.toString(), 'subtotal:', data.subtotal.toString());
   cartStore.addWeighableItem({
     id: data.product.id,
     name: data.product.name,
@@ -231,14 +229,12 @@ const handleCheckout = () => {
 };
 
 const completeSale = (paymentMethod: string, amountReceived?: Decimal, clientId?: number) => {
-  // Save current ticket number for notification
   const currentTicket = ticketNumber.value;
   
-  // Create sale record
   const saleItems = cartStore.items.map(item => ({
     productId: item.id,
     productName: item.name,
-    quantity: item.quantity.toNumber(), // Convert Decimal to number for SaleItem
+    quantity: typeof item.quantity === 'object' && item.quantity.toNumber ? item.quantity.toNumber() : item.quantity,
     price: item.price,
     subtotal: item.subtotal || item.price.times(item.quantity),
   }));
@@ -254,7 +250,7 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal, clientId?
     clientId,
   });
 
-  // If fiado, register the debt in clients store
+  // If fiado, register the debt
   if (paymentMethod === 'fiado' && clientId) {
     clientsStore.addPurchaseDebt(
       clientId,
