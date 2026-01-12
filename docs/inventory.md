@@ -76,5 +76,13 @@ interface Product {
 - `BottomNav.vue` - Navegación inferior
 - `RecycleScroller` - Virtual scrolling
 
+## Componentes UI Utilizados
+- `NoPermissionOverlay` - Overlay cuando usuario no tiene permiso
+
+## Composables Utilizados
+- `useCurrencyFormat` - Formateo de moneda
+
 ## Stores Utilizados
 - `useInventoryStore`
+- `useAuthStore`
+

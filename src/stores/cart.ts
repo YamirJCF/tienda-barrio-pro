@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import type { MeasurementUnit } from './inventory';
+import { cartSerializer } from '../data/serializers';
 
 export interface CartItem {
   id: number;
@@ -11,25 +12,6 @@ export interface CartItem {
   unit: MeasurementUnit;       // 'kg', 'lb', 'g', 'un'
   isWeighable: boolean;        // true for weight-based products
   subtotal?: Decimal;          // Pre-calculated subtotal for weighable items
-}
-
-// Helper functions for serialization
-function serializeItem(item: CartItem) {
-  return {
-    ...item,
-    price: item.price.toString(),
-    quantity: item.quantity.toString(),
-    subtotal: item.subtotal?.toString(),
-  };
-}
-
-function deserializeItem(data: any): CartItem {
-  return {
-    ...data,
-    price: new Decimal(data.price),
-    quantity: new Decimal(data.quantity),
-    subtotal: data.subtotal ? new Decimal(data.subtotal) : undefined,
-  };
 }
 
 export const useCartStore = defineStore('cart', () => {
@@ -127,18 +109,6 @@ export const useCartStore = defineStore('cart', () => {
   persist: {
     key: 'tienda-cart',
     storage: localStorage,
-    serializer: {
-      serialize: (state) => {
-        return JSON.stringify({
-          items: state.items.map(serializeItem),
-        });
-      },
-      deserialize: (value) => {
-        const data = JSON.parse(value);
-        return {
-          items: data.items.map(deserializeItem),
-        };
-      },
-    },
+    serializer: cartSerializer,
   },
 });

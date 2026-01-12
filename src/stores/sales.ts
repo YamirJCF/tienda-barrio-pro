@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
+import { salesSerializer } from '../data/serializers';
 
 export interface Sale {
     id: number;
@@ -29,35 +30,6 @@ export interface DailyStats {
     cashSales: Decimal;
     nequiSales: Decimal;
     fiadoSales: Decimal;
-}
-
-// Serialization helpers
-function serializeSale(sale: Sale) {
-    return {
-        ...sale,
-        total: sale.total.toString(),
-        amountReceived: sale.amountReceived?.toString(),
-        change: sale.change?.toString(),
-        items: sale.items.map(item => ({
-            ...item,
-            price: item.price.toString(),
-            subtotal: item.subtotal.toString(),
-        })),
-    };
-}
-
-function deserializeSale(data: any): Sale {
-    return {
-        ...data,
-        total: new Decimal(data.total),
-        amountReceived: data.amountReceived ? new Decimal(data.amountReceived) : undefined,
-        change: data.change ? new Decimal(data.change) : undefined,
-        items: data.items.map((item: any) => ({
-            ...item,
-            price: new Decimal(item.price),
-            subtotal: new Decimal(item.subtotal),
-        })),
-    };
 }
 
 export const useSalesStore = defineStore('sales', () => {
@@ -208,26 +180,7 @@ export const useSalesStore = defineStore('sales', () => {
     persist: {
         key: 'tienda-sales',
         storage: localStorage,
-        serializer: {
-            serialize: (state) => {
-                return JSON.stringify({
-                    sales: state.sales.map(serializeSale),
-                    nextId: state.nextId,
-                    isStoreOpen: state.isStoreOpen,
-                    openingCash: state.openingCash.toString(),
-                    currentCash: state.currentCash.toString(),
-                });
-            },
-            deserialize: (value) => {
-                const data = JSON.parse(value);
-                return {
-                    sales: data.sales.map(deserializeSale),
-                    nextId: data.nextId,
-                    isStoreOpen: data.isStoreOpen,
-                    openingCash: new Decimal(data.openingCash),
-                    currentCash: new Decimal(data.currentCash),
-                };
-            },
-        },
+        serializer: salesSerializer,
     },
 });
+

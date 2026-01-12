@@ -76,6 +76,14 @@ Sistema de cobro que permite agregar productos al carrito y procesar ventas con 
 | Búsqueda | Botón lupa | Modal |
 | Checkout | Botón "COBRAR" | Modal |
 
+## Componentes UI Utilizados
+- `NoPermissionOverlay` - Overlay cuando usuario no tiene permiso de venta
+- `NoPermissionOverlay` - Overlay cuando tienda está cerrada
+
+## Composables Utilizados
+- `useCurrencyFormat` - Formateo de moneda
+- `useNotifications` - Notificaciones de venta
+
 ## Modales Utilizados
 - `CheckoutModal.vue` - Proceso de pago
 - `ProductSearchModal.vue` - Búsqueda de productos
@@ -87,3 +95,6 @@ Sistema de cobro que permite agregar productos al carrito y procesar ventas con 
 - `useInventoryStore`
 - `useSalesStore`
 - `useClientsStore`
+- `useStoreStatusStore`
+- `useAuthStore`
+

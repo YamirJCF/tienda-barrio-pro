@@ -44,9 +44,16 @@ Esta pantalla no envía datos, solo consume y muestra información.
 | Clientes | Click "Clientes" | `/clients` |
 | Administración | Click "Admin" | `/admin` |
 
-## Componentes Utilizados
-- `BottomNav.vue` - Navegación inferior
+## Componentes UI Utilizados
+- `StatCard` - Tarjetas de estadísticas (Caja Real, Ventas Hoy, Por Cobrar, Inventario)
+- `BottomNav` - Navegación inferior
+- `UserProfileSidebar` - Sidebar de perfil
+
+## Composables Utilizados
+- `useCurrencyFormat` - Formateo de moneda
 
 ## Stores Utilizados
 - `useSalesStore`
 - `useInventoryStore`
+- `useAuthStore`
+

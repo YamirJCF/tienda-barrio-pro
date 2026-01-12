@@ -2,6 +2,12 @@
 
 Este directorio contiene la documentación técnica de cada pantalla de la aplicación.
 
+## Arquitectura
+| Documento | Descripción |
+|-----------|-------------|
+| [Arquitectura](./architecture.md) | Estructura del proyecto, componentes UI, composables |
+| [Supabase](./architecture-supabase.md) | Plan de migración a Supabase |
+
 ## Índice de Pantallas
 
 ### Vistas Principales
@@ -33,3 +39,4 @@ Cada archivo incluye:
 - **Datos de Salida**: Qué datos espera recibir
 - **Stores Utilizados**: Qué stores de Pinia consume
 - **Navegación**: Desde/hacia dónde se puede navegar
+

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
+import { inventorySerializer } from '../data/serializers';
 
 export type MeasurementUnit = 'kg' | 'lb' | 'g' | 'un';
 
@@ -18,25 +19,6 @@ export interface Product {
     minStock: number;
     createdAt: string;
     updatedAt: string;
-}
-
-// Serialization helpers
-function serializeProduct(product: Product) {
-    return {
-        ...product,
-        price: product.price.toString(),
-        cost: product.cost?.toString(),
-        stock: product.stock.toString(),
-    };
-}
-
-function deserializeProduct(data: any): Product {
-    return {
-        ...data,
-        price: new Decimal(data.price),
-        cost: data.cost ? new Decimal(data.cost) : undefined,
-        stock: new Decimal(data.stock || 0),
-    };
 }
 
 export const useInventoryStore = defineStore('inventory', () => {
@@ -158,20 +140,7 @@ export const useInventoryStore = defineStore('inventory', () => {
     persist: {
         key: 'tienda-inventory',
         storage: localStorage,
-        serializer: {
-            serialize: (state) => {
-                return JSON.stringify({
-                    products: state.products.map(serializeProduct),
-                    nextId: state.nextId,
-                });
-            },
-            deserialize: (value) => {
-                const data = JSON.parse(value);
-                return {
-                    products: data.products.map(deserializeProduct),
-                    nextId: data.nextId,
-                };
-            },
-        },
+        serializer: inventorySerializer,
     },
 });
+

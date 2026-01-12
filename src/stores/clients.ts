@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
+import { clientsSerializer } from '../data/serializers';
 
 export interface ClientTransaction {
     id: number;
@@ -21,37 +22,6 @@ export interface Client {
     balance: Decimal; // Positive = owes money, Negative = credit
     createdAt: string;
     updatedAt: string;
-}
-
-// Serialization helpers
-function serializeClient(client: Client) {
-    return {
-        ...client,
-        creditLimit: client.creditLimit.toString(),
-        balance: client.balance.toString(),
-    };
-}
-
-function deserializeClient(data: any): Client {
-    return {
-        ...data,
-        creditLimit: new Decimal(data.creditLimit || 0),
-        balance: new Decimal(data.balance || 0),
-    };
-}
-
-function serializeTransaction(tx: ClientTransaction) {
-    return {
-        ...tx,
-        amount: tx.amount.toString(),
-    };
-}
-
-function deserializeTransaction(data: any): ClientTransaction {
-    return {
-        ...data,
-        amount: new Decimal(data.amount || 0),
-    };
 }
 
 export const useClientsStore = defineStore('clients', () => {
@@ -229,24 +199,7 @@ export const useClientsStore = defineStore('clients', () => {
 }, {
     persist: {
         key: 'tienda-clients',
-        serializer: {
-            serialize: (state: any) => {
-                return JSON.stringify({
-                    clients: state.clients.map(serializeClient),
-                    transactions: state.transactions.map(serializeTransaction),
-                    nextClientId: state.nextClientId,
-                    nextTransactionId: state.nextTransactionId,
-                });
-            },
-            deserialize: (value: string) => {
-                const data = JSON.parse(value);
-                return {
-                    clients: data.clients?.map(deserializeClient) || [],
-                    transactions: data.transactions?.map(deserializeTransaction) || [],
-                    nextClientId: data.nextClientId || 1,
-                    nextTransactionId: data.nextTransactionId || 1,
-                };
-            },
-        },
+        serializer: clientsSerializer,
     },
 });
+
