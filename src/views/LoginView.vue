@@ -19,16 +19,23 @@ const handleLogin = async () => {
   errorMessage.value = '';
   isLoading.value = true;
 
-  // Small delay for UX
+  // UX Delay
   await new Promise(resolve => setTimeout(resolve, 300));
 
-  // Try admin login first (email + password)
+  // 1. VALIDACIÓN PREVENTIVA: ¿Existe tienda?
+  if (!authStore.hasStores) {
+    isLoading.value = false;
+    errorMessage.value = 'No se detecta una tienda registrada en este dispositivo.';
+    return;
+  }
+
+  // 2. Intento Admin
   if (authStore.loginWithCredentials(username.value, password.value)) {
     router.push('/');
     return;
   }
 
-  // Try employee login (username + PIN)
+  // 3. Intento Empleado (Fail-Safe)
   const firstStore = authStore.getFirstStore();
   if (firstStore) {
     const employee = employeesStore.validatePin(username.value, password.value);
@@ -45,7 +52,7 @@ const handleLogin = async () => {
   }
 
   isLoading.value = false;
-  errorMessage.value = 'Credenciales incorrectas';
+  errorMessage.value = 'Credenciales inválidas o cuenta no autorizada';
 };
 </script>
 
@@ -105,7 +112,8 @@ const handleLogin = async () => {
           </div>
 
           <!-- Error message -->
-          <div v-if="errorMessage" class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+          <div v-if="errorMessage"
+            class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
             <p class="text-sm text-red-600 dark:text-red-400 text-center font-medium">
               {{ errorMessage }}
             </p>

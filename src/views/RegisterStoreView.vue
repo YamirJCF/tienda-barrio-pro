@@ -6,31 +6,56 @@ import { useAuthStore } from '../stores/auth';
 const router = useRouter();
 const authStore = useAuthStore();
 
-// Form state
+// ============================================
+// FORM STATE
+// ============================================
 const storeName = ref('');
 const ownerName = ref('');
 const email = ref('');
 const password = ref('');
 const pin = ref('');
 const showPassword = ref(false);
-const errorMessage = ref('');
 
-// Computed
-const isStoreNameValid = computed(() => storeName.value.length >= 3);
-const isPinComplete = computed(() => pin.value.length === 6);
+// ============================================
+// UI STATE
+// ============================================
+const errorMessage = ref('');
+const isLoading = ref(false);
+
+// ============================================
+// VALIDATION RULES
+// ============================================
+// Regex para validación estricta de email
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Computed validations
+const isStoreNameValid = computed(() => storeName.value.trim().length >= 3);
+const isOwnerNameValid = computed(() => ownerName.value.trim().length > 0);
+const isEmailValid = computed(() => emailRegex.test(email.value.trim()));
+const isPasswordValid = computed(() => password.value.length >= 6);
+// PIN: exactamente 6 dígitos numéricos
+const isPinComplete = computed(() => /^\d{6}$/.test(pin.value));
+
+// Botón habilitado solo si todo es válido y no está cargando
 const canSubmit = computed(() => {
     return isStoreNameValid.value &&
-        ownerName.value.length > 0 &&
-        email.value.length > 0 &&
-        password.value.length >= 6 &&
-        isPinComplete.value;
+        isOwnerNameValid.value &&
+        isEmailValid.value &&
+        isPasswordValid.value &&
+        isPinComplete.value &&
+        !isLoading.value;
 });
 
-// Methods
+// ============================================
+// NAVIGATION METHODS
+// ============================================
 const goBack = () => {
     router.back();
 };
 
+// ============================================
+// PIN KEYPAD HANDLERS
+// ============================================
 const handleKeypadPress = (num: string) => {
     if (pin.value.length < 6) {
         pin.value += num;
@@ -43,31 +68,53 @@ const handleBackspace = () => {
     }
 };
 
-const handleSubmit = () => {
-    if (canSubmit.value) {
-        errorMessage.value = '';
+// ============================================
+// PASSWORD VISIBILITY TOGGLE
+// ============================================
+const togglePassword = () => {
+    showPassword.value = !showPassword.value;
+};
 
-        // Register store and auto-login as admin
+// ============================================
+// FORM SUBMISSION (ASYNC + ERROR HANDLING)
+// ============================================
+const handleSubmit = async () => {
+    // Guard clause: previene doble-click y envíos inválidos
+    if (!canSubmit.value || isLoading.value) return;
+
+    isLoading.value = true;
+    errorMessage.value = '';
+
+    try {
+        // Espera artificial para:
+        // 1. Dar feedback visual (spinner/loading state)
+        // 2. Asegurar que localStorage complete la escritura antes de navegar
+        await new Promise(resolve => setTimeout(resolve, 600));
+
+        // Intentar registro en el store
         const result = authStore.registerStore({
-            storeName: storeName.value,
-            ownerName: ownerName.value,
-            email: email.value,
+            storeName: storeName.value.trim(),
+            ownerName: ownerName.value.trim(),
+            email: email.value.trim().toLowerCase(),
             password: password.value,
             pin: pin.value
         });
 
         if (result) {
-            console.log('Store registered successfully:', result);
-            // Navigate to dashboard
+            console.log('✅ Tienda registrada exitosamente:', result.storeName);
+            // Redirección al Dashboard
             router.push('/');
         } else {
-            errorMessage.value = 'Este correo ya está registrado';
+            // Email duplicado (único error conocido del store)
+            errorMessage.value = 'Este correo electrónico ya está registrado.';
+            isLoading.value = false;
         }
+    } catch (error) {
+        // Captura errores inesperados (quota de localStorage, etc.)
+        console.error('❌ Error crítico en registro:', error);
+        errorMessage.value = 'Error del sistema. Por favor, intenta nuevamente.';
+        isLoading.value = false;
     }
-};
-
-const togglePassword = () => {
-    showPassword.value = !showPassword.value;
 };
 </script>
 

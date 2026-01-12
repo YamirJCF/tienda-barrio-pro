@@ -23,8 +23,13 @@ const salesStore = useSalesStore();
 const clientsStore = useClientsStore();
 const storeStatusStore = useStoreStatusStore();
 const authStore = useAuthStore();
-const { showSaleSuccess, showSaleOffline } = useNotifications();
+const { showSaleSuccess, showSaleOffline, showSuccess, showError } = useNotifications();
 const { formatWithSign: formatCurrency } = useCurrencyFormat();
+
+// ============================================
+// UI STATE
+// ============================================
+const isProcessing = ref(false); // Loading state for COBRAR button
 
 // Estado operativo de la tienda
 const isStoreClosed = computed(() => storeStatusStore.isClosed);
@@ -119,7 +124,9 @@ const handleQuantity = () => {
     pluInput.value = '';
   } else {
     // Flow A: Input is a quantity → save quantity, wait for PLU
-    const qty = parseInt(pluInput.value);
+    const rawQty = parseInt(pluInput.value);
+    // DEFENSIVE: NaN fallback - if parse fails, treat as invalid
+    const qty = (isNaN(rawQty) || rawQty <= 0) ? 0 : rawQty;
     if (qty > 0 && qty <= 999) {
       console.log('[CANT.×] Flow A: Quantity set to:', qty, '- waiting for PLU');
       pendingQuantity.value = qty;
@@ -147,7 +154,9 @@ const addProductByPLU = () => {
 
   // Flow B: Product already selected, input is quantity
   if (isProductMode.value && pendingProduct.value) {
-    const quantity = pluInput.value ? parseInt(pluInput.value) : 1;
+    // DEFENSIVE: Safe parseInt with NaN fallback to 1
+    const rawQty = pluInput.value ? parseInt(pluInput.value) : 1;
+    const quantity = (isNaN(rawQty) || rawQty <= 0) ? 1 : rawQty;
     if (quantity > 0) {
       // Check if weighable - should use weight calculator
       if (pendingProduct.value.isWeighable) {
@@ -161,6 +170,8 @@ const addProductByPLU = () => {
       console.log('[AGREGAR] Flow B: Adding', quantity, 'x', pendingProduct.value.name);
       cartStore.addItem({ ...pendingProduct.value, quantity });
       inventoryStore.updateStock(pendingProduct.value.id, -quantity);
+      // ✅ SUCCESS FEEDBACK
+      showSuccess(`${quantity}x ${pendingProduct.value.name} agregado`);
       pluInput.value = '';
       resetModes();
       return;
@@ -191,10 +202,13 @@ const addProductByPLU = () => {
     console.log('[AGREGAR] Flow A: Adding', quantity, 'x', product.name);
     cartStore.addItem({ ...product, quantity });
     inventoryStore.updateStock(product.id, -quantity);
+    // ✅ SUCCESS FEEDBACK
+    showSuccess(`${quantity}x ${product.name} agregado`);
     pluInput.value = '';
     resetModes();
   } else {
-    console.error('[AGREGAR] Product not found for PLU:', pluInput.value);
+    // ❌ ERROR FEEDBACK (reemplaza console.error)
+    showError(`Producto no encontrado: ${pluInput.value}`);
     pluInput.value = '';
   }
 };
@@ -241,54 +255,72 @@ const handleCheckout = () => {
   showCheckout.value = true;
 };
 
-const completeSale = (paymentMethod: string, amountReceived?: Decimal, clientId?: number) => {
+const completeSale = async (paymentMethod: string, amountReceived?: Decimal, clientId?: number) => {
+  // Prevent double-click
+  if (isProcessing.value) return;
+
+  isProcessing.value = true;
   const currentTicket = ticketNumber.value;
 
-  const saleItems = cartStore.items.map(item => {
-    // Ensure quantity is always a number
-    const qty = typeof item.quantity === 'object' && 'toNumber' in item.quantity
-      ? (item.quantity as Decimal).toNumber()
-      : Number(item.quantity);
+  try {
+    // ============================================
+    // SIMULATED PROCESSING DELAY
+    // Gives user visual feedback that transaction is being processed
+    // Also ensures localStorage writes complete before navigation
+    // ============================================
+    await new Promise(resolve => setTimeout(resolve, 600));
 
-    return {
-      productId: item.id,
-      productName: item.name,
-      quantity: qty,
-      price: item.price,
-      subtotal: item.subtotal || item.price.times(item.quantity),
-    };
-  });
+    const saleItems = cartStore.items.map(item => {
+      // Ensure quantity is always a number
+      const qty = typeof item.quantity === 'object' && 'toNumber' in item.quantity
+        ? (item.quantity as Decimal).toNumber()
+        : Number(item.quantity);
 
-  const change = amountReceived ? amountReceived.minus(cartStore.total) : undefined;
+      return {
+        productId: item.id,
+        productName: item.name,
+        quantity: qty,
+        price: item.price,
+        subtotal: item.subtotal || item.price.times(item.quantity),
+      };
+    });
 
-  salesStore.addSale({
-    items: saleItems,
-    total: cartStore.total,
-    paymentMethod: paymentMethod as 'cash' | 'nequi' | 'fiado',
-    amountReceived,
-    change,
-    clientId,
-  });
+    const change = amountReceived ? amountReceived.minus(cartStore.total) : undefined;
 
-  // If fiado, register the debt
-  if (paymentMethod === 'fiado' && clientId) {
-    clientsStore.addPurchaseDebt(
+    salesStore.addSale({
+      items: saleItems,
+      total: cartStore.total,
+      paymentMethod: paymentMethod as 'cash' | 'nequi' | 'fiado',
+      amountReceived,
+      change,
       clientId,
-      cartStore.total,
-      `Compra ${currentTicket}`,
-      salesStore.sales[salesStore.sales.length - 1]?.id
-    );
-  }
+    });
 
-  // Clear cart
-  cartStore.clearCart();
-  showCheckout.value = false;
+    // If fiado, register the debt
+    if (paymentMethod === 'fiado' && clientId) {
+      clientsStore.addPurchaseDebt(
+        clientId,
+        cartStore.total,
+        `Compra ${currentTicket}`,
+        salesStore.sales[salesStore.sales.length - 1]?.id
+      );
+    }
 
-  // Show confirmation notification
-  if (navigator.onLine) {
-    showSaleSuccess(currentTicket);
-  } else {
-    showSaleOffline(currentTicket);
+    // Clear cart
+    cartStore.clearCart();
+    showCheckout.value = false;
+
+    // Show confirmation notification
+    if (navigator.onLine) {
+      showSaleSuccess(currentTicket);
+    } else {
+      showSaleOffline(currentTicket);
+    }
+  } catch (error) {
+    console.error('Error processing sale:', error);
+    showError('Error al procesar la venta. Intenta nuevamente.');
+  } finally {
+    isProcessing.value = false;
   }
 };
 </script>
@@ -297,19 +329,14 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal, clientId?
   <div class="bg-background-light dark:bg-background-dark h-screen w-full flex flex-col overflow-hidden relative">
 
     <!-- No Permission Overlay -->
-    <NoPermissionOverlay 
-      v-if="!canSell"
+    <NoPermissionOverlay v-if="!canSell"
       message="No tienes permiso para realizar ventas. Contacta a tu administrador si necesitas acceso."
-      @go-back="goToDashboard"
-    />
+      @go-back="goToDashboard" />
 
     <!-- Store Closed Overlay -->
-    <NoPermissionOverlay 
-      v-else-if="isStoreClosed"
-      title="Tienda Cerrada"
+    <NoPermissionOverlay v-else-if="isStoreClosed" title="Tienda Cerrada"
       message="La tienda está fuera de servicio en este momento. No se pueden realizar ventas."
-      @go-back="goToDashboard"
-    />
+      @go-back="goToDashboard" />
 
     <!-- ZONA SUPERIOR: TICKET (Flex Grow) -->
     <section class="flex flex-col flex-1 min-h-0 relative">
@@ -484,9 +511,11 @@ const completeSale = (paymentMethod: string, amountReceived?: Decimal, clientId?
         <!-- Master Action Button (COBRAR) -->
         <button
           class="w-full h-14 bg-accent-green hover:bg-emerald-600 text-black font-black text-xl tracking-wide rounded-xl shadow-lg shadow-emerald-500/30 active:scale-[0.98] active:translate-y-0.5 transition-all mt-2 flex items-center justify-center gap-3 border-b-4 border-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-          :disabled="cartStore.items.length === 0" @click="handleCheckout">
-          <span class="material-symbols-outlined text-2xl">payments</span>
-          COBRAR {{ formattedTotal }}
+          :disabled="cartStore.items.length === 0 || isProcessing" @click="handleCheckout">
+          <!-- Spinner when processing -->
+          <span v-if="isProcessing" class="material-symbols-outlined text-2xl animate-spin">progress_activity</span>
+          <span v-else class="material-symbols-outlined text-2xl">payments</span>
+          {{ isProcessing ? 'Procesando...' : `COBRAR ${formattedTotal}` }}
         </button>
       </div>
     </section>

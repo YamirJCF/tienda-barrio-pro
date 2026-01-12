@@ -29,7 +29,7 @@ export const useCartStore = defineStore('cart', () => {
     return `$ ${total.value.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
   });
 
-  // Add regular item (integer quantity)
+  // Add regular item (integer quantity) with defensive validation
   const addItem = (product: {
     id: number;
     name: string;
@@ -38,10 +38,26 @@ export const useCartStore = defineStore('cart', () => {
     measurementUnit?: MeasurementUnit;
     isWeighable?: boolean;
   }) => {
+    // ============================================
+    // DEFENSIVE VALIDATION: Prevent NaN/Infinity
+    // ============================================
+    const qty = product.quantity;
+
+    // Check if quantity is a valid finite number greater than 0
+    if (typeof qty !== 'number' || !Number.isFinite(qty) || qty <= 0) {
+      console.warn('[Cart] ⚠️ addItem rejected: Invalid quantity', {
+        productId: product.id,
+        productName: product.name,
+        receivedQuantity: qty,
+        type: typeof qty
+      });
+      return; // Silently ignore corrupt data
+    }
+
     const existing = items.value.find(i => i.id === product.id);
     if (existing) {
       // Add the quantity from the product
-      existing.quantity = existing.quantity.plus(product.quantity);
+      existing.quantity = existing.quantity.plus(qty);
       // Recalculate subtotal if weighable
       if (existing.isWeighable) {
         existing.subtotal = existing.price.times(existing.quantity);
@@ -51,7 +67,7 @@ export const useCartStore = defineStore('cart', () => {
         id: product.id,
         name: product.name,
         price: product.price,
-        quantity: new Decimal(product.quantity),
+        quantity: new Decimal(qty),
         unit: product.measurementUnit || 'un',
         isWeighable: product.isWeighable || false,
       });
@@ -59,6 +75,7 @@ export const useCartStore = defineStore('cart', () => {
   };
 
   // Add weighable item with Decimal quantity and pre-calculated subtotal
+  // Includes defensive validation for Decimal values
   const addWeighableItem = (item: {
     id: number;
     name: string;
@@ -67,6 +84,26 @@ export const useCartStore = defineStore('cart', () => {
     unit: MeasurementUnit;
     subtotal: Decimal;
   }) => {
+    // ============================================
+    // DEFENSIVE VALIDATION: Prevent NaN/Infinity in Decimals
+    // ============================================
+    // Verify that quantity and subtotal are valid Decimal instances
+    const isValidDecimal = (val: unknown): val is Decimal => {
+      if (!(val instanceof Decimal)) return false;
+      const num = val.toNumber();
+      return Number.isFinite(num) && num > 0;
+    };
+
+    if (!isValidDecimal(item.quantity) || !isValidDecimal(item.subtotal)) {
+      console.warn('[Cart] ⚠️ addWeighableItem rejected: Invalid Decimal values', {
+        productId: item.id,
+        productName: item.name,
+        quantity: item.quantity?.toString?.() ?? 'undefined',
+        subtotal: item.subtotal?.toString?.() ?? 'undefined'
+      });
+      return; // Silently ignore corrupt data
+    }
+
     const existing = items.value.find(i => i.id === item.id);
     if (existing) {
       // For weighable items, add quantity and subtotal
