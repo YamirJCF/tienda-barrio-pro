@@ -1,7 +1,7 @@
 # Mapa de Lógica Global - Tienda de Barrio Pro
 
-> **Última actualización:** 2026-01-13 (v2 - Capa Financiera Completa)  
-> **Rama:** docs/expenses-logic-sync  
+> **Última actualización:** 2026-01-13 (v3 - Fase 2: Onboarding Completo)  
+> **Rama:** docs/register-store-sync  
 > **Propósito:** Hoja de ruta para sincronización código ↔ documentación
 
 ---
@@ -11,10 +11,10 @@
 | Métrica | Valor |
 |---------|-------|
 | Vistas en código (`03_SRC/src/views/`) | 15 |
-| Módulos documentados (`01_REQUIREMENTS/`) | 12 |
-| Módulos sincronizados (100%) | 3 |
+| Módulos documentados (`01_REQUIREMENTS/`) | 13 |
+| Módulos sincronizados (100%) | 4 |
 | Módulos parcialmente sincronizados | 9 |
-| Vistas sin documentación | 4 |
+| Vistas sin documentación | 3 |
 
 ---
 
@@ -38,7 +38,7 @@
 | Gastos | `expenses.md` | `ExpensesView.vue` | 🟢 100% | **Sincronizado** |
 | Recuperar Password | ❌ No existe | `ForgotPasswordView.vue` | 🔴 0% | **Sin documentar** |
 | Notificaciones | ❌ No existe | `NotificationCenterView.vue` | 🔴 0% | **Sin documentar** |
-| Registro de Tienda | ❌ No existe | `RegisterStoreView.vue` | 🔴 0% | **Sin documentar** |
+| Registro de Tienda | `register-store.md` | `RegisterStoreView.vue` | 🟢 100% | **Sincronizado** |
 | Entrada de Stock | ❌ No existe | `StockEntryView.vue` | 🔴 0% | **Sin documentar** |
 | Auditoría Sistema | ❌ No existe | `SystemAuditView.vue` | 🔴 0% | **Sin documentar** (solo DEV) |
 
@@ -52,7 +52,7 @@
 |-------|------------|---------------|
 | ~~`CashControlView.vue`~~ | ~~CRÍTICA~~ | ✅ **COMPLETADO** |
 | ~~`ExpensesView.vue`~~ | ~~ALTA~~ | ✅ **COMPLETADO** |
-| `RegisterStoreView.vue` | **ALTA** | Onboarding de nuevos usuarios |
+| ~~`RegisterStoreView.vue`~~ | ~~ALTA~~ | ✅ **COMPLETADO** |
 | `StockEntryView.vue` | **MEDIA** | Gestión de inventario |
 | `NotificationCenterView.vue` | **BAJA** | Feature secundario |
 | `ForgotPasswordView.vue` | **BAJA** | Flujo de recuperación |
@@ -138,7 +138,7 @@ graph TD
     style DASH fill:#90EE90
     style CASH fill:#90EE90
     style EXPENSES fill:#90EE90
-    style REGISTER fill:#FFB6C1
+    style REGISTER fill:#90EE90
 ```
 
 ### Leyenda
@@ -163,7 +163,7 @@ graph TD
 ### Semana 1: Documentación Crítica ✅ COMPLETADA
 - [x] Crear `cash-control.md` - Requisitos de CashControlView
 - [x] Crear `expenses.md` - Requisitos de ExpensesView
-- [ ] Crear `register-store.md` - Requisitos de RegisterStoreView
+- [x] Crear `register-store.md` - Requisitos de RegisterStoreView
 
 ### Semana 2: Sincronización de Módulos Existentes
 - [ ] Actualizar `admin-hub.md` (patrón Dashboard)
@@ -200,8 +200,8 @@ graph TD
 
 ## ✅ Conclusiones
 
-1. **Dashboard**, **CashControl** y **Expenses** están 100% sincronizados.
-2. **Capa Financiera COMPLETA** - Los módulos críticos de dinero están documentados.
-3. **4 vistas** aún carecen de documentación: RegisterStore, StockEntry, Notifications, ForgotPassword.
+1. **4 módulos** al 100%: Dashboard, CashControl, Expenses, RegisterStore.
+2. **Capa Financiera COMPLETA** + **Onboarding COMPLETO**.
+3. **3 vistas** aún sin documentar: StockEntry, Notifications, ForgotPassword.
 4. El patrón de `todayStats` en documentación está obsoleto - la implementación usa propiedades individuales.
-5. Se recomienda seguir el **plan de 4 semanas** para lograr sincronización completa.
+5. Se recomienda continuar con Semana 2: sincronización de módulos existentes.
