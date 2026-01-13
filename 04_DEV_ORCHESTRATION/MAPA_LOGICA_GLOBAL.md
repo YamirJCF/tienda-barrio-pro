@@ -1,7 +1,7 @@
 # Mapa de Lógica Global - Tienda de Barrio Pro
 
-> **Última actualización:** 2026-01-13 (v5 - Fase 3: Operaciones)  
-> **Rama:** docs/stock-entry-sync  
+> **Última actualización:** 2026-01-13 (v6 - Núcleo Operativo Completo)  
+> **Rama:** docs/pos-checkout-sync  
 > **Propósito:** Hoja de ruta para sincronización código ↔ documentación
 
 ---
@@ -12,8 +12,8 @@
 |---------|-------|
 | Vistas en código (`03_SRC/src/views/`) | 15 |
 | Módulos documentados (`01_REQUIREMENTS/`) | 14 |
-| Módulos sincronizados (100%) | 6 |
-| Módulos parcialmente sincronizados | 8 |
+| Módulos sincronizados (100%) | 8 |
+| Módulos parcialmente sincronizados | 6 |
 | Vistas sin documentación | 2 |
 
 ---
@@ -24,13 +24,13 @@
 |--------|-------------------|------------------|------------|--------|
 | Dashboard | `dashboard.md` | `DashboardView.vue` | 🟢 100% | **Sincronizado** |
 | Inventario | `inventory.md` | `InventoryView.vue` | 🟡 85% | Código ≈ Docs |
-| POS | `pos.md` | `POSView.vue` | 🟡 80% | Docs ligeramente desactual |
+| POS | `pos.md` | `POSView.vue` | 🟢 100% | **Sincronizado** |
 | Clientes | `clients.md` | `ClientListView.vue` | 🟡 80% | Falta authStore |
 | Detalle Cliente | `client-detail.md` | `ClientDetailView.vue` | 🟡 75% | Pendiente revisión |
 | Admin Hub | `admin-hub.md` | `AdminHubView.vue` | 🟠 60% | todayStats obsoleto |
 | Empleados | `employees.md` | `EmployeeManagerView.vue` | 🟡 85% | Código ≈ Docs |
 | Login | `login.md` | `LoginView.vue` | 🟢 100% | **Sincronizado** |
-| Checkout Modal | `checkout-modal.md` | `CheckoutModal.vue` | 🟡 80% | Pendiente revisión |
+| Checkout Modal | `checkout-modal.md` | `CheckoutModal.vue` | 🟢 100% | **Sincronizado** |
 | Product Form | `product-form-modal.md` | `ProductFormModal.vue` | 🟡 85% | Código ≈ Docs |
 | Client Form | `client-form-modal.md` | `ClientFormModal.vue` | 🟡 85% | Código ≈ Docs |
 | Employee Form | `employee-form-modal.md` | `EmployeeFormModal.vue` | 🟡 85% | Código ≈ Docs |
@@ -167,9 +167,10 @@ graph TD
 
 ### Semana 2: Sincronización de Módulos Existentes
 - [x] Actualizar `login.md` (flujo cascada Admin/Empleado)
+- [x] Actualizar `pos.md` (guards, notificaciones, flows A/B)
+- [x] Actualizar `checkout-modal.md` (métodos de pago completos)
 - [ ] Actualizar `admin-hub.md` (patrón Dashboard)
 - [ ] Actualizar `clients.md` (agregar authStore)
-- [ ] Revisar `pos.md` vs POSView.vue
 
 ### Semana 3: Documentación Secundaria
 - [x] Crear `stock-entry.md` - Entrada de inventario
@@ -200,8 +201,8 @@ graph TD
 
 ## ✅ Conclusiones
 
-1. **6 módulos** al 100%: Dashboard, CashControl, Expenses, RegisterStore, Login, StockEntry.
-2. **Capa Financiera + Onboarding + Login + Operaciones COMPLETOS**.
-3. **Solo 2 vistas** sin documentar: Notifications, ForgotPassword (ambas de prioridad BAJA).
-4. El patrón de `todayStats` en documentación está obsoleto - la implementación usa propiedades individuales.
-5. Próximo objetivo: Completar Semana 3 con módulos secundarios.
+1. **8 módulos** al 100%: Dashboard, CashControl, Expenses, RegisterStore, Login, StockEntry, POS, Checkout.
+2. **Núcleo Operativo COMPLETO** - Todo el flujo de venta está documentado.
+3. **Solo 2 vistas** sin documentar: Notifications, ForgotPassword (prioridad BAJA).
+4. **6 módulos** parcialmente sincronizados requieren revisión menor.
+5. Próximo objetivo: Sincronizar Admin Hub y completar Semana 2.
