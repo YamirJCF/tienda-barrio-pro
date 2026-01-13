@@ -1,7 +1,7 @@
 # Mapa de Lógica Global - Tienda de Barrio Pro
 
-> **Última actualización:** 2026-01-13 (v4 - Semana 2: Login Sync)  
-> **Rama:** docs/login-logic-sync  
+> **Última actualización:** 2026-01-13 (v5 - Fase 3: Operaciones)  
+> **Rama:** docs/stock-entry-sync  
 > **Propósito:** Hoja de ruta para sincronización código ↔ documentación
 
 ---
@@ -11,10 +11,10 @@
 | Métrica | Valor |
 |---------|-------|
 | Vistas en código (`03_SRC/src/views/`) | 15 |
-| Módulos documentados (`01_REQUIREMENTS/`) | 13 |
-| Módulos sincronizados (100%) | 5 |
+| Módulos documentados (`01_REQUIREMENTS/`) | 14 |
+| Módulos sincronizados (100%) | 6 |
 | Módulos parcialmente sincronizados | 8 |
-| Vistas sin documentación | 3 |
+| Vistas sin documentación | 2 |
 
 ---
 
@@ -39,7 +39,7 @@
 | Recuperar Password | ❌ No existe | `ForgotPasswordView.vue` | 🔴 0% | **Sin documentar** |
 | Notificaciones | ❌ No existe | `NotificationCenterView.vue` | 🔴 0% | **Sin documentar** |
 | Registro de Tienda | `register-store.md` | `RegisterStoreView.vue` | 🟢 100% | **Sincronizado** |
-| Entrada de Stock | ❌ No existe | `StockEntryView.vue` | 🔴 0% | **Sin documentar** |
+| Entrada de Stock | `stock-entry.md` | `StockEntryView.vue` | 🟢 100% | **Sincronizado** |
 | Auditoría Sistema | ❌ No existe | `SystemAuditView.vue` | 🔴 0% | **Sin documentar** (solo DEV) |
 
 ---
@@ -53,7 +53,7 @@
 | ~~`CashControlView.vue`~~ | ~~CRÍTICA~~ | ✅ **COMPLETADO** |
 | ~~`ExpensesView.vue`~~ | ~~ALTA~~ | ✅ **COMPLETADO** |
 | ~~`RegisterStoreView.vue`~~ | ~~ALTA~~ | ✅ **COMPLETADO** |
-| `StockEntryView.vue` | **MEDIA** | Gestión de inventario |
+| ~~`StockEntryView.vue`~~ | ~~MEDIA~~ | ✅ **COMPLETADO** |
 | `NotificationCenterView.vue` | **BAJA** | Feature secundario |
 | `ForgotPasswordView.vue` | **BAJA** | Flujo de recuperación |
 
@@ -172,7 +172,7 @@ graph TD
 - [ ] Revisar `pos.md` vs POSView.vue
 
 ### Semana 3: Documentación Secundaria
-- [ ] Crear `stock-entry.md` - Entrada de inventario
+- [x] Crear `stock-entry.md` - Entrada de inventario
 - [ ] Crear `notifications.md` - Centro de notificaciones
 - [ ] Crear `forgot-password.md` - Recuperación de contraseña
 
@@ -200,8 +200,8 @@ graph TD
 
 ## ✅ Conclusiones
 
-1. **5 módulos** al 100%: Dashboard, CashControl, Expenses, RegisterStore, Login.
-2. **Capa Financiera + Onboarding + Login COMPLETOS**.
-3. **3 vistas** aún sin documentar: StockEntry, Notifications, ForgotPassword.
+1. **6 módulos** al 100%: Dashboard, CashControl, Expenses, RegisterStore, Login, StockEntry.
+2. **Capa Financiera + Onboarding + Login + Operaciones COMPLETOS**.
+3. **Solo 2 vistas** sin documentar: Notifications, ForgotPassword (ambas de prioridad BAJA).
 4. El patrón de `todayStats` en documentación está obsoleto - la implementación usa propiedades individuales.
-5. Próximo objetivo: Sincronizar Admin Hub.
+5. Próximo objetivo: Completar Semana 3 con módulos secundarios.
