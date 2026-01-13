@@ -1,5 +1,8 @@
-# Borrador de Documento de Requisitos del Producto (PRD)
+# Documento de Requisitos del Producto (PRD)
 ## Tienda de Barrio Pro
+
+> **Estado de Sincronización:** 🟢 100% - Documentación completamente alineada con implementación  
+> **Última Auditoría:** 2026-01-13 | Ver `04_DEV_ORCHESTRATION/CHANGELOG_SYNC.md`
 
 ---
 
@@ -82,11 +85,16 @@ graph TD
 4. Acceder a recuperación de contraseña
 5. Navegar a registro de nueva tienda
 
-**Lógica de Interfaz:**
-- Mensaje de error genérico: *"Credenciales incorrectas"*
-- Sin validación de formato de email visible
-- Empleados pueden usar username + PIN de 4 dígitos
-- Admins usan email + contraseña
+**Lógica de Autenticación (Cascada):**
+```
+1. ¿Existe tienda registrada? → No → Error "No se detecta tienda"
+                              ↓ Sí
+2. ¿Es Admin (email+password)? → Sí → loginAsAdmin() → Dashboard
+                              ↓ No
+3. ¿Es Empleado (username+pin)? → Sí → loginAsEmployee() → Dashboard
+                              ↓ No
+4. Error "Credenciales inválidas"
+```
 
 ---
 
@@ -271,28 +279,60 @@ graph TD
 
 ### 3.12 Vista: Gastos (`/expenses`)
 
+**Categorías Predefinidas:**
+- Servicios
+- Proveedores
+- Transporte
+- Salarios
+- Otro
+
 **Acciones del Usuario:**
-1. Ver lista de gastos del día
+1. Ver lista de gastos del día con total acumulado
 2. Agregar nuevo gasto:
    - Descripción (requerida)
-   - Monto (requerido)
-   - Categoría
-   - Nota adicional
-3. Eliminar gasto
+   - Monto mediante numpad
+   - Categoría (dropdown)
+   - Nota adicional (opcional)
+3. Eliminar gasto existente
+
+**Lógica de Reset:**
+> Los gastos del día se limpian automáticamente al ejecutar `closeStore()` en el control de caja.
 
 ---
 
 ### 3.13 Vista: Control de Caja (`/cash-control`)
 
-**Acciones del Usuario:**
+**Estados de la Vista:**
+| Estado | Condición | Acción Disponible |
+|--------|-----------|-------------------|
+| Apertura | `!salesStore.isStoreOpen` | Ingresar base inicial |
+| Cierre | `salesStore.isStoreOpen` | Realizar arqueo |
+
+**Fórmula de Efectivo Esperado:**
+```
+expectedCash = openingCash + todayCash - todayExpenses
+difference = closingAmount - expectedCash
+```
+
+**Acciones del Usuario (Apertura):**
+1. Ingresar monto base con teclado numérico
+2. Click "Abrir Caja" → Activa tienda en salesStore
+3. Redirige a Dashboard
+
+**Acciones del Usuario (Cierre):**
 1. Ver resumen del día:
-   - Base inicial
-   - Ventas en efectivo
-   - Ventas Nequi
-   - Ventas fiado
-   - Gastos del día
-   - Efectivo esperado vs real
-2. Realizar arqueo de caja (cerrar jornada)
+   - Base inicial (openingCash)
+   - Ventas en efectivo (todayCash)
+   - Ventas Nequi (todayNequi)
+   - Ventas fiado (todayFiado)
+   - Gastos del día (todayExpenses)
+   - Efectivo esperado vs conteo real
+2. Ingresar conteo real de caja
+3. Ver diferencia (verde positiva, roja negativa)
+4. Click "Cerrar Caja" → Ejecuta:
+   - `salesStore.closeStore()`
+   - `expensesStore.clearTodayExpenses()`
+5. Redirige a Dashboard
 
 ---
 
@@ -520,4 +560,5 @@ Se encontró un archivo `docs/architecture-supabase.md` indicando planes de migr
 
 ---
 
-*Documento generado mediante ingeniería inversa del código frontend. Última actualización: Enero 2026*
+*Documento mantenido sincronizado mediante orquestación automatizada.*  
+*Última auditoría completa: 2026-01-13 - Ver CHANGELOG_SYNC.md para historial de cambios.*
