@@ -1,7 +1,7 @@
 # Mapa de Lógica Global - Tienda de Barrio Pro
 
-> **Última actualización:** 2026-01-13 (v3 - Fase 2: Onboarding Completo)  
-> **Rama:** docs/register-store-sync  
+> **Última actualización:** 2026-01-13 (v4 - Semana 2: Login Sync)  
+> **Rama:** docs/login-logic-sync  
 > **Propósito:** Hoja de ruta para sincronización código ↔ documentación
 
 ---
@@ -12,8 +12,8 @@
 |---------|-------|
 | Vistas en código (`03_SRC/src/views/`) | 15 |
 | Módulos documentados (`01_REQUIREMENTS/`) | 13 |
-| Módulos sincronizados (100%) | 4 |
-| Módulos parcialmente sincronizados | 9 |
+| Módulos sincronizados (100%) | 5 |
+| Módulos parcialmente sincronizados | 8 |
 | Vistas sin documentación | 3 |
 
 ---
@@ -29,7 +29,7 @@
 | Detalle Cliente | `client-detail.md` | `ClientDetailView.vue` | 🟡 75% | Pendiente revisión |
 | Admin Hub | `admin-hub.md` | `AdminHubView.vue` | 🟠 60% | todayStats obsoleto |
 | Empleados | `employees.md` | `EmployeeManagerView.vue` | 🟡 85% | Código ≈ Docs |
-| Login | `login.md` | `LoginView.vue` | 🟠 70% | Flujo dueño no implementado |
+| Login | `login.md` | `LoginView.vue` | 🟢 100% | **Sincronizado** |
 | Checkout Modal | `checkout-modal.md` | `CheckoutModal.vue` | 🟡 80% | Pendiente revisión |
 | Product Form | `product-form-modal.md` | `ProductFormModal.vue` | 🟡 85% | Código ≈ Docs |
 | Client Form | `client-form-modal.md` | `ClientFormModal.vue` | 🟡 85% | Código ≈ Docs |
@@ -61,8 +61,8 @@
 
 | Módulo | Problema Principal | Acción Requerida |
 |--------|--------------------|------------------|
+| ~~Login~~ | ~~Flujo dueño/admin no implementado~~ | ✅ **COMPLETADO** |
 | Admin Hub | `todayStats` no existe, usa propiedades individuales | Actualizar contrato de datos |
-| Login | Flujo dueño/admin no implementado | Sincronizar con implementación real |
 
 ### 🟡 Prioridad Baja - Revisión Menor
 
@@ -166,8 +166,8 @@ graph TD
 - [x] Crear `register-store.md` - Requisitos de RegisterStoreView
 
 ### Semana 2: Sincronización de Módulos Existentes
+- [x] Actualizar `login.md` (flujo cascada Admin/Empleado)
 - [ ] Actualizar `admin-hub.md` (patrón Dashboard)
-- [ ] Actualizar `login.md` (flujo real implementado)
 - [ ] Actualizar `clients.md` (agregar authStore)
 - [ ] Revisar `pos.md` vs POSView.vue
 
@@ -200,8 +200,8 @@ graph TD
 
 ## ✅ Conclusiones
 
-1. **4 módulos** al 100%: Dashboard, CashControl, Expenses, RegisterStore.
-2. **Capa Financiera COMPLETA** + **Onboarding COMPLETO**.
+1. **5 módulos** al 100%: Dashboard, CashControl, Expenses, RegisterStore, Login.
+2. **Capa Financiera + Onboarding + Login COMPLETOS**.
 3. **3 vistas** aún sin documentar: StockEntry, Notifications, ForgotPassword.
 4. El patrón de `todayStats` en documentación está obsoleto - la implementación usa propiedades individuales.
-5. Se recomienda continuar con Semana 2: sincronización de módulos existentes.
+5. Próximo objetivo: Sincronizar Admin Hub.
