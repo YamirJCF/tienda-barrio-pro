@@ -153,6 +153,21 @@ CREATE TABLE IF NOT EXISTS employee_sessions (
   ended_at TIMESTAMPTZ
 );
 
+-- Solicitudes de Acceso IAM (Control de Dispositivos)
+-- PROTOCOLO IAM-01: Device Fingerprinting
+CREATE TABLE IF NOT EXISTS access_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
+  device_fingerprint TEXT NOT NULL,
+  user_agent TEXT,
+  ip_address INET,
+  status TEXT CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+  reviewed_by UUID REFERENCES employees(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  reviewed_at TIMESTAMPTZ,
+  UNIQUE(employee_id, device_fingerprint)
+);
+
 -- =============================================
 -- TRIGGERS
 -- =============================================
@@ -245,6 +260,111 @@ BEGIN
       'name', v_employee.name,
       'username', v_employee.username,
       'permissions', v_employee.permissions
+    )
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Login Unificado de Empleado (Gatekeeper de 3 Capas)
+-- SPEC-005: Autenticación Unificada e Integridad IAM
+CREATE OR REPLACE FUNCTION login_empleado_unificado(
+  p_username TEXT,
+  p_pin TEXT,
+  p_device_fingerprint TEXT DEFAULT NULL,
+  p_user_agent TEXT DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+  v_employee employees%ROWTYPE;
+  v_store_id UUID;
+  v_is_store_open BOOLEAN := false;
+  v_device_status TEXT;
+BEGIN
+  -- ========================================
+  -- NIVEL 1: Validación de Credenciales
+  -- ========================================
+  SELECT * INTO v_employee 
+  FROM employees 
+  WHERE username = LOWER(p_username)
+    AND pin = crypt(p_pin, pin)
+    AND is_active = true;
+  
+  IF NOT FOUND THEN
+    RETURN json_build_object(
+      'success', false, 
+      'error_code', 'INVALID_CREDENTIALS',
+      'error', 'Credenciales inválidas o empleado inactivo'
+    );
+  END IF;
+
+  v_store_id := v_employee.store_id;
+
+  -- ========================================
+  -- NIVEL 2: Validación IAM (Dispositivo)
+  -- ========================================
+  IF p_device_fingerprint IS NOT NULL THEN
+    SELECT status INTO v_device_status
+    FROM access_requests
+    WHERE employee_id = v_employee.id
+      AND device_fingerprint = p_device_fingerprint;
+
+    IF NOT FOUND THEN
+      -- Dispositivo nuevo: registrar solicitud
+      INSERT INTO access_requests (employee_id, device_fingerprint, user_agent)
+      VALUES (v_employee.id, p_device_fingerprint, p_user_agent);
+      
+      RETURN json_build_object(
+        'success', false,
+        'error_code', 'GATEKEEPER_PENDING',
+        'error', 'Dispositivo en espera de aprobación del Administrador'
+      );
+    ELSIF v_device_status = 'pending' THEN
+      RETURN json_build_object(
+        'success', false,
+        'error_code', 'GATEKEEPER_PENDING',
+        'error', 'Dispositivo en espera de aprobación del Administrador'
+      );
+    ELSIF v_device_status = 'rejected' THEN
+      RETURN json_build_object(
+        'success', false,
+        'error_code', 'GATEKEEPER_REJECTED',
+        'error', 'Acceso denegado desde este dispositivo'
+      );
+    END IF;
+    -- Si status = 'approved', continúa
+  END IF;
+
+  -- ========================================
+  -- NIVEL 3: Estado de Tienda (Operativo)
+  -- ========================================
+  SELECT EXISTS (
+    SELECT 1 FROM cash_register 
+    WHERE store_id = v_store_id 
+      AND date = CURRENT_DATE 
+      AND type = 'opening'
+      AND NOT EXISTS (
+        SELECT 1 FROM cash_register 
+        WHERE store_id = v_store_id 
+          AND date = CURRENT_DATE 
+          AND type = 'closing'
+      )
+  ) INTO v_is_store_open;
+
+  -- Registrar sesión exitosa
+  INSERT INTO employee_sessions (employee_id, device_info)
+  VALUES (v_employee.id, p_user_agent);
+
+  RETURN json_build_object(
+    'success', true,
+    'employee', json_build_object(
+      'id', v_employee.id,
+      'name', v_employee.name,
+      'username', v_employee.username,
+      'permissions', v_employee.permissions,
+      'store_id', v_store_id
+    ),
+    'store_state', json_build_object(
+      'is_open', v_is_store_open
     )
   );
 END;
@@ -579,6 +699,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_store_date ON sales(store_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements(product_id);
 CREATE INDEX IF NOT EXISTS idx_clients_store ON clients(store_id);
 CREATE INDEX IF NOT EXISTS idx_client_transactions_client ON client_transactions(client_id);
+CREATE INDEX IF NOT EXISTS idx_access_requests_employee_device ON access_requests(employee_id, device_fingerprint);
 
 -- =============================================
 -- DATOS INICIALES (Desarrollo)

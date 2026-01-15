@@ -73,4 +73,86 @@ Cuando se conecte la base de datos real, el equipo de Backend debe respetar esta
 
 ---
 
+## 6. PROTOCOLO IAM-01: Aprobación de Dispositivos (Device Fingerprinting)
+
+> [!IMPORTANT]
+> Este protocolo se activa cuando el backend Supabase está integrado.
+
+### 6.1 Registro de Dispositivo
+
+Cada vez que un empleado intenta loguearse desde un dispositivo no reconocido, el sistema:
+
+1. Captura `user_agent` y un identificador único (fingerprint).
+2. Inserta una solicitud en `access_requests` con estado `pending`.
+3. Notifica al Administrador vía sistema de notificaciones.
+
+**Tabla involucrada:** `access_requests`
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | UUID | Identificador único |
+| `employee_id` | UUID | Referencia al empleado |
+| `device_fingerprint` | TEXT | Hash único del dispositivo |
+| `user_agent` | TEXT | Información del navegador |
+| `status` | TEXT | `pending`, `approved`, `rejected` |
+| `reviewed_by` | UUID | Admin que revisó la solicitud |
+| `created_at` | TIMESTAMPTZ | Fecha de solicitud |
+| `reviewed_at` | TIMESTAMPTZ | Fecha de revisión |
+
+### 6.2 Validación de Acceso
+
+El RPC `login_empleado_unificado` denegará el token JWT si el estado del dispositivo no es `approved`.
+
+**Códigos de error:**
+
+| Código | Mensaje UI |
+|--------|------------|
+| `GATEKEEPER_PENDING` | "Dispositivo en espera de aprobación del Administrador" |
+| `GATEKEEPER_REJECTED` | "Acceso denegado desde este dispositivo" |
+
+---
+
+## 7. PROTOCOLO OP-01: Gatekeeper de Operación
+
+### 7.1 Regla de Oro
+
+La creación de registros en `sales` e `inventory_movements` (tipo `venta`) **solo es posible** si existe un registro activo en `cash_cuts` (o `cash_register`) sin `closing_time`.
+
+```sql
+-- Verificación de tienda abierta
+SELECT EXISTS (
+  SELECT 1 FROM cash_register 
+  WHERE store_id = ? 
+    AND date = CURRENT_DATE 
+    AND type = 'opening'
+    AND NOT EXISTS (
+      SELECT 1 FROM cash_register 
+      WHERE store_id = ? 
+        AND date = CURRENT_DATE 
+        AND type = 'closing'
+    )
+);
+```
+
+### 7.2 Excepción Administrativa
+
+Los **Administradores** pueden realizar ajustes de inventario incluso con la tienda cerrada por motivos de auditoría.
+
+| Operación | Empleado (Tienda Cerrada) | Admin (Tienda Cerrada) |
+|-----------|---------------------------|------------------------|
+| Ver inventario | ✅ Permitido | ✅ Permitido |
+| Ajuste de stock | ❌ Bloqueado | ✅ Permitido |
+| Crear venta | ❌ Bloqueado | ❌ Bloqueado |
+
+### 7.3 Comportamiento UI
+
+Cuando `is_store_open == false`:
+
+- **Dashboard:** Acceso completo, banner informativo "Inicie jornada para vender"
+- **POS:** Redirige a Dashboard con notificación
+- **Inventario (Vista):** Acceso completo
+- **Inventario (Edición):** Solo Admin
+
+---
+
 > **Nota:** Este documento debe ser revisado cada vez que se modifique la lógica crítica de `src/stores/`.

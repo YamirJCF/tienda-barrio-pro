@@ -118,3 +118,31 @@
 ---
 
 **Conclusión:** La implementación está **completa y funcional**, pero los requisitos están **desactualizados**. Se recomienda sincronizar la documentación con la implementación actual.
+
+---
+
+## 🔐 SPEC-005: Autenticación Unificada e Integridad IAM
+
+> **Referencia:** `01_REQUIREMENTS/auth-unificada-iam.md`  
+> **Fecha de Adición:** 2026-01-15
+
+### Tareas Backend (Supabase)
+
+- [ ] Verificar tabla `access_requests` en `supabase-schema.sql`
+- [ ] Implementar RPC `login_empleado_unificado` con Gatekeeper de 3 capas
+- [ ] Configurar índice para `access_requests(employee_id, device_fingerprint)`
+
+### Tareas Frontend (Vue)
+
+- [ ] **`src/stores/auth.ts`:** Agregar estados `deviceApproved` y `storeOpenStatus`
+- [ ] **`src/views/LoginView.vue`:** Detectar tipo de usuario por presencia de `@` en input
+- [ ] **`src/views/LoginView.vue`:** Manejar códigos de error `GATEKEEPER_PENDING` y `GATEKEEPER_REJECTED`
+- [ ] **`src/router/index.ts`:** Middleware para bloquear `/pos` cuando `storeOpenStatus == false`
+- [ ] **Dashboard:** Mostrar banner "Inicie jornada para vender" cuando tienda cerrada
+
+### Tareas de Seguridad
+
+- [ ] Implementar fingerprinting de dispositivo en cliente (FingerprintJS o similar)
+- [ ] Crear vista admin para aprobar/rechazar solicitudes pendientes
+- [ ] Agregar notificación push cuando hay solicitudes pendientes
+

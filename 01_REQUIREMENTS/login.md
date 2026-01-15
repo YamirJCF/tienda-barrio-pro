@@ -10,6 +10,9 @@ Pantalla de autenticación unificada que soporta acceso tanto para Dueños/Admin
 
 ## Flujo de Autenticación (Cascada de Validación)
 
+> [!IMPORTANT]
+> **SPEC-005 (Próxima versión):** Este flujo será reemplazado por el sistema de autenticación unificada con Gatekeeper de 3 capas e integración IAM. Ver [auth-unificada-iam.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/01_REQUIREMENTS/auth-unificada-iam.md)
+
 La lógica de login sigue un patrón de **cascada** con 3 pasos:
 
 ```
