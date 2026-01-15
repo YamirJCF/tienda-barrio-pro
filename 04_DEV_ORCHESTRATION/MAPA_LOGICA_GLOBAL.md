@@ -1,8 +1,29 @@
 # Mapa de Lógica Global - Tienda de Barrio Pro
 
-> **Última actualización:** 2026-01-13 (v7 - DOCUMENTACIÓN COMPLETA)  
-> **Rama:** docs/secondary-features-sync  
+> **Última actualización:** 2026-01-15 (v8 - ESTRUCTURA PROFESIONALIZADA)  
+> **Rama:** chore/documentation-governance  
 > **Propósito:** Hoja de ruta para sincronización código ↔ documentación
+
+---
+
+## 📁 Estructura de Carpeta 01_REQUIREMENTS
+
+```
+01_REQUIREMENTS/
+├── proposals/          # 💡 Borradores (prop-nombre-vX.md)
+├── discussions/        # ⚠️ Observaciones (obs-rol-nombre.md)
+├── archive/            # 📦 Documentos obsoletos
+│   └── stitch_inicio_dashboard/  # Legacy UI mockups
+├── README.md           # Índice de la carpeta
+├── dashboard.md        # ✅ [FINAL]
+├── pos.md              # ✅ [FINAL]
+├── inventory.md        # ✅ [FINAL]
+├── cash-control.md     # ✅ [FINAL]
+├── expenses.md         # ✅ [FINAL]
+└── ... (16 documentos finales)
+```
+
+> 📖 Ver **SISTEMA_TRAZABILIDAD.md** para reglas de gobernanza completas.
 
 ---
 
