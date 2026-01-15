@@ -1,7 +1,7 @@
 # Inventario (InventoryView)
 
 ## Descripción
-Vista de gestión de productos que permite ver, buscar, agregar y editar productos del inventario.
+Vista de gestión de productos que permite ver, buscar, agregar y editar productos del inventario. Protegida por permisos de usuario.
 
 ## Ruta
 `/inventory`
@@ -10,12 +10,14 @@ Vista de gestión de productos que permite ver, buscar, agregar y editar product
 
 ### Ver Productos
 1. Usuario accede a la vista
-2. Ve lista de productos con scroll virtual (optimizado para grandes catálogos)
-3. Puede buscar por nombre o PLU
-4. Puede filtrar por categoría
+2. Sistema verifica permiso `canViewInventory`
+3. Si no tiene permiso → muestra `NoPermissionOverlay`
+4. Ve lista de productos con scroll virtual (optimizado para grandes catálogos)
+5. Puede buscar por nombre o PLU
+6. Puede filtrar por categoría
 
 ### Agregar Producto
-1. Click en botón FAB (+)
+1. Click en FAB azul (+)
 2. Se abre `ProductFormModal`
 3. Llena los campos requeridos
 4. Click "Guardar"
@@ -27,22 +29,40 @@ Vista de gestión de productos que permite ver, buscar, agregar y editar product
 3. Modifica los campos deseados
 4. Click "Guardar"
 
+### Entrada de Inventario
+1. Click en FAB verde (icono inventario)
+2. Navega a `/stock-entry`
+3. Flujo de entrada masiva de stock
+
+---
+
 ## Datos de Entrada (Stores Consumidos)
 
-### inventoryStore
+### useInventoryStore
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `products` | `Product[]` | Lista de todos los productos |
 | `lowStockProducts` | `Product[]` | Productos con stock bajo |
 
+### useAuthStore
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `canViewInventory` | `boolean` | Permiso para ver inventario |
+
+---
+
 ## Datos de Salida (Hacia Stores)
 
-### inventoryStore
+### useInventoryStore
 | Método | Parámetros | Descripción |
 |--------|------------|-------------|
+| `initializeSampleData()` | - | Inicializa datos de muestra |
+| `searchProducts()` | `query: string` | Busca productos por nombre/PLU |
 | `addProduct()` | `Product` | Agrega nuevo producto |
 | `updateProduct()` | `id, Partial<Product>` | Actualiza producto existente |
-| `deleteProduct()` | `id` | Elimina producto |
+| `deleteProduct()` | `id` | Elimina producto (con confirmación) |
+
+---
 
 ## Estructura de Producto
 
@@ -51,6 +71,7 @@ interface Product {
   id: number;
   name: string;
   plu: string;
+  brand?: string;
   price: Decimal;
   category: string;
   stock: Decimal;
@@ -59,6 +80,8 @@ interface Product {
   measurementUnit: 'kg' | 'lb' | 'g' | 'un';
 }
 ```
+
+---
 
 ## Navegación
 
@@ -69,20 +92,20 @@ interface Product {
 ### Hacia
 | Destino | Acción | Ruta |
 |---------|--------|------|
-| Dashboard | Botón ← | `/` |
+| Dashboard | Botón ← (goBack) | `/` |
+| Entrada Stock | FAB verde | `/stock-entry` |
+
+---
 
 ## Componentes Utilizados
 - `ProductFormModal.vue` - Formulario de producto
 - `BottomNav.vue` - Navegación inferior
-- `RecycleScroller` - Virtual scrolling
-
-## Componentes UI Utilizados
+- `RecycleScroller` - Virtual scrolling para listas largas
 - `NoPermissionOverlay` - Overlay cuando usuario no tiene permiso
 
 ## Composables Utilizados
-- `useCurrencyFormat` - Formateo de moneda
+- `useCurrencyFormat` - Formateo de moneda (`formatCurrency`)
 
 ## Stores Utilizados
 - `useInventoryStore`
 - `useAuthStore`
-

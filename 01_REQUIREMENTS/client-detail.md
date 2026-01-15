@@ -11,30 +11,34 @@ Vista que muestra información detallada de un cliente, su saldo, límite de cr�
 ### Ver Información
 1. Usuario accede desde lista de clientes
 2. Ve hero header con:
-   - Nombre y cédula
-   - Saldo pendiente (grande)
-   - Barra de progreso de crédito usado
-   - Crédito disponible
+   - Nombre y cédula formateada
+   - Saldo pendiente (grande, centrado)
+   - Barra de progreso de crédito usado (`creditUsagePercent`)
+   - Crédito disponible (`availableCredit`)
 
 ### Ver Historial
-1. Scroll hacia abajo
+1. Scroll hacia abajo sección "Movimientos Recientes"
 2. Ve lista de movimientos:
-   - Compras (rojo, aumentan deuda)
-   - Pagos/Abonos (verde, reducen deuda)
+   - Compras (rojo, icono carrito, aumentan deuda)
+   - Pagos/Abonos (verde, icono pagos, reducen deuda)
+3. Cada movimiento muestra fecha formateada y monto
 
 ### Registrar Abono
-1. Click en botón "REGISTRAR ABONO"
-2. Se abre modal de pago
+1. Click en botón sticky "REGISTRAR ABONO"
+2. Se abre modal de pago (Teleport)
 3. Ingresa monto del abono
 4. Click "Confirmar"
 5. Se registra la transacción y actualiza el saldo
 
 ### Eliminar Cliente
-1. Click en icono de 3 puntos (⋮)
-2. Se despliega menú
+1. Click en icono de 3 puntos (⋮) en header
+2. Se despliega dropdown menú
 3. Click "Eliminar cliente"
-4. Confirma en modal
+4. Confirma en modal de confirmación
 5. Cliente y transacciones eliminados
+6. Redirige a `/clients`
+
+---
 
 ## Datos de Entrada (Route Params)
 
@@ -42,22 +46,38 @@ Vista que muestra información detallada de un cliente, su saldo, límite de cr�
 |-----------|------|-------------|
 | `id` | `number` | ID del cliente a mostrar |
 
+---
+
 ## Datos de Entrada (Stores Consumidos)
 
-### clientsStore
+### useClientsStore
 | Método | Parámetros | Retorno |
 |--------|------------|---------|
 | `getClientById()` | `id` | `Client` |
 | `getClientTransactions()` | `id` | `ClientTransaction[]` |
 | `getAvailableCredit()` | `id` | `Decimal` |
+| `initializeSampleData()` | - | void |
+
+---
 
 ## Datos de Salida (Hacia Stores)
 
-### clientsStore
+### useClientsStore
 | Método | Parámetros | Descripción |
 |--------|------------|-------------|
 | `registerPayment()` | `clientId, amount, description` | Registra abono |
 | `deleteClient()` | `id` | Elimina cliente y transacciones |
+
+---
+
+## Computed Properties
+
+| Propiedad | Tipo | Descripción |
+|-----------|------|-------------|
+| `creditUsagePercent` | `number` | Porcentaje de crédito usado (0-100) |
+| `availableCredit` | `Decimal` | Crédito disponible |
+
+---
 
 ## Estructura de Transacción
 
@@ -73,6 +93,8 @@ interface ClientTransaction {
 }
 ```
 
+---
+
 ## Navegación
 
 ### Desde
@@ -81,12 +103,14 @@ interface ClientTransaction {
 ### Hacia
 | Destino | Acción | Ruta |
 |---------|--------|------|
-| Lista Clientes | Botón ← | `/clients` |
+| Lista Clientes | Botón ← (goBack) | `/clients` |
 
-## Componentes Utilizados
-- Modal de pago (inline)
-- Modal de confirmación de eliminación (inline)
-- Dropdown menú de opciones
+---
+
+## Modales Inline
+- **Modal de Abono**: Campo numérico + botones Cancelar/Confirmar
+- **Modal de Eliminación**: Confirmación con advertencia y botones Cancelar/Eliminar
+- **Dropdown Menú**: Opciones contextuales (eliminar)
 
 ## Stores Utilizados
 - `useClientsStore`

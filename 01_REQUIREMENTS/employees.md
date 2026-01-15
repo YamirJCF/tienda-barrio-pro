@@ -11,10 +11,11 @@ Vista para administrar empleados del negocio, sus permisos y accesos al sistema.
 ### Ver Empleados
 1. Usuario accede desde Admin Hub
 2. Ve lista de empleados con:
-   - Iniciales/avatar
+   - Iniciales/avatar (color generado por nombre)
    - Nombre
    - Etiqueta "Empleado"
    - Indicador de estado (punto verde = activo)
+   - Botón de editar PIN (icono llave)
    - Toggle de activación
 
 ### Agregar Empleado
@@ -35,32 +36,40 @@ Vista para administrar empleados del negocio, sus permisos y accesos al sistema.
 
 ### Cambiar PIN Rápido
 1. Click en icono de llave 🔑
-2. Se abre modal de PIN
-3. Ingresa nuevo PIN de 4 dígitos
+2. Se abre modal de PIN (Teleport)
+3. Ingresa nuevo PIN de 4 dígitos (solo números)
 4. Click "Guardar"
 
 ### Activar/Desactivar Empleado
 1. Toggle el switch del empleado
 2. Estado cambia inmediatamente
 3. Empleado inactivo no puede hacer login
+4. Empleado inactivo aparece con opacidad reducida
+
+---
 
 ## Datos de Entrada (Stores Consumidos)
 
-### employeesStore
+### useEmployeesStore
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `employees` | `Employee[]` | Lista de todos los empleados |
 | `activeEmployees` | `Employee[]` | Solo empleados activos |
 
+---
+
 ## Datos de Salida (Hacia Stores)
 
-### employeesStore
+### useEmployeesStore
 | Método | Parámetros | Descripción |
 |--------|------------|-------------|
+| `initializeSampleData()` | - | Inicializa datos de muestra |
 | `addEmployee()` | `Employee` | Agrega nuevo empleado |
 | `updateEmployee()` | `id, data` | Actualiza empleado |
 | `toggleActive()` | `id` | Cambia estado activo/inactivo |
 | `updatePin()` | `id, newPin` | Cambia PIN del empleado |
+
+---
 
 ## Estructura de Empleado
 
@@ -84,6 +93,8 @@ interface EmployeePermissions {
 }
 ```
 
+---
+
 ## Permisos por Defecto (Nuevo Empleado)
 | Permiso | Valor |
 |---------|-------|
@@ -91,6 +102,8 @@ interface EmployeePermissions {
 | Puede Ver Inventario | ✅ Sí |
 | Puede Ver Reportes | ❌ No |
 | Puede Fiar | ❌ No |
+
+---
 
 ## Navegación
 
@@ -100,12 +113,14 @@ interface EmployeePermissions {
 ### Hacia
 | Destino | Acción | Ruta |
 |---------|--------|------|
-| Admin Hub | Botón ← | `/admin` |
+| Admin Hub | Botón ← (goBack) | `/admin` |
+
+---
 
 ## Componentes Utilizados
 - `EmployeeFormModal.vue` - Formulario de empleado
 - `BottomNav.vue` - Navegación inferior
-- Modal de PIN (inline)
+- Modal de PIN (inline, Teleport)
 
 ## Stores Utilizados
 - `useEmployeesStore`

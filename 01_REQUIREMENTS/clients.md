@@ -11,14 +11,15 @@ Vista que muestra todos los clientes registrados con su saldo pendiente y permit
 ### Ver Clientes
 1. Usuario accede a la vista
 2. Ve lista de clientes con:
-   - Iniciales/avatar
-   - Nombre y cédula
-   - Saldo pendiente (rojo si debe, verde si está al día)
-3. Ve el total de deuda en el header
+   - Iniciales/avatar (color generado por nombre)
+   - Nombre y cédula formateada (ej: 1.020.304)
+   - Saldo pendiente (rojo con borde si debe, verde si al día)
+3. Ve el total de deuda en el header (badge rojo)
 
 ### Buscar Cliente
 1. Escribe en el campo de búsqueda
 2. Lista se filtra por nombre o cédula en tiempo real
+3. Si no hay resultados, muestra estado vacío
 
 ### Agregar Cliente
 1. Click en botón FAB (+)
@@ -30,21 +31,28 @@ Vista que muestra todos los clientes registrados con su saldo pendiente y permit
 1. Click en tarjeta de cliente
 2. Navega a `/clients/:id`
 
+---
+
 ## Datos de Entrada (Stores Consumidos)
 
-### clientsStore
+### useClientsStore
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `clients` | `Client[]` | Lista de todos los clientes |
 | `totalDebt` | `Decimal` | Suma total de deudas |
 
+---
+
 ## Datos de Salida (Hacia Stores)
 
-### clientsStore
+### useClientsStore
 | Método | Parámetros | Descripción |
 |--------|------------|-------------|
+| `initializeSampleData()` | - | Inicializa datos de muestra |
+| `searchClients()` | `query: string` | Busca por nombre o cédula |
 | `addClient()` | `Client` | Agrega nuevo cliente |
-| `searchClients()` | `query` | Busca clientes |
+
+---
 
 ## Estructura de Cliente
 
@@ -61,6 +69,8 @@ interface Client {
 }
 ```
 
+---
+
 ## Navegación
 
 ### Desde
@@ -70,8 +80,10 @@ interface Client {
 ### Hacia
 | Destino | Acción | Ruta |
 |---------|--------|------|
-| Dashboard | Botón ← | `/` |
+| Dashboard | Botón ← (goToDashboard) | `/` |
 | Detalle Cliente | Click en cliente | `/clients/:id` |
+
+---
 
 ## Componentes Utilizados
 - `ClientFormModal.vue` - Formulario de cliente
