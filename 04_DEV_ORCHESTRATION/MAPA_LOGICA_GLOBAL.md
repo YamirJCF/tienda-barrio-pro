@@ -1,7 +1,7 @@
 # Mapa de Lógica Global - Tienda de Barrio Pro
 
-> **Última actualización:** 2026-01-15 (v9 - OPERACIÓN VERDE TOTAL ✅)  
-> **Rama:** task/final-green-sync  
+> **Última actualización:** 2026-01-15 (v10 - Agregado SPEC-005 IAM)  
+> **Rama:** master  
 > **Propósito:** Hoja de ruta para sincronización código ↔ documentación
 
 ---
@@ -32,9 +32,9 @@
 | Métrica | Valor |
 |---------|-------|
 | Vistas en código (`03_SRC/src/views/`) | 15 |
-| Módulos documentados (`01_REQUIREMENTS/`) | 20 |
+| Módulos documentados (`01_REQUIREMENTS/`) | 21 |
 | Módulos sincronizados (100%) | 19 ✅ |
-| Módulos parcialmente sincronizados | 0 |
+| Especificaciones pendientes de implementación | 1 (SPEC-005 IAM) |
 | Vistas sin documentación | 1 (SystemAuditView - solo DEV) |
 
 ---
@@ -61,6 +61,7 @@
 | Notificaciones | `notifications.md` | `NotificationCenterView.vue` | 🟢 100% | **Sincronizado** |
 | Registro de Tienda | `register-store.md` | `RegisterStoreView.vue` | 🟢 100% | **Sincronizado** |
 | Entrada de Stock | `stock-entry.md` | `StockEntryView.vue` | 🟢 100% | **Sincronizado** |
+| **Auth Unificada IAM** | `auth-unificada-iam.md` | ⏳ Pendiente | 🟡 SPEC | **Por implementar** |
 | Auditoría Sistema | ⚙️ Solo DEV | `SystemAuditView.vue` | ⚪ N/A | Herramienta interna |
 
 ---
