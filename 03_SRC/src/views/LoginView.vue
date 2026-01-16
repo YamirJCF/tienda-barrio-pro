@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { Store, User, Lock, Eye, EyeOff } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
+import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const employeesStore = useEmployeesStore();
+const { getFingerprint } = useDeviceFingerprint();
 
 const username = ref('');
 const password = ref('');
@@ -15,44 +17,127 @@ const showPassword = ref(false);
 const errorMessage = ref('');
 const isLoading = ref(false);
 
+// SPEC-005: Detectar tipo de usuario basado en presencia de @
+const isAdminLogin = computed(() => username.value.includes('@'));
+const credentialLabel = computed(() => isAdminLogin.value ? 'Contraseña' : 'PIN');
+const credentialPlaceholder = computed(() => isAdminLogin.value ? '••••••••' : '••••');
+
 const handleLogin = async () => {
   errorMessage.value = '';
   isLoading.value = true;
 
-  // UX Delay
-  await new Promise(resolve => setTimeout(resolve, 300));
+  try {
+    // UX Delay
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-  // 1. VALIDACIÓN PREVENTIVA: ¿Existe tienda?
-  if (!authStore.hasStores) {
-    isLoading.value = false;
-    errorMessage.value = 'No se detecta una tienda registrada en este dispositivo.';
-    return;
-  }
-
-  // 2. Intento Admin
-  if (authStore.loginWithCredentials(username.value, password.value)) {
-    router.push('/');
-    return;
-  }
-
-  // 3. Intento Empleado (Fail-Safe)
-  const firstStore = authStore.getFirstStore();
-  if (firstStore) {
-    const employee = employeesStore.validatePin(username.value, password.value);
-    if (employee) {
-      authStore.loginAsEmployee({
-        id: employee.id,
-        name: employee.name,
-        username: employee.username,
-        permissions: employee.permissions,
-      }, firstStore.id);
-      router.push('/');
+    // 1. VALIDACIÓN PREVENTIVA: ¿Existe tienda?
+    if (!authStore.hasStores) {
+      errorMessage.value = 'No se detecta una tienda registrada en este dispositivo.';
       return;
     }
-  }
 
-  isLoading.value = false;
-  errorMessage.value = 'Credenciales inválidas o cuenta no autorizada';
+    // SPEC-005: Flujo basado en detección automática
+    if (isAdminLogin.value) {
+      // =============================================
+      // FLUJO ADMIN (contiene @)
+      // =============================================
+      if (authStore.loginWithCredentials(username.value, password.value)) {
+        // Admin siempre tiene acceso completo
+        authStore.setDeviceStatus('approved');
+        authStore.setStoreOpenStatus(true); // Admins controlan la tienda
+        router.push('/');
+        return;
+      }
+      errorMessage.value = 'Correo o contraseña incorrectos';
+    } else {
+      // =============================================
+      // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos
+      // =============================================
+      const firstStore = authStore.getFirstStore();
+      if (!firstStore) {
+        errorMessage.value = 'No hay tienda configurada';
+        return;
+      }
+
+      // Obtener fingerprint del dispositivo
+      const fingerprint = await getFingerprint();
+      console.log('[Login] Fingerprint:', fingerprint.substring(0, 16) + '...');
+
+      // Validar credenciales localmente (simulación - en producción sería RPC)
+      const employee = employeesStore.validatePin(username.value, password.value);
+      
+      if (employee) {
+        // Simular respuesta del servidor con diferentes estados
+        // En producción esto vendría del RPC login_empleado_unificado
+        const mockServerResponse = simulateServerResponse(employee, fingerprint);
+        
+        if (!mockServerResponse.success) {
+          handleServerError(mockServerResponse.error_code, mockServerResponse.error);
+          return;
+        }
+
+        // Login exitoso
+        authStore.loginAsEmployee({
+          id: employee.id,
+          name: employee.name,
+          username: employee.username,
+          permissions: employee.permissions,
+        }, firstStore.id);
+        
+        // Establecer estados IAM
+        authStore.setDeviceStatus('approved');
+        authStore.setStoreOpenStatus(mockServerResponse.store_state?.is_open ?? false);
+        
+        router.push('/');
+        return;
+      }
+      
+      errorMessage.value = 'Usuario o PIN incorrectos';
+    }
+  } catch (error) {
+    console.error('[Login] Error:', error);
+    errorMessage.value = 'Error al iniciar sesión. Intenta nuevamente.';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// SPEC-005: Simular respuesta del servidor (reemplazar con RPC real)
+type ServerResponse = {
+  success: boolean;
+  employee?: any;
+  store_state?: { is_open: boolean };
+  error_code?: string;
+  error?: string;
+};
+
+const simulateServerResponse = (employee: any, fingerprint: string): ServerResponse => {
+  // En producción, esto sería la respuesta del RPC login_empleado_unificado
+  // Por ahora simulamos éxito
+  return {
+    success: true,
+    employee: employee,
+    store_state: { is_open: true } // Simular tienda abierta
+  };
+};
+
+// SPEC-005: Manejar códigos de error del servidor
+const handleServerError = (errorCode: string, errorMsg: string) => {
+  const errorMessages: Record<string, string> = {
+    'ACCOUNT_LOCKED': '🔒 Cuenta bloqueada. Intenta en 15 minutos.',
+    'GATEKEEPER_PENDING': '📱 Dispositivo en espera de aprobación del Administrador.',
+    'GATEKEEPER_REJECTED': '🚫 Acceso denegado desde este dispositivo.',
+    'INVALID_CREDENTIALS': 'Usuario o PIN incorrectos.'
+  };
+  
+  errorMessage.value = errorMessages[errorCode] || errorMsg || 'Error desconocido';
+  
+  // Para dispositivo pendiente, mostrar estado especial
+  if (errorCode === 'GATEKEEPER_PENDING') {
+    authStore.setDeviceStatus('pending');
+  } else if (errorCode === 'GATEKEEPER_REJECTED') {
+    authStore.setDeviceStatus('rejected');
+  }
 };
 </script>
 

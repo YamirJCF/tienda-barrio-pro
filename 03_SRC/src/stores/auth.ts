@@ -35,6 +35,10 @@ export const useAuthStore = defineStore('auth', () => {
     const currentUser = ref<CurrentUser | null>(null);
     const isAuthenticated = ref(false);
 
+    // SPEC-005: Estados IAM
+    const deviceApproved = ref<'pending' | 'approved' | 'rejected' | null>(null);
+    const storeOpenStatus = ref<boolean>(false);
+
     // Computed
     const isAdmin = computed(() => currentUser.value?.type === 'admin');
     const isEmployee = computed(() => currentUser.value?.type === 'employee');
@@ -66,6 +70,15 @@ export const useAuthStore = defineStore('auth', () => {
         if (!currentUser.value) return false;
         if (isAdmin.value) return true;
         return currentUser.value.permissions?.canFiar ?? false;
+    });
+
+    // SPEC-005: Computed para acceso al POS
+    const canAccessPOS = computed(() => {
+        if (!isAuthenticated.value) return false;
+        // Admins siempre pueden acceder
+        if (isAdmin.value) return true;
+        // Empleados: dispositivo aprobado Y tienda abierta
+        return deviceApproved.value === 'approved' && storeOpenStatus.value;
     });
 
     // Methods
@@ -157,6 +170,18 @@ export const useAuthStore = defineStore('auth', () => {
     const logout = () => {
         currentUser.value = null;
         isAuthenticated.value = false;
+        // Reset IAM states
+        deviceApproved.value = null;
+        storeOpenStatus.value = false;
+    };
+
+    // SPEC-005: Actions para estados IAM
+    const setDeviceStatus = (status: 'pending' | 'approved' | 'rejected') => {
+        deviceApproved.value = status;
+    };
+
+    const setStoreOpenStatus = (isOpen: boolean) => {
+        storeOpenStatus.value = isOpen;
     };
 
     const getStoreById = (id: string) => {
@@ -174,6 +199,9 @@ export const useAuthStore = defineStore('auth', () => {
         stores,
         currentUser,
         isAuthenticated,
+        // SPEC-005: IAM States
+        deviceApproved,
+        storeOpenStatus,
         // Computed
         isAdmin,
         isEmployee,
@@ -184,6 +212,7 @@ export const useAuthStore = defineStore('auth', () => {
         canViewInventory,
         canViewReports,
         canFiar,
+        canAccessPOS,
         // Methods
         registerStore,
         loginWithCredentials,
@@ -193,6 +222,9 @@ export const useAuthStore = defineStore('auth', () => {
         getStoreById,
         getFirstStore,
         generateId,
+        // SPEC-005: IAM Methods
+        setDeviceStatus,
+        setStoreOpenStatus,
     };
 }, {
     persist: {

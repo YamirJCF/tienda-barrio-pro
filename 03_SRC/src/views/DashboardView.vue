@@ -130,6 +130,20 @@ const navigateToNotifications = () => {
         </button>
       </div>
 
+      <!-- SPEC-005: Banner Tienda Cerrada (Para Empleados) -->
+      <div v-if="isEmployee && !authStore.storeOpenStatus"
+        class="relative overflow-hidden rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-800/50 text-amber-600 dark:text-amber-400">
+            <span class="material-symbols-outlined">storefront</span>
+          </div>
+          <div class="flex flex-col">
+            <h3 class="text-amber-900 dark:text-amber-100 font-bold text-sm">Tienda Cerrada</h3>
+            <p class="text-amber-700 dark:text-amber-300 text-xs">Inicie jornada para vender. Contacta al administrador.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Info Banner -->
       <div v-if="!isStoreOpen && totalProducts === 0"
         class="relative overflow-hidden rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 shadow-sm">

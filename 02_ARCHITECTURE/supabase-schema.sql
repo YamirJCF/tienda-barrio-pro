@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS employees (
   pin TEXT NOT NULL, -- Hasheado con crypt()
   permissions JSONB DEFAULT '{"canSell": true, "canViewInventory": true, "canViewReports": false, "canFiar": false}',
   is_active BOOLEAN DEFAULT true,
+  -- SPEC-005: Rate Limiting para protección contra fuerza bruta
+  failed_attempts INTEGER DEFAULT 0,
+  locked_until TIMESTAMPTZ DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -281,6 +284,22 @@ DECLARE
   v_device_status TEXT;
 BEGIN
   -- ========================================
+  -- NIVEL 0: Verificar Bloqueo por Rate Limiting
+  -- ========================================
+  SELECT * INTO v_employee 
+  FROM employees 
+  WHERE username = LOWER(p_username);
+
+  IF FOUND AND v_employee.locked_until IS NOT NULL AND v_employee.locked_until > NOW() THEN
+    RETURN json_build_object(
+      'success', false,
+      'error_code', 'ACCOUNT_LOCKED',
+      'error', 'Cuenta bloqueada. Intenta en 15 minutos.',
+      'locked_until', v_employee.locked_until
+    );
+  END IF;
+
+  -- ========================================
   -- NIVEL 1: Validación de Credenciales
   -- ========================================
   SELECT * INTO v_employee 
@@ -290,6 +309,15 @@ BEGIN
     AND is_active = true;
   
   IF NOT FOUND THEN
+    -- Incrementar intentos fallidos
+    UPDATE employees 
+    SET failed_attempts = failed_attempts + 1,
+        locked_until = CASE 
+          WHEN failed_attempts >= 4 THEN NOW() + INTERVAL '15 minutes' 
+          ELSE NULL 
+        END
+    WHERE username = LOWER(p_username);
+
     RETURN json_build_object(
       'success', false, 
       'error_code', 'INVALID_CREDENTIALS',
@@ -349,6 +377,13 @@ BEGIN
           AND type = 'closing'
       )
   ) INTO v_is_store_open;
+
+  -- ========================================
+  -- Login Exitoso: Resetear Rate Limiting
+  -- ========================================
+  UPDATE employees 
+  SET failed_attempts = 0, locked_until = NULL 
+  WHERE id = v_employee.id;
 
   -- Registrar sesión exitosa
   INSERT INTO employee_sessions (employee_id, device_info)
@@ -715,3 +750,25 @@ INSERT INTO employees (store_id, name, username, pin, permissions) VALUES
   ('00000000-0000-0000-0000-000000000001', 'Administrador', 'admin', crypt('0000', gen_salt('bf')), 
    '{"canSell": true, "canViewInventory": true, "canViewReports": true, "canFiar": true}')
 ON CONFLICT DO NOTHING;
+
+-- =============================================
+-- MANTENIMIENTO AUTOMÁTICO (pg_cron)
+-- =============================================
+-- SPEC-005: Limpieza de sesiones expiradas (TTL 8 horas)
+-- 
+-- INSTRUCCIONES:
+-- 1. Habilitar extensión pg_cron en Supabase Dashboard > Database > Extensions
+-- 2. Ejecutar el siguiente comando en el SQL Editor:
+--
+-- SELECT cron.schedule(
+--   'cleanup-expired-sessions',
+--   '0 3 * * *',  -- Todos los días a las 3 AM
+--   $$DELETE FROM employee_sessions WHERE started_at < NOW() - INTERVAL '8 hours'$$
+-- );
+--
+-- 3. Para verificar jobs activos:
+-- SELECT * FROM cron.job;
+--
+-- 4. Para desactivar:
+-- SELECT cron.unschedule('cleanup-expired-sessions');
+

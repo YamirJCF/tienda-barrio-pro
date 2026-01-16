@@ -78,6 +78,69 @@ Para evitar el **"Deadlock Operativo"** (tienda cerrada que impide el login), la
 
 ---
 
+## 6. Especificaciones Técnicas de Seguridad
+
+> Sección añadida tras revisión QA (2026-01-15)
+
+### 6.1 Generación de Device Fingerprint
+
+```javascript
+// Algoritmo de fingerprinting (sin dependencias externas)
+const generateFingerprint = () => {
+  const data = [
+    navigator.userAgent,
+    `${screen.width}x${screen.height}`,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.language
+  ].join('|');
+  
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(data))
+    .then(hash => Array.from(new Uint8Array(hash))
+      .map(b => b.toString(16).padStart(2, '0')).join(''));
+};
+```
+
+**Justificación:** Huella ligera, determinista y sin bibliotecas externas.
+
+### 6.2 Expiración de Sesiones (TTL)
+
+| Tipo de Usuario | TTL | Política de Limpieza |
+|-----------------|-----|----------------------|
+| Administrador | 24 horas | Supabase Auth (automático) |
+| Empleado | **8 horas** | `pg_cron` diario: `DELETE FROM employee_sessions WHERE started_at < NOW() - INTERVAL '8 hours'` |
+
+### 6.3 Protección Contra Fuerza Bruta (Rate Limiting)
+
+| Parámetro | Valor |
+|-----------|-------|
+| Intentos permitidos | 5 |
+| Cooldown tras exceder | 15 minutos |
+| Campo en DB | `employees.failed_attempts` + `employees.locked_until` |
+
+**Lógica en RPC:**
+```sql
+-- Dentro de login_empleado_unificado
+IF v_employee.locked_until > NOW() THEN
+  RETURN json_build_object('success', false, 'error_code', 'ACCOUNT_LOCKED');
+END IF;
+```
+
+### 6.4 UX de Dispositivo Rechazado
+
+| Estado | Mensaje UI | Acción Permitida |
+|--------|-----------|------------------|
+| `pending` | "Dispositivo en espera de aprobación" | Ninguna - Pantalla de espera |
+| `rejected` | "Acceso denegado. Contacta al administrador." | Ninguna - Sin re-solicitud automática |
+| `approved` | (Login exitoso) | Acceso completo |
+
+### 6.5 Mecanismo de Notificación al Admin
+
+- **Canal:** Badge numérico en `NotificationCenterView.vue`
+- **Trigger:** Insert en `access_requests` con `status = 'pending'`
+- **Acción:** Admin ve lista de dispositivos pendientes y aprueba/rechaza
+
+---
+
 ## Conexiones con Documentación
 
 - **Implementación actual:** [login.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/01_REQUIREMENTS/login.md)

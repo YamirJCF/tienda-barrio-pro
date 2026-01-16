@@ -1,8 +1,35 @@
 # Mapa de Lógica Global - Tienda de Barrio Pro
 
-> **Última actualización:** 2026-01-15 (v10 - Agregado SPEC-005 IAM)  
+> **Última actualización:** 2026-01-15 (v11 - Agregado 03_UI_UX_DESIGN)  
 > **Rama:** master  
 > **Propósito:** Hoja de ruta para sincronización código ↔ documentación
+
+---
+
+## 📁 Estructura de Carpetas del Proyecto
+
+```
+prueba/
+├── 01_REQUIREMENTS/     # Especificaciones de requisitos
+├── 02_ARCHITECTURE/     # Arquitectura técnica y DB
+├── 03_UI_UX_DESIGN/     # 🆕 Diseño de interacción (UX/UI)
+├── 03_SRC/              # Código fuente (Vue 3 + Pinia)
+└── 04_DEV_ORCHESTRATION/# Orquestación y documentación de desarrollo
+```
+
+---
+
+## 🎨 Estructura de Carpeta 03_UI_UX_DESIGN (NUEVO)
+
+```
+03_UI_UX_DESIGN/
+├── README.md                       # Índice y principios de diseño
+├── 01_USER_FLOWS.md                # 6 flujos de usuario (Mermaid)
+├── 02_INFORMATION_ARCHITECTURE.md  # Mapa de navegación
+├── 03_WIREFRAMES_DESCRIPTIVOS.md   # 7 wireframes detallados
+├── 04_DESIGN_SYSTEM.md             # Tokens: colores, tipografía, espaciado
+└── 05_COMPONENT_LOGIC.md           # Lógica de Numpad, Modales, Estados
+```
 
 ---
 
@@ -34,6 +61,7 @@
 | Vistas en código (`03_SRC/src/views/`) | 15 |
 | Módulos documentados (`01_REQUIREMENTS/`) | 21 |
 | Módulos sincronizados (100%) | 19 ✅ |
+| Documentos de diseño UX/UI (`03_UI_UX_DESIGN/`) | 6 🆕 |
 | Especificaciones pendientes de implementación | 1 (SPEC-005 IAM) |
 | Vistas sin documentación | 1 (SystemAuditView - solo DEV) |
 
@@ -61,7 +89,7 @@
 | Notificaciones | `notifications.md` | `NotificationCenterView.vue` | 🟢 100% | **Sincronizado** |
 | Registro de Tienda | `register-store.md` | `RegisterStoreView.vue` | 🟢 100% | **Sincronizado** |
 | Entrada de Stock | `stock-entry.md` | `StockEntryView.vue` | 🟢 100% | **Sincronizado** |
-| **Auth Unificada IAM** | `auth-unificada-iam.md` | ⏳ Pendiente | 🟡 SPEC | **Por implementar** |
+| **Auth Unificada IAM** | `auth-unificada-iam.md` | ⏳ Pendiente | 🟢 SPEC ✅ | **Listo para implementar** |
 | Auditoría Sistema | ⚙️ Solo DEV | `SystemAuditView.vue` | ⚪ N/A | Herramienta interna |
 
 ---

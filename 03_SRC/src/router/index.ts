@@ -95,6 +95,26 @@ router.beforeEach((to, from, next) => {
     return next({ name: 'register-store' });
   }
 
+  // =============================================
+  // SPEC-005: Guard para POS - Tienda Abierta
+  // =============================================
+  // Empleados no pueden acceder al POS si la tienda está cerrada
+  if (to.name === 'pos' && isAuthenticated) {
+    const isAdmin = authStore.isAdmin;
+    const storeIsOpen = authStore.storeOpenStatus;
+
+    // Admins siempre pueden acceder al POS
+    if (!isAdmin && !storeIsOpen) {
+      console.warn('[Router] POS bloqueado: tienda cerrada');
+      // Importar notificaciones para mostrar mensaje
+      import('../composables/useNotifications').then(({ useNotifications }) => {
+        const { showWarning } = useNotifications();
+        showWarning('Inicie jornada para vender', 'storefront');
+      });
+      return next({ name: 'dashboard' });
+    }
+  }
+
   next();
 });
 

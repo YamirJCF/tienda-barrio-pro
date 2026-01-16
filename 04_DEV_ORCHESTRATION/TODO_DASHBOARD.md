@@ -124,25 +124,31 @@
 ## 🔐 SPEC-005: Autenticación Unificada e Integridad IAM
 
 > **Referencia:** `01_REQUIREMENTS/auth-unificada-iam.md`  
-> **Fecha de Adición:** 2026-01-15
+> **Fecha de Adición:** 2026-01-15  
+> **Estado:** ✅ Especificación Completa - Listo para Implementar
 
 ### Tareas Backend (Supabase)
 
-- [ ] Verificar tabla `access_requests` en `supabase-schema.sql`
-- [ ] Implementar RPC `login_empleado_unificado` con Gatekeeper de 3 capas
-- [ ] Configurar índice para `access_requests(employee_id, device_fingerprint)`
+- [x] Verificar tabla `access_requests` en `supabase-schema.sql` ✅
+- [x] Implementar RPC `login_empleado_unificado` con Gatekeeper de 3 capas ✅
+- [x] Configurar índice para `access_requests(employee_id, device_fingerprint)` ✅
+- [ ] Agregar campos `failed_attempts` y `locked_until` a tabla `employees`
+- [ ] Agregar lógica de rate limiting al RPC (5 intentos / 15 min)
+- [ ] Configurar `pg_cron` para limpieza de sesiones (TTL 8h)
 
 ### Tareas Frontend (Vue)
 
 - [ ] **`src/stores/auth.ts`:** Agregar estados `deviceApproved` y `storeOpenStatus`
 - [ ] **`src/views/LoginView.vue`:** Detectar tipo de usuario por presencia de `@` en input
-- [ ] **`src/views/LoginView.vue`:** Manejar códigos de error `GATEKEEPER_PENDING` y `GATEKEEPER_REJECTED`
+- [ ] **`src/views/LoginView.vue`:** Manejar códigos de error `GATEKEEPER_PENDING`, `GATEKEEPER_REJECTED`, `ACCOUNT_LOCKED`
 - [ ] **`src/router/index.ts`:** Middleware para bloquear `/pos` cuando `storeOpenStatus == false`
 - [ ] **Dashboard:** Mostrar banner "Inicie jornada para vender" cuando tienda cerrada
+- [ ] **Composable:** Crear `useDeviceFingerprint.ts` con algoritmo SHA-256
 
 ### Tareas de Seguridad
 
-- [ ] Implementar fingerprinting de dispositivo en cliente (FingerprintJS o similar)
-- [ ] Crear vista admin para aprobar/rechazar solicitudes pendientes
-- [ ] Agregar notificación push cuando hay solicitudes pendientes
+- [x] Definir algoritmo de fingerprinting → SHA-256(userAgent+screen+timezone+lang) ✅
+- [x] Crear vista admin para aprobar/rechazar solicitudes pendientes ✅
+- [x] Agregar badge de notificación en `NotificationCenterView.vue` ✅
+
 

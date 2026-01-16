@@ -5,6 +5,7 @@ import { useSalesStore } from '../stores/sales';
 import { useStoreStatusStore } from '../stores/storeStatus';
 import BottomNav from '../components/BottomNav.vue';
 import ReportsContent from '../components/ReportsContent.vue';
+import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -12,6 +13,7 @@ const storeStatusStore = useStoreStatusStore();
 
 // State
 const activeTab = ref<'reportes' | 'gestion'>('gestion');
+const showDeviceModal = ref(false);
 
 // Computed - Estado operativo de la tienda (diferente de la caja)
 const isStoreClosed = computed(() => storeStatusStore.isClosed);
@@ -180,7 +182,7 @@ const navigateTo = (route: string) => {
           </button>
 
           <!-- Dispositivos Autorizados -->
-          <button
+          <button @click="showDeviceModal = true"
             class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group">
             <div class="flex items-center gap-4">
               <div
@@ -248,6 +250,9 @@ const navigateTo = (route: string) => {
 
       <div class="h-10"></div>
     </main>
+
+    <!-- Device Approval Modal -->
+    <DeviceApprovalModal v-model="showDeviceModal" />
 
     <BottomNav />
   </div>

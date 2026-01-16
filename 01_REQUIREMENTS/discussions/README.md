@@ -7,6 +7,7 @@ Esta carpeta contiene documentos con observaciones o conflictos por resolver.
 - `obs-ux-nombre.md` - Observación de UX
 - `obs-db-nombre.md` - Observación de Base de Datos
 - `obs-lead-nombre.md` - Observación del Lead
+- `obs-qa-nombre.md` - Observación de QA y Auditoría
 
 ## Flujo
 
