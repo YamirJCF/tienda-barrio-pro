@@ -54,12 +54,22 @@ const isValidUUID = (str: string): boolean => {
     return uuidRegex.test(str);
 };
 
+// Validate ID: accepts UUID or numeric string (for backwards compatibility with inventory)
+const isValidId = (str: string): boolean => {
+    if (!str || str.trim() === '') return false;
+    // Accept UUID format
+    if (isValidUUID(str)) return true;
+    // Accept numeric IDs (current inventory format)
+    if (/^\d+$/.test(str)) return true;
+    return false;
+};
+
 const isValidNotification = (n: Partial<SystemNotification>): boolean => {
     if (!n.title || n.title.length > 100) return false;
     if (!n.message || n.message.length > 500) return false;
     if (!['security', 'inventory', 'finance', 'general'].includes(n.type!)) return false;
-    if (n.metadata?.productId && !isValidUUID(n.metadata.productId)) return false;
-    if (n.metadata?.clientId && !isValidUUID(n.metadata.clientId)) return false;
+    if (n.metadata?.productId && !isValidId(n.metadata.productId)) return false;
+    if (n.metadata?.clientId && !isValidId(n.metadata.clientId)) return false;
     return true;
 };
 
