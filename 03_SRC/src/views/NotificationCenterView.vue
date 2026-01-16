@@ -1,64 +1,19 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+/**
+ * NotificationCenterView - Centro de Notificaciones
+ * FRD: 01_REQUIREMENTS/notifications.md v1.1
+ */
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-
-interface Notification {
-    id: string;
-    type: 'security' | 'inventory' | 'finance' | 'general';
-    title: string;
-    message: string;
-    time: string;
-    isRead: boolean;
-    actionable?: boolean;
-}
+import { useNotificationsStore, type SystemNotification } from '../stores/notificationsStore';
+import { formatRelativeTime } from '../composables/useRelativeTime';
 
 const router = useRouter();
-
-// Sample notifications data
-const notifications = ref<Notification[]>([
-    {
-        id: '1',
-        type: 'security',
-        title: 'Solicitud de Acceso',
-        message: 'Carlos intenta entrar desde Samsung A50. ¿Deseas permitir el acceso?',
-        time: 'Hace 5 min',
-        isRead: false,
-        actionable: true
-    },
-    {
-        id: '2',
-        type: 'inventory',
-        title: 'Stock Bajo: Leche',
-        message: 'Quedan menos de 5 unidades en el inventario.',
-        time: 'Hace 1 hora',
-        isRead: false,
-        actionable: false
-    },
-    {
-        id: '3',
-        type: 'finance',
-        title: 'Pago Recibido',
-        message: 'Transferencia de $50.000 completada.',
-        time: 'Ayer',
-        isRead: true,
-        actionable: false
-    },
-    {
-        id: '4',
-        type: 'general',
-        title: 'Cierre de Caja',
-        message: 'Resumen del día generado exitosamente.',
-        time: 'Ayer',
-        isRead: true,
-        actionable: false
-    }
-]);
+const notificationsStore = useNotificationsStore();
 
 // Computed
-const hasUnreadNotifications = computed(() => {
-    return notifications.value.some(n => !n.isRead);
-});
-
+const notifications = computed(() => notificationsStore.sortedByDate);
+const hasUnreadNotifications = computed(() => notificationsStore.hasUnread);
 const isEmpty = computed(() => notifications.value.length === 0);
 
 // Methods
@@ -67,41 +22,32 @@ const goBack = () => {
 };
 
 const markAllAsRead = () => {
-    notifications.value.forEach(n => {
-        n.isRead = true;
-    });
+    notificationsStore.markAllAsRead();
 };
 
 const handleApprove = (notificationId: string) => {
-    // Handle approval logic
     console.log('Approved:', notificationId);
-    removeNotification(notificationId);
+    notificationsStore.removeNotification(notificationId);
 };
 
 const handleReject = (notificationId: string) => {
-    // Handle rejection logic
     console.log('Rejected:', notificationId);
-    removeNotification(notificationId);
+    notificationsStore.removeNotification(notificationId);
 };
 
-const removeNotification = (id: string) => {
-    const index = notifications.value.findIndex(n => n.id === id);
-    if (index > -1) {
-        notifications.value.splice(index, 1);
-    }
+const getIconConfig = (notification: SystemNotification) => {
+    // Use icon from notification if available, otherwise default by type
+    const iconMap: Record<string, { icon: string; bgColor: string; textColor: string }> = {
+        security: { icon: notification.icon || 'shield', bgColor: 'bg-red-100 dark:bg-red-900/40', textColor: 'text-red-600 dark:text-red-400' },
+        inventory: { icon: notification.icon || 'inventory_2', bgColor: 'bg-orange-100 dark:bg-orange-900/40', textColor: 'text-orange-600 dark:text-orange-400' },
+        finance: { icon: notification.icon || 'payments', bgColor: 'bg-green-100 dark:bg-green-900/40', textColor: 'text-green-600 dark:text-green-400' },
+        general: { icon: notification.icon || 'store', bgColor: 'bg-blue-100 dark:bg-blue-900/40', textColor: 'text-blue-600 dark:text-blue-400' },
+    };
+    return iconMap[notification.type] || iconMap.general;
 };
 
-const getIconConfig = (type: string) => {
-    switch (type) {
-        case 'security':
-            return { icon: 'lock_person', bgColor: 'bg-red-100 dark:bg-red-900/40', textColor: 'text-red-600 dark:text-red-400' };
-        case 'inventory':
-            return { icon: 'inventory_2', bgColor: 'bg-orange-100 dark:bg-orange-900/40', textColor: 'text-orange-600 dark:text-orange-400' };
-        case 'finance':
-            return { icon: 'payments', bgColor: 'bg-green-100 dark:bg-green-900/40', textColor: 'text-green-600 dark:text-green-400' };
-        default:
-            return { icon: 'notifications_active', bgColor: 'bg-slate-100 dark:bg-slate-700', textColor: 'text-slate-600 dark:text-slate-400' };
-    }
+const getRelativeTime = (createdAt: string) => {
+    return formatRelativeTime(createdAt);
 };
 </script>
 
@@ -146,9 +92,8 @@ const getIconConfig = (type: string) => {
                         <!-- Icon -->
                         <div class="shrink-0 relative z-10">
                             <div class="flex items-center justify-center size-12 rounded-full shadow-sm"
-                                :class="[getIconConfig(notification.type).bgColor, getIconConfig(notification.type).textColor]">
-                                <span class="material-symbols-outlined">{{ getIconConfig(notification.type).icon
-                                    }}</span>
+                                :class="[getIconConfig(notification).bgColor, getIconConfig(notification).textColor]">
+                                <span class="material-symbols-outlined">{{ getIconConfig(notification).icon }}</span>
                             </div>
                         </div>
 
@@ -161,7 +106,7 @@ const getIconConfig = (type: string) => {
                                 </h3>
                                 <span class="text-xs font-medium whitespace-nowrap pt-0.5"
                                     :class="notification.isRead ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'">
-                                    {{ notification.time }}
+                                    {{ getRelativeTime(notification.createdAt) }}
                                 </span>
                             </div>
                             <p class="text-sm leading-relaxed" :class="[

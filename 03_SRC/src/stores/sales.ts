@@ -127,6 +127,19 @@ export const useSalesStore = defineStore('sales', () => {
     };
 
     const closeStore = () => {
+        // Generate notification for cash close
+        import('./notificationsStore').then(({ useNotificationsStore }) => {
+            const notificationsStore = useNotificationsStore();
+            const balance = currentCash.value.minus(openingCash.value);
+            notificationsStore.addNotification({
+                type: 'finance',
+                icon: 'payments',
+                title: 'Cierre de Caja',
+                message: `Arqueo completado. Balance: $${balance.toFixed(0)}`,
+                isRead: false,
+            });
+        });
+
         isStoreOpen.value = false;
         openingCash.value = new Decimal(0);
         currentCash.value = new Decimal(0);

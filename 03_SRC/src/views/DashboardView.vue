@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useInventoryStore } from '../stores/inventory';
 import { useAuthStore } from '../stores/auth';
+import { useNotificationsStore } from '../stores/notificationsStore';
 import { Decimal } from 'decimal.js';
 import BottomNav from '../components/BottomNav.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
@@ -14,6 +15,7 @@ const router = useRouter();
 const salesStore = useSalesStore();
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
+const notificationsStore = useNotificationsStore();
 const { formatWithSign } = useCurrencyFormat();
 
 // State
@@ -93,8 +95,10 @@ const navigateToNotifications = () => {
         <button @click="navigateToNotifications"
           class="relative text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors">
           <span class="material-symbols-outlined text-[26px]">notifications</span>
-          <span
-            class="absolute top-0 right-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-surface-dark"></span>
+          <span v-if="notificationsStore.hasUnread"
+            class="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white ring-2 ring-white dark:ring-surface-dark">
+            {{ notificationsStore.unreadCount > 9 ? '9+' : notificationsStore.unreadCount }}
+          </span>
         </button>
         <button @click="openProfileSidebar"
           class="h-8 w-8 overflow-hidden rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 hover:ring-2 hover:ring-primary/50 transition-all">
@@ -134,12 +138,14 @@ const navigateToNotifications = () => {
       <div v-if="isEmployee && !authStore.storeOpenStatus"
         class="relative overflow-hidden rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 shadow-sm">
         <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-800/50 text-amber-600 dark:text-amber-400">
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-800/50 text-amber-600 dark:text-amber-400">
             <span class="material-symbols-outlined">storefront</span>
           </div>
           <div class="flex flex-col">
             <h3 class="text-amber-900 dark:text-amber-100 font-bold text-sm">Tienda Cerrada</h3>
-            <p class="text-amber-700 dark:text-amber-300 text-xs">Inicie jornada para vender. Contacta al administrador.</p>
+            <p class="text-amber-700 dark:text-amber-300 text-xs">Inicie jornada para vender. Contacta al administrador.
+            </p>
           </div>
         </div>
       </div>
@@ -167,33 +173,13 @@ const navigateToNotifications = () => {
 
       <!-- Quick Stats Grid -->
       <div class="grid grid-cols-2 gap-3">
-        <StatCard 
-          icon="payments" 
-          icon-color="green" 
-          title="Caja Real" 
-          :value="formattedCash" 
-        />
-        <StatCard 
-          icon="show_chart" 
-          icon-color="blue" 
-          title="Ventas Hoy" 
-          :value="formattedTodayTotal"
-          :subtitle="`${salesStore.todayCount} ventas`" 
-        />
-        <StatCard 
-          icon="person" 
-          icon-color="orange" 
-          title="Por Cobrar" 
-          :value="formattedTodayFiado" 
-        />
-        <StatCard 
-          icon="inventory_2" 
-          icon-color="purple" 
-          title="Inventario" 
-          :value="`${totalProducts} Prod.`"
+        <StatCard icon="payments" icon-color="green" title="Caja Real" :value="formattedCash" />
+        <StatCard icon="show_chart" icon-color="blue" title="Ventas Hoy" :value="formattedTodayTotal"
+          :subtitle="`${salesStore.todayCount} ventas`" />
+        <StatCard icon="person" icon-color="orange" title="Por Cobrar" :value="formattedTodayFiado" />
+        <StatCard icon="inventory_2" icon-color="purple" title="Inventario" :value="`${totalProducts} Prod.`"
           :subtitle="inventoryStore.lowStockProducts.length > 0 ? `${inventoryStore.lowStockProducts.length} con stock bajo` : undefined"
-          :subtitle-color="inventoryStore.lowStockProducts.length > 0 ? 'red' : undefined"
-        />
+          :subtitle-color="inventoryStore.lowStockProducts.length > 0 ? 'red' : undefined" />
       </div>
 
       <!-- Quick Actions - Admin Only -->

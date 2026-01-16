@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { inventorySerializer } from '../data/serializers';
+import { useNotificationsStore } from './notificationsStore';
 
 export type MeasurementUnit = 'kg' | 'lb' | 'g' | 'un';
 
@@ -17,6 +18,7 @@ export interface Product {
     measurementUnit: MeasurementUnit; // 'kg', 'lb', 'g', 'un'
     stock: Decimal;           // Stock en decimales para soportar 0.5 lb, etc.
     minStock: number;
+    notifiedLowStock?: boolean;  // Flag anti-duplicado (QA)
     createdAt: string;
     updatedAt: string;
 }
@@ -105,6 +107,28 @@ export const useInventoryStore = defineStore('inventory', () => {
             const delta = quantity instanceof Decimal ? quantity : new Decimal(quantity);
             product.stock = product.stock.plus(delta);
             product.updatedAt = new Date().toISOString();
+
+            // Check for low stock notification
+            if (product.stock.lt(product.minStock) && !product.notifiedLowStock) {
+                const notificationsStore = useNotificationsStore();
+                notificationsStore.addNotification({
+                    type: 'inventory',
+                    icon: 'inventory_2',
+                    title: `Stock Bajo: ${product.name}`,
+                    message: `Quedan ${product.stock.toFixed(product.measurementUnit === 'un' ? 0 : 2)} ${product.measurementUnit}`,
+                    isRead: false,
+                    metadata: {
+                        productId: String(product.id),
+                    },
+                });
+                product.notifiedLowStock = true;
+            }
+
+            // Reset flag if stock is restored above min
+            if (product.stock.gte(product.minStock) && product.notifiedLowStock) {
+                product.notifiedLowStock = false;
+            }
+
             return product;
         }
         return null;

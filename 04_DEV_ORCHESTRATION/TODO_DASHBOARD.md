@@ -151,4 +151,38 @@
 - [x] Crear vista admin para aprobar/rechazar solicitudes pendientes ✅
 - [x] Agregar badge de notificación en `NotificationCenterView.vue` ✅
 
+---
 
+## 🔔 Sistema de Notificaciones Funcional
+
+> **Referencia:** `01_REQUIREMENTS/notifications.md`  
+> **Fecha de Adición:** 2026-01-15  
+> **Estado:** 📋 Especificación Completa - Listo para Implementar
+
+### Contexto
+
+El sistema actual tiene:
+- ✅ **Toast notifications** (`useNotifications.ts`) - Funciona correctamente
+- ❌ **Centro de Notificaciones** - Usa datos estáticos de ejemplo
+- ❌ **Badge en Dashboard** - Siempre muestra punto rojo (hardcoded)
+
+### Tareas de Implementación
+
+#### Store de Notificaciones
+- [ ] Crear `stores/notificationsStore.ts` con persistencia localStorage
+- [ ] Definir interfaz `SystemNotification` según FRD
+
+#### Integraciones con Eventos del Sistema
+- [ ] Modificar `stores/inventory.ts` - Generar notificación cuando stock < 5
+- [ ] Modificar `stores/sales.ts` - Generar notificación en cierre de caja
+- [ ] Generar notificación al abrir tienda (jornada iniciada)
+
+#### Actualización de Componentes
+- [ ] **`views/NotificationCenterView.vue`:** Conectar a `useNotificationsStore` (eliminar datos estáticos)
+- [ ] **`views/DashboardView.vue`:** Badge dinámico con `unreadCount` del store, ocultar si es 0
+
+### Criterios de Aceptación
+- [ ] Badge muestra contador real de notificaciones no leídas
+- [ ] Notificación de stock bajo aparece al crear producto con stock < 5
+- [ ] Notificación de cierre aparece tras arqueo exitoso
+- [ ] "Marcar todo leído" limpia el badge
