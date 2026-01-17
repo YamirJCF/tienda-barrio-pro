@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../lib/supabase';
 import { useAuthStore } from './auth';
 
 export interface CashControlEvent {

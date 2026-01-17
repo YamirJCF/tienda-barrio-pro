@@ -7,9 +7,7 @@
 export { STORAGE_KEYS, getAllStorageKeys } from './storageKeys';
 export type { StorageKey } from './storageKeys';
 
-// Sample data
-export { SAMPLE_PRODUCTS, CATEGORIES, PAYMENT_METHODS } from './sampleData';
-export type { SampleProduct } from './sampleData';
+// WO-003: sampleData exports eliminados - SPEC-007
 
 // Storage utilities
 export {

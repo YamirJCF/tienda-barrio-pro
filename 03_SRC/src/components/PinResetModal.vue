@@ -11,13 +11,8 @@
         <div v-if="currentStep === 'password'" class="step-password">
           <p class="step-label">Ingresa tu contraseña actual:</p>
           <div class="password-input-container">
-            <input
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              class="password-input"
-              placeholder="Tu contraseña"
-              @keyup.enter="validatePassword"
-            />
+            <input v-model="password" :type="showPassword ? 'text' : 'password'" class="password-input"
+              placeholder="Tu contraseña" @keyup.enter="validatePassword" />
             <button class="toggle-password" @click="showPassword = !showPassword">
               {{ showPassword ? '🙈' : '👁️' }}
             </button>
@@ -34,26 +29,16 @@
         <!-- Step 2: New PIN -->
         <div v-if="currentStep === 'newPin'" class="step-new-pin">
           <p class="step-label">Crea tu nuevo PIN de 6 dígitos:</p>
-          <PinKeypad
-            ref="newPinKeypad"
-            :length="6"
-            :error="error"
-            :disabled="loading"
-            @complete="handleNewPinComplete"
-          />
+          <PinKeypad ref="newPinKeypad" :length="6" :error="error" :disabled="loading"
+            @complete="handleNewPinComplete" />
           <button class="btn-back" @click="currentStep = 'password'">← Volver</button>
         </div>
 
         <!-- Step 3: Confirm PIN -->
         <div v-if="currentStep === 'confirm'" class="step-confirm">
           <p class="step-label">Confirma tu nuevo PIN:</p>
-          <PinKeypad
-            ref="confirmPinKeypad"
-            :length="6"
-            :error="error"
-            :disabled="loading"
-            @complete="handleConfirmPinComplete"
-          />
+          <PinKeypad ref="confirmPinKeypad" :length="6" :error="error" :disabled="loading"
+            @complete="handleConfirmPinComplete" />
           <button class="btn-back" @click="goBackToNewPin">← Volver</button>
         </div>
 
@@ -76,13 +61,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import PinKeypad from './PinKeypad.vue';
-import { supabase } from '@/lib/supabase';
-import { useCashControlStore } from '@/stores/cashControl';
-import { useAuthStore } from '@/stores/auth';
+import { supabase } from '../lib/supabase';
+import { useCashControlStore } from '../stores/cashControl';
+import { useAuthStore } from '../stores/auth';
 
-defineProps<{
-  isVisible: boolean;
-}>();
+// Props definido más abajo para poder usar en watch
 
 const emit = defineEmits<{
   close: [];
@@ -186,15 +169,16 @@ const resetModal = () => {
   showPassword.value = false;
 };
 
+// Watch usando la referencia de props destructurada
+const props = defineProps<{
+  isVisible: boolean;
+}>();
+
 watch(() => props.isVisible, (visible) => {
   if (visible) {
     resetModal();
   }
 });
-
-const props = defineProps<{
-  isVisible: boolean;
-}>();
 </script>
 
 <style scoped>
@@ -331,7 +315,7 @@ const props = defineProps<{
 .loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255,255,255,0.8);
+  background: rgba(255, 255, 255, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -348,6 +332,8 @@ const props = defineProps<{
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

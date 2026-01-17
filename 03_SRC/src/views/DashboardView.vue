@@ -23,10 +23,7 @@ const openingModalOpen = ref(false);
 const baseMoney = ref('');
 const profileSidebarOpen = ref(false);
 
-// Initialize
-onMounted(() => {
-  inventoryStore.initializeSampleData();
-});
+// WO: initializeSampleData eliminada - SPEC-007
 
 // Computed
 const isStoreOpen = computed(() => salesStore.isStoreOpen);

@@ -2,7 +2,16 @@
 import { ref, computed, watch } from 'vue';
 import type { Product, MeasurementUnit } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
-import { UNIT_LABELS } from '../data/sampleData';
+
+// WO: UNIT_LABELS definido localmente (antes importado de sampleData eliminado)
+const UNIT_LABELS: Record<string, string> = {
+  'un': 'Unidades',
+  'kg': 'Kilogramos',
+  'g': 'Gramos',
+  'lb': 'Libras',
+  'l': 'Litros',
+  'ml': 'Mililitros',
+};
 
 // Conversion factors to base unit (grams)
 const TO_GRAMS: Record<string, number> = {
@@ -39,7 +48,7 @@ watch(() => props.product, (product) => {
 // Convert between units
 const convertUnits = (value: Decimal, fromUnit: MeasurementUnit, toUnit: MeasurementUnit): Decimal => {
   if (fromUnit === toUnit) return value;
-  
+
   // Convert to grams first, then to target unit
   const inGrams = value.times(TO_GRAMS[fromUnit] || 1);
   return inGrams.div(TO_GRAMS[toUnit] || 1);
@@ -48,16 +57,16 @@ const convertUnits = (value: Decimal, fromUnit: MeasurementUnit, toUnit: Measure
 // Price per unit based on sell unit (converted from product's base unit)
 const pricePerSellUnit = computed(() => {
   if (!props.product) return new Decimal(0);
-  
+
   const basePrice = props.product.price;
   const baseUnit = props.product.measurementUnit;
-  
+
   if (baseUnit === sellUnit.value) return basePrice;
-  
+
   // Convert: if base is kg at $5000, and selling in g, price per g = $5000/1000 = $5
   const baseToGrams = TO_GRAMS[baseUnit] || 1;
   const sellToGrams = TO_GRAMS[sellUnit.value] || 1;
-  
+
   // Price per gram = base price / grams in base unit
   // Price per sell unit = price per gram * grams in sell unit
   return basePrice.div(baseToGrams).times(sellToGrams);
@@ -67,7 +76,7 @@ const pricePerSellUnit = computed(() => {
 const calculatedWeight = computed(() => {
   if (!props.product || !inputValue.value) return new Decimal(0);
   const value = new Decimal(inputValue.value || 0);
-  
+
   if (inputMode.value === 'value') {
     // peso = valor / precio_por_unidad_de_venta
     if (pricePerSellUnit.value.isZero()) return new Decimal(0);
@@ -81,7 +90,7 @@ const calculatedWeight = computed(() => {
 const calculatedValue = computed(() => {
   if (!props.product || !inputValue.value) return new Decimal(0);
   const value = new Decimal(inputValue.value || 0);
-  
+
   if (inputMode.value === 'weight') {
     return value.times(pricePerSellUnit.value);
   } else {
@@ -129,13 +138,13 @@ const close = () => {
 
 const confirm = () => {
   if (!props.product || !isValid.value) return;
-  
+
   emit('confirm', {
     product: props.product,
     quantity: quantityInBaseUnit.value, // Always in product's base unit
     subtotal: calculatedValue.value,
   });
-  
+
   close();
 };
 
@@ -157,12 +166,10 @@ const clear = () => {
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div
-        v-if="modelValue && product"
-        class="fixed inset-0 z-50 flex items-end justify-center bg-gray-800/80"
-        @click.self="close"
-      >
-        <div class="w-full max-w-[480px] mx-auto bg-white dark:bg-background-dark rounded-t-2xl shadow-2xl flex flex-col animate-slide-up">
+      <div v-if="modelValue && product" class="fixed inset-0 z-50 flex items-end justify-center bg-gray-800/80"
+        @click.self="close">
+        <div
+          class="w-full max-w-[480px] mx-auto bg-white dark:bg-background-dark rounded-t-2xl shadow-2xl flex flex-col animate-slide-up">
           <!-- Header -->
           <div class="bg-gradient-to-r from-primary to-blue-600 text-white p-4 rounded-t-2xl">
             <div class="flex justify-center mb-2">
@@ -185,34 +192,25 @@ const clear = () => {
               Vender en:
             </div>
             <div class="flex gap-2">
-              <button
-                type="button"
+              <button type="button"
                 class="flex-1 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
-                :class="sellUnit === 'kg' 
-                  ? 'bg-primary text-white' 
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'"
-                @click="sellUnit = 'kg'; clear()"
-              >
+                :class="sellUnit === 'kg'
+                  ? 'bg-primary text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'" @click="sellUnit = 'kg'; clear()">
                 kg
               </button>
-              <button
-                type="button"
+              <button type="button"
                 class="flex-1 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
-                :class="sellUnit === 'lb' 
-                  ? 'bg-primary text-white' 
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'"
-                @click="sellUnit = 'lb'; clear()"
-              >
+                :class="sellUnit === 'lb'
+                  ? 'bg-primary text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'" @click="sellUnit = 'lb'; clear()">
                 Libras
               </button>
-              <button
-                type="button"
+              <button type="button"
                 class="flex-1 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
-                :class="sellUnit === 'g' 
-                  ? 'bg-primary text-white' 
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'"
-                @click="sellUnit = 'g'; clear()"
-              >
+                :class="sellUnit === 'g'
+                  ? 'bg-primary text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'" @click="sellUnit = 'g'; clear()">
                 Gramos
               </button>
             </div>
@@ -221,25 +219,19 @@ const clear = () => {
           <!-- Mode Toggle -->
           <div class="p-4 border-b border-gray-100 dark:border-gray-800">
             <div class="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex h-10">
-              <button
-                type="button"
+              <button type="button"
                 class="flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-bold transition-all"
-                :class="inputMode === 'weight' 
-                  ? 'bg-white dark:bg-gray-700 text-primary shadow-sm' 
-                  : 'text-gray-500 dark:text-gray-400'"
-                @click="inputMode = 'weight'; clear()"
-              >
+                :class="inputMode === 'weight'
+                  ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400'" @click="inputMode = 'weight'; clear()">
                 <span class="material-symbols-outlined text-[16px]">scale</span>
                 Por Peso
               </button>
-              <button
-                type="button"
+              <button type="button"
                 class="flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-bold transition-all"
-                :class="inputMode === 'value' 
-                  ? 'bg-white dark:bg-gray-700 text-primary shadow-sm' 
-                  : 'text-gray-500 dark:text-gray-400'"
-                @click="inputMode = 'value'; clear()"
-              >
+                :class="inputMode === 'value'
+                  ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400'" @click="inputMode = 'value'; clear()">
                 <span class="material-symbols-outlined text-[16px]">payments</span>
                 Por Valor
               </button>
@@ -252,7 +244,8 @@ const clear = () => {
               {{ inputMode === 'value' ? 'Valor a cobrar' : `Cantidad (${sellUnit})` }}
             </div>
             <div class="text-4xl font-bold text-gray-900 dark:text-white mb-2 min-h-[48px] tabular-nums">
-              {{ inputMode === 'value' ? '$ ' : '' }}{{ inputValue || '0' }}{{ inputMode === 'weight' ? ` ${sellUnit}` : '' }}
+              {{ inputMode === 'value' ? '$ ' : '' }}{{ inputValue || '0' }}{{ inputMode === 'weight' ? ` ${sellUnit}` :
+              '' }}
             </div>
             <div v-if="inputValue" class="text-lg text-primary font-medium">
               {{ formattedResult }}
@@ -261,32 +254,25 @@ const clear = () => {
 
           <!-- Numpad -->
           <div class="grid grid-cols-3 gap-2 p-4 bg-gray-50 dark:bg-gray-900">
-            <button
-              v-for="num in ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00']"
-              :key="num"
+            <button v-for="num in ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00']" :key="num"
               class="h-12 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-xl shadow-sm active:scale-95 transition-transform border border-gray-100 dark:border-gray-700"
-              @click="handleNumpad(num)"
-            >
+              @click="handleNumpad(num)">
               {{ num }}
             </button>
           </div>
 
           <!-- Actions -->
-          <div class="grid grid-cols-2 gap-3 p-4 bg-white dark:bg-background-dark border-t border-gray-100 dark:border-gray-800 pb-8">
-            <button
-              type="button"
+          <div
+            class="grid grid-cols-2 gap-3 p-4 bg-white dark:bg-background-dark border-t border-gray-100 dark:border-gray-800 pb-8">
+            <button type="button"
               class="h-12 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-              @click="close"
-            >
+              @click="close">
               <span class="material-symbols-outlined text-[18px]">close</span>
               Cancelar
             </button>
-            <button
-              type="button"
+            <button type="button"
               class="h-12 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="!isValid"
-              @click="confirm"
-            >
+              :disabled="!isValid" @click="confirm">
               <span class="material-symbols-outlined text-[18px]">add_shopping_cart</span>
               Agregar {{ formatCurrency(calculatedValue) }}
             </button>
@@ -316,6 +302,7 @@ const clear = () => {
   from {
     transform: translateY(100%);
   }
+
   to {
     transform: translateY(0);
   }

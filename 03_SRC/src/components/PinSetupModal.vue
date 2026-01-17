@@ -10,36 +10,21 @@
         <!-- Current PIN (only for change mode) -->
         <div v-if="mode === 'change' && currentStep === 'current'" class="pin-step">
           <p class="step-label">Ingresa tu PIN actual:</p>
-          <PinKeypad
-            :length="6"
-            :error="error"
-            :disabled="loading"
-            @complete="handleCurrentPinComplete"
-          />
+          <PinKeypad :length="6" :error="error" :disabled="loading" @complete="handleCurrentPinComplete" />
         </div>
 
         <!-- New PIN -->
         <div v-if="currentStep === 'new'" class="pin-step">
           <p class="step-label">{{ mode === 'setup' ? 'Crea un PIN de 6 dígitos:' : 'Ingresa tu nuevo PIN:' }}</p>
-          <PinKeypad
-            ref="newPinKeypad"
-            :length="6"
-            :error="error"
-            :disabled="loading"
-            @complete="handleNewPinComplete"
-          />
+          <PinKeypad ref="newPinKeypad" :length="6" :error="error" :disabled="loading"
+            @complete="handleNewPinComplete" />
         </div>
 
         <!-- Confirm PIN -->
         <div v-if="currentStep === 'confirm'" class="pin-step">
           <p class="step-label">Confirma tu PIN:</p>
-          <PinKeypad
-            ref="confirmPinKeypad"
-            :length="6"
-            :error="error"
-            :disabled="loading"
-            @complete="handleConfirmPinComplete"
-          />
+          <PinKeypad ref="confirmPinKeypad" :length="6" :error="error" :disabled="loading"
+            @complete="handleConfirmPinComplete" />
           <button class="btn-back" @click="goBack">← Volver</button>
         </div>
 
@@ -62,7 +47,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import PinKeypad from './PinKeypad.vue';
-import { useCashControlStore } from '@/stores/cashControl';
+import { useCashControlStore } from '../stores/cashControl';
 
 const props = defineProps<{
   mode: 'setup' | 'change';
@@ -252,7 +237,7 @@ watch(() => props.isVisible, (visible) => {
 .loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255,255,255,0.8);
+  background: rgba(255, 255, 255, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -269,6 +254,8 @@ watch(() => props.isVisible, (visible) => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

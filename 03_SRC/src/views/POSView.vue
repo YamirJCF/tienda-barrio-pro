@@ -38,11 +38,7 @@ const isStoreClosed = computed(() => storeStatusStore.isClosed);
 const canSell = computed(() => authStore.canSell);
 const canFiar = computed(() => authStore.canFiar);
 
-
-// Initialize inventory with sample data if empty
-onMounted(() => {
-  inventoryStore.initializeSampleData();
-});
+// WO: initializeSampleData eliminada - SPEC-007
 
 // State
 const pluInput = ref('');
