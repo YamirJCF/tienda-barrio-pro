@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS stores (
   address TEXT,
   phone TEXT,
   owner_name TEXT,
+  -- SPEC-006: PIN de Caja del Dueño
+  owner_pin_hash TEXT,                          -- PIN hasheado con bcrypt (6 dígitos)
+  pin_failed_attempts INTEGER DEFAULT 0,        -- Contador de intentos fallidos
+  pin_locked_until TIMESTAMPTZ,                 -- Timestamp de desbloqueo (rate limiting)
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -31,7 +35,7 @@ CREATE TABLE IF NOT EXISTS employees (
   name TEXT NOT NULL,
   username TEXT NOT NULL UNIQUE,
   pin TEXT NOT NULL, -- Hasheado con crypt()
-  permissions JSONB DEFAULT '{"canSell": true, "canViewInventory": true, "canViewReports": false, "canFiar": false}',
+  permissions JSONB DEFAULT '{"canSell": true, "canViewInventory": true, "canViewReports": false, "canFiar": false, "canOpenCloseCash": false}',
   is_active BOOLEAN DEFAULT true,
   -- SPEC-005: Rate Limiting para protección contra fuerza bruta
   failed_attempts INTEGER DEFAULT 0,
@@ -170,6 +174,39 @@ CREATE TABLE IF NOT EXISTS access_requests (
   reviewed_at TIMESTAMPTZ,
   UNIQUE(employee_id, device_fingerprint)
 );
+
+-- =============================================
+-- SPEC-006: Control de Caja con PIN
+-- =============================================
+
+-- Eventos de Control de Caja (Auditoría)
+CREATE TABLE IF NOT EXISTS cash_control_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL CHECK (event_type IN ('open', 'close')),
+  
+  -- Usuario que autorizó (puede ser admin o empleado)
+  authorized_by_id UUID,
+  authorized_by_type TEXT NOT NULL CHECK (authorized_by_type IN ('admin', 'employee')),
+  authorized_by_name TEXT NOT NULL,
+  
+  -- Montos
+  amount_declared DECIMAL(12,2) NOT NULL,
+  amount_expected DECIMAL(12,2),              -- Solo para cierre
+  difference DECIMAL(12,2),                    -- Solo para cierre
+  
+  -- Metadatos de seguridad
+  pin_verified BOOLEAN DEFAULT true,
+  device_fingerprint TEXT,
+  ip_address INET,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índices para cash_control_events
+CREATE INDEX IF NOT EXISTS idx_cash_events_store ON cash_control_events(store_id);
+CREATE INDEX IF NOT EXISTS idx_cash_events_date ON cash_control_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_cash_events_type ON cash_control_events(store_id, event_type);
 
 -- =============================================
 -- TRIGGERS
@@ -460,6 +497,220 @@ BEGIN
   WHERE id = p_employee_id;
 
   RETURN json_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =============================================
+-- SPEC-006: RPCs para Control de Caja con PIN
+-- =============================================
+
+-- RPC: Validar PIN del Admin/Dueño (WO-003)
+CREATE OR REPLACE FUNCTION validar_pin_admin(
+  p_store_id UUID,
+  p_pin TEXT
+)
+RETURNS JSON AS $$
+DECLARE
+  v_store stores%ROWTYPE;
+  v_current_attempts INTEGER;
+BEGIN
+  -- Obtener datos de la tienda
+  SELECT * INTO v_store FROM stores WHERE id = p_store_id;
+  
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error_code', 'STORE_NOT_FOUND');
+  END IF;
+  
+  -- Verificar si está bloqueado
+  IF v_store.pin_locked_until IS NOT NULL AND v_store.pin_locked_until > NOW() THEN
+    RETURN json_build_object(
+      'success', false,
+      'error_code', 'PIN_LOCKED',
+      'locked_until', v_store.pin_locked_until,
+      'message', 'Cuenta bloqueada temporalmente'
+    );
+  END IF;
+  
+  -- Verificar si tiene PIN configurado
+  IF v_store.owner_pin_hash IS NULL THEN
+    RETURN json_build_object(
+      'success', false,
+      'error_code', 'PIN_NOT_CONFIGURED',
+      'message', 'Debes configurar un PIN primero'
+    );
+  END IF;
+  
+  -- Validar PIN usando bcrypt
+  IF v_store.owner_pin_hash = crypt(p_pin, v_store.owner_pin_hash) THEN
+    -- PIN correcto: resetear contadores
+    UPDATE stores 
+    SET pin_failed_attempts = 0, 
+        pin_locked_until = NULL 
+    WHERE id = p_store_id;
+    
+    RETURN json_build_object('success', true);
+  ELSE
+    -- PIN incorrecto: incrementar intentos
+    v_current_attempts := COALESCE(v_store.pin_failed_attempts, 0) + 1;
+    
+    UPDATE stores 
+    SET pin_failed_attempts = v_current_attempts,
+        pin_locked_until = CASE 
+          WHEN v_current_attempts >= 7 THEN NOW() + INTERVAL '1 hour'
+          WHEN v_current_attempts >= 6 THEN NOW() + INTERVAL '15 minutes'
+          WHEN v_current_attempts >= 5 THEN NOW() + INTERVAL '5 minutes'
+          ELSE NULL 
+        END
+    WHERE id = p_store_id;
+    
+    RETURN json_build_object(
+      'success', false,
+      'error_code', 'INVALID_PIN',
+      'attempts_remaining', GREATEST(5 - v_current_attempts, 0),
+      'message', 'PIN incorrecto'
+    );
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Establecer/Cambiar PIN del Admin (WO-004)
+CREATE OR REPLACE FUNCTION establecer_pin_admin(
+  p_store_id UUID,
+  p_new_pin TEXT,
+  p_current_pin TEXT DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+  v_store stores%ROWTYPE;
+BEGIN
+  SELECT * INTO v_store FROM stores WHERE id = p_store_id;
+  
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Tienda no encontrada');
+  END IF;
+  
+  -- Validar formato de PIN (exactamente 6 dígitos)
+  IF LENGTH(p_new_pin) != 6 OR p_new_pin !~ '^\d{6}$' THEN
+    RETURN json_build_object('success', false, 'error', 'El PIN debe ser de 6 dígitos numéricos');
+  END IF;
+  
+  -- Si ya tiene PIN, validar el actual
+  IF v_store.owner_pin_hash IS NOT NULL THEN
+    IF p_current_pin IS NULL THEN
+      RETURN json_build_object('success', false, 'error', 'Debes ingresar tu PIN actual');
+    END IF;
+    
+    IF v_store.owner_pin_hash != crypt(p_current_pin, v_store.owner_pin_hash) THEN
+      RETURN json_build_object('success', false, 'error', 'PIN actual incorrecto');
+    END IF;
+    
+    -- Verificar que nuevo PIN sea diferente
+    IF v_store.owner_pin_hash = crypt(p_new_pin, v_store.owner_pin_hash) THEN
+      RETURN json_build_object('success', false, 'error', 'El nuevo PIN debe ser diferente al actual');
+    END IF;
+  END IF;
+  
+  -- Establecer nuevo PIN
+  UPDATE stores 
+  SET owner_pin_hash = crypt(p_new_pin, gen_salt('bf')),
+      pin_failed_attempts = 0,
+      pin_locked_until = NULL
+  WHERE id = p_store_id;
+  
+  RETURN json_build_object('success', true, 'message', 'PIN configurado correctamente');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- RPC: Registrar Evento de Caja (WO-005)
+CREATE OR REPLACE FUNCTION registrar_evento_caja(
+  p_store_id UUID,
+  p_event_type TEXT,
+  p_amount_declared DECIMAL,
+  p_authorized_by_name TEXT,
+  p_authorized_by_type TEXT,
+  p_authorized_by_id UUID DEFAULT NULL,
+  p_device_fingerprint TEXT DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+  v_event_id UUID;
+  v_amount_expected DECIMAL;
+  v_difference DECIMAL;
+  v_existing_open BOOLEAN;
+BEGIN
+  -- Validar tipo de evento
+  IF p_event_type NOT IN ('open', 'close') THEN
+    RETURN json_build_object('success', false, 'error', 'Tipo de evento inválido');
+  END IF;
+  
+  -- Para apertura: verificar que no haya una apertura sin cierre hoy
+  IF p_event_type = 'open' THEN
+    SELECT EXISTS (
+      SELECT 1 FROM cash_control_events 
+      WHERE store_id = p_store_id 
+        AND DATE(created_at) = CURRENT_DATE 
+        AND event_type = 'open'
+        AND NOT EXISTS (
+          SELECT 1 FROM cash_control_events ce2
+          WHERE ce2.store_id = p_store_id 
+            AND DATE(ce2.created_at) = CURRENT_DATE 
+            AND ce2.event_type = 'close'
+            AND ce2.created_at > cash_control_events.created_at
+        )
+    ) INTO v_existing_open;
+    
+    IF v_existing_open THEN
+      RETURN json_build_object('success', false, 'error', 'La caja ya está abierta');
+    END IF;
+  END IF;
+  
+  -- Para cierre: calcular monto esperado
+  IF p_event_type = 'close' THEN
+    SELECT COALESCE(
+      (SELECT amount FROM cash_register 
+       WHERE store_id = p_store_id AND date = CURRENT_DATE AND type = 'opening'), 0
+    ) + COALESCE(
+      (SELECT SUM(total) FROM sales 
+       WHERE store_id = p_store_id AND DATE(created_at) = CURRENT_DATE AND payment_method = 'cash'), 0
+    ) - COALESCE(
+      (SELECT SUM(amount) FROM expenses 
+       WHERE store_id = p_store_id AND DATE(created_at) = CURRENT_DATE), 0
+    ) INTO v_amount_expected;
+    
+    v_difference := p_amount_declared - COALESCE(v_amount_expected, 0);
+  END IF;
+  
+  -- Insertar evento de control de caja
+  INSERT INTO cash_control_events (
+    store_id, event_type, 
+    authorized_by_id, authorized_by_type, authorized_by_name,
+    amount_declared, amount_expected, difference,
+    device_fingerprint
+  ) VALUES (
+    p_store_id, p_event_type,
+    p_authorized_by_id, p_authorized_by_type, p_authorized_by_name,
+    p_amount_declared, v_amount_expected, v_difference,
+    p_device_fingerprint
+  )
+  RETURNING id INTO v_event_id;
+  
+  -- Sincronizar con tabla cash_register para compatibilidad
+  INSERT INTO cash_register (store_id, date, type, amount, created_by)
+  VALUES (
+    p_store_id, 
+    CURRENT_DATE, 
+    CASE WHEN p_event_type = 'open' THEN 'opening' ELSE 'closing' END,
+    p_amount_declared,
+    p_authorized_by_id
+  )
+  ON CONFLICT (store_id, date, type) DO UPDATE SET amount = p_amount_declared;
+  
+  RETURN json_build_object(
+    'success', true,
+    'event_id', v_event_id,
+    'amount_expected', v_amount_expected,
+    'difference', v_difference
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

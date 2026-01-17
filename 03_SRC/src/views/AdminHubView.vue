@@ -6,6 +6,9 @@ import { useStoreStatusStore } from '../stores/storeStatus';
 import BottomNav from '../components/BottomNav.vue';
 import ReportsContent from '../components/ReportsContent.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
+// WO-004: Modales de PIN para SPEC-006
+import PinSetupModal from '../components/PinSetupModal.vue';
+import PinResetModal from '../components/PinResetModal.vue';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -14,6 +17,9 @@ const storeStatusStore = useStoreStatusStore();
 // State
 const activeTab = ref<'reportes' | 'gestion'>('gestion');
 const showDeviceModal = ref(false);
+// WO-004: States para modales de PIN
+const showPinSetupModal = ref(false);
+const showPinResetModal = ref(false);
 
 // Computed - Estado operativo de la tienda (diferente de la caja)
 const isStoreClosed = computed(() => storeStatusStore.isClosed);
@@ -142,9 +148,9 @@ const navigateTo = (route: string) => {
         </div>
       </section>
 
-      <!-- Equipo y Tienda -->
+      <!-- Equipo -->
       <section v-if="activeTab === 'gestion'">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Equipo y Tienda</h3>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">👥 Equipo</h3>
         <div
           class="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
           <!-- Empleados y Permisos -->
@@ -157,62 +163,52 @@ const navigateTo = (route: string) => {
               </div>
               <div>
                 <p class="text-base font-semibold text-slate-900 dark:text-slate-100">Empleados y Permisos</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Administrar accesos</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Administrar accesos del equipo</p>
               </div>
             </div>
             <span
               class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">chevron_right</span>
           </button>
+        </div>
+      </section>
 
-          <!-- Configuración del Negocio -->
-          <button
-            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group">
-            <div class="flex items-center gap-4">
-              <div
-                class="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400">
-                <span class="material-symbols-outlined">storefront</span>
-              </div>
-              <div>
-                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">Configuración del Negocio</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Horarios e info general</p>
-              </div>
-            </div>
-            <span
-              class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">chevron_right</span>
-          </button>
-
-          <!-- Dispositivos Autorizados -->
-          <button @click="showDeviceModal = true"
-            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group">
-            <div class="flex items-center gap-4">
-              <div
-                class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                <span class="material-symbols-outlined">smartphone</span>
-              </div>
-              <div>
-                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">Dispositivos Autorizados</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Seguridad de la cuenta</p>
-              </div>
-            </div>
-            <span
-              class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">chevron_right</span>
-          </button>
-
-          <!-- Historial de Ventas -->
-          <button
+      <!-- WO-004: Sección Seguridad (PIN) -->
+      <section v-if="activeTab === 'gestion'">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">🔐 Seguridad</h3>
+        <div
+          class="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+          <!-- Configurar PIN de Caja -->
+          <button @click="showPinSetupModal = true"
             class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group">
             <div class="flex items-center gap-4">
               <div
                 class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
-                <span class="material-symbols-outlined">history</span>
+                <span class="material-symbols-outlined">pin</span>
               </div>
               <div>
-                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">Historial de Ventas</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Ver transacciones pasadas</p>
+                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">Configurar PIN de Caja</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Establecer PIN para apertura y cierre</p>
               </div>
             </div>
             <span
-              class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">chevron_right</span>
+              class="material-symbols-outlined text-slate-400 group-hover:text-emerald-500 transition-colors">chevron_right</span>
+          </button>
+
+          <!-- Cambiar/Resetear PIN -->
+          <button @click="showPinResetModal = true"
+            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group">
+            <div class="flex items-center gap-4">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
+                <span class="material-symbols-outlined">lock_reset</span>
+              </div>
+              <div>
+                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">Cambiar o Resetear PIN</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Olvidaste tu PIN o quieres cambiarlo</p>
+              </div>
+            </div>
+            <span
+              class="material-symbols-outlined text-slate-400 group-hover:text-amber-500 transition-colors">chevron_right</span>
           </button>
         </div>
       </section>
@@ -253,6 +249,12 @@ const navigateTo = (route: string) => {
 
     <!-- Device Approval Modal -->
     <DeviceApprovalModal v-model="showDeviceModal" />
+
+    <!-- WO-004: Modales de PIN -->
+    <PinSetupModal :isVisible="showPinSetupModal" mode="setup" @close="showPinSetupModal = false"
+      @success="showPinSetupModal = false" />
+    <PinResetModal :isVisible="showPinResetModal" @close="showPinResetModal = false"
+      @success="showPinResetModal = false" />
 
     <BottomNav />
   </div>

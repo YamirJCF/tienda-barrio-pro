@@ -9,7 +9,7 @@ export interface StoreAccount {
     ownerName: string;
     email: string;
     password: string;
-    pin: string;
+    // SPEC-006: PIN movido a Supabase (owner_pin_hash en tabla stores)
     createdAt: string;
 }
 
@@ -26,12 +26,25 @@ export interface CurrentUser {
         canViewInventory: boolean;
         canViewReports: boolean;
         canFiar: boolean;
+        canOpenCloseCash: boolean;  // SPEC-006
     };
 }
 
+// =============================================
+// CUENTA DEMO POR DEFECTO
+// =============================================
+const DEMO_ACCOUNT: StoreAccount = {
+    id: 'demo-store-001',
+    storeName: 'Mi Tienda Demo',
+    ownerName: 'Usuario Demo',
+    email: 'demo@tienda.com',
+    password: 'demo123',
+    createdAt: new Date().toISOString()
+};
+
 export const useAuthStore = defineStore('auth', () => {
-    // State
-    const stores = ref<StoreAccount[]>([]);
+    // State - inicializado con cuenta demo
+    const stores = ref<StoreAccount[]>([DEMO_ACCOUNT]);
     const currentUser = ref<CurrentUser | null>(null);
     const isAuthenticated = ref(false);
 
@@ -72,6 +85,13 @@ export const useAuthStore = defineStore('auth', () => {
         return currentUser.value.permissions?.canFiar ?? false;
     });
 
+    // SPEC-006: Permiso para control de caja
+    const canOpenCloseCash = computed(() => {
+        if (!currentUser.value) return false;
+        if (isAdmin.value) return true;
+        return currentUser.value.permissions?.canOpenCloseCash ?? false;
+    });
+
     // SPEC-005: Computed para acceso al POS
     const canAccessPOS = computed(() => {
         if (!isAuthenticated.value) return false;
@@ -91,7 +111,7 @@ export const useAuthStore = defineStore('auth', () => {
         ownerName: string;
         email: string;
         password: string;
-        pin: string;
+        // SPEC-006: PIN eliminado del registro
     }): StoreAccount | null => {
         // Check if email already exists
         const exists = stores.value.find(s => s.email.toLowerCase() === data.email.toLowerCase());
@@ -106,7 +126,6 @@ export const useAuthStore = defineStore('auth', () => {
             ownerName: data.ownerName,
             email: data.email,
             password: data.password,
-            pin: data.pin,
             createdAt: new Date().toISOString(),
         };
 
@@ -152,6 +171,7 @@ export const useAuthStore = defineStore('auth', () => {
             canViewInventory: boolean;
             canViewReports: boolean;
             canFiar: boolean;
+            canOpenCloseCash: boolean;  // SPEC-006
         };
     }, storeId: string): boolean => {
         currentUser.value = {
@@ -184,6 +204,28 @@ export const useAuthStore = defineStore('auth', () => {
         storeOpenStatus.value = isOpen;
     };
 
+    // Resetear a cuenta demo (limpia todo excepto la cuenta demo)
+    const resetToDemo = () => {
+        stores.value = [DEMO_ACCOUNT];
+        currentUser.value = null;
+        isAuthenticated.value = false;
+        deviceApproved.value = null;
+        storeOpenStatus.value = false;
+        // Limpiar otros stores del localStorage
+        localStorage.removeItem('tienda-employees');
+        localStorage.removeItem('tienda-inventory');
+        localStorage.removeItem('tienda-sales');
+        localStorage.removeItem('tienda-cart');
+        localStorage.removeItem('tienda-clients');
+        localStorage.removeItem('tienda-expenses');
+        console.log('✅ Sistema reseteado a cuenta demo');
+    };
+
+    // Auto-inicializar: asegurar que siempre exista la cuenta demo
+    if (!stores.value.find(s => s.id === DEMO_ACCOUNT.id)) {
+        stores.value = [DEMO_ACCOUNT];
+    }
+
     const getStoreById = (id: string) => {
         return stores.value.find(s => s.id === id);
     };
@@ -212,6 +254,7 @@ export const useAuthStore = defineStore('auth', () => {
         canViewInventory,
         canViewReports,
         canFiar,
+        canOpenCloseCash,  // SPEC-006
         canAccessPOS,
         // Methods
         registerStore,
@@ -222,6 +265,7 @@ export const useAuthStore = defineStore('auth', () => {
         getStoreById,
         getFirstStore,
         generateId,
+        resetToDemo,  // Nueva función
         // SPEC-005: IAM Methods
         setDeviceStatus,
         setStoreOpenStatus,

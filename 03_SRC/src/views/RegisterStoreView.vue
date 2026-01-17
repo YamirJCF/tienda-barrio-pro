@@ -13,7 +13,7 @@ const storeName = ref('');
 const ownerName = ref('');
 const email = ref('');
 const password = ref('');
-const pin = ref('');
+// SPEC-006: PIN eliminado del registro, se configura en AdminHub
 const showPassword = ref(false);
 
 // ============================================
@@ -33,8 +33,7 @@ const isStoreNameValid = computed(() => storeName.value.trim().length >= 3);
 const isOwnerNameValid = computed(() => ownerName.value.trim().length > 0);
 const isEmailValid = computed(() => emailRegex.test(email.value.trim()));
 const isPasswordValid = computed(() => password.value.length >= 6);
-// PIN: exactamente 6 dígitos numéricos
-const isPinComplete = computed(() => /^\d{6}$/.test(pin.value));
+// SPEC-006: PIN ya no se valida en registro
 
 // Botón habilitado solo si todo es válido y no está cargando
 const canSubmit = computed(() => {
@@ -42,7 +41,6 @@ const canSubmit = computed(() => {
         isOwnerNameValid.value &&
         isEmailValid.value &&
         isPasswordValid.value &&
-        isPinComplete.value &&
         !isLoading.value;
 });
 
@@ -53,20 +51,7 @@ const goBack = () => {
     router.back();
 };
 
-// ============================================
-// PIN KEYPAD HANDLERS
-// ============================================
-const handleKeypadPress = (num: string) => {
-    if (pin.value.length < 6) {
-        pin.value += num;
-    }
-};
-
-const handleBackspace = () => {
-    if (pin.value.length > 0) {
-        pin.value = pin.value.slice(0, -1);
-    }
-};
+// SPEC-006: Keypad handlers eliminados (PIN se configura en AdminHub)
 
 // ============================================
 // PASSWORD VISIBILITY TOGGLE
@@ -96,8 +81,8 @@ const handleSubmit = async () => {
             storeName: storeName.value.trim(),
             ownerName: ownerName.value.trim(),
             email: email.value.trim().toLowerCase(),
-            password: password.value,
-            pin: pin.value
+            password: password.value
+            // SPEC-006: PIN eliminado del registro
         });
 
         if (result) {
@@ -212,55 +197,7 @@ const handleSubmit = async () => {
                 </div>
             </section>
 
-            <div class="h-px bg-[#cee9e0]/50 dark:bg-white/10 my-6 mx-5"></div>
-
-            <!-- Section 3: Seguridad (PIN) -->
-            <section class="px-5 mb-8 animate-[fadeIn_0.5s_ease-out]">
-                <h2 class="text-xl font-bold text-[#0d1c17] dark:text-white mb-2 flex items-center gap-2">
-                    <span
-                        class="bg-emerald-500/10 text-emerald-600 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold">3</span>
-                    Seguridad
-                </h2>
-                <p class="text-sm text-[#0d1c17]/80 dark:text-gray-300 mb-6 leading-relaxed">
-                    Crea un <span class="font-bold text-emerald-600">PIN de 6 dígitos</span>. Esta será tu llave rápida
-                    para abrir la tienda todos los días.
-                </p>
-
-                <!-- PIN Display -->
-                <div class="flex justify-between max-w-[320px] mx-auto mb-8 gap-2" id="pinDisplay">
-                    <div v-for="i in 6" :key="i"
-                        class="w-10 h-14 sm:w-12 sm:h-14 rounded-lg border-2 border-[#cee9e0] dark:border-white/20 bg-white dark:bg-white/5 flex items-center justify-center transition-all duration-200"
-                        :class="{ 'border-emerald-500 ring-2 ring-emerald-500/20': pin.length === i - 1 }">
-                        <div v-if="pin.length >= i"
-                            class="w-3 h-3 rounded-full bg-emerald-500 animate-[popIn_0.2s_cubic-bezier(0.175,0.885,0.32,1.275)]">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Keypad -->
-                <div
-                    class="bg-gray-50 dark:bg-white/5 rounded-2xl p-4 max-w-[340px] mx-auto shadow-inner border border-[#cee9e0]/30 dark:border-white/5">
-                    <div class="grid grid-cols-3 gap-3">
-                        <button v-for="num in ['1', '2', '3', '4', '5', '6', '7', '8', '9']" :key="num"
-                            @click="handleKeypadPress(num)"
-                            class="keypad-btn h-14 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-white/5 text-xl font-medium text-[#0d1c17] dark:text-white flex items-center justify-center transition-transform touch-manipulation select-none active:bg-emerald-500/10 active:scale-95">
-                            {{ num }}
-                        </button>
-                        <!-- Empty space -->
-                        <div class="h-14"></div>
-                        <!-- 0 -->
-                        <button @click="handleKeypadPress('0')"
-                            class="keypad-btn h-14 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-white/5 text-xl font-medium text-[#0d1c17] dark:text-white flex items-center justify-center transition-transform touch-manipulation select-none active:bg-emerald-500/10 active:scale-95">
-                            0
-                        </button>
-                        <!-- Backspace -->
-                        <button @click="handleBackspace"
-                            class="keypad-btn h-14 rounded-xl bg-transparent text-gray-500 dark:text-gray-400 flex items-center justify-center transition-transform touch-manipulation select-none active:scale-95">
-                            <span class="material-symbols-outlined text-2xl">backspace</span>
-                        </button>
-                    </div>
-                </div>
-            </section>
+            <!-- SPEC-006: Sección de PIN eliminada - se configura en AdminHub después del registro -->
 
             <!-- Submit Button -->
             <div class="w-full p-4 mt-4 max-w-lg mx-auto">

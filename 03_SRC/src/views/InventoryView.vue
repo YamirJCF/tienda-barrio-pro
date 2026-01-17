@@ -17,10 +17,7 @@ const { formatCurrency } = useCurrencyFormat();
 // Permisos del usuario
 const canViewInventory = computed(() => authStore.canViewInventory);
 
-// Initialize inventory
-onMounted(() => {
-  inventoryStore.initializeSampleData();
-});
+// WO-006: initializeSampleData ELIMINADA - SPEC-007
 
 // State
 const searchQuery = ref('');
@@ -83,11 +80,9 @@ const getCategoryLabel = (category: string) => {
   <div class="flex flex-col h-screen bg-background-light dark:bg-background-dark pb-24 relative">
 
     <!-- No Permission Overlay -->
-    <NoPermissionOverlay 
-      v-if="!canViewInventory"
+    <NoPermissionOverlay v-if="!canViewInventory"
       message="No tienes permiso para ver el inventario. Contacta a tu administrador si necesitas acceso."
-      @go-back="goToDashboard"
-    />
+      @go-back="goToDashboard" />
 
     <!-- Header with Search -->
     <header
@@ -123,7 +118,7 @@ const getCategoryLabel = (category: string) => {
     </header>
 
     <!-- Products List -->
-    <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+    <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 no-scrollbar">
       <div class="flex justify-between items-end px-1">
         <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
           Productos ({{ filteredProducts.length }})

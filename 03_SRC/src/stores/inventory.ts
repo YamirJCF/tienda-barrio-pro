@@ -134,16 +134,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         return null;
     };
 
-    // Initialize with sample data if empty
-    const initializeSampleData = () => {
-        if (products.value.length === 0) {
-            // Import dynamically to avoid circular deps  
-            import('../data/sampleData').then(({ SAMPLE_PRODUCTS }) => {
-                SAMPLE_PRODUCTS.forEach(product => addProduct(product));
-                console.log('[Inventory] Initialized with', SAMPLE_PRODUCTS.length, 'sample products');
-            });
-        }
-    };
+    // WO-001: initializeSampleData ELIMINADA - SPEC-007
 
     return {
         products,
@@ -158,7 +149,7 @@ export const useInventoryStore = defineStore('inventory', () => {
         getProductByPLU,
         searchProducts,
         updateStock,
-        initializeSampleData,
+        // initializeSampleData ELIMINADA
     };
 }, {
     persist: {

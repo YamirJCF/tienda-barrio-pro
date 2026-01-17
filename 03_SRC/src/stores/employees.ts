@@ -6,6 +6,7 @@ export interface EmployeePermissions {
     canViewInventory: boolean;
     canViewReports: boolean;
     canFiar: boolean;
+    canOpenCloseCash: boolean;  // SPEC-006
 }
 
 export interface Employee {
@@ -95,44 +96,7 @@ export const useEmployeesStore = defineStore('employees', () => {
         return null;
     };
 
-    // Initialize with sample data
-    const initializeSampleData = () => {
-        if (employees.value.length > 0) return;
-
-        const sampleEmployees = [
-            {
-                name: 'Carlos Pérez',
-                username: 'carlos01',
-                pin: '1234',
-                permissions: { canSell: true, canViewInventory: true, canViewReports: false, canFiar: false },
-                isActive: true,
-            },
-            {
-                name: 'María Rodriguez',
-                username: 'maria02',
-                pin: '5678',
-                permissions: { canSell: true, canViewInventory: true, canViewReports: true, canFiar: true },
-                isActive: false,
-            },
-            {
-                name: 'Juan Gómez',
-                username: 'juan03',
-                pin: '9012',
-                permissions: { canSell: true, canViewInventory: true, canViewReports: false, canFiar: false },
-                isActive: true,
-            },
-        ];
-
-        sampleEmployees.forEach(e => {
-            const now = new Date().toISOString();
-            employees.value.push({
-                id: nextId.value++,
-                ...e,
-                createdAt: now,
-                updatedAt: now,
-            });
-        });
-    };
+    // WO-002: initializeSampleData ELIMINADA - SPEC-007
 
     return {
         employees,
@@ -146,7 +110,7 @@ export const useEmployeesStore = defineStore('employees', () => {
         getEmployeeById,
         getEmployeeByUsername,
         validatePin,
-        initializeSampleData,
+        // initializeSampleData ELIMINADA
     };
 }, {
     persist: {
