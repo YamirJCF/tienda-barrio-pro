@@ -1,25 +1,34 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useStoreStatusStore } from '../stores/storeStatus';
+import { useCashControlStore } from '../stores/cashControl';
 import BottomNav from '../components/BottomNav.vue';
 import ReportsContent from '../components/ReportsContent.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
-// WO-004: Modales de PIN para SPEC-006
+// WO-004: Modal de PIN para SPEC-006 (consolidado)
 import PinSetupModal from '../components/PinSetupModal.vue';
-import PinResetModal from '../components/PinResetModal.vue';
 
 const router = useRouter();
 const salesStore = useSalesStore();
 const storeStatusStore = useStoreStatusStore();
+const cashControlStore = useCashControlStore();
 
 // State
 const activeTab = ref<'reportes' | 'gestion'>('gestion');
 const showDeviceModal = ref(false);
-// WO-004: States para modales de PIN
+// WO-004: State para modal de PIN (consolidado)
 const showPinSetupModal = ref(false);
-const showPinResetModal = ref(false);
+
+// Computed: detectar si ya hay PIN configurado para determinar modo
+const hasPinConfigured = computed(() => cashControlStore.hasPinConfigured);
+const pinSetupMode = computed(() => hasPinConfigured.value ? 'change' : 'setup');
+
+// Check PIN status on mount
+onMounted(() => {
+  cashControlStore.checkPinConfigured();
+});
 
 // Computed - Estado operativo de la tienda (diferente de la caja)
 const isStoreClosed = computed(() => storeStatusStore.isClosed);
@@ -177,7 +186,7 @@ const navigateTo = (route: string) => {
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">🔐 Seguridad</h3>
         <div
           class="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
-          <!-- Configurar PIN de Caja -->
+          <!-- Configurar/Cambiar PIN de Caja (inteligente) -->
           <button @click="showPinSetupModal = true"
             class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group">
             <div class="flex items-center gap-4">
@@ -186,29 +195,16 @@ const navigateTo = (route: string) => {
                 <span class="material-symbols-outlined">pin</span>
               </div>
               <div>
-                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">Configurar PIN de Caja</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Establecer PIN para apertura y cierre</p>
+                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {{ hasPinConfigured ? 'Cambiar PIN de Caja' : 'Configurar PIN de Caja' }}
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  {{ hasPinConfigured ? 'Modificar tu PIN actual' : 'Establecer PIN para apertura y cierre' }}
+                </p>
               </div>
             </div>
             <span
               class="material-symbols-outlined text-slate-400 group-hover:text-emerald-500 transition-colors">chevron_right</span>
-          </button>
-
-          <!-- Cambiar/Resetear PIN -->
-          <button @click="showPinResetModal = true"
-            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group">
-            <div class="flex items-center gap-4">
-              <div
-                class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
-                <span class="material-symbols-outlined">lock_reset</span>
-              </div>
-              <div>
-                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">Cambiar o Resetear PIN</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Olvidaste tu PIN o quieres cambiarlo</p>
-              </div>
-            </div>
-            <span
-              class="material-symbols-outlined text-slate-400 group-hover:text-amber-500 transition-colors">chevron_right</span>
           </button>
         </div>
       </section>
@@ -250,11 +246,9 @@ const navigateTo = (route: string) => {
     <!-- Device Approval Modal -->
     <DeviceApprovalModal v-model="showDeviceModal" />
 
-    <!-- WO-004: Modales de PIN -->
-    <PinSetupModal :isVisible="showPinSetupModal" mode="setup" @close="showPinSetupModal = false"
-      @success="showPinSetupModal = false" />
-    <PinResetModal :isVisible="showPinResetModal" @close="showPinResetModal = false"
-      @success="showPinResetModal = false" />
+    <!-- WO-004: Modal de PIN (consolidado con detección automática de modo) -->
+    <PinSetupModal :isVisible="showPinSetupModal" :mode="pinSetupMode" @close="showPinSetupModal = false"
+      @success="showPinSetupModal = false; cashControlStore.checkPinConfigured()" />
 
     <BottomNav />
   </div>

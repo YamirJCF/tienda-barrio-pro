@@ -70,10 +70,27 @@ const loading = ref(false);
 const newPinKeypad = ref<InstanceType<typeof PinKeypad> | null>(null);
 const confirmPinKeypad = ref<InstanceType<typeof PinKeypad> | null>(null);
 
-const handleCurrentPinComplete = (pin: string) => {
-  currentPin.value = pin;
-  currentStep.value = 'new';
+const handleCurrentPinComplete = async (pin: string) => {
+  // CRITICAL: Validate current PIN before allowing change
+  loading.value = true;
   error.value = null;
+
+  try {
+    const result = await cashControlStore.validatePin(pin);
+
+    if (result.success) {
+      currentPin.value = pin;
+      currentStep.value = 'new';
+      error.value = null;
+    } else {
+      error.value = result.error ?? 'PIN incorrecto';
+      // Note: keypad should clear itself on error via the error prop
+    }
+  } catch (err) {
+    error.value = 'Error de validación';
+  } finally {
+    loading.value = false;
+  }
 };
 
 const handleNewPinComplete = (pin: string) => {
