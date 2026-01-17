@@ -33,10 +33,52 @@ const isProcessing = ref(false); // Loading state for COBRAR button
 
 // Estado operativo de la tienda
 const isStoreClosed = computed(() => storeStatusStore.isClosed);
+const isCashRegisterClosed = computed(() => !salesStore.isStoreOpen);
+const isInventoryEmpty = computed(() => inventoryStore.totalProducts === 0);
 
 // Permisos del usuario
 const canSell = computed(() => authStore.canSell);
 const canFiar = computed(() => authStore.canFiar);
+
+// WO-005: Estado de bloqueo consolidado
+const blockingState = computed(() => {
+  if (!canSell.value) {
+    return {
+      title: 'Sin Permiso',
+      message: 'No tienes permiso para realizar ventas. Contacta a tu administrador.',
+      buttonText: 'Volver',
+      action: goToDashboard
+    };
+  }
+  if (isStoreClosed.value) {
+    // Bloqueo por Switch Global (AdminHub)
+    return {
+      title: 'Tienda Cerrada',
+      message: 'La tienda está marcada como "Cerrada" en el panel de administración.',
+      buttonText: 'Volver',
+      action: goToDashboard
+    };
+  }
+  if (isCashRegisterClosed.value) {
+    // Bloqueo por Caja (CashControl)
+    return {
+      title: 'Caja Cerrada',
+      message: 'Para realizar ventas, primero debes iniciar el turno y abrir la caja.',
+      buttonText: 'Abrir Caja',
+      action: () => router.push('/cash-control')
+    };
+  }
+  if (isInventoryEmpty.value) {
+    // Bloqueo por Inventario
+    return {
+      title: 'Sin Inventario',
+      message: 'Tu inventario está vacío. Agrega tus primeros productos para comenzar.',
+      buttonText: 'Crear Producto',
+      action: () => router.push('/inventory')
+    };
+  }
+  return null;
+});
 
 // WO: initializeSampleData eliminada - SPEC-007
 
@@ -324,15 +366,9 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
 <template>
   <div class="bg-background-light dark:bg-background-dark h-screen w-full flex flex-col overflow-hidden relative">
 
-    <!-- No Permission Overlay -->
-    <NoPermissionOverlay v-if="!canSell"
-      message="No tienes permiso para realizar ventas. Contacta a tu administrador si necesitas acceso."
-      @go-back="goToDashboard" />
-
-    <!-- Store Closed Overlay -->
-    <NoPermissionOverlay v-else-if="isStoreClosed" title="Tienda Cerrada"
-      message="La tienda está fuera de servicio en este momento. No se pueden realizar ventas."
-      @go-back="goToDashboard" />
+    <!-- WO-005: Consolidated Blocking Overlay -->
+    <NoPermissionOverlay v-if="blockingState" :title="blockingState.title" :message="blockingState.message"
+      :buttonText="blockingState.buttonText" @go-back="blockingState.action" />
 
     <!-- ZONA SUPERIOR: TICKET (Flex Grow) -->
     <section class="flex flex-col flex-1 min-h-0 relative">

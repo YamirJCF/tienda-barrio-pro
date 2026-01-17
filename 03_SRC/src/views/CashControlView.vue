@@ -7,6 +7,7 @@ import { useCashControlStore } from '../stores/cashControl';
 import { useAuthStore } from '../stores/auth';
 import { Decimal } from 'decimal.js';
 import PinKeypad from '../components/PinKeypad.vue';
+import PinSetupModal from '../components/PinSetupModal.vue';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -24,6 +25,7 @@ const closingAmount = ref('');
 const currentStep = ref<'amount' | 'pin' | 'success'>('amount');
 const pinError = ref<string | null>(null);
 const isLoading = ref(false);
+const showPinSetupModal = ref(false); // WO-005
 
 // Computed
 const isStoreOpen = computed(() => salesStore.isStoreOpen);
@@ -63,6 +65,11 @@ onMounted(async () => {
         } else if (isStoreOpen.value && closingInput.value) {
             closingInput.value.focus();
         }
+        
+        // WO-005: Si entra a abrir caja y no tiene PIN, abrir modal automáticamente
+        if (!isStoreOpen.value && !hasPinConfigured.value) {
+             showPinSetupModal.value = true;
+        }
     });
 });
 
@@ -85,6 +92,18 @@ const formatCurrency = (val: Decimal | number) => {
 // CRITICAL: PIN VALIDATION REQUIRED
 // ============================================
 
+// WO-005: Handlers para el modal de PIN
+const handlePinSetupClose = () => {
+    // Si cancela la configuración, lo sacamos de la vista para evitar estados inconsistentes
+    router.push('/admin');
+};
+
+const handlePinSetupSuccess = async () => {
+    showPinSetupModal.value = false;
+    await cashControlStore.checkPinConfigured();
+    // Volver a checkear si ya podemos continuar (opcional)
+};
+
 const goToPinStep = () => {
     // Validate amount first
     const amount = isStoreOpen.value
@@ -97,8 +116,8 @@ const goToPinStep = () => {
 
     // Check if PIN is configured
     if (!hasPinConfigured.value) {
-        // Show error - PIN must be set up first
-        pinError.value = 'Debes configurar un PIN primero. Ve a Admin > Seguridad > Configurar PIN';
+        // WO-005: Redirect to setup instead of error
+        showPinSetupModal.value = true;
         return;
     }
 
@@ -462,6 +481,14 @@ const handlePinComplete = async (pin: string) => {
                 </div>
             </template>
         </template>
+        
+        <!-- WO-005: Modal de Configuración de PIN -->
+        <PinSetupModal 
+            :isVisible="showPinSetupModal" 
+            mode="setup"
+            @close="handlePinSetupClose" 
+            @success="handlePinSetupSuccess" 
+        />
     </div>
 </template>
 
