@@ -1,7 +1,13 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { supabase } from '../lib/supabase';
 import { useAuthStore } from './auth';
+
+/**
+ * Cash Control Store - SPEC-006
+ * 
+ * Implementación local con localStorage para desarrollo.
+ * TODO: Migrar a Supabase cuando el backend esté configurado.
+ */
 
 export interface CashControlEvent {
     id: string;
@@ -17,27 +23,26 @@ export interface CashControlEvent {
     createdAt: string;
 }
 
-interface ValidatePinResult {
-    success: boolean;
-    error_code?: 'PIN_LOCKED' | 'PIN_NOT_CONFIGURED' | 'INVALID_PIN' | 'STORE_NOT_FOUND';
-    attempts_remaining?: number;
-    locked_until?: string;
-    message?: string;
-}
+// Storage keys
+const STORAGE_KEYS = {
+    PIN_HASH: 'tienda_pro:pin_hash',
+    PIN_ATTEMPTS: 'tienda_pro:pin_attempts',
+    PIN_LOCKED_UNTIL: 'tienda_pro:pin_locked',
+    CASH_OPEN: 'tienda_pro:cash_open',
+    CASH_BASE: 'tienda_pro:cash_base',
+    CASH_EVENTS: 'tienda_pro:cash_events'
+};
 
-interface SetupPinResult {
-    success: boolean;
-    error?: string;
-    message?: string;
-}
-
-interface RegisterEventResult {
-    success: boolean;
-    error?: string;
-    event_id?: string;
-    amount_expected?: number;
-    difference?: number;
-}
+// Simple hash function for PIN (not cryptographically secure, but ok for dev)
+const simpleHash = (str: string): string => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return hash.toString(36);
+};
 
 export const useCashControlStore = defineStore('cashControl', () => {
     const authStore = useAuthStore();
@@ -51,6 +56,36 @@ export const useCashControlStore = defineStore('cashControl', () => {
     const hasPinConfigured = ref(false);
     const expectedCash = ref<number>(0);
 
+    // Constants
+    const MAX_ATTEMPTS = 5;
+    const LOCK_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+    const PIN_LENGTH = 6;
+
+    // Initialize from localStorage
+    const init = () => {
+        const storedHash = localStorage.getItem(STORAGE_KEYS.PIN_HASH);
+        hasPinConfigured.value = !!storedHash;
+
+        const storedAttempts = localStorage.getItem(STORAGE_KEYS.PIN_ATTEMPTS);
+        pinAttempts.value = storedAttempts ? parseInt(storedAttempts, 10) : 0;
+
+        const storedLocked = localStorage.getItem(STORAGE_KEYS.PIN_LOCKED_UNTIL);
+        if (storedLocked) {
+            const lockedDate = new Date(storedLocked);
+            if (lockedDate > new Date()) {
+                lockedUntil.value = lockedDate;
+            } else {
+                localStorage.removeItem(STORAGE_KEYS.PIN_LOCKED_UNTIL);
+                localStorage.setItem(STORAGE_KEYS.PIN_ATTEMPTS, '0');
+                pinAttempts.value = 0;
+            }
+        }
+
+        isOpen.value = localStorage.getItem(STORAGE_KEYS.CASH_OPEN) === 'true';
+        const storedBase = localStorage.getItem(STORAGE_KEYS.CASH_BASE);
+        expectedCash.value = storedBase ? parseFloat(storedBase) : 0;
+    };
+
     // Computed
     const isLocked = computed(() =>
         lockedUntil.value !== null && lockedUntil.value > new Date()
@@ -63,270 +98,202 @@ export const useCashControlStore = defineStore('cashControl', () => {
 
     // Actions
     const checkPinConfigured = async (): Promise<boolean> => {
-        const storeId = authStore.currentUser?.storeId;
-        if (!storeId) return false;
-
-        try {
-            const { data, error } = await supabase
-                .from('stores')
-                .select('owner_pin_hash')
-                .eq('id', storeId)
-                .single();
-
-            if (error) throw error;
-            hasPinConfigured.value = data?.owner_pin_hash !== null;
-            return hasPinConfigured.value;
-        } catch (err) {
-            console.error('Error checking PIN status:', err);
-            return false;
-        }
+        const storedHash = localStorage.getItem(STORAGE_KEYS.PIN_HASH);
+        hasPinConfigured.value = !!storedHash;
+        return hasPinConfigured.value;
     };
 
     const validatePin = async (pin: string): Promise<{ success: boolean; error?: string; attemptsRemaining?: number }> => {
-        const storeId = authStore.currentUser?.storeId;
-        if (!storeId) {
-            return { success: false, error: 'Sesión no válida' };
-        }
-
-        try {
-            loading.value = true;
-
-            const { data, error } = await supabase
-                .rpc('validar_pin_admin', { p_store_id: storeId, p_pin: pin });
-
-            if (error) throw error;
-
-            const result = data as ValidatePinResult;
-
-            if (result.success) {
-                pinAttempts.value = 0;
-                lockedUntil.value = null;
-                return { success: true };
-            }
-
-            // Handle specific error codes
-            if (result.error_code === 'PIN_LOCKED') {
-                lockedUntil.value = result.locked_until ? new Date(result.locked_until) : null;
-                return { success: false, error: 'Cuenta bloqueada temporalmente' };
-            }
-
-            if (result.error_code === 'PIN_NOT_CONFIGURED') {
-                return { success: false, error: 'Debes configurar un PIN primero' };
-            }
-
-            pinAttempts.value = 5 - (result.attempts_remaining ?? 0);
+        // Check if locked
+        if (isLocked.value) {
             return {
                 success: false,
-                error: result.message ?? 'PIN incorrecto',
-                attemptsRemaining: result.attempts_remaining
+                error: `Cuenta bloqueada. Espera ${lockRemainingSeconds.value} segundos.`
             };
-        } catch (err) {
-            // Network errors don't count as attempts
-            console.error('Error validating PIN:', err);
-            return { success: false, error: 'Error de conexión. Intenta de nuevo.' };
-        } finally {
-            loading.value = false;
         }
+
+        // Check if PIN is configured
+        const storedHash = localStorage.getItem(STORAGE_KEYS.PIN_HASH);
+        if (!storedHash) {
+            return { success: false, error: 'Debes configurar un PIN primero' };
+        }
+
+        // Validate PIN
+        const inputHash = simpleHash(pin);
+        if (inputHash === storedHash) {
+            // Success - reset attempts
+            pinAttempts.value = 0;
+            localStorage.setItem(STORAGE_KEYS.PIN_ATTEMPTS, '0');
+            localStorage.removeItem(STORAGE_KEYS.PIN_LOCKED_UNTIL);
+            lockedUntil.value = null;
+            return { success: true };
+        }
+
+        // Wrong PIN
+        pinAttempts.value++;
+        localStorage.setItem(STORAGE_KEYS.PIN_ATTEMPTS, pinAttempts.value.toString());
+
+        const attemptsRemaining = MAX_ATTEMPTS - pinAttempts.value;
+
+        if (attemptsRemaining <= 0) {
+            // Lock the account
+            const lockTime = new Date(Date.now() + LOCK_DURATION_MS);
+            lockedUntil.value = lockTime;
+            localStorage.setItem(STORAGE_KEYS.PIN_LOCKED_UNTIL, lockTime.toISOString());
+            return {
+                success: false,
+                error: 'Demasiados intentos. Cuenta bloqueada por 5 minutos.',
+                attemptsRemaining: 0
+            };
+        }
+
+        return {
+            success: false,
+            error: `PIN incorrecto. ${attemptsRemaining} intentos restantes.`,
+            attemptsRemaining
+        };
     };
 
     const setupPin = async (newPin: string, currentPin?: string): Promise<{ success: boolean; error?: string }> => {
-        const storeId = authStore.currentUser?.storeId;
-        if (!storeId) {
-            return { success: false, error: 'Sesión no válida' };
+        // Validate PIN format
+        if (newPin.length !== PIN_LENGTH || !/^\d+$/.test(newPin)) {
+            return { success: false, error: `El PIN debe tener ${PIN_LENGTH} dígitos` };
         }
 
-        try {
-            loading.value = true;
-
-            const { data, error } = await supabase
-                .rpc('establecer_pin_admin', {
-                    p_store_id: storeId,
-                    p_new_pin: newPin,
-                    p_current_pin: currentPin ?? null
-                });
-
-            if (error) throw error;
-
-            const result = data as SetupPinResult;
-
-            if (result.success) {
-                hasPinConfigured.value = true;
+        // If changing PIN, verify current PIN first
+        if (currentPin) {
+            const storedHash = localStorage.getItem(STORAGE_KEYS.PIN_HASH);
+            if (!storedHash) {
+                return { success: false, error: 'No hay PIN configurado' };
             }
-
-            return result;
-        } catch (err) {
-            console.error('Error setting up PIN:', err);
-            return { success: false, error: 'Error de conexión' };
-        } finally {
-            loading.value = false;
+            const currentHash = simpleHash(currentPin);
+            if (currentHash !== storedHash) {
+                return { success: false, error: 'PIN actual incorrecto' };
+            }
         }
+
+        // Save new PIN
+        const newHash = simpleHash(newPin);
+        localStorage.setItem(STORAGE_KEYS.PIN_HASH, newHash);
+        hasPinConfigured.value = true;
+
+        console.log('[CashControl] PIN configurado exitosamente');
+        return { success: true };
     };
 
-    const openCash = async (amount: number, pin: string, authorizedByName: string): Promise<{ success: boolean; error?: string }> => {
-        const storeId = authStore.currentUser?.storeId;
-        if (!storeId) {
-            return { success: false, error: 'Sesión no válida' };
-        }
-
+    const openCash = async (
+        amount: number,
+        pin: string,
+        authorizedByName: string
+    ): Promise<{ success: boolean; error?: string }> => {
         // First validate PIN
         const pinResult = await validatePin(pin);
         if (!pinResult.success) {
             return pinResult;
         }
 
-        try {
-            loading.value = true;
+        // Open cash
+        isOpen.value = true;
+        expectedCash.value = amount;
+        localStorage.setItem(STORAGE_KEYS.CASH_OPEN, 'true');
+        localStorage.setItem(STORAGE_KEYS.CASH_BASE, amount.toString());
 
-            const { data, error } = await supabase
-                .rpc('registrar_evento_caja', {
-                    p_store_id: storeId,
-                    p_event_type: 'open',
-                    p_amount_declared: amount,
-                    p_authorized_by_name: authorizedByName,
-                    p_authorized_by_type: authStore.isAdmin ? 'admin' : 'employee',
-                    p_authorized_by_id: authStore.currentUser?.employeeId ?? null
-                });
+        // Create event record
+        const event: CashControlEvent = {
+            id: `evt_${Date.now()}`,
+            storeId: authStore.currentUser?.storeId || 'unknown',
+            eventType: 'open',
+            authorizedById: authStore.currentUser?.id || null,
+            authorizedByType: authStore.isAdmin ? 'admin' : 'employee',
+            authorizedByName,
+            amountDeclared: amount,
+            amountExpected: null,
+            difference: null,
+            pinVerified: true,
+            createdAt: new Date().toISOString()
+        };
 
-            if (error) throw error;
+        currentEvent.value = event;
+        saveEvent(event);
 
-            const result = data as RegisterEventResult;
-
-            if (result.success) {
-                isOpen.value = true;
-                currentEvent.value = {
-                    id: result.event_id!,
-                    storeId,
-                    eventType: 'open',
-                    authorizedById: authStore.currentUser?.employeeId?.toString() ?? null,
-                    authorizedByType: authStore.isAdmin ? 'admin' : 'employee',
-                    authorizedByName,
-                    amountDeclared: amount,
-                    amountExpected: null,
-                    difference: null,
-                    pinVerified: true,
-                    createdAt: new Date().toISOString()
-                };
-            }
-
-            return result;
-        } catch (err) {
-            console.error('Error opening cash:', err);
-            return { success: false, error: 'Error de conexión' };
-        } finally {
-            loading.value = false;
-        }
+        console.log('[CashControl] Caja abierta con monto:', amount);
+        return { success: true };
     };
 
-    const closeCash = async (amountDeclared: number, pin: string, authorizedByName: string): Promise<{ success: boolean; error?: string; difference?: number }> => {
-        const storeId = authStore.currentUser?.storeId;
-        if (!storeId) {
-            return { success: false, error: 'Sesión no válida' };
-        }
-
-        // First validate PIN
+    const closeCash = async (
+        amountDeclared: number,
+        pin: string,
+        authorizedByName: string
+    ): Promise<{ success: boolean; error?: string; difference?: number }> => {
+        // ** CRITICAL: First validate PIN **
         const pinResult = await validatePin(pin);
         if (!pinResult.success) {
             return pinResult;
         }
 
-        try {
-            loading.value = true;
+        // Calculate expected from sales
+        const currentExpected = await getExpectedCash();
+        const difference = amountDeclared - currentExpected;
 
-            const { data, error } = await supabase
-                .rpc('registrar_evento_caja', {
-                    p_store_id: storeId,
-                    p_event_type: 'close',
-                    p_amount_declared: amountDeclared,
-                    p_authorized_by_name: authorizedByName,
-                    p_authorized_by_type: authStore.isAdmin ? 'admin' : 'employee',
-                    p_authorized_by_id: authStore.currentUser?.employeeId ?? null
-                });
+        // Close cash
+        isOpen.value = false;
+        localStorage.setItem(STORAGE_KEYS.CASH_OPEN, 'false');
 
-            if (error) throw error;
+        // Create event record
+        const event: CashControlEvent = {
+            id: `evt_${Date.now()}`,
+            storeId: authStore.currentUser?.storeId || 'unknown',
+            eventType: 'close',
+            authorizedById: authStore.currentUser?.id || null,
+            authorizedByType: authStore.isAdmin ? 'admin' : 'employee',
+            authorizedByName,
+            amountDeclared,
+            amountExpected: currentExpected,
+            difference,
+            pinVerified: true,
+            createdAt: new Date().toISOString()
+        };
 
-            const result = data as RegisterEventResult;
+        currentEvent.value = event;
+        saveEvent(event);
 
-            if (result.success) {
-                isOpen.value = false;
-                currentEvent.value = {
-                    id: result.event_id!,
-                    storeId,
-                    eventType: 'close',
-                    authorizedById: authStore.currentUser?.employeeId?.toString() ?? null,
-                    authorizedByType: authStore.isAdmin ? 'admin' : 'employee',
-                    authorizedByName,
-                    amountDeclared,
-                    amountExpected: result.amount_expected ?? null,
-                    difference: result.difference ?? null,
-                    pinVerified: true,
-                    createdAt: new Date().toISOString()
-                };
-            }
+        // Reset base amount
+        expectedCash.value = 0;
+        localStorage.removeItem(STORAGE_KEYS.CASH_BASE);
 
-            return {
-                success: result.success,
-                error: result.error,
-                difference: result.difference
-            };
-        } catch (err) {
-            console.error('Error closing cash:', err);
-            return { success: false, error: 'Error de conexión' };
-        } finally {
-            loading.value = false;
-        }
+        console.log('[CashControl] Caja cerrada. Diferencia:', difference);
+        return { success: true, difference };
+    };
+
+    const saveEvent = (event: CashControlEvent) => {
+        const events = JSON.parse(localStorage.getItem(STORAGE_KEYS.CASH_EVENTS) || '[]');
+        events.push(event);
+        localStorage.setItem(STORAGE_KEYS.CASH_EVENTS, JSON.stringify(events));
     };
 
     const checkCashStatus = async (): Promise<void> => {
-        const storeId = authStore.currentUser?.storeId;
-        if (!storeId) return;
-
-        try {
-            const { data, error } = await supabase
-                .from('cash_control_events')
-                .select('*')
-                .eq('store_id', storeId)
-                .eq('event_type', 'open')
-                .gte('created_at', new Date().toISOString().split('T')[0])
-                .order('created_at', { ascending: false })
-                .limit(1);
-
-            if (error) throw error;
-
-            if (data && data.length > 0) {
-                // Check if there's a closing event after
-                const { data: closeData } = await supabase
-                    .from('cash_control_events')
-                    .select('id')
-                    .eq('store_id', storeId)
-                    .eq('event_type', 'close')
-                    .gt('created_at', data[0].created_at)
-                    .limit(1);
-
-                isOpen.value = !closeData || closeData.length === 0;
-            } else {
-                isOpen.value = false;
-            }
-        } catch (err) {
-            console.error('Error checking cash status:', err);
+        isOpen.value = localStorage.getItem(STORAGE_KEYS.CASH_OPEN) === 'true';
+        const storedBase = localStorage.getItem(STORAGE_KEYS.CASH_BASE);
+        if (storedBase) {
+            expectedCash.value = parseFloat(storedBase);
         }
     };
 
     const getExpectedCash = async (): Promise<number> => {
-        const storeId = authStore.currentUser?.storeId;
-        if (!storeId) return 0;
+        // In a real app, this would sum: base + cash sales - payments
+        // For now, just return the base + simulated sales
+        const base = parseFloat(localStorage.getItem(STORAGE_KEYS.CASH_BASE) || '0');
 
-        try {
-            const { data, error } = await supabase
-                .rpc('get_cash_report', { p_store_id: storeId });
+        // TODO: Get actual cash sales from salesStore
+        // const salesStore = useSalesStore();
+        // const cashSales = salesStore.todayCashTotal;
 
-            if (error) throw error;
-            expectedCash.value = data?.expected_cash ?? 0;
-            return expectedCash.value;
-        } catch (err) {
-            console.error('Error getting expected cash:', err);
-            return 0;
-        }
+        expectedCash.value = base;
+        return base;
     };
+
+    // Initialize on store creation
+    init();
 
     return {
         // State

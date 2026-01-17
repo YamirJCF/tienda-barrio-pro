@@ -44,19 +44,15 @@ const storeName = computed(() => currentStore.value?.storeName || 'Mi Tiendita')
 
 // Methods
 const toggleStore = () => {
-  if (!isStoreOpen.value) {
-    openingModalOpen.value = true;
-  } else {
-    // Redirigir a CashControlView para hacer el arqueo antes de cerrar
-    router.push('/cash-control');
-  }
+  // CRITICAL: Always redirect to CashControlView which requires PIN
+  // Do NOT allow opening/closing without PIN validation
+  router.push('/cash-control');
 };
 
 const confirmOpen = () => {
-  const amount = baseMoney.value ? new Decimal(baseMoney.value) : new Decimal(0);
-  salesStore.openStore(amount);
+  // This modal should not be used - redirect to proper flow with PIN
   openingModalOpen.value = false;
-  baseMoney.value = '';
+  router.push('/cash-control');
 };
 
 const navigateTo = (route: string) => {
