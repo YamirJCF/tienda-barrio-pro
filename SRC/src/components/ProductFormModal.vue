@@ -40,6 +40,14 @@ const margin = computed(() => {
   return (price - cost) / cost * 100;
 });
 
+// T-007: Validación de precio vs costo
+const isPriceBelowCost = computed(() => {
+  if (!formData.value.cost || !formData.value.price) return false;
+  const cost = parseFloat(formData.value.cost);
+  const price = parseFloat(formData.value.price);
+  return price > 0 && cost > 0 && price < cost;
+});
+
 const isValid = computed(() => {
   const name = String(formData.value.name || '').trim();
   const price = formData.value.price;
@@ -346,6 +354,15 @@ watch(() => props.productId, (id) => {
                   />
                 </div>
               </div>
+
+              <!-- T-007: Warning precio menor que costo -->
+              <div v-if="isPriceBelowCost" class="col-span-12 -mt-1">
+                <div class="flex items-center gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-lg">
+                  <span class="material-symbols-outlined text-amber-600 dark:text-amber-400 text-lg">warning</span>
+                  <span class="text-xs font-medium text-amber-700 dark:text-amber-300">El precio de venta es menor al costo</span>
+                </div>
+              </div>
+
               <div class="col-span-12 flex justify-end -mt-1">
                 <span v-if="margin > 0" class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                   <span class="material-symbols-outlined text-[12px]">trending_up</span>
