@@ -180,7 +180,7 @@ const navigateToNotifications = () => {
         <h3 class="ml-1 text-sm font-bold text-slate-900 dark:text-white mb-3">Gestión de Tienda</h3>
         <div
           class="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-surface-dark shadow-sm border border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-          <button @click="navigateTo('/admin')"
+          <button @click="navigateTo('/employees')"
             class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors">
             <div class="flex items-center gap-3">
               <div
@@ -192,7 +192,7 @@ const navigateToNotifications = () => {
             <span class="material-symbols-outlined text-slate-400">chevron_right</span>
           </button>
 
-          <button @click="navigateTo('/admin')"
+          <button @click="navigateTo('/admin?tab=gestion')"
             class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors">
             <div class="flex items-center gap-3">
               <div
