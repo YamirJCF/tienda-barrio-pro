@@ -101,37 +101,48 @@ export const useInventoryStore = defineStore('inventory', () => {
         });
     };
 
-    const updateStock = (id: number, quantity: number | Decimal) => {
+    const updateStock = (id: number, quantity: number | Decimal): { success: boolean; product?: Product; error?: string } => {
         const product = products.value.find(p => p.id === id);
-        if (product) {
-            const delta = quantity instanceof Decimal ? quantity : new Decimal(quantity);
-            product.stock = product.stock.plus(delta);
-            product.updatedAt = new Date().toISOString();
-
-            // Check for low stock notification
-            if (product.stock.lt(product.minStock) && !product.notifiedLowStock) {
-                const notificationsStore = useNotificationsStore();
-                notificationsStore.addNotification({
-                    type: 'inventory',
-                    icon: 'inventory_2',
-                    title: `Stock Bajo: ${product.name}`,
-                    message: `Quedan ${product.stock.toFixed(product.measurementUnit === 'un' ? 0 : 2)} ${product.measurementUnit}`,
-                    isRead: false,
-                    metadata: {
-                        productId: String(product.id),
-                    },
-                });
-                product.notifiedLowStock = true;
-            }
-
-            // Reset flag if stock is restored above min
-            if (product.stock.gte(product.minStock) && product.notifiedLowStock) {
-                product.notifiedLowStock = false;
-            }
-
-            return product;
+        if (!product) {
+            return { success: false, error: 'Producto no encontrado' };
         }
-        return null;
+
+        const delta = quantity instanceof Decimal ? quantity : new Decimal(quantity);
+        const newStock = product.stock.plus(delta);
+
+        // 🛡️ T-001: Validación crítica - Rechazar si resultaría en stock negativo
+        if (newStock.lt(0)) {
+            return { 
+                success: false, 
+                error: `Stock insuficiente. Disponible: ${product.stock.toFixed(product.measurementUnit === 'un' ? 0 : 2)} ${product.measurementUnit}` 
+            };
+        }
+
+        product.stock = newStock;
+        product.updatedAt = new Date().toISOString();
+
+        // Check for low stock notification
+        if (product.stock.lt(product.minStock) && !product.notifiedLowStock) {
+            const notificationsStore = useNotificationsStore();
+            notificationsStore.addNotification({
+                type: 'inventory',
+                icon: 'inventory_2',
+                title: `Stock Bajo: ${product.name}`,
+                message: `Quedan ${product.stock.toFixed(product.measurementUnit === 'un' ? 0 : 2)} ${product.measurementUnit}`,
+                isRead: false,
+                metadata: {
+                    productId: String(product.id),
+                },
+            });
+            product.notifiedLowStock = true;
+        }
+
+        // Reset flag if stock is restored above min
+        if (product.stock.gte(product.minStock) && product.notifiedLowStock) {
+            product.notifiedLowStock = false;
+        }
+
+        return { success: true, product };
     };
 
     // WO-001: initializeSampleData ELIMINADA - SPEC-007

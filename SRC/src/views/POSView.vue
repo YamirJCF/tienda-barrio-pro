@@ -205,9 +205,27 @@ const addProductByPLU = () => {
         resetModes();
         return;
       }
+
+      // 🛡️ T-002: Validar stock ANTES de agregar al carrito
+      if (pendingProduct.value.stock.lt(quantity)) {
+        showError(`Stock insuficiente. Disponible: ${pendingProduct.value.stock.toFixed(0)} un`);
+        pluInput.value = '';
+        resetModes();
+        return;
+      }
+
       console.log('[AGREGAR] Flow B: Adding', quantity, 'x', pendingProduct.value.name);
+      
+      // Primero actualizar stock (validará nuevamente internamente)
+      const stockResult = inventoryStore.updateStock(pendingProduct.value.id, -quantity);
+      if (!stockResult.success) {
+        showError(stockResult.error || 'Error al actualizar stock');
+        pluInput.value = '';
+        resetModes();
+        return;
+      }
+
       cartStore.addItem({ ...pendingProduct.value, quantity });
-      inventoryStore.updateStock(pendingProduct.value.id, -quantity);
       // ✅ SUCCESS FEEDBACK
       showSuccess(`${quantity}x ${pendingProduct.value.name} agregado`);
       pluInput.value = '';
@@ -237,9 +255,27 @@ const addProductByPLU = () => {
     }
 
     const quantity = pendingQuantity.value;
+
+    // 🛡️ T-002: Validar stock ANTES de agregar al carrito
+    if (product.stock.lt(quantity)) {
+      showError(`Stock insuficiente. Disponible: ${product.stock.toFixed(0)} un`);
+      pluInput.value = '';
+      resetModes();
+      return;
+    }
+
     console.log('[AGREGAR] Flow A: Adding', quantity, 'x', product.name);
+    
+    // Primero actualizar stock (validará nuevamente internamente)
+    const stockResult = inventoryStore.updateStock(product.id, -quantity);
+    if (!stockResult.success) {
+      showError(stockResult.error || 'Error al actualizar stock');
+      pluInput.value = '';
+      resetModes();
+      return;
+    }
+
     cartStore.addItem({ ...product, quantity });
-    inventoryStore.updateStock(product.id, -quantity);
     // ✅ SUCCESS FEEDBACK
     showSuccess(`${quantity}x ${product.name} agregado`);
     pluInput.value = '';

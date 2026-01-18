@@ -170,7 +170,57 @@ export function checkDataIntegrity(): IntegrityCheckResult {
         console.log('✨ Todos los datos están íntegros');
     }
 
+    // 🛡️ T-003: Reparar stock negativo
+    const stockRepairResult = repairNegativeStock();
+    if (stockRepairResult.repaired > 0) {
+        result.wasCorrupted = true;
+        result.repairedKeys.push(`stock-negativo (${stockRepairResult.repaired} productos)`);
+        console.warn(`🔧 Stock negativo corregido: ${stockRepairResult.products.join(', ')}`);
+    }
+
     console.groupEnd();
+
+    return result;
+}
+
+/**
+ * 🛡️ T-003: Repara productos con stock negativo
+ * Corrige a 0 cualquier producto que tenga stock < 0
+ */
+export function repairNegativeStock(): { repaired: number; products: string[] } {
+    const result = { repaired: 0, products: [] as string[] };
+
+    try {
+        const rawData = localStorage.getItem('tienda-inventory');
+        if (!rawData) return result;
+
+        const data = JSON.parse(rawData);
+        if (!data.products || !Array.isArray(data.products)) return result;
+
+        let modified = false;
+
+        for (const product of data.products) {
+            // Stock puede ser string (serializado de Decimal.js) o número
+            const stockValue = typeof product.stock === 'string'
+                ? parseFloat(product.stock)
+                : product.stock;
+
+            if (stockValue < 0) {
+                console.warn(`🔧 Producto "${product.name}" tenía stock ${stockValue}, corrigiendo a 0`);
+                product.stock = '0'; // Decimal.js se serializa como string
+                result.repaired++;
+                result.products.push(product.name);
+                modified = true;
+            }
+        }
+
+        if (modified) {
+            localStorage.setItem('tienda-inventory', JSON.stringify(data));
+            console.log(`✅ ${result.repaired} productos corregidos en localStorage`);
+        }
+    } catch (error) {
+        console.error('Error al reparar stock negativo:', error);
+    }
 
     return result;
 }
