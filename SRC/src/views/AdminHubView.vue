@@ -20,6 +20,8 @@ const activeTab = ref<'reportes' | 'gestion'>('gestion');
 const showDeviceModal = ref(false);
 // WO-004: State para modal de PIN (consolidado)
 const showPinSetupModal = ref(false);
+// T-008: State para confirmación de cierre de tienda
+const showCloseStoreConfirm = ref(false);
 
 // Computed: detectar si ya hay PIN configurado para determinar modo
 const hasPinConfigured = computed(() => cashControlStore.hasPinConfigured);
@@ -41,6 +43,22 @@ const goBack = () => {
 const toggleStoreStatus = () => {
   // Solo cambiar estado operativo, NO afecta la caja
   storeStatusStore.toggleStatus();
+};
+
+// T-008: Confirmar antes de cerrar tienda
+const confirmCloseStore = () => {
+  // Si la tienda está cerrada, abrir directamente (sin confirmación)
+  if (isStoreClosed.value) {
+    toggleStoreStatus();
+  } else {
+    // Si está abierta, pedir confirmación antes de cerrar
+    showCloseStoreConfirm.value = true;
+  }
+};
+
+const executeCloseStore = () => {
+  showCloseStoreConfirm.value = false;
+  toggleStoreStatus();
 };
 
 const navigateTo = (route: string) => {
@@ -224,7 +242,7 @@ const navigateTo = (route: string) => {
                 <p class="text-xs font-medium text-red-600/80 dark:text-red-400/70">Temporalmente fuera de servicio</p>
               </div>
             </div>
-            <button @click="toggleStoreStatus"
+            <button @click="confirmCloseStore"
               class="relative inline-flex h-6 w-12 items-center rounded-full transition-colors duration-300"
               :class="isStoreClosed ? 'bg-red-500' : 'bg-slate-300'">
               <span
@@ -249,6 +267,38 @@ const navigateTo = (route: string) => {
     <!-- WO-004: Modal de PIN (consolidado con detección automática de modo) -->
     <PinSetupModal :isVisible="showPinSetupModal" :mode="pinSetupMode" @close="showPinSetupModal = false"
       @success="showPinSetupModal = false; cashControlStore.checkPinConfigured()" />
+
+    <!-- T-008: Modal de Confirmación para Cerrar Tienda -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showCloseStoreConfirm" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showCloseStoreConfirm = false"></div>
+          <div class="relative w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 animate-scale-in">
+            <div class="flex flex-col items-center text-center gap-4">
+              <div class="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                <span class="material-symbols-outlined text-3xl text-red-500">warning</span>
+              </div>
+              <h3 class="text-xl font-bold text-slate-900 dark:text-white">¿Cerrar Tienda?</h3>
+              <p class="text-sm text-slate-600 dark:text-slate-300">
+                Esta acción bloqueará las ventas para todo el equipo hasta que vuelvas a abrir.
+              </p>
+              <div class="flex gap-3 w-full mt-2">
+                <button 
+                  @click="showCloseStoreConfirm = false"
+                  class="flex-1 h-12 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                  Cancelar
+                </button>
+                <button 
+                  @click="executeCloseStore"
+                  class="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 transition-colors">
+                  Cerrar Tienda
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <BottomNav />
   </div>
