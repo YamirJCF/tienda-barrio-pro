@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+// T-011: Store para preferencias persistentes
+import { usePreferencesStore } from '../stores/preferences';
 
 interface Props {
   isOpen: boolean;
@@ -23,11 +25,13 @@ const emit = defineEmits<{
 }>();
 
 const router = useRouter();
+// T-011: Usar store persistente en lugar de refs locales
+const preferencesStore = usePreferencesStore();
 
-// State
-const saleSoundsEnabled = ref(true);
-const darkModeEnabled = ref(false);
-const notificationsEnabled = ref(true);
+// T-011: Computed que referencian el store
+const saleSoundsEnabled = computed(() => preferencesStore.saleSoundsEnabled);
+const darkModeEnabled = computed(() => preferencesStore.darkModeEnabled);
+const notificationsEnabled = computed(() => preferencesStore.notificationsEnabled);
 
 // Computed
 const userInitials = computed(() => {
@@ -52,8 +56,7 @@ const handleLogout = () => {
 };
 
 const toggleDarkMode = () => {
-  darkModeEnabled.value = !darkModeEnabled.value;
-  document.documentElement.classList.toggle('dark', darkModeEnabled.value);
+  preferencesStore.toggleDarkMode();
 };
 
 const navigateToHelp = () => {

@@ -104,10 +104,18 @@ const getRelativeTime = (createdAt: string) => {
                                     :class="notification.isRead ? 'font-semibold' : 'font-bold'">
                                     {{ notification.title }}
                                 </h3>
-                                <span class="text-xs font-medium whitespace-nowrap pt-0.5"
-                                    :class="notification.isRead ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'">
-                                    {{ getRelativeTime(notification.createdAt) }}
-                                </span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-medium whitespace-nowrap pt-0.5"
+                                        :class="notification.isRead ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'">
+                                        {{ getRelativeTime(notification.createdAt) }}
+                                    </span>
+                                    <!-- T-013: Botón eliminar notificación -->
+                                    <button @click.stop="notificationsStore.removeNotification(notification.id)"
+                                        class="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                        title="Eliminar">
+                                        <span class="material-symbols-outlined text-lg">close</span>
+                                    </button>
+                                </div>
                             </div>
                             <p class="text-sm leading-relaxed" :class="[
                                 notification.isRead ? 'text-slate-500 dark:text-slate-400 truncate' : 'text-slate-600 dark:text-slate-300',

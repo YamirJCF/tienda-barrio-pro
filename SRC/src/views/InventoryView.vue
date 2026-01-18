@@ -24,6 +24,9 @@ const searchQuery = ref('');
 const selectedCategory = ref('all');
 const showProductModal = ref(false);
 const editingProductId = ref<number | undefined>(undefined);
+// T-010: State para modal de eliminar
+const showDeleteModal = ref(false);
+const productToDelete = ref<{ id: number; name: string } | null>(null);
 
 // Computed
 const categories = computed(() => {
@@ -65,9 +68,25 @@ const openEditProduct = (id: number) => {
 };
 
 const deleteProduct = (id: number) => {
-  if (confirm('¿Estás seguro de eliminar este producto?')) {
-    inventoryStore.deleteProduct(id);
+  const product = inventoryStore.products.find(p => p.id === id);
+  if (product) {
+    productToDelete.value = { id, name: product.name };
+    showDeleteModal.value = true;
   }
+};
+
+// T-010: Confirmar eliminación
+const confirmDelete = () => {
+  if (productToDelete.value) {
+    inventoryStore.deleteProduct(productToDelete.value.id);
+  }
+  showDeleteModal.value = false;
+  productToDelete.value = null;
+};
+
+const cancelDelete = () => {
+  showDeleteModal.value = false;
+  productToDelete.value = null;
 };
 
 const getCategoryLabel = (category: string) => {
@@ -202,6 +221,36 @@ const getCategoryLabel = (category: string) => {
 
     <!-- Product Form Modal -->
     <ProductFormModal v-model="showProductModal" :product-id="editingProductId" @saved="showProductModal = false" />
+
+    <!-- T-010: Modal de Confirmación de Eliminación -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showDeleteModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="cancelDelete"></div>
+          <div class="relative w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6">
+            <div class="flex flex-col items-center text-center gap-4">
+              <div class="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                <span class="material-symbols-outlined text-2xl text-red-500">delete</span>
+              </div>
+              <h3 class="text-lg font-bold text-slate-900 dark:text-white">¿Eliminar producto?</h3>
+              <p class="text-sm text-slate-600 dark:text-slate-300">
+                <span class="font-semibold">{{ productToDelete?.name }}</span> será eliminado permanentemente.
+              </p>
+              <div class="flex gap-3 w-full mt-2">
+                <button @click="cancelDelete"
+                  class="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                  Cancelar
+                </button>
+                <button @click="confirmDelete"
+                  class="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold transition-colors">
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
