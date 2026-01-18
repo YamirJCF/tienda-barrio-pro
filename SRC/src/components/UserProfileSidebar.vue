@@ -62,8 +62,9 @@ const navigateToHelp = () => {
 };
 
 const navigateToSecurity = () => {
-  // Placeholder for security settings
-  console.log('Navigate to security settings');
+  // T-005: Navegación a configuración de seguridad (Admin > Gestión > Seguridad)
+  router.push('/admin?tab=gestion');
+  emit('close');
 };
 </script>
 
