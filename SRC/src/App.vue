@@ -6,6 +6,9 @@ import { useNetworkStatus } from './composables/useNetworkStatus';
 import { checkDataIntegrity } from './composables/useDataIntegrity';
 // T-009: Import para banner de tienda cerrada
 import { useStoreStatusStore } from './stores/storeStatus';
+// SPEC-008: Alertas críticas bloqueantes
+import CriticalAlertModal from './components/CriticalAlertModal.vue';
+import { useCriticalAlerts } from './composables/useCriticalAlerts';
 
 // ============================================
 // DATA INTEGRITY CHECK (FIRST THING!)
@@ -17,6 +20,9 @@ if (integrityResult.wasCorrupted) {
 }
 
 useNetworkStatus();
+
+// SPEC-008: Inicializar sistema de alertas críticas
+const { currentAlert, isVisible, handlePrimary, handleSecondary, dismissAlert } = useCriticalAlerts();
 
 // T-009: Estado de tienda para banner global
 const storeStatusStore = useStoreStatusStore();

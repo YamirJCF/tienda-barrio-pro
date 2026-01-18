@@ -14,6 +14,8 @@ import ExpensesView from '../views/ExpensesView.vue';
 import NotificationCenterView from '../views/NotificationCenterView.vue';
 import RegisterStoreView from '../views/RegisterStoreView.vue';
 import ForgotPasswordView from '../views/ForgotPasswordView.vue';
+// SPEC-009: Vista de Historiales
+import HistoryView from '../views/HistoryView.vue';
 // ⚠️ SystemAuditView se importa dinámicamente solo en DEV (ver abajo)
 
 const routes: RouteRecordRaw[] = [
@@ -52,6 +54,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/cash-control', name: 'cash-control', component: CashControlView, meta: { requiresAuth: true } },
   { path: '/expenses', name: 'expenses', component: ExpensesView, meta: { requiresAuth: true } },
   { path: '/notifications', name: 'notifications', component: NotificationCenterView, meta: { requiresAuth: true } },
+  // SPEC-009: Ruta de Historiales
+  { path: '/history', name: 'history', component: HistoryView, meta: { requiresAuth: true } },
 ];
 
 // ============================================
