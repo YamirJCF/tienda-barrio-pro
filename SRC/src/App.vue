@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onErrorCaptured } from 'vue';
+import { ref, computed, onErrorCaptured } from 'vue';
 import { RouterView } from 'vue-router';
 import ToastNotification from './components/ToastNotification.vue';
 import { useNetworkStatus } from './composables/useNetworkStatus';
 import { checkDataIntegrity } from './composables/useDataIntegrity';
+// T-009: Import para banner de tienda cerrada
+import { useStoreStatusStore } from './stores/storeStatus';
 
 // ============================================
 // DATA INTEGRITY CHECK (FIRST THING!)
@@ -15,6 +17,10 @@ if (integrityResult.wasCorrupted) {
 }
 
 useNetworkStatus();
+
+// T-009: Estado de tienda para banner global
+const storeStatusStore = useStoreStatusStore();
+const isStoreClosed = computed(() => storeStatusStore.isClosed);
 
 const errorDetected = ref(false);
 
@@ -33,7 +39,15 @@ const resetApp = () => {
 
 <template>
   <div
-    class="min-h-screen w-full mx-auto max-w-md bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden relative">
+    class="min-h-screen w-full mx-auto max-w-md bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden relative"
+    :class="{ 'pt-8': isStoreClosed }">
+
+    <!-- T-009: Banner Global de Tienda Cerrada -->
+    <div v-if="isStoreClosed"
+      class="fixed top-0 left-0 right-0 z-[200] bg-red-500 text-white text-center py-2 px-4 text-xs font-semibold flex items-center justify-center gap-2 shadow-lg">
+      <span class="material-symbols-outlined text-sm">lock</span>
+      <span>🔒 Tienda Cerrada - Solo Administración</span>
+    </div>
 
     <div v-if="errorDetected"
       class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white dark:bg-gray-900 p-6 text-center">
