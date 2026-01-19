@@ -161,7 +161,30 @@ const completeSale = () => {
                 {{ total.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") }}
               </span>
             </div>
+            <span class="text-xs text-gray-400 mt-1">{{ cartStore.itemCount }} producto(s)</span>
           </header>
+
+          <!-- Lista de Productos (Scrollable, No Editable) -->
+          <div class="bg-white dark:bg-surface-dark border-b border-gray-100 dark:border-gray-800">
+            <div class="max-h-32 overflow-y-auto">
+              <div class="px-4 py-2 space-y-1">
+                <div 
+                  v-for="item in cartStore.items" 
+                  :key="item.id"
+                  class="flex items-center justify-between py-1.5 text-sm">
+                  <div class="flex items-center gap-2 min-w-0 flex-1">
+                    <span class="shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
+                      {{ item.quantity }}
+                    </span>
+                    <span class="text-gray-700 dark:text-gray-300 truncate">{{ item.name }}</span>
+                  </div>
+                  <span class="shrink-0 text-gray-900 dark:text-white font-semibold ml-2">
+                    ${{ item.subtotal.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Payment Method Tabs -->
           <div
