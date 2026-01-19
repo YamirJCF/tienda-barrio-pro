@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { logger } from '../utils/logger';
 
 // Props y Emits
 const props = defineProps<{
@@ -26,11 +27,11 @@ const requests = ref<AccessRequest[]>([]);
 const isLoading = ref(false);
 
 // Computed
-const pendingRequests = computed(() => 
+const pendingRequests = computed(() =>
   requests.value.filter(r => r.status === 'pending')
 );
 
-const approvedDevices = computed(() => 
+const approvedDevices = computed(() =>
   requests.value.filter(r => r.status === 'approved')
 );
 
@@ -68,7 +69,7 @@ const approveDevice = (request: AccessRequest) => {
   const idx = requests.value.findIndex(r => r.id === request.id);
   if (idx !== -1) {
     requests.value[idx].status = 'approved';
-    console.log('[DeviceApproval] Aprobado:', request.employeeName);
+    logger.log('[DeviceApproval] Aprobado:', request.employeeName);
   }
 };
 
@@ -76,7 +77,7 @@ const rejectDevice = (request: AccessRequest) => {
   const idx = requests.value.findIndex(r => r.id === request.id);
   if (idx !== -1) {
     requests.value[idx].status = 'rejected';
-    console.log('[DeviceApproval] Rechazado:', request.employeeName);
+    logger.log('[DeviceApproval] Rechazado:', request.employeeName);
   }
 };
 
@@ -91,8 +92,8 @@ const parseDevice = (ua: string): string => {
 
 const formatDate = (isoDate: string): string => {
   const date = new Date(isoDate);
-  return date.toLocaleDateString('es-CO', { 
-    day: 'numeric', 
+  return date.toLocaleDateString('es-CO', {
+    day: 'numeric',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit'
@@ -106,17 +107,20 @@ const formatDate = (isoDate: string): string => {
       <div v-if="modelValue" class="fixed inset-0 z-50 flex items-end justify-center">
         <!-- Backdrop -->
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" @click="close"></div>
-        
+
         <!-- Modal Panel -->
-        <div class="relative w-full max-w-md max-h-[80vh] bg-white dark:bg-surface-dark rounded-t-3xl shadow-2xl animate-slide-up flex flex-col">
+        <div
+          class="relative w-full max-w-md max-h-[80vh] bg-white dark:bg-surface-dark rounded-t-3xl shadow-2xl animate-slide-up flex flex-col">
           <!-- Handle -->
-          <div class="mx-auto mt-3 mb-2 h-1.5 w-12 rounded-full bg-slate-200 dark:bg-slate-700 cursor-pointer" @click="close"></div>
-          
+          <div class="mx-auto mt-3 mb-2 h-1.5 w-12 rounded-full bg-slate-200 dark:bg-slate-700 cursor-pointer"
+            @click="close"></div>
+
           <!-- Header -->
           <div class="px-6 pb-4 border-b border-slate-100 dark:border-slate-700">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                <div
+                  class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                   <span class="material-symbols-outlined">smartphone</span>
                 </div>
                 <div>
@@ -169,7 +173,8 @@ const formatDate = (isoDate: string): string => {
 
             <!-- Empty State Pendientes -->
             <div v-else class="text-center py-6">
-              <div class="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mb-3">
+              <div
+                class="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mb-3">
                 <span class="material-symbols-outlined text-3xl text-green-600 dark:text-green-400">verified_user</span>
               </div>
               <p class="text-sm font-medium text-slate-600 dark:text-slate-400">No hay solicitudes pendientes</p>
@@ -223,12 +228,22 @@ const formatDate = (isoDate: string): string => {
 }
 
 @keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideDown {
-  from { transform: translateY(0); }
-  to { transform: translateY(100%); }
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(100%);
+  }
 }
 </style>

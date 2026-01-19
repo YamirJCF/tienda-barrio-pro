@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import type { Product, MeasurementUnit } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
+import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 
 // WO: UNIT_LABELS definido localmente (antes importado de sampleData eliminado)
 const UNIT_LABELS: Record<string, string> = {
@@ -31,6 +32,9 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean];
   'confirm': [{ product: Product; quantity: Decimal; subtotal: Decimal }];
 }>();
+
+// Composables
+const { roundHybrid50 } = useCurrencyFormat();
 
 // State
 const inputMode = ref<'weight' | 'value'>('value');
@@ -86,15 +90,15 @@ const calculatedWeight = computed(() => {
   }
 });
 
-// Calculated value
+// Calculated value (redondeado a múltiplos de $50)
 const calculatedValue = computed(() => {
   if (!props.product || !inputValue.value) return new Decimal(0);
   const value = new Decimal(inputValue.value || 0);
 
   if (inputMode.value === 'weight') {
-    return value.times(pricePerSellUnit.value);
+    return roundHybrid50(value.times(pricePerSellUnit.value));
   } else {
-    return value;
+    return roundHybrid50(value);
   }
 });
 
@@ -245,7 +249,7 @@ const clear = () => {
             </div>
             <div class="text-4xl font-bold text-gray-900 dark:text-white mb-2 min-h-[48px] tabular-nums">
               {{ inputMode === 'value' ? '$ ' : '' }}{{ inputValue || '0' }}{{ inputMode === 'weight' ? ` ${sellUnit}` :
-              '' }}
+                '' }}
             </div>
             <div v-if="inputValue" class="text-lg text-primary font-medium">
               {{ formattedResult }}

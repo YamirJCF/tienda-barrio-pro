@@ -4,6 +4,7 @@
  */
 
 import { STORAGE_KEYS, getAllStorageKeys } from './storageKeys';
+import { logger } from '../utils/logger';
 
 export interface StorageSnapshot {
     timestamp: string;
@@ -46,7 +47,7 @@ export const formatBytes = (bytes: number): string => {
  */
 export const clearStore = (key: string): void => {
     localStorage.removeItem(key);
-    console.log(`[Storage] Cleared: ${key}`);
+    logger.log(`[Storage] Cleared: ${key}`);
 };
 
 /**
@@ -56,7 +57,7 @@ export const clearAllData = (): void => {
     getAllStorageKeys().forEach(key => {
         localStorage.removeItem(key);
     });
-    console.log('[Storage] All data cleared');
+    logger.log('[Storage] All data cleared');
 };
 
 /**
@@ -82,7 +83,7 @@ export const exportData = (): StorageSnapshot => {
         data,
     };
 
-    console.log('[Storage] Data exported:', snapshot);
+    logger.log('[Storage] Data exported:', snapshot);
     return snapshot;
 };
 
@@ -109,7 +110,7 @@ export const importData = (snapshot: StorageSnapshot): boolean => {
             const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
             localStorage.setItem(key, stringValue);
         });
-        console.log('[Storage] Data imported successfully');
+        logger.log('[Storage] Data imported successfully');
         return true;
     } catch (error) {
         console.error('[Storage] Import failed:', error);
@@ -121,19 +122,22 @@ export const importData = (snapshot: StorageSnapshot): boolean => {
  * Debug: Log all stored data
  */
 export const debugLogAllData = (): void => {
+    // Solo ejecutar en desarrollo
+    if (!import.meta.env.DEV) return;
+
     console.group('[Storage Debug] Current Data');
-    console.log('Size:', formatBytes(getStorageSize().total));
+    logger.log('Size:', formatBytes(getStorageSize().total));
 
     getAllStorageKeys().forEach(key => {
         const item = localStorage.getItem(key);
         if (item) {
             try {
-                console.log(`${key}:`, JSON.parse(item));
+                logger.log(`${key}:`, JSON.parse(item));
             } catch {
-                console.log(`${key}:`, item);
+                logger.log(`${key}:`, item);
             }
         } else {
-            console.log(`${key}: (empty)`);
+            logger.log(`${key}: (empty)`);
         }
     });
 

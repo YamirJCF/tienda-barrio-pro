@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { logger } from '../utils/logger';
 
 export type UserType = 'admin' | 'employee';
 
@@ -218,7 +219,7 @@ export const useAuthStore = defineStore('auth', () => {
         localStorage.removeItem('tienda-cart');
         localStorage.removeItem('tienda-clients');
         localStorage.removeItem('tienda-expenses');
-        console.log('✅ Sistema reseteado a cuenta demo');
+        logger.log('✅ Sistema reseteado a cuenta demo');
     };
 
     // Auto-inicializar: asegurar que siempre exista la cuenta demo

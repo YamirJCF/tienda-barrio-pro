@@ -7,6 +7,7 @@
  */
 
 import { ref, readonly } from 'vue';
+import { logger } from '../utils/logger';
 
 // Cache del fingerprint para evitar recálculos
 const cachedFingerprint = ref<string | null>(null);
@@ -29,11 +30,11 @@ async function generateFingerprint(): Promise<string> {
   const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(data);
   const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
-  
+
   // Convertir a hex string
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
+
   return hashHex;
 }
 
@@ -42,7 +43,7 @@ async function generateFingerprint(): Promise<string> {
  * El fingerprint se genera una sola vez y se cachea.
  */
 export function useDeviceFingerprint() {
-  
+
   const getFingerprint = async (): Promise<string> => {
     // Retornar cache si existe
     if (cachedFingerprint.value) {
@@ -64,10 +65,10 @@ export function useDeviceFingerprint() {
     }
 
     isGenerating.value = true;
-    
+
     try {
       cachedFingerprint.value = await generateFingerprint();
-      console.log('[Fingerprint] Generated:', cachedFingerprint.value.substring(0, 16) + '...');
+      logger.log('[Fingerprint] Generated:', cachedFingerprint.value.substring(0, 16) + '...');
       return cachedFingerprint.value;
     } finally {
       isGenerating.value = false;

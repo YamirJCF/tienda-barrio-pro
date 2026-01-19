@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useAuthStore } from './auth';
+import { logger } from '../utils/logger';
 
 /**
  * Cash Control Store - SPEC-006
@@ -177,7 +178,7 @@ export const useCashControlStore = defineStore('cashControl', () => {
         localStorage.setItem(STORAGE_KEYS.PIN_HASH, newHash);
         hasPinConfigured.value = true;
 
-        console.log('[CashControl] PIN configurado exitosamente');
+        logger.log('[CashControl] PIN configurado exitosamente');
         return { success: true };
     };
 
@@ -216,7 +217,7 @@ export const useCashControlStore = defineStore('cashControl', () => {
         currentEvent.value = event;
         saveEvent(event);
 
-        console.log('[CashControl] Caja abierta con monto:', amount);
+        logger.log('[CashControl] Caja abierta con monto:', amount);
         return { success: true };
     };
 
@@ -261,7 +262,7 @@ export const useCashControlStore = defineStore('cashControl', () => {
         expectedCash.value = 0;
         localStorage.removeItem(STORAGE_KEYS.CASH_BASE);
 
-        console.log('[CashControl] Caja cerrada. Diferencia:', difference);
+        logger.log('[CashControl] Caja cerrada. Diferencia:', difference);
         return { success: true, difference };
     };
 

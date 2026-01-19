@@ -32,9 +32,30 @@ export function useCurrencyFormat() {
         return decimal.toFixed(decimals);
     };
 
+    /**
+     * Redondea un valor monetario a múltiplos de $50 (política empresarial Colombia).
+     * Estrategia híbrida: beneficia al cliente cuando la diferencia es pequeña.
+     * - Residuo ≤ 25 → Redondea hacia abajo (cliente gana)
+     * - Residuo > 25 → Redondea hacia arriba (al más cercano)
+     * @example roundHybrid50(1447) => Decimal(1450) (residuo 47 > 25 → arriba)
+     * @example roundHybrid50(1423) => Decimal(1400) (residuo 23 ≤ 25 → abajo)
+     */
+    const roundHybrid50 = (val: Decimal | number): Decimal => {
+        const decimal = val instanceof Decimal ? val : new Decimal(val);
+        const value = decimal.toNumber();
+        const remainder = value % 50;
+
+        if (remainder <= 25) {
+            return new Decimal(Math.floor(value / 50) * 50);
+        } else {
+            return new Decimal(Math.ceil(value / 50) * 50);
+        }
+    };
+
     return {
         formatCurrency,
         formatWithSign,
         formatDecimal,
+        roundHybrid50,
     };
 }

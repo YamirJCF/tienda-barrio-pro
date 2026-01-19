@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { logger } from '../utils/logger';
 
 const router = useRouter();
 
@@ -21,7 +22,7 @@ const handleSubmit = async () => {
     isLoading.value = false;
     isSuccess.value = true;
 
-    console.log('Password recovery email sent to:', email.value);
+    logger.log('Password recovery email sent to:', email.value);
 };
 
 const goBackToLogin = () => {

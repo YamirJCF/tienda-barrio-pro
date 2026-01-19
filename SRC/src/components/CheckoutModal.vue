@@ -26,7 +26,13 @@ const amountReceived = ref('');
 const nequiReference = ref('');
 const selectedClient = ref<Client | null>(null);
 const clientSearch = ref('');
+const isListExpanded = ref(false);  // OBS-01: Lista expandible
 
+// OBS-02: Formatear cantidad a máximo 2 decimales
+const formatQuantity = (qty: number | Decimal): string => {
+  const num = qty instanceof Decimal ? qty.toNumber() : Number(qty);
+  return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+};
 // WO: initializeSampleData eliminada - SPEC-007
 
 // Computed
@@ -173,20 +179,29 @@ const completeSale = () => {
                 <span class="material-symbols-outlined text-sm">receipt_long</span>
                 Detalle de Compra
               </h4>
-              <span class="text-xs text-gray-400">{{ cartStore.items.length }} ítem(s)</span>
+              <!-- OBS-01: Botón expandir lista -->
+              <button @click="isListExpanded = !isListExpanded"
+                class="text-xs text-primary hover:text-primary-dark font-medium flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">{{ isListExpanded ? 'expand_less' : 'expand_more'
+                  }}</span>
+                {{ isListExpanded ? 'Contraer' : 'Ver Todo' }} ({{ cartStore.items.length }})
+              </button>
             </div>
 
             <!-- Product List Container -->
             <div
               class="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div class="max-h-28 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
+              <!-- OBS-01: Lista con altura dinámica -->
+              <div :class="isListExpanded ? 'max-h-[50vh]' : 'max-h-28'"
+                class="overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50 transition-all duration-300">
                 <div v-for="item in cartStore.items" :key="item.id"
                   class="flex items-center justify-between px-3 py-2.5 bg-white dark:bg-gray-800/80">
                   <!-- Left: Quantity + Name -->
                   <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    <!-- OBS-02: Cantidad formateada -->
                     <span
-                      class="shrink-0 w-7 h-7 rounded-lg bg-primary text-white text-xs font-bold flex items-center justify-center shadow-sm">
-                      {{ item.quantity }}
+                      class="shrink-0 min-w-7 h-7 px-1.5 rounded-lg bg-primary text-white text-xs font-bold flex items-center justify-center shadow-sm">
+                      {{ formatQuantity(item.quantity) }}
                     </span>
                     <span class="text-sm text-gray-800 dark:text-gray-200 font-medium truncate">{{ item.name }}</span>
                   </div>

@@ -7,6 +7,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useNotificationsStore, type SystemNotification } from '../stores/notificationsStore';
 import { formatRelativeTime } from '../composables/useRelativeTime';
+import { logger } from '../utils/logger';
 
 const router = useRouter();
 const notificationsStore = useNotificationsStore();
@@ -26,12 +27,12 @@ const markAllAsRead = () => {
 };
 
 const handleApprove = (notificationId: string) => {
-    console.log('Approved:', notificationId);
+    logger.log('Approved:', notificationId);
     notificationsStore.removeNotification(notificationId);
 };
 
 const handleReject = (notificationId: string) => {
-    console.log('Rejected:', notificationId);
+    logger.log('Rejected:', notificationId);
     notificationsStore.removeNotification(notificationId);
 };
 

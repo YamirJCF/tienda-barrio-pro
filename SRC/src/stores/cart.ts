@@ -87,7 +87,6 @@ export const useCartStore = defineStore('cart', () => {
     // ============================================
     // DEFENSIVE VALIDATION: Prevent NaN/Infinity in Decimals
     // ============================================
-    // Verify that quantity and subtotal are valid Decimal instances
     const isValidDecimal = (val: unknown): val is Decimal => {
       if (!(val instanceof Decimal)) return false;
       const num = val.toNumber();
@@ -104,11 +103,21 @@ export const useCartStore = defineStore('cart', () => {
       return; // Silently ignore corrupt data
     }
 
+    // 🛡️ SPEC-010: Redondeo híbrido a múltiplos de $50 (defensivo)
+    const roundHybrid50 = (val: Decimal): Decimal => {
+      const value = val.toNumber();
+      const remainder = value % 50;
+      return remainder <= 25
+        ? new Decimal(Math.floor(value / 50) * 50)
+        : new Decimal(Math.ceil(value / 50) * 50);
+    };
+    const roundedSubtotal = roundHybrid50(item.subtotal);
+
     const existing = items.value.find(i => i.id === item.id);
     if (existing) {
       // For weighable items, add quantity and subtotal
       existing.quantity = existing.quantity.plus(item.quantity);
-      existing.subtotal = (existing.subtotal || new Decimal(0)).plus(item.subtotal);
+      existing.subtotal = (existing.subtotal || new Decimal(0)).plus(roundedSubtotal);
     } else {
       items.value.push({
         id: item.id,
@@ -117,7 +126,7 @@ export const useCartStore = defineStore('cart', () => {
         quantity: item.quantity,
         unit: item.unit,
         isWeighable: true,
-        subtotal: item.subtotal,
+        subtotal: roundedSubtotal,
       });
     }
   };

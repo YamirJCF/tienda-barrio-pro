@@ -9,6 +9,7 @@ import { useStoreStatusStore } from '../stores/storeStatus';
 import { useAuthStore } from '../stores/auth';
 import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { logger } from '../utils/logger';
 import { Decimal } from 'decimal.js';
 import CheckoutModal from '../components/CheckoutModal.vue';
 import ProductSearchModal from '../components/ProductSearchModal.vue';
@@ -25,6 +26,12 @@ const storeStatusStore = useStoreStatusStore();
 const authStore = useAuthStore();
 const { showSaleSuccess, showSaleOffline, showSuccess, showError } = useNotifications();
 const { formatWithSign: formatCurrency } = useCurrencyFormat();
+
+// OBS-02: Formatear cantidad a máximo 2 decimales
+const formatQuantity = (qty: number | Decimal): string => {
+  const num = qty instanceof Decimal ? qty.toNumber() : Number(qty);
+  return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+};
 
 // ============================================
 // UI STATE
@@ -124,63 +131,90 @@ const goToDashboard = () => {
 
 const handleNumpad = (value: string) => {
   if (value === 'backspace') {
-    pluInput.value = pluInput.value.slice(0, -1);
+    if (pluInput.value.length > 0) {
+      pluInput.value = pluInput.value.slice(0, -1);
+    } else if (isQuantityMode.value || isProductMode.value) {
+      // FIX: Si no hay input y estamos en un modo, cancelar el modo
+      logger.log('[Numpad] Backspace on empty input - resetting modes');
+      resetModes();
+    }
   } else {
     pluInput.value += value;
   }
-  console.log('[Numpad] pluInput:', pluInput.value, '| mode:', isQuantityMode.value ? 'QTY' : isProductMode.value ? 'PROD' : 'NORMAL');
+  logger.log('[Numpad] pluInput:', pluInput.value, '| mode:', isQuantityMode.value ? 'QTY' : isProductMode.value ? 'PROD' : 'NORMAL');
 };
 
-// Handle CANT. × button - supports two flows
+// Handle CANT. × button - FLUJO ÚNICO: siempre PLU primero
 const handleQuantity = () => {
-  console.log('[CANT.×] Pressed. pluInput:', pluInput.value, '| isProductMode:', isProductMode.value);
+  logger.log('[CANT.×] Pressed. pluInput:', pluInput.value);
 
   if (!pluInput.value) {
-    console.log('[CANT.×] No input');
+    logger.log('[CANT.×] No input');
     return;
   }
 
-  // Check if input is a valid PLU (product exists)
-  const productByPLU = inventoryStore.getProductByPLU(pluInput.value);
+  // =====================================================
+  // CASO 1: Ya tenemos producto seleccionado (isProductMode)
+  // El input actual es la cantidad
+  // =====================================================
+  if (isProductMode.value && pendingProduct.value) {
+    const rawQty = parseInt(pluInput.value);
+    const qty = (isNaN(rawQty) || rawQty <= 0) ? 1 : rawQty;
 
-  if (productByPLU) {
-    // Check if product is weighable - open calculator immediately
-    if (productByPLU.isWeighable) {
-      console.log('[CANT.×] Product is weighable - opening calculator immediately');
-      selectedWeighableProduct.value = productByPLU;
+    // Validar stock
+    if (pendingProduct.value.stock.lt(qty)) {
+      showError(`Stock insuficiente. Disponible: ${pendingProduct.value.stock.toFixed(0)} un`);
+      pluInput.value = '';
+      resetModes();
+      return;
+    }
+
+    // Agregar al carrito
+    const stockResult = inventoryStore.updateStock(pendingProduct.value.id, -qty);
+    if (stockResult.success) {
+      cartStore.addItem({ ...pendingProduct.value, quantity: qty });
+      showSuccess(`${qty}x ${pendingProduct.value.name} agregado`);
+    } else {
+      showError(stockResult.error || 'Error al actualizar stock');
+    }
+    pluInput.value = '';
+    resetModes();
+    return;
+  }
+
+  // =====================================================
+  // CASO 2: Modo normal - el input DEBE ser un PLU
+  // =====================================================
+  const product = inventoryStore.getProductByPLU(pluInput.value);
+
+  if (product) {
+    // Producto pesable → abrir calculador directamente
+    if (product.isWeighable) {
+      logger.log('[CANT.×] Product is weighable - opening calculator');
+      selectedWeighableProduct.value = product;
       showWeightCalculator.value = true;
       pluInput.value = '';
       resetModes();
       return;
     }
 
-    // Flow B: Input is a PLU → save product, wait for quantity
-    console.log('[CANT.×] Flow B: Product found:', productByPLU.name, '- waiting for quantity');
-    pendingProduct.value = productByPLU;
+    // Producto por unidad → guardar y esperar cantidad
+    logger.log('[CANT.×] Product found:', product.name, '- waiting for quantity');
+    pendingProduct.value = product;
     isProductMode.value = true;
     isQuantityMode.value = false;
     pluInput.value = '';
   } else {
-    // Flow A: Input is a quantity → save quantity, wait for PLU
-    const rawQty = parseInt(pluInput.value);
-    // DEFENSIVE: NaN fallback - if parse fails, treat as invalid
-    const qty = (isNaN(rawQty) || rawQty <= 0) ? 0 : rawQty;
-    if (qty > 0 && qty <= 999) {
-      console.log('[CANT.×] Flow A: Quantity set to:', qty, '- waiting for PLU');
-      pendingQuantity.value = qty;
-      isQuantityMode.value = true;
-      isProductMode.value = false;
-      pendingProduct.value = null;
-      pluInput.value = '';
-    } else {
-      console.log('[CANT.×] Invalid number for quantity');
-    }
+    // NO es PLU válido → ERROR inmediato
+    showError(`Producto no encontrado: ${pluInput.value}`);
+    pluInput.value = '';
+    resetModes();
   }
 };
 
 // Reset all modes
 const resetModes = () => {
-  console.log('[Reset] Clearing all modes');
+  logger.log('[Reset] Clearing all modes');
   pendingQuantity.value = 1;
   pendingProduct.value = null;
   isQuantityMode.value = false;
@@ -188,7 +222,7 @@ const resetModes = () => {
 };
 
 const addProductByPLU = () => {
-  console.log('[AGREGAR] pluInput:', pluInput.value, '| isProductMode:', isProductMode.value, '| pendingQuantity:', pendingQuantity.value);
+  logger.log('[AGREGAR] pluInput:', pluInput.value, '| isProductMode:', isProductMode.value, '| pendingQuantity:', pendingQuantity.value);
 
   // Flow B: Product already selected, input is quantity
   if (isProductMode.value && pendingProduct.value) {
@@ -198,7 +232,7 @@ const addProductByPLU = () => {
     if (quantity > 0) {
       // Check if weighable - should use weight calculator
       if (pendingProduct.value.isWeighable) {
-        console.log('[AGREGAR] Flow B: Product is weighable - opening calculator');
+        logger.log('[AGREGAR] Flow B: Product is weighable - opening calculator');
         selectedWeighableProduct.value = pendingProduct.value;
         showWeightCalculator.value = true;
         pluInput.value = '';
@@ -214,8 +248,8 @@ const addProductByPLU = () => {
         return;
       }
 
-      console.log('[AGREGAR] Flow B: Adding', quantity, 'x', pendingProduct.value.name);
-      
+      logger.log('[AGREGAR] Flow B: Adding', quantity, 'x', pendingProduct.value.name);
+
       // Primero actualizar stock (validará nuevamente internamente)
       const stockResult = inventoryStore.updateStock(pendingProduct.value.id, -quantity);
       if (!stockResult.success) {
@@ -236,17 +270,17 @@ const addProductByPLU = () => {
 
   // Flow A: Normal flow - input is PLU
   if (!pluInput.value) {
-    console.log('[AGREGAR] No PLU entered');
+    logger.log('[AGREGAR] No PLU entered');
     return;
   }
 
   const product = inventoryStore.getProductByPLU(pluInput.value);
-  console.log('[AGREGAR] Product lookup:', product ? product.name : 'NOT FOUND');
+  logger.log('[AGREGAR] Product lookup:', product ? product.name : 'NOT FOUND');
 
   if (product) {
     // Check if product is weighable - open calculator instead of adding directly
     if (product.isWeighable) {
-      console.log('[AGREGAR] Product is weighable - opening weight calculator');
+      logger.log('[AGREGAR] Product is weighable - opening weight calculator');
       selectedWeighableProduct.value = product;
       showWeightCalculator.value = true;
       pluInput.value = '';
@@ -264,8 +298,8 @@ const addProductByPLU = () => {
       return;
     }
 
-    console.log('[AGREGAR] Flow A: Adding', quantity, 'x', product.name);
-    
+    logger.log('[AGREGAR] Flow A: Adding', quantity, 'x', product.name);
+
     // Primero actualizar stock (validará nuevamente internamente)
     const stockResult = inventoryStore.updateStock(product.id, -quantity);
     if (!stockResult.success) {
@@ -281,9 +315,10 @@ const addProductByPLU = () => {
     pluInput.value = '';
     resetModes();
   } else {
-    // ❌ ERROR FEEDBACK (reemplaza console.error)
+    // ❌ ERROR FEEDBACK - FIX: también resetear modos
     showError(`Producto no encontrado: ${pluInput.value}`);
     pluInput.value = '';
+    resetModes();  // FIX: Reiniciar para que usuario pueda continuar
   }
 };
 
@@ -432,8 +467,9 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
         <!-- Cart Items -->
         <div v-for="item in cartStore.items" :key="item.id"
           class="flex items-center gap-3 bg-white dark:bg-gray-800 p-3 rounded-lg mb-2 shadow-sm border border-gray-100 dark:border-gray-700 animate-fade-in">
-          <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded h-8 w-8 shrink-0">
-            <span class="text-xs font-bold text-gray-600 dark:text-gray-300">x{{ item.quantity }}</span>
+          <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded h-8 min-w-8 px-1 shrink-0">
+            <!-- OBS-02: Cantidad formateada -->
+            <span class="text-xs font-bold text-gray-600 dark:text-gray-300">x{{ formatQuantity(item.quantity) }}</span>
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-gray-900 dark:text-white text-sm font-medium leading-tight truncate">{{ item.name }}</p>

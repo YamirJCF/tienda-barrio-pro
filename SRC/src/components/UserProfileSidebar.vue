@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 // T-011: Store para preferencias persistentes
 import { usePreferencesStore } from '../stores/preferences';
+import { logger } from '../utils/logger';
 
 interface Props {
   isOpen: boolean;
@@ -61,7 +62,7 @@ const toggleDarkMode = () => {
 
 const navigateToHelp = () => {
   // Placeholder for help center navigation
-  console.log('Navigate to help center');
+  logger.log('Navigate to help center');
 };
 
 const navigateToSecurity = () => {

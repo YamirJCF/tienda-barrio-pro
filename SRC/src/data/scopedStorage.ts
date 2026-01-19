@@ -3,6 +3,8 @@
  * Permite que múltiples tiendas coexistan en el mismo dispositivo
  */
 
+import { logger } from '../utils/logger';
+
 let currentStoreId: string | null = null;
 
 /**
@@ -11,7 +13,7 @@ let currentStoreId: string | null = null;
 export const setCurrentStoreId = (storeId: string | null): void => {
     currentStoreId = storeId;
     if (storeId) {
-        console.log('[ScopedStorage] StoreId set:', storeId);
+        logger.log('[ScopedStorage] StoreId set:', storeId);
     }
 };
 
@@ -76,6 +78,6 @@ export const scopedStorage: Storage = {
         }
 
         keysToRemove.forEach(k => localStorage.removeItem(k));
-        console.log('[ScopedStorage] Cleared', keysToRemove.length, 'keys for store:', currentStoreId);
+        logger.log('[ScopedStorage] Cleared', keysToRemove.length, 'keys for store:', currentStoreId);
     }
 };

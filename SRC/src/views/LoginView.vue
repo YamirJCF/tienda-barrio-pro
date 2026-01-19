@@ -5,6 +5,7 @@ import { Store, User, Lock, Eye, EyeOff } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
 import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
+import { logger } from '../utils/logger';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -61,16 +62,16 @@ const handleLogin = async () => {
 
       // Obtener fingerprint del dispositivo
       const fingerprint = await getFingerprint();
-      console.log('[Login] Fingerprint:', fingerprint.substring(0, 16) + '...');
+      logger.log('[Login] Fingerprint:', fingerprint.substring(0, 16) + '...');
 
       // Validar credenciales localmente (simulación - en producción sería RPC)
       const employee = employeesStore.validatePin(username.value, password.value);
-      
+
       if (employee) {
         // Simular respuesta del servidor con diferentes estados
         // En producción esto vendría del RPC login_empleado_unificado
         const mockServerResponse = simulateServerResponse(employee, fingerprint);
-        
+
         if (!mockServerResponse.success) {
           handleServerError(mockServerResponse.error_code, mockServerResponse.error);
           return;
@@ -83,15 +84,15 @@ const handleLogin = async () => {
           username: employee.username,
           permissions: employee.permissions,
         }, firstStore.id);
-        
+
         // Establecer estados IAM
         authStore.setDeviceStatus('approved');
         authStore.setStoreOpenStatus(mockServerResponse.store_state?.is_open ?? false);
-        
+
         router.push('/');
         return;
       }
-      
+
       errorMessage.value = 'Usuario o PIN incorrectos';
     }
   } catch (error) {
@@ -129,9 +130,9 @@ const handleServerError = (errorCode: string, errorMsg: string) => {
     'GATEKEEPER_REJECTED': '🚫 Acceso denegado desde este dispositivo.',
     'INVALID_CREDENTIALS': 'Usuario o PIN incorrectos.'
   };
-  
+
   errorMessage.value = errorMessages[errorCode] || errorMsg || 'Error desconocido';
-  
+
   // Para dispositivo pendiente, mostrar estado especial
   if (errorCode === 'GATEKEEPER_PENDING') {
     authStore.setDeviceStatus('pending');

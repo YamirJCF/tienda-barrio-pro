@@ -5,6 +5,8 @@
  * de que la aplicación intente leerlos. Previene crashes por datos corruptos.
  */
 
+import { logger } from '../utils/logger';
+
 // ============================================
 // TIPOS Y CONFIGURACIÓN
 // ============================================
@@ -128,14 +130,14 @@ export function checkDataIntegrity(): IntegrityCheckResult {
     };
 
     console.group('🔍 Data Integrity Check');
-    console.log('Iniciando verificación de integridad...');
+    logger.log('Iniciando verificación de integridad...');
 
     for (const config of CRITICAL_STORAGE_KEYS) {
         const rawData = localStorage.getItem(config.key);
 
         // Si la clave no existe, es válido (datos vacíos)
         if (rawData === null) {
-            console.log(`⬜ ${config.key}: No existe (OK)`);
+            logger.log(`⬜ ${config.key}: No existe (OK)`);
             continue;
         }
 
@@ -145,7 +147,7 @@ export function checkDataIntegrity(): IntegrityCheckResult {
 
             // Validar estructura
             if (config.validator(parsedData)) {
-                console.log(`✅ ${config.key}: Válido`);
+                logger.log(`✅ ${config.key}: Válido`);
                 result.validKeys.push(config.key);
             } else {
                 // Estructura inválida - purgar
@@ -167,7 +169,7 @@ export function checkDataIntegrity(): IntegrityCheckResult {
     if (result.wasCorrupted) {
         console.warn(`🔧 Reparación completada. Claves purgadas: ${result.repairedKeys.join(', ')}`);
     } else {
-        console.log('✨ Todos los datos están íntegros');
+        logger.log('✨ Todos los datos están íntegros');
     }
 
     // 🛡️ T-003: Reparar stock negativo
@@ -216,7 +218,7 @@ export function repairNegativeStock(): { repaired: number; products: string[] } 
 
         if (modified) {
             localStorage.setItem('tienda-inventory', JSON.stringify(data));
-            console.log(`✅ ${result.repaired} productos corregidos en localStorage`);
+            logger.log(`✅ ${result.repaired} productos corregidos en localStorage`);
         }
     } catch (error) {
         console.error('Error al reparar stock negativo:', error);

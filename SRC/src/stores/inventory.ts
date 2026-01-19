@@ -46,11 +46,21 @@ export const useInventoryStore = defineStore('inventory', () => {
         return grouped;
     });
 
+    // 🛡️ SPEC-010: Redondeo híbrido a múltiplos de $50 (defensivo)
+    const roundHybrid50 = (val: Decimal): Decimal => {
+        const value = val.toNumber();
+        const remainder = value % 50;
+        return remainder <= 25
+            ? new Decimal(Math.floor(value / 50) * 50)
+            : new Decimal(Math.ceil(value / 50) * 50);
+    };
+
     // Methods
     const addProduct = (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
         const now = new Date().toISOString();
         const newProduct: Product = {
             ...productData,
+            price: roundHybrid50(productData.price), // SPEC-010: Forzar redondeo
             id: nextId.value++,
             createdAt: now,
             updatedAt: now,
@@ -62,9 +72,13 @@ export const useInventoryStore = defineStore('inventory', () => {
     const updateProduct = (id: number, updates: Partial<Omit<Product, 'id' | 'createdAt'>>) => {
         const index = products.value.findIndex(p => p.id === id);
         if (index !== -1) {
+            // SPEC-010: Si se actualiza el precio, forzar redondeo
+            const processedUpdates = updates.price
+                ? { ...updates, price: roundHybrid50(updates.price) }
+                : updates;
             products.value[index] = {
                 ...products.value[index],
-                ...updates,
+                ...processedUpdates,
                 updatedAt: new Date().toISOString(),
             };
             return products.value[index];
@@ -112,9 +126,9 @@ export const useInventoryStore = defineStore('inventory', () => {
 
         // 🛡️ T-001: Validación crítica - Rechazar si resultaría en stock negativo
         if (newStock.lt(0)) {
-            return { 
-                success: false, 
-                error: `Stock insuficiente. Disponible: ${product.stock.toFixed(product.measurementUnit === 'un' ? 0 : 2)} ${product.measurementUnit}` 
+            return {
+                success: false,
+                error: `Stock insuficiente. Disponible: ${product.stock.toFixed(product.measurementUnit === 'un' ? 0 : 2)} ${product.measurementUnit}`
             };
         }
 

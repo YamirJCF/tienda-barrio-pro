@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { logger } from '../utils/logger';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -36,7 +37,7 @@ const isOwnerNameValid = computed(() => ownerName.value.trim().length > 0);
 const isEmailValid = computed(() => emailRegex.test(email.value.trim()));
 const isPasswordValid = computed(() => password.value.length >= 6);
 // T-004: Validación de confirmación de contraseña
-const isConfirmPasswordValid = computed(() => 
+const isConfirmPasswordValid = computed(() =>
     confirmPassword.value.length >= 6 && confirmPassword.value === password.value
 );
 // SPEC-006: PIN ya no se valida en registro
@@ -98,7 +99,7 @@ const handleSubmit = async () => {
         });
 
         if (result) {
-            console.log('✅ Tienda registrada exitosamente:', result.storeName);
+            logger.log('✅ Tienda registrada exitosamente:', result.storeName);
             // Redirección al Dashboard
             router.push('/');
         } else {
@@ -215,23 +216,26 @@ const handleSubmit = async () => {
                             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                                 <span class="material-symbols-outlined text-xl">lock</span>
                             </span>
-                            <input v-model="confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" id="confirmPassword"
+                            <input v-model="confirmPassword" :type="showConfirmPassword ? 'text' : 'password'"
+                                id="confirmPassword"
                                 class="w-full pl-11 pr-11 bg-white dark:bg-white/5 border rounded-xl px-4 py-3.5 text-base outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                                :class="confirmPassword.length > 0 
+                                :class="confirmPassword.length > 0
                                     ? (isConfirmPasswordValid ? 'border-emerald-500 focus:ring-emerald-500' : 'border-red-400 focus:ring-red-400')
                                     : 'border-[#cee9e0] dark:border-white/10 focus:border-emerald-500 focus:ring-emerald-500'"
                                 placeholder="Repite tu contraseña" />
                             <button type="button" @click="toggleConfirmPassword"
                                 class="absolute right-10 top-0 bottom-0 px-2 flex items-center text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none">
-                                <span class="material-symbols-outlined text-xl">{{ showConfirmPassword ? 'visibility_off' : 'visibility' }}</span>
+                                <span class="material-symbols-outlined text-xl">{{ showConfirmPassword ?
+                                    'visibility_off' : 'visibility' }}</span>
                             </button>
-                            <span v-if="confirmPassword.length > 0" 
+                            <span v-if="confirmPassword.length > 0"
                                 class="absolute right-4 top-1/2 -translate-y-1/2 transition-opacity"
                                 :class="isConfirmPasswordValid ? 'text-emerald-500' : 'text-red-400'">
-                                <span class="material-symbols-outlined">{{ isConfirmPasswordValid ? 'check_circle' : 'cancel' }}</span>
+                                <span class="material-symbols-outlined">{{ isConfirmPasswordValid ? 'check_circle' :
+                                    'cancel' }}</span>
                             </span>
                         </div>
-                        <p v-if="confirmPassword.length > 0 && !isConfirmPasswordValid" 
+                        <p v-if="confirmPassword.length > 0 && !isConfirmPasswordValid"
                             class="text-xs text-red-500 ml-1">Las contraseñas no coinciden</p>
                     </div>
                 </div>
