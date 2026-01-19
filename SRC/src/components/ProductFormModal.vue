@@ -94,6 +94,15 @@ const isValid = computed(() => {
     priceNum > 0;
 });
 
+// UX-FIX: Categorías dinámicas basadas en productos existentes
+const existingCategories = computed(() => {
+  const cats = new Set(
+    inventoryStore.products
+      .map(p => p.category)
+      .filter((c): c is string => Boolean(c))
+  );
+  return Array.from(cats).sort();
+});
 
 
 // Methods
@@ -312,12 +321,7 @@ watch(() => formData.value.measurementUnit, (newUnit, oldUnit) => {
                     class="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 pl-3 pr-10 text-sm text-slate-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm"
                     placeholder="Ej. Bebidas, Despensa, Lácteos..." type="text" list="categories" />
                   <datalist id="categories">
-                    <option value="Bebidas y Licores" />
-                    <option value="Despensa" />
-                    <option value="Lácteos y Huevos" />
-                    <option value="Aseo del Hogar" />
-                    <option value="Panadería" />
-                    <option value="Snacks" />
+                    <option v-for="cat in existingCategories" :key="cat" :value="cat" />
                   </datalist>
                   <span
                     class="material-symbols-outlined absolute right-3 top-2.5 text-gray-500 pointer-events-none text-[20px]">arrow_drop_down</span>
