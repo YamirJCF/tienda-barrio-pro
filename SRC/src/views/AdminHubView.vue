@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useStoreStatusStore } from '../stores/storeStatus';
 import { useCashControlStore } from '../stores/cashControl';
@@ -9,8 +9,11 @@ import ReportsContent from '../components/ReportsContent.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
 // WO-004: Modal de PIN para SPEC-006 (consolidado)
 import PinSetupModal from '../components/PinSetupModal.vue';
+// A-02: UserProfileSidebar para icono de perfil
+import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 
 const router = useRouter();
+const route = useRoute();
 const salesStore = useSalesStore();
 const storeStatusStore = useStoreStatusStore();
 const cashControlStore = useCashControlStore();
@@ -22,6 +25,8 @@ const showDeviceModal = ref(false);
 const showPinSetupModal = ref(false);
 // T-008: State para confirmación de cierre de tienda
 const showCloseStoreConfirm = ref(false);
+// A-02: State para sidebar de perfil
+const showProfileSidebar = ref(false);
 
 // Computed: detectar si ya hay PIN configurado para determinar modo
 const hasPinConfigured = computed(() => cashControlStore.hasPinConfigured);
@@ -30,6 +35,12 @@ const pinSetupMode = computed(() => hasPinConfigured.value ? 'change' : 'setup')
 // Check PIN status on mount
 onMounted(() => {
   cashControlStore.checkPinConfigured();
+  // A-02: Leer query param para seleccionar tab automáticamente
+  if (route.query.tab === 'gestion') {
+    activeTab.value = 'gestion';
+  } else if (route.query.tab === 'reportes') {
+    activeTab.value = 'reportes';
+  }
 });
 
 // Computed - Estado operativo de la tienda (diferente de la caja)
@@ -80,8 +91,8 @@ const navigateTo = (route: string) => {
         </button>
         <h2 class="text-xl font-bold leading-tight tracking-tight flex-1 dark:text-white">Administración</h2>
         <div class="flex items-center justify-end">
-          <button aria-label="Perfil de usuario"
-            class="relative flex items-center justify-center overflow-hidden rounded-full h-10 w-10 bg-slate-200 dark:bg-slate-700 ring-2 ring-white dark:ring-slate-800 shadow-sm">
+          <button @click="showProfileSidebar = true" aria-label="Perfil de usuario"
+            class="relative flex items-center justify-center overflow-hidden rounded-full h-10 w-10 bg-slate-200 dark:bg-slate-700 ring-2 ring-white dark:ring-slate-800 shadow-sm cursor-pointer hover:ring-primary transition-all">
             <div class="h-full w-full bg-gradient-to-br from-blue-400 to-purple-500"></div>
           </button>
         </div>
@@ -283,13 +294,11 @@ const navigateTo = (route: string) => {
                 Esta acción bloqueará las ventas para todo el equipo hasta que vuelvas a abrir.
               </p>
               <div class="flex gap-3 w-full mt-2">
-                <button 
-                  @click="showCloseStoreConfirm = false"
+                <button @click="showCloseStoreConfirm = false"
                   class="flex-1 h-12 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                   Cancelar
                 </button>
-                <button 
-                  @click="executeCloseStore"
+                <button @click="executeCloseStore"
                   class="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 transition-colors">
                   Cerrar Tienda
                 </button>
@@ -299,6 +308,10 @@ const navigateTo = (route: string) => {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- A-02: UserProfileSidebar para icono de perfil -->
+    <UserProfileSidebar :isOpen="showProfileSidebar" @close="showProfileSidebar = false"
+      @logout="router.push('/login')" />
 
     <BottomNav />
   </div>
