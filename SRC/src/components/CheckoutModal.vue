@@ -161,23 +161,37 @@ const completeSale = () => {
                 {{ total.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") }}
               </span>
             </div>
-            <span class="text-xs text-gray-400 mt-1">{{ cartStore.itemCount }} producto(s)</span>
+            <span class="text-xs text-gray-400 mt-1">{{ cartStore.items.length }} producto(s)</span>
           </header>
 
           <!-- Lista de Productos (Scrollable, No Editable) -->
-          <div class="bg-white dark:bg-surface-dark border-b border-gray-100 dark:border-gray-800">
-            <div class="max-h-32 overflow-y-auto">
-              <div class="px-4 py-2 space-y-1">
+          <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <!-- Section Header -->
+            <div class="flex items-center justify-between mb-2">
+              <h4
+                class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-sm">receipt_long</span>
+                Detalle de Compra
+              </h4>
+              <span class="text-xs text-gray-400">{{ cartStore.items.length }} ítem(s)</span>
+            </div>
+
+            <!-- Product List Container -->
+            <div
+              class="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div class="max-h-28 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
                 <div v-for="item in cartStore.items" :key="item.id"
-                  class="flex items-center justify-between py-1.5 text-sm">
-                  <div class="flex items-center gap-2 min-w-0 flex-1">
+                  class="flex items-center justify-between px-3 py-2.5 bg-white dark:bg-gray-800/80">
+                  <!-- Left: Quantity + Name -->
+                  <div class="flex items-center gap-2.5 min-w-0 flex-1">
                     <span
-                      class="shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
+                      class="shrink-0 w-7 h-7 rounded-lg bg-primary text-white text-xs font-bold flex items-center justify-center shadow-sm">
                       {{ item.quantity }}
                     </span>
-                    <span class="text-gray-700 dark:text-gray-300 truncate">{{ item.name }}</span>
+                    <span class="text-sm text-gray-800 dark:text-gray-200 font-medium truncate">{{ item.name }}</span>
                   </div>
-                  <span class="shrink-0 text-gray-900 dark:text-white font-semibold ml-2">
+                  <!-- Right: Price -->
+                  <span class="shrink-0 text-sm text-gray-900 dark:text-white font-bold ml-3">
                     ${{ (item.subtotal ||
                       item.price.times(item.quantity)).toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
                     }}
