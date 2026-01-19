@@ -168,18 +168,19 @@ const completeSale = () => {
           <div class="bg-white dark:bg-surface-dark border-b border-gray-100 dark:border-gray-800">
             <div class="max-h-32 overflow-y-auto">
               <div class="px-4 py-2 space-y-1">
-                <div 
-                  v-for="item in cartStore.items" 
-                  :key="item.id"
+                <div v-for="item in cartStore.items" :key="item.id"
                   class="flex items-center justify-between py-1.5 text-sm">
                   <div class="flex items-center gap-2 min-w-0 flex-1">
-                    <span class="shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
+                    <span
+                      class="shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
                       {{ item.quantity }}
                     </span>
                     <span class="text-gray-700 dark:text-gray-300 truncate">{{ item.name }}</span>
                   </div>
                   <span class="shrink-0 text-gray-900 dark:text-white font-semibold ml-2">
-                    ${{ item.subtotal.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") }}
+                    ${{ (item.subtotal ||
+                      item.price.times(item.quantity)).toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+                    }}
                   </span>
                 </div>
               </div>
@@ -333,7 +334,7 @@ const completeSale = () => {
                 <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Pago con Nequi / Daviplata</h4>
                 <p class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed">
                   Solicita al cliente el pago exacto de <strong class="text-gray-900 dark:text-white">{{ formattedTotal
-                    }}</strong>.
+                  }}</strong>.
                 </p>
               </div>
               <div class="w-full max-w-xs mt-4">
