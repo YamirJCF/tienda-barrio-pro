@@ -9,12 +9,14 @@ import { useStockEntriesStore, type StockEntry } from '../stores/stockEntries';
 import { useCashClosesStore, type CashClose } from '../stores/cashCloses';
 import { formatRelativeTime } from '../composables/useRelativeTime';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { useQuantityFormat } from '../composables/useQuantityFormat';
 import BottomNav from '../components/BottomNav.vue';
 
 const router = useRouter();
 const stockEntriesStore = useStockEntriesStore();
 const cashClosesStore = useCashClosesStore();
 const { formatCurrency } = useCurrencyFormat();
+const { formatQuantity } = useQuantityFormat();
 
 // State
 const activeTab = ref<'stock' | 'cash'>('stock');
@@ -126,7 +128,7 @@ const getDifferenceClass = (difference: number) => {
                         </div>
                         <div class="text-right shrink-0">
                             <span class="font-bold" :class="entry.quantity > 0 ? 'text-green-600' : 'text-red-500'">
-                                {{ entry.quantity > 0 ? '+' : '' }}{{ entry.quantity }}
+                                {{ entry.quantity > 0 ? '+' : '' }}{{ formatQuantity(entry.quantity) }}
                             </span>
                             <p class="text-xs text-slate-400">
                                 {{ formatRelativeTime(entry.createdAt) }}

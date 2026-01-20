@@ -4,10 +4,12 @@ import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useInventoryStore } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
+import { useQuantityFormat } from '../composables/useQuantityFormat';
 
 const router = useRouter();
 const salesStore = useSalesStore();
 const inventoryStore = useInventoryStore();
+const { formatStock } = useQuantityFormat();
 
 // State
 const selectedPeriod = ref<'today' | 'week' | 'month'>('today');
@@ -318,8 +320,8 @@ const goBack = () => {
               <div class="flex-1 min-w-0">
                 <h4 class="text-sm font-semibold text-slate-900 dark:text-white truncate">{{ product.name }}</h4>
                 <p class="text-xs text-gray-500">
-                  Stock: <span class="font-bold text-red-500">{{ product.stock.toFixed ? product.stock.toFixed(0) :
-                    product.stock }}</span> / Min: {{ product.minStock }}
+                  Stock: <span class="font-bold text-red-500">{{ formatStock(product.stock, product.measurementUnit)
+                    }}</span> / Min: {{ product.minStock }}
                 </p>
               </div>
             </div>

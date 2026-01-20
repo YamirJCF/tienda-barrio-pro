@@ -3,9 +3,11 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useInventoryStore, type Product } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
+import { useQuantityFormat } from '../composables/useQuantityFormat';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();
+const { formatStock } = useQuantityFormat();
 
 // Form state
 const supplierName = ref('');
@@ -18,7 +20,9 @@ interface EntryItem {
   productName: string;
   quantity: string;
   unitCost: string;
-  measurementUnit: string;
+  measurementUnit: string;  // Unidad del producto (destino)
+  entryUnit: string;        // Unidad elegida por usuario (entrada)
+  isWeighable: boolean;     // Para mostrar selector de unidad
 }
 
 const entryItems = ref<EntryItem[]>([]);
@@ -97,9 +101,42 @@ const formatCurrency = (val: number) => {
 };
 
 const getSubtotal = (item: EntryItem) => {
-  const qty = parseFloat(item.quantity) || 0;
+  let qty = parseFloat(item.quantity) || 0;
   const cost = parseFloat(item.unitCost) || 0;
+
+  // CRITICAL FIX: Convertir cantidad a unidad del producto para cálculo correcto
+  // El costo está en measurementUnit, la cantidad en entryUnit
+  if (item.isWeighable && item.entryUnit !== item.measurementUnit) {
+    qty = convertWeight(qty, item.entryUnit, item.measurementUnit);
+  }
+
   return qty * cost;
+};
+
+// WO-002: Conversión de peso con redondeo UX
+const convertWeight = (value: number, from: string, to: string): number => {
+  if (from === to) return value;
+
+  // Paso 1: Convertir a gramos (unidad base)
+  let grams: number;
+  switch (from) {
+    case 'kg': grams = value * 1000; break;
+    case 'lb': grams = value * 453.592; break;
+    case 'g': grams = value; break;
+    default: return value;
+  }
+
+  // Paso 2: Convertir de gramos a unidad destino
+  let result: number;
+  switch (to) {
+    case 'kg': result = grams / 1000; break;
+    case 'lb': result = grams / 453.592; break;
+    case 'g': result = grams; break;
+    default: return value;
+  }
+
+  // Redondeo UX: gramos enteros, kg/lb 2 decimales
+  return to === 'g' ? Math.round(result) : Math.round(result * 100) / 100;
 };
 
 const selectProduct = (product: Product) => {
@@ -118,6 +155,8 @@ const selectProduct = (product: Product) => {
     quantity: '1',
     unitCost: product.cost?.toString() || product.price.toString(),
     measurementUnit: product.measurementUnit || 'un',
+    entryUnit: product.measurementUnit || 'un',  // Iniciar con unidad del producto
+    isWeighable: product.isWeighable,
   });
 
   searchQuery.value = '';
@@ -151,9 +190,15 @@ const saveEntry = () => {
     return;
   }
 
-  // Update stock for each item
+  // Update stock for each item with unit conversion
   entryItems.value.forEach(item => {
-    const qty = parseFloat(item.quantity);
+    let qty = parseFloat(item.quantity);
+
+    // WO-005: Convertir si es pesable y unidades diferentes
+    if (item.isWeighable && item.entryUnit !== item.measurementUnit) {
+      qty = convertWeight(qty, item.entryUnit, item.measurementUnit);
+    }
+
     if (qty > 0) {
       inventoryStore.updateStock(item.productId, new Decimal(qty));
     }
@@ -270,9 +315,18 @@ const clearSearch = () => {
             <div class="flex items-end gap-3 mb-3">
               <div class="flex-1">
                 <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Cant. ({{
-                  item.measurementUnit }})</label>
-                <input v-model="item.quantity" type="number" :step="item.measurementUnit === 'un' ? '1' : '0.01'"
-                  min="0"
+                  item.entryUnit }})</label>
+                <!-- Selector de unidad para pesables -->
+                <div v-if="item.isWeighable" class="flex gap-1 mb-1.5">
+                  <button v-for="unit in ['kg', 'lb', 'g']" :key="unit" @click="item.entryUnit = unit" type="button"
+                    :class="item.entryUnit === unit
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'"
+                    class="px-2 py-1 text-xs font-bold rounded transition-colors">
+                    {{ unit }}
+                  </button>
+                </div>
+                <input v-model="item.quantity" type="number" :step="item.entryUnit === 'un' ? '1' : '0.01'" min="0"
                   class="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 text-slate-900 dark:text-white text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
               </div>
               <div class="flex-[2]">
@@ -324,7 +378,8 @@ const clearSearch = () => {
               class="w-full p-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between">
               <div>
                 <p class="font-semibold text-slate-900 dark:text-white text-sm">{{ product.name }}</p>
-                <p class="text-xs text-slate-500">Stock: {{ product.stock.toFixed(1) }} {{ product.measurementUnit }}
+                <p class="text-xs text-slate-500">Stock: {{ formatStock(product.stock, product.measurementUnit) }} {{
+                  product.measurementUnit }}
                 </p>
               </div>
               <span class="material-symbols-outlined text-orange-500">add_circle</span>

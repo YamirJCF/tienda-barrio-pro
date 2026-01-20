@@ -7,12 +7,14 @@ import ProductFormModal from '../components/ProductFormModal.vue';
 import BottomNav from '../components/BottomNav.vue';
 import NoPermissionOverlay from '../components/ui/NoPermissionOverlay.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { useQuantityFormat } from '../composables/useQuantityFormat';
 import { Decimal } from 'decimal.js';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
 const { formatCurrency } = useCurrencyFormat();
+const { formatStock } = useQuantityFormat();
 
 // Permisos del usuario
 const canViewInventory = computed(() => authStore.canViewInventory);
@@ -187,8 +189,8 @@ const getCategoryLabel = (category: string) => {
             <span
               :class="product.stock.lte ? product.stock.lte(product.minStock) ? 'text-red-500' : 'text-primary' : product.stock <= product.minStock ? 'text-red-500' : 'text-primary'"
               class="font-bold text-lg leading-none">
-              {{ product.stock.toFixed ? product.stock.toFixed(1) : product.stock }} <span
-                class="text-xs font-medium opacity-70">{{ product.measurementUnit || 'un' }}</span>
+              {{ formatStock(product.stock, product.measurementUnit) }} <span class="text-xs font-medium opacity-70">{{
+                product.measurementUnit || 'un' }}</span>
             </span>
             <button
               class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
