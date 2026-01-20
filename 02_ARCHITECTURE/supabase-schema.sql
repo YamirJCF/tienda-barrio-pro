@@ -1103,6 +1103,244 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =============================================
+-- TRIGGERS Y FUNCIONES AUTOMÁTICAS
+-- =============================================
+
+-- 1. Función para actualizar timestamp (updated_at)
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Triggers de timestamp
+DROP TRIGGER IF EXISTS trg_products_updated ON products;
+CREATE TRIGGER trg_products_updated BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+DROP TRIGGER IF EXISTS trg_employees_updated ON employees;
+CREATE TRIGGER trg_employees_updated BEFORE UPDATE ON employees FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+DROP TRIGGER IF EXISTS trg_clients_updated ON clients;
+CREATE TRIGGER trg_clients_updated BEFORE UPDATE ON clients FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- 2. Función para actualizar stock automáticamete
+CREATE OR REPLACE FUNCTION update_inventory_stock()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Si es entrada, sumar
+  IF NEW.movement_type IN ('entrada', 'devolucion', 'ajuste') THEN
+    UPDATE products SET current_stock = current_stock + NEW.quantity WHERE id = NEW.product_id;
+  
+  -- Si es salida o venta, restar
+  ELSIF NEW.movement_type IN ('salida', 'venta') THEN
+    -- Validar stock negativo (opcional, pero recomendado)
+    IF (SELECT current_stock FROM products WHERE id = NEW.product_id) < NEW.quantity THEN
+       RAISE EXCEPTION 'Stock insuficiente para el producto %', NEW.product_id;
+    END IF;
+    UPDATE products SET current_stock = current_stock - NEW.quantity WHERE id = NEW.product_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger de inventario
+DROP TRIGGER IF EXISTS trg_inventory_movement ON inventory_movements;
+CREATE TRIGGER trg_inventory_movement 
+AFTER INSERT ON inventory_movements 
+FOR EACH ROW EXECUTE FUNCTION update_inventory_stock();
+
+
+-- =============================================
+-- RPCs FALTANTES (SPEC-012)
+-- =============================================
+
+-- RPC: Establecer PIN de Admin (Dueño)
+CREATE OR REPLACE FUNCTION establecer_pin_admin(
+  p_store_id UUID,
+  p_pin TEXT
+)
+RETURNS JSON AS $$
+BEGIN
+  -- Validar formato (6 dígitos para admin)
+  IF LENGTH(p_pin) != 6 OR p_pin !~ '^\d{6}$' THEN
+    RETURN json_build_object('success', false, 'error', 'PIN de administrador debe ser de 6 dígitos');
+  END IF;
+
+  UPDATE stores 
+  SET owner_pin_hash = crypt(p_pin, gen_salt('bf')),
+      pin_failed_attempts = 0,
+      pin_locked_until = NULL
+  WHERE id = p_store_id;
+
+  RETURN json_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- RPC: Validar PIN de Admin (para Caja)
+CREATE OR REPLACE FUNCTION validar_pin_admin(
+  p_store_id UUID,
+  p_pin TEXT
+)
+RETURNS JSON AS $$
+DECLARE
+  v_store stores%ROWTYPE;
+BEGIN
+  SELECT * INTO v_store FROM stores WHERE id = p_store_id;
+
+  -- 1. Verificar bloqueo
+  IF v_store.pin_locked_until IS NOT NULL AND v_store.pin_locked_until > NOW() THEN
+     RETURN json_build_object('success', false, 'error', 'PIN bloqueado temporalmente. Intente más tarde.');
+  END IF;
+
+  -- 2. Verificar Hash
+  IF v_store.owner_pin_hash = crypt(p_pin, v_store.owner_pin_hash) THEN
+     -- Resetear intentos
+     UPDATE stores SET pin_failed_attempts = 0, pin_locked_until = NULL WHERE id = p_store_id;
+     RETURN json_build_object('success', true);
+  ELSE
+     -- Incrementar intentos
+     UPDATE stores SET pin_failed_attempts = pin_failed_attempts + 1 WHERE id = p_store_id;
+     
+     -- Bloquear si > 5 intentos (por 15 min)
+     IF (v_store.pin_failed_attempts + 1) >= 5 THEN
+       UPDATE stores SET pin_locked_until = NOW() + INTERVAL '15 minutes' WHERE id = p_store_id;
+       RETURN json_build_object('success', false, 'error', 'PIN bloqueado por demasiados intentos fallidos');
+     END IF;
+
+     RETURN json_build_object('success', false, 'error', 'PIN incorrecto');
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- RPC: Registrar Evento de Caja
+CREATE OR REPLACE FUNCTION registrar_evento_caja(
+  p_store_id UUID,
+  p_type TEXT, -- 'open' | 'close'
+  p_amount DECIMAL,
+  p_authorized_by_name TEXT,
+  p_authorized_by_type TEXT, -- 'admin' | 'employee'
+  p_notes TEXT DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+  v_event_id UUID;
+BEGIN
+  -- 1. Insertar en Historial de Eventos (Auditoría)
+  INSERT INTO cash_control_events (
+    store_id, event_type, authorized_by_name, authorized_by_type, 
+    amount_declared, pin_verified
+  ) VALUES (
+    p_store_id, p_type, p_authorized_by_name, p_authorized_by_type, 
+    p_amount, true
+  ) RETURNING id INTO v_event_id;
+
+  -- 2. Actualizar estado actual de la caja
+  -- 'opening' -> inserta registro del día
+  -- 'closing' -> actualiza o inserta cierre
+  INSERT INTO cash_register (store_id, date, type, amount, notes)
+  VALUES (
+    p_store_id, CURRENT_DATE, 
+    CASE WHEN p_type = 'open' THEN 'opening' ELSE 'closing' END,
+    p_amount, p_notes
+  );
+
+  RETURN json_build_object('success', true, 'event_id', v_event_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- RPC: Procesar Venta Completa
+CREATE OR REPLACE FUNCTION procesar_venta(
+  p_store_id UUID,
+  p_items JSONB, -- Array de {product_id, quantity, price}
+  p_payment_method TEXT,
+  p_amount_received DECIMAL,
+  p_client_id UUID DEFAULT NULL,
+  p_employee_id UUID DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+  v_sale_id UUID;
+  v_total DECIMAL := 0;
+  v_item JSONB;
+  v_product products%ROWTYPE;
+  v_item_subtotal DECIMAL;
+BEGIN
+  -- 1. Calcular Total y Validar Stock
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    SELECT * INTO v_product FROM products WHERE id = (v_item->>'product_id')::UUID;
+    
+    IF NOT FOUND THEN
+      RETURN json_build_object('success', false, 'error', 'Producto no encontrado: ' || (v_item->>'product_id'));
+    END IF;
+
+    -- Validar stock (si no es servicio/infinito, aqui asumimos todo tiene stock finito por ahora)
+    IF v_product.current_stock < (v_item->>'quantity')::DECIMAL THEN
+       RETURN json_build_object('success', false, 'error', 'Stock insuficiente para: ' || v_product.name);
+    END IF;
+
+    v_item_subtotal := (v_item->>'quantity')::DECIMAL * (v_item->>'price')::DECIMAL;
+    v_total := v_total + v_item_subtotal;
+  END LOOP;
+
+  -- 2. Crear Venta
+  INSERT INTO sales (
+    store_id, employee_id, total, payment_method, 
+    amount_received, change, client_id
+  ) VALUES (
+    p_store_id, p_employee_id, v_total, p_payment_method,
+    p_amount_received, (p_amount_received - v_total), p_client_id
+  ) RETURNING id INTO v_sale_id;
+
+  -- 3. Procesar Items y Movimientos
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    v_product := NULL; -- Reset
+    SELECT * INTO v_product FROM products WHERE id = (v_item->>'product_id')::UUID;
+    v_item_subtotal := (v_item->>'quantity')::DECIMAL * (v_item->>'price')::DECIMAL;
+
+    -- Insertar Sale Item
+    INSERT INTO sale_items (
+      sale_id, product_id, product_name, quantity, price, subtotal
+    ) VALUES (
+      v_sale_id, v_product.id, v_product.name, 
+      (v_item->>'quantity')::DECIMAL, 
+      (v_item->>'price')::DECIMAL, 
+      v_item_subtotal
+    );
+
+    -- Insertar Movimiento de Inventario (Trigger actualizará stock)
+    INSERT INTO inventory_movements (
+      product_id, movement_type, quantity, reason, sale_id, created_by
+    ) VALUES (
+      v_product.id, 'venta', (v_item->>'quantity')::DECIMAL, 
+      'Venta #' || v_sale_id, v_sale_id, p_employee_id
+    );
+  END LOOP;
+
+  -- 4. Si es Fiado, actualizar saldo cliente
+  IF p_payment_method = 'fiado' AND p_client_id IS NOT NULL THEN
+    UPDATE clients SET balance = balance + v_total WHERE id = p_client_id;
+    
+    INSERT INTO client_transactions (
+      client_id, type, amount, description, sale_id, created_by
+    ) VALUES (
+      p_client_id, 'purchase', v_total, 'Compra Fiada', v_sale_id, p_employee_id
+    );
+  END IF;
+
+  RETURN json_build_object('success', true, 'sale_id', v_sale_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- =============================================
 -- DATOS INICIALES (Desarrollo)
 -- =============================================
 
