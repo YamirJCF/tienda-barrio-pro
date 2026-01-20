@@ -52,6 +52,23 @@
 | Por Cobrar | `#F97316` | `#F97316/10` |
 | Inventario | `#A855F7` | `#A855F7/10` |
 
+### Colores de Sincronización (SPEC-011)
+
+> Estados visuales para caché SWR y conectividad.
+
+| Token | Hex | Uso |
+|-------|-----|-----|
+| `--sync-validating` | `#3B82F6` | Revalidación en curso (spinner) |
+| `--sync-stale` | `#F59E0B` | Datos desactualizados (banner) |
+| `--sync-offline` | `#EF4444` | Sin conexión (banner fijo) |
+| `--sync-success` | `#22C55E` | Conexión restaurada (fade out) |
+
+| Token (Fondos) | Valor | Uso |
+|----------------|-------|-----|
+| `--sync-validating-bg` | `rgba(59, 130, 246, 0.1)` | Fondo indicator |
+| `--sync-stale-bg` | `rgba(245, 158, 11, 0.1)` | Fondo banner stale |
+| `--sync-offline-bg` | `rgba(239, 68, 68, 0.1)` | Fondo banner offline |
+
 ---
 
 ## 🔤 Tipografía

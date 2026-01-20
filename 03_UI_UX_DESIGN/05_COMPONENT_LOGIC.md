@@ -462,6 +462,113 @@ function addToast(toast: Toast) {
 
 ---
 
+## ↻ Estados de Sincronización (SPEC-011)
+
+### SyncIndicator
+
+```
+┌─────────────────────────────────────┐
+│ Inventario              [↻ azul]   │
+└─────────────────────────────────────┘
+```
+
+| Prop | Tipo | Default | Descripción |
+|------|------|---------|-------------|
+| `isValidating` | boolean | - | Mostrar/ocultar indicador |
+| `variant` | 'minimal' \| 'compact' | 'minimal' | Estilo visual |
+| `label` | string | 'Sincronizando' | Texto (solo compact) |
+
+**Lógica:**
+```typescript
+// Solo mostrar cuando isValidating es true
+<SyncIndicator v-if="isValidating" variant="minimal" />
+```
+
+**CSS:**
+```css
+.sync-indicator__icon {
+  animation: spin 1s linear infinite;
+  color: var(--sync-validating);
+}
+```
+
+### StaleDataBanner
+
+```
+┌─────────────────────────────────────┐
+│ ⏰ Datos de hace 10 min [Actualizar]│
+└─────────────────────────────────────┘
+```
+
+| Prop | Tipo | Descripción |
+|------|------|-------------|
+| `lastUpdated` | number | Timestamp de última actualización |
+| `onRefresh` | () => void | Callback para revalidar |
+
+**Lógica:**
+```typescript
+// Mostrar cuando stale pero NO validando
+<StaleDataBanner 
+  v-if="isStale && !isValidating"
+  :lastUpdated="lastFetch"
+  @refresh="revalidate"
+/>
+
+// Calcular tiempo
+const timeAgo = computed(() => {
+  const mins = Math.floor((Date.now() - lastUpdated) / 60000)
+  return mins < 60 ? `hace ${mins} min` : `hace ${Math.floor(mins/60)} h`
+})
+```
+
+### OfflineBanner
+
+```
+Offline:   ┌──📡 Sin conexión - Modo offline──┐  Rojo fijo
+Reconect:  ┌──↻ Reconectando...──────────────┐  Ámbar + spin
+Online:    ┌──✓ Conexión restaurada──────────┐  Verde fade
+```
+
+| Estado | Fondo | Comportamiento |
+|--------|-------|----------------|
+| `offline` | `--sync-offline` | Persistente |
+| `reconnecting` | `--sync-stale` | + Spinner |
+| `online` | `--sync-success` | Fade out 3s |
+
+**Lógica:**
+```typescript
+// Composable useOnlineStatus
+const { isOnline, wasOffline } = useOnlineStatus()
+
+// En App.vue (nivel raíz)
+<OfflineBanner v-if="!isOnline || showReconnected" />
+```
+
+### SyncQueueStatus
+
+```
+Pendientes: ┌──📤 3 transacciones pendientes──┐
+Fallidas:   ┌──⚠️ 2 transacciones fallidas───┐
+```
+
+| Prop | Tipo | Descripción |
+|------|------|-------------|
+| `pendingCount` | number | Transacciones en cola |
+| `failedCount` | number | Transacciones en Dead Letter Queue |
+| `onViewFailed` | () => void | Abrir modal de fallidas |
+
+**Lógica:**
+```typescript
+// Solo mostrar si hay items
+<SyncQueueStatus 
+  v-if="pendingCount > 0 || failedCount > 0"
+  :pendingCount="queue.length"
+  :failedCount="failedQueue.length"
+/>
+```
+
+---
+
 ## 📋 Instrucciones para el Orquestador
 
 ### Para Frontend Developer

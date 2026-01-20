@@ -988,6 +988,121 @@ CREATE INDEX IF NOT EXISTS idx_client_transactions_client ON client_transactions
 CREATE INDEX IF NOT EXISTS idx_access_requests_employee_device ON access_requests(employee_id, device_fingerprint);
 
 -- =============================================
+-- SPEC-011: Cache Strategy - Dead Letter Queue
+-- =============================================
+
+-- Tabla para transacciones que fallan después de MAX_RETRIES
+CREATE TABLE IF NOT EXISTS sync_queue_failed (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  action_type TEXT NOT NULL CHECK (action_type IN ('sale', 'stock_entry', 'expense', 'client_payment')),
+  payload JSONB NOT NULL,
+  original_timestamp TIMESTAMPTZ NOT NULL,
+  failed_at TIMESTAMPTZ DEFAULT NOW(),
+  retry_count INTEGER NOT NULL DEFAULT 5,
+  last_error TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'retried', 'discarded', 'manual_resolved')),
+  resolved_by UUID REFERENCES employees(id),
+  resolved_at TIMESTAMPTZ,
+  resolution_notes TEXT,
+  created_by UUID REFERENCES employees(id),
+  device_fingerprint TEXT
+);
+
+-- Índices para sync_queue_failed
+CREATE INDEX IF NOT EXISTS idx_sync_failed_store ON sync_queue_failed(store_id);
+CREATE INDEX IF NOT EXISTS idx_sync_failed_status ON sync_queue_failed(status);
+CREATE INDEX IF NOT EXISTS idx_sync_failed_pending ON sync_queue_failed(store_id, status) WHERE status = 'pending';
+
+-- Índices optimizados para consultas SWR frecuentes
+CREATE INDEX IF NOT EXISTS idx_products_store_active ON products(store_id) WHERE current_stock > 0;
+CREATE INDEX IF NOT EXISTS idx_clients_with_balance ON clients(store_id) WHERE balance > 0;
+CREATE INDEX IF NOT EXISTS idx_sales_today ON sales(store_id, created_at);
+
+-- RLS para sync_queue_failed
+ALTER TABLE sync_queue_failed ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "sync_failed_store_isolation" ON sync_queue_failed
+FOR ALL USING (
+  store_id IN (
+    SELECT store_id FROM employees WHERE id = auth.uid()
+    UNION
+    SELECT id FROM stores WHERE id = auth.uid()
+  )
+);
+
+-- RPC: Obtener timestamp del servidor (MIT-05)
+CREATE OR REPLACE FUNCTION get_server_timestamp()
+RETURNS JSON AS $$
+BEGIN
+  RETURN json_build_object(
+    'timestamp', EXTRACT(EPOCH FROM NOW()) * 1000,
+    'iso', NOW()::TEXT
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- RPC: Reintentar transacción fallida desde Dead Letter Queue
+CREATE OR REPLACE FUNCTION retry_failed_sync(
+  p_failed_id UUID,
+  p_employee_id UUID
+)
+RETURNS JSON AS $$
+DECLARE
+  v_failed sync_queue_failed%ROWTYPE;
+  v_result JSON;
+BEGIN
+  SELECT * INTO v_failed FROM sync_queue_failed WHERE id = p_failed_id;
+  
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Registro no encontrado');
+  END IF;
+  
+  IF v_failed.status != 'pending' THEN
+    RETURN json_build_object('success', false, 'error', 'Transacción ya procesada');
+  END IF;
+  
+  -- Procesar según tipo
+  CASE v_failed.action_type
+    WHEN 'sale' THEN
+      SELECT procesar_venta(
+        v_failed.store_id,
+        v_failed.payload->'items',
+        v_failed.payload->>'payment_method',
+        (v_failed.payload->>'amount_received')::DECIMAL,
+        (v_failed.payload->>'client_id')::UUID,
+        p_employee_id
+      ) INTO v_result;
+      
+    WHEN 'expense' THEN
+      INSERT INTO expenses (store_id, amount, description, category, created_by)
+      VALUES (
+        v_failed.store_id,
+        (v_failed.payload->>'amount')::DECIMAL,
+        v_failed.payload->>'description',
+        COALESCE(v_failed.payload->>'category', 'General'),
+        p_employee_id
+      );
+      v_result := json_build_object('success', true);
+      
+    ELSE
+      RETURN json_build_object('success', false, 'error', 'Tipo de acción no soportado: ' || v_failed.action_type);
+  END CASE;
+  
+  -- Actualizar estado si fue exitoso
+  IF (v_result->>'success')::BOOLEAN THEN
+    UPDATE sync_queue_failed 
+    SET status = 'retried',
+        resolved_by = p_employee_id,
+        resolved_at = NOW()
+    WHERE id = p_failed_id;
+  END IF;
+  
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =============================================
 -- DATOS INICIALES (Desarrollo)
 -- =============================================
 
