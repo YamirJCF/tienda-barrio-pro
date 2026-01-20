@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useInventoryStore, type Product } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
@@ -24,6 +24,18 @@ interface EntryItem {
 const entryItems = ref<EntryItem[]>([]);
 const searchQuery = ref('');
 const showSearchResults = ref(false);
+
+// UX-FIX: Toast notification state
+const toastMessage = ref('');
+const toastType = ref<'success' | 'error'>('success');
+const showToast = ref(false);
+
+const showToastNotification = (message: string, type: 'success' | 'error' = 'success') => {
+  toastMessage.value = message;
+  toastType.value = type;
+  showToast.value = true;
+  setTimeout(() => { showToast.value = false; }, 3000);
+};
 
 // Computed
 const filteredProducts = computed(() => {
@@ -52,6 +64,29 @@ watch(searchQuery, (val) => {
   showSearchResults.value = val.trim().length > 0;
 });
 
+// UX-FIX: Persistir borrador en sessionStorage
+const DRAFT_KEY = 'stock-entry-draft';
+
+watch(entryItems, (items) => {
+  if (items.length > 0) {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(items));
+  } else {
+    sessionStorage.removeItem(DRAFT_KEY);
+  }
+}, { deep: true });
+
+// Restaurar borrador al montar
+onMounted(() => {
+  const saved = sessionStorage.getItem(DRAFT_KEY);
+  if (saved) {
+    try {
+      entryItems.value = JSON.parse(saved);
+    } catch {
+      sessionStorage.removeItem(DRAFT_KEY);
+    }
+  }
+});
+
 // Methods
 const goBack = () => {
   router.push('/inventory');
@@ -76,7 +111,8 @@ const selectProduct = (product: Product) => {
     return;
   }
 
-  entryItems.value.push({
+  // UX-FIX: Agregar al principio (unshift) para acceso rápido
+  entryItems.value.unshift({
     productId: product.id,
     productName: product.name,
     quantity: '1',
@@ -111,7 +147,7 @@ const clearDraft = () => {
 
 const saveEntry = () => {
   if (entryItems.value.length === 0) {
-    alert('Agrega al menos un producto');
+    showToastNotification('Agrega al menos un producto', 'error');
     return;
   }
 
@@ -124,8 +160,9 @@ const saveEntry = () => {
   });
 
   // Success feedback and navigate back
-  alert(`✅ Entrada guardada: ${totalItems.value} productos, $${formatCurrency(totalInvoice.value)} total`);
-  router.push('/inventory');
+  sessionStorage.removeItem(DRAFT_KEY); // Limpiar borrador
+  showToastNotification(`Entrada guardada: ${totalItems.value} productos, $${formatCurrency(totalInvoice.value)} total`, 'success');
+  setTimeout(() => router.push('/inventory'), 1500);
 };
 
 const clearSearch = () => {
@@ -153,7 +190,7 @@ const clearSearch = () => {
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 overflow-y-auto pb-32">
+    <main class="flex-1 overflow-y-auto pb-44">
       <!-- Supplier & Invoice Section -->
       <section
         class="bg-white dark:bg-slate-800 mx-4 mt-4 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
@@ -232,9 +269,10 @@ const clearSearch = () => {
             <!-- Quantity and Cost Inputs -->
             <div class="flex items-end gap-3 mb-3">
               <div class="flex-1">
-                <label
-                  class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Cant.</label>
-                <input v-model="item.quantity" type="number" step="1" min="0"
+                <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Cant. ({{
+                  item.measurementUnit }})</label>
+                <input v-model="item.quantity" type="number" :step="item.measurementUnit === 'un' ? '1' : '0.01'"
+                  min="0"
                   class="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 text-slate-900 dark:text-white text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
               </div>
               <div class="flex-[2]">
@@ -252,7 +290,7 @@ const clearSearch = () => {
             <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-700">
               <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Subtotal</span>
               <span class="text-sm font-bold text-slate-900 dark:text-white">${{ formatCurrency(getSubtotal(item))
-                }}</span>
+              }}</span>
             </div>
           </article>
         </div>
@@ -271,7 +309,7 @@ const clearSearch = () => {
             <div class="flex items-center gap-2 text-slate-500 mb-3">
               <span class="material-symbols-outlined text-xl">person_search</span>
               <span class="text-sm">No existe un producto llamado "<strong class="text-slate-700 dark:text-white">{{
-                  searchQuery }}</strong>"</span>
+                searchQuery }}</strong>"</span>
             </div>
             <button @click="createNewProduct"
               class="w-full flex items-center justify-center gap-2 py-3 bg-orange-50 dark:bg-orange-900/20 text-orange-500 font-semibold rounded-xl border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors">
@@ -321,6 +359,16 @@ const clearSearch = () => {
         GUARDAR
       </button>
     </footer>
+
+    <!-- Toast Notification -->
+    <Transition name="toast">
+      <div v-if="showToast"
+        class="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg font-medium" :class="toastType === 'success'
+          ? 'bg-green-600 text-white'
+          : 'bg-red-500 text-white'">
+        {{ toastMessage }}
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -334,5 +382,17 @@ const clearSearch = () => {
 .slide-up-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+/* Toast animations */
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -20px);
 }
 </style>
