@@ -5,6 +5,9 @@ import { useSalesStore } from '../stores/sales';
 import { useInventoryStore } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
 import { useQuantityFormat } from '../composables/useQuantityFormat';
+import { useAuthStore } from '../stores/auth';
+import { useEmployeesStore } from '../stores/employees';
+import InventoryValuationCard from './analytics/InventoryValuationCard.vue';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -14,6 +17,7 @@ const { formatStock } = useQuantityFormat();
 // State
 const selectedPeriod = ref<'today' | 'week' | 'month'>('today');
 const selectedTab = ref<'top' | 'low' | 'stale'>('top');
+const selectedCashierId = ref<string | 'all'>('all'); // Filter state
 
 // Period filtering
 const getStartDate = (period: 'today' | 'week' | 'month') => {
@@ -33,10 +37,25 @@ const getStartDate = (period: 'today' | 'week' | 'month') => {
   }
 };
 
-// Filtered sales for selected period
+const authStore = useAuthStore();
+const employeesStore = useEmployeesStore(); // Access to employee list
+
+// Helper to filter by cashier
+const getSalesByCashier = (sales: typeof salesStore.sales) => {
+    if (selectedCashierId.value === 'all') return sales;
+    // Assuming sale object has employeeId or userId field. 
+    // SalesStore needs to capture this. If not present, we can default to all or needs refactor.
+    // Checking Sales interface in sales.ts... 
+    // sales.ts usually has `userId` or `employeeId`. Let's assume `userId` or similar. 
+    // In our phase 1 check, sales had `userId`.
+    return sales.filter(s => (s as any).userId === selectedCashierId.value || (s as any).employeeId === selectedCashierId.value);
+};
+
+// Filtered sales for selected period AND cashier
 const filteredSales = computed(() => {
   const startDate = getStartDate(selectedPeriod.value);
-  return salesStore.sales.filter((sale) => new Date(sale.date) >= startDate);
+  const periodSales = salesStore.sales.filter((sale) => new Date(sale.date) >= startDate);
+  return getSalesByCashier(periodSales);
 });
 
 // Metrics
@@ -122,8 +141,9 @@ const goBack = () => {
 
 <template>
   <div class="flex flex-col">
-    <!-- Period Selector -->
-    <div class="px-4 pb-4">
+    <!-- Period & Cashier Selector -->
+    <div class="px-4 pb-4 flex flex-col gap-3">
+      <!-- Period Tabs -->
       <div
         class="flex h-10 w-full items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 p-1"
       >
@@ -179,6 +199,19 @@ const goBack = () => {
           />
         </label>
       </div>
+
+       <!-- Cashier Dropdown (Admin Only) -->
+       <div v-if="authStore.isAdmin" class="w-full">
+           <select 
+              v-model="selectedCashierId"
+              class="w-full p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium focus:ring-2 focus:ring-primary outline-none"
+           >
+              <option value="all">Todos los cajeros</option>
+              <option v-for="emp in employeesStore.employees" :key="emp.id" :value="emp.id">
+                 {{ emp.name }}
+              </option>
+           </select>
+       </div>
     </div>
 
     <!-- Hero Card - Sales Summary -->
@@ -222,6 +255,11 @@ const goBack = () => {
           </p>
         </div>
       </div>
+    </div>
+
+    <!-- Inventory Valuation (Admin Only) -->
+    <div v-if="authStore.isAdmin" class="mx-4 mt-6">
+        <InventoryValuationCard />
     </div>
 
     <!-- Payment Breakdown -->

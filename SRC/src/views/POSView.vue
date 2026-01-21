@@ -6,7 +6,7 @@ import { useInventoryStore } from '../stores/inventory';
 import type { Product } from '../types';
 import { useSalesStore } from '../stores/sales';
 import { useClientsStore } from '../stores/clients';
-import { useStoreStatusStore } from '../stores/storeStatus';
+import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
 import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
@@ -25,7 +25,7 @@ const cartStore = useCartStore();
 const inventoryStore = useInventoryStore();
 const salesStore = useSalesStore();
 const clientsStore = useClientsStore();
-const storeStatusStore = useStoreStatusStore();
+const cashRegisterStore = useCashRegisterStore();
 const authStore = useAuthStore();
 const { showSaleSuccess, showSaleOffline, showSuccess, showError } = useNotifications();
 const { formatWithSign: formatCurrency } = useCurrencyFormat();
@@ -43,7 +43,7 @@ const isProcessing = ref(false); // Loading state for COBRAR button
 
 // Estado operativo de la tienda
 const isAdminLocked = computed(() => !authStore.storeOpenStatus);
-const isCashRegisterClosed = computed(() => storeStatusStore.isClosed);
+// const isCashRegisterClosed = computed(() => !cashRegisterStore.isOpen); // Handled directly in blockingState
 const isInventoryEmpty = computed(() => inventoryStore.totalProducts === 0);
 
 // Permisos del usuario
@@ -69,7 +69,7 @@ const blockingState = computed(() => {
       action: goToDashboard,
     };
   }
-  if (isCashRegisterClosed.value) {
+  if (!cashRegisterStore.isOpen) {
     // Bloqueo por Caja (CashControl)
     return {
       title: 'Caja Cerrada',
@@ -260,6 +260,9 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
       change,
       clientId,
     });
+
+    // Register income in cash register
+    cashRegisterStore.addIncome(cartStore.total, `Venta ${currentTicket}`, salesStore.sales[salesStore.sales.length - 1]?.id);
 
     // If fiado, register the debt
     if (paymentMethod === 'fiado' && clientId) {

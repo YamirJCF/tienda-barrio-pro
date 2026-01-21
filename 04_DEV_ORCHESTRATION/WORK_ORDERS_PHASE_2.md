@@ -108,28 +108,28 @@ flowchart LR
 
 ### Tareas
 
-- [ ] **T3.1**: Schema de Caja
+- [x] **T3.1**: Schema de Caja
   - Tabla `cash_registers` (sesiones)
   - Tabla `cash_movements` (ingresos/egresos manuales y automáticos) or `transactions`
 
-- [ ] **T3.2**: Flujo de Apertura de Caja
+- [x] **T3.2**: Flujo de Apertura de Caja
   - Modal `OpenRegister.vue`: Conteo de base inicial
   - Asignación de cajero responsable
 
-- [ ] **T3.3**: Flujo de Cierre de Caja (Arqueo)
+- [x] **T3.3**: Flujo de Cierre de Caja (Arqueo)
   - Modal `CloseRegister.vue`: Conteo final de efectivo
   - Cálculo de discrepancia (Sobrante/Faltante)
   - Bloqueo de POS si caja cerrada
 
-- [ ] **T3.4**: Gestión de Gastos Menores
+- [x] **T3.4**: Gestión de Gastos Menores
   - Vista `ExpensesView.vue`: Registrar salida de efectivo (ej. pago proveedores menor)
   - Impacto en saldo de caja actual
 
 ### Criterios de Aceptación
 
-- [ ] No se puede vender sin abrir caja
-- [ ] El cierre genera reporte de discrepancias
-- [ ] Los gastos descuentan del efectivo teórico
+- [x] No se puede vender sin abrir caja
+- [x] El cierre genera reporte de discrepancias
+- [x] Los gastos descuentan del efectivo teórico
 
 ---
 
@@ -144,22 +144,22 @@ flowchart LR
 
 ### Tareas
 
-- [ ] **T4.1**: Widgets Dashboard Principal
+- [x] **T4.1**: Widgets Dashboard Principal
   - "Ventas del Día" (Total $)
   - "Transacciones" (Cantidad #)
   - "Productos Bajo Stock" (Alerta)
 
-- [ ] **T4.2**: Reporte de Ventas Básico
+- [x] **T4.2**: Reporte de Ventas Básico
   - Vista `SalesReport.vue`
   - Filtros por fecha, cajero, método de pago
 
-- [ ] **T4.3**: Reporte de Inventario
-  - Valor total del inventario (Costo vs Precio Venta)
+- [x] **T4.3**: Reporte de Inventario
+  - Valoración del inventario (Costo vs Precio Venta)
 
 ### Criterios de Aceptación
 
-- [ ] Dashboard carga rápido (optimistic metrics)
-- [ ] Datos coinciden con POS y Caja
+- [x] Dashboard carga rápido (optimistic metrics)
+- [x] Datos coinciden con POS y Caja
 
 ---
 

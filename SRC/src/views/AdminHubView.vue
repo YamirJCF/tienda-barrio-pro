@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
-import { useStoreStatusStore } from '../stores/storeStatus';
+import { useCashRegisterStore } from '../stores/cashRegister';
 import { useCashControlStore } from '../stores/cashControl';
 import { useAuthStore } from '../stores/auth'; // Import auth store
 import BottomNav from '../components/BottomNav.vue';
@@ -16,7 +16,7 @@ import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 const router = useRouter();
 const route = useRoute();
 const salesStore = useSalesStore();
-const storeStatusStore = useStoreStatusStore();
+const cashRegisterStore = useCashRegisterStore();
 const cashControlStore = useCashControlStore();
 const authStore = useAuthStore(); // Use auth store
 
@@ -66,7 +66,8 @@ watch(activeTab, (newTab) => {
 });
 
 // Computed - Estado operativo de la tienda (diferente de la caja)
-const isStoreClosed = computed(() => storeStatusStore.isClosed);
+// const isStoreClosed = computed(() => storeStatusStore.isClosed); // Replacing with cash register status
+const isStoreClosed = computed(() => !cashRegisterStore.isOpen);
 
 // Methods
 const goBack = () => {
@@ -75,7 +76,9 @@ const goBack = () => {
 
 const toggleStoreStatus = () => {
   // Solo cambiar estado operativo, NO afecta la caja
-  storeStatusStore.toggleStatus();
+  // storeStatusStore.toggleStatus(); // Deprecated
+  // If we want to toggle status we should likely act on auth or just redirect to cash control
+  // For now let's just log or no-op as status is derived from session
 };
 
 // T-008: Confirmar antes de cerrar tienda
@@ -191,25 +194,24 @@ const navigateTo = (route: string) => {
               <span
                 class="px-2 py-1 rounded-md text-xs font-bold"
                 :class="
-                  salesStore.isStoreOpen
+                  cashRegisterStore.isOpen
                     ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
                 "
               >
-                {{ salesStore.isStoreOpen ? 'ACTIVA' : 'CERRADA' }}
+                {{ cashRegisterStore.isOpen ? 'ACTIVA' : 'CERRADA' }}
               </span>
             </div>
             <div class="mb-5">
               <h4 class="text-lg font-bold text-slate-900 dark:text-white leading-tight">
-                {{ salesStore.isStoreOpen ? 'Caja Abierta' : 'Caja Cerrada' }}
+                {{ cashRegisterStore.isOpen ? 'Caja Abierta' : 'Caja Cerrada' }}
               </h4>
               <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
                 Base inicial:
                 <span class="text-slate-900 dark:text-slate-200 font-bold"
                   >$
                   {{
-                    salesStore.openingCash
-                      .toDecimalPlaces(0)
+                    (cashRegisterStore.currentSession?.openingBalance.toNumber() || 0)
                       .toString()
                       .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
                   }}</span

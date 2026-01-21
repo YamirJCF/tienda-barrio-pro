@@ -1,53 +1,41 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useStoreStatusStore } from '../stores/storeStatus';
-import { useExpensesStore } from '../stores/expenses';
-import { useSalesStore } from '../stores/sales';
+import { useCashRegisterStore } from '../stores/cashRegister';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
 import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
+import Decimal from 'decimal.js';
+
+import { useAuthStore } from '../stores/auth'; // Import auth store
 
 const router = useRouter();
-const storeStatus = useStoreStatusStore();
-const expensesStore = useExpensesStore();
-const salesStore = useSalesStore(); // Para obtener ventas de hoy si fuera necesario, aunque el backend lo hace
+const cashRegisterStore = useCashRegisterStore(); // Replaced storeStatusStore
+const authStore = useAuthStore(); // Initialize auth store
 const { formatCurrency } = useCurrencyFormat();
 const { showSuccess, showError } = useNotifications();
 
 // Computed State
-const isOpening = computed(() => !storeStatus.isOperational);
+const isOpening = computed(() => !cashRegisterStore.isOpen);
 const title = computed(() => isOpening.value ? 'Apertura de Caja' : 'Cierre de Caja');
 const buttonText = computed(() => isOpening.value ? 'ABRIR TURNO' : 'CERRAR TURNO');
 
 // Form State
 const amount = ref(0);
-const pin = ref('');
 const notes = ref('');
 const isSubmitting = ref(false);
 
 // Closing Data (Summary)
-const summary = ref({
-    base: 0,
-    salesCash: 0,
-    expenses: 0,
-    expected: 0
-});
-
-// Lifecycle
-onMounted(async () => {
-    if (!isOpening.value) {
-        // Prepare Closing Summary
-        await expensesStore.fetchTodayExpenses();
-        // Here we could fetch sales summary from backend or relying on SalesStore if perfectly synced
-        // For robustness, let's rely on SalesStore local totals for responsive UI, 
-        // knowing backend will validate on close.
-        
-        summary.value.base = storeStatus.openingAmount;
-        summary.value.salesCash = salesStore.todayCash.toNumber();
-        summary.value.expenses = expensesStore.todayTotal.toNumber();
-        summary.value.expected = summary.value.base + summary.value.salesCash - summary.value.expenses;
-    }
+const summary = computed(() => {
+    if (isOpening.value) return { base: 0, salesCash: 0, expenses: 0, expected: 0 };
+    
+    // We can get these directly from the store computed properties
+    return {
+        base: cashRegisterStore.currentSession?.openingBalance.toNumber() || 0,
+        salesCash: cashRegisterStore.totalIncome.toNumber(),
+        expenses: cashRegisterStore.totalExpenses.toNumber(),
+        expected: cashRegisterStore.currentBalance.toNumber()
+    };
 });
 
 // Difference Calculation (Only for Closing)
@@ -67,13 +55,22 @@ const handleSubmit = async () => {
     isSubmitting.value = true;
     try {
         if (isOpening.value) {
-            await storeStatus.openStore(amount.value, pin.value);
+            if (authStore.currentUser?.id) {
+                cashRegisterStore.openRegister(authStore.currentUser.id, new Decimal(amount.value), notes.value);
+            } else {
+                 throw new Error('Usuario no autenticado');
+            }
             showSuccess('Caja abierta correctamente');
             router.push('/'); // Go to POS
         } else {
-            const result = await storeStatus.closeStore(amount.value);
+            // Closing
+            if (!confirm('¿Estás seguro de cerrar el turno?')) {
+                isSubmitting.value = false;
+                return;
+            }
+            cashRegisterStore.closeRegister(new Decimal(amount.value), notes.value);
             showSuccess('Turno cerrado. Reporte generado.');
-            router.push('/'); // Go to Dashboard (which will be in Closed state)
+            router.push('/'); // Go to Dashboard/Home
         }
     } catch (e: any) {
         showError(e.message || 'Error en la operación');
@@ -110,7 +107,12 @@ const goBack = () => router.back();
                 <div class="space-y-4">
                     <div>
                         <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Base Inicial</label>
-                        <FormInputCurrency v-model="amount" placeholder="0" class="text-2xl font-bold text-center" />
+                        <FormInputCurrency v-model="amount" placeholder="0" class="text-2xl font-bold text-center" :autofocus="true" />
+                    </div>
+                    
+                     <div>
+                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Notas (Opcional)</label>
+                        <textarea v-model="notes" rows="2" class="w-full p-3 bg-gray-50 dark:bg-gray-700 border-none rounded-lg text-sm" placeholder="Observaciones..."></textarea>
                     </div>
                 </div>
             </div>
@@ -126,7 +128,7 @@ const goBack = () => router.back();
                         <span class="font-medium text-gray-800 dark:text-white">{{ formatCurrency(summary.base) }}</span>
                     </div>
                     <div class="flex justify-between items-center text-sm">
-                        <span class="text-gray-600 dark:text-gray-300">Ventas Efectivo (+)</span>
+                        <span class="text-gray-600 dark:text-gray-300">Ventas/Ingresos (+)</span>
                         <span class="font-medium text-emerald-600">{{ formatCurrency(summary.salesCash) }}</span>
                     </div>
                     <div class="flex justify-between items-center text-sm">
@@ -152,6 +154,11 @@ const goBack = () => router.back();
                              ({{ formatCurrency(Math.abs(difference)) }})
                          </span>
                      </div>
+                     
+                      <div class="mt-4">
+                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Notas del Cierre</label>
+                        <textarea v-model="notes" rows="2" class="w-full p-3 bg-gray-50 dark:bg-gray-700 border-none rounded-lg text-sm" placeholder="Observaciones sobre diferencias..."></textarea>
+                    </div>
                 </div>
             </div>
 
@@ -166,11 +173,6 @@ const goBack = () => router.back();
                 <span v-else class="material-symbols-outlined">{{ isOpening ? 'store' : 'lock' }}</span>
                 {{ buttonText }}
             </button>
-
-            <!-- Notes field optional -->
-            <div v-if="!isOpening" class="text-center">
-                 <button class="text-xs text-gray-400 font-medium underline">Agregar nota al reporte</button>
-            </div>
 
         </div>
     </div>

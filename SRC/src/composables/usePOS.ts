@@ -52,39 +52,26 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
                 return;
             }
 
-            const stockResult = inventoryStore.updateStock(pendingProduct.value.id, -qty);
-            if (stockResult.success) {
-                cartStore.addItem({ ...pendingProduct.value, quantity: qty });
-                showSuccess(`${qty}x ${pendingProduct.value.name} agregado`);
-            } else {
-                showError(stockResult.error || 'Error al actualizar stock');
-            }
+            // Validation only - Stock is deducted at checkout
+            cartStore.addItem({ ...pendingProduct.value, quantity: qty });
+            showSuccess(`${qty}x ${pendingProduct.value.name} agregado`);
             clearPluInput();
             resetModes();
             return;
         }
 
-        // CASE 2: Normal mode (Input is PLU, finding product to set Quantity next)
-        const product = inventoryStore.getProductByPLU(pluInput.value);
-
-        if (product) {
-            if (product.isWeighable) {
-                logger.log('[CANT.×] Product is weighable - opening calculator');
-                openWeightCalculator(product);
-                clearPluInput();
-                resetModes();
-                return;
-            }
-
-            logger.log('[CANT.×] Product found:', product.name, '- waiting for quantity');
-            pendingProduct.value = product;
-            isProductMode.value = true;
-            isQuantityMode.value = false;
+        // CASE 2: No product selected yet (Pre-setting quantity for NEXT product)
+        // User typed "2" then pressed "CANT. x" -> They want next item to be added 2 times
+        const rawQty = parseInt(pluInput.value);
+        if (!isNaN(rawQty) && rawQty > 0) {
+            pendingQuantity.value = rawQty;
+            isQuantityMode.value = true;
+            logger.log('[CANT.×] Set pendingQuantity:', rawQty);
+            // showSuccess(`Cantidad fijada: ${rawQty}x`); // Optional feedback
             clearPluInput();
         } else {
-            showError(`Producto no encontrado: ${pluInput.value}`);
+            showError('Cantidad inválida');
             clearPluInput();
-            resetModes();
         }
     };
 
@@ -120,14 +107,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
                     return;
                 }
 
-                const stockResult = inventoryStore.updateStock(pendingProduct.value.id, -quantity);
-                if (!stockResult.success) {
-                    showError(stockResult.error || 'Error al actualizar stock');
-                    clearPluInput();
-                    resetModes();
-                    return;
-                }
-
+                // Validation only
                 cartStore.addItem({ ...pendingProduct.value, quantity });
                 showSuccess(`${quantity}x ${pendingProduct.value.name} agregado`);
                 clearPluInput();
@@ -161,14 +141,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
                 return;
             }
 
-            const stockResult = inventoryStore.updateStock(product.id, -quantity);
-            if (!stockResult.success) {
-                showError(stockResult.error || 'Error al actualizar stock');
-                clearPluInput();
-                resetModes();
-                return;
-            }
-
+            // Validation only
             cartStore.addItem({ ...product, quantity });
             showSuccess(`${quantity}x ${product.name} agregado`);
             clearPluInput();

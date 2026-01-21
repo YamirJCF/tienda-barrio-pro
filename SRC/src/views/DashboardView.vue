@@ -205,6 +205,7 @@ const navigateToNotifications = () => {
           icon-color="orange"
           title="Por Cobrar"
           :value="formattedTodayFiado"
+          :subtitle="`${salesStore.todayFiadoCount} fiados`"
         />
         <StatCard
           icon="inventory_2"

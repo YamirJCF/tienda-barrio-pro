@@ -85,6 +85,10 @@ export const useSalesStore = defineStore(
         .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
+    const todayFiadoCount = computed(() => {
+      return todaySales.value.filter((sale) => sale.paymentMethod === 'fiado').length;
+    });
+
     const totalFiado = computed(() => {
       return sales.value
         .filter((sale) => sale.paymentMethod === 'fiado')
@@ -224,6 +228,7 @@ export const useSalesStore = defineStore(
       todayCash,
       todayNequi,
       todayFiado,
+      todayFiadoCount,
       totalFiado,
       getSalesByDateRange,
       getDailyStats,
