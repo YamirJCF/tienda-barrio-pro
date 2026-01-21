@@ -3,17 +3,19 @@ import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { cartSerializer } from '../data/serializers';
 import { getLegalCashPayable, roundToNearest50 } from '../utils/currency';
+import { useInventoryStore } from './inventory';
 import type { CartItem, MeasurementUnit } from '../types';
 
 export const useCartStore = defineStore(
   'cart',
   () => {
     const items = ref<CartItem[]>([]);
+    const inventoryStore = useInventoryStore();
 
     // BR-03: Fiscal Calculation (Exact Math)
     const total = computed(() => {
+      // ... existing logic
       return items.value.reduce((acc, item) => {
-        // Use subtotal if available (for weighable items), otherwise calculate
         const itemTotal = item.subtotal || item.price.times(item.quantity);
         return acc.plus(itemTotal);
       }, new Decimal(0));
@@ -36,8 +38,27 @@ export const useCartStore = defineStore(
         .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
     });
 
+    // Helper: Validar stock disponible
+    const checkStockAvailability = (productId: string, quantityToAdd: Decimal | number): boolean => {
+      const product = inventoryStore.products.find(p => p.id === productId);
+      if (!product) return false; // Producto no encontrado en inventario local
+
+      const currentInCart = items.value.find(i => i.id === productId);
+      const cartQty = currentInCart
+        ? (currentInCart.quantity instanceof Decimal ? currentInCart.quantity : new Decimal(currentInCart.quantity))
+        : new Decimal(0);
+
+      const totalRequested = cartQty.plus(quantityToAdd);
+
+      // Stock actual en repositorio
+      const currentStock = product.stock instanceof Decimal ? product.stock : new Decimal(product.stock);
+
+      // Si el stock es infinito (servicio?) o configuración permite negativos:
+      // Por ahora, asumimos bloqueo estricto si stock < solicitado
+      return totalRequested.lte(currentStock);
+    };
+
     // Add regular item (integer quantity) with defensive validation
-    // WO-001: Changed id from number to string for UUID
     const addItem = (product: {
       id: string; // UUID
       name: string;
@@ -45,29 +66,27 @@ export const useCartStore = defineStore(
       quantity: number;
       measurementUnit?: MeasurementUnit;
       isWeighable?: boolean;
-    }) => {
+    }): boolean => {
       // ============================================
       // DEFENSIVE VALIDATION: Prevent NaN/Infinity
       // ============================================
       const qty = product.quantity;
 
-      // Check if quantity is a valid finite number greater than 0
       if (typeof qty !== 'number' || !Number.isFinite(qty) || qty <= 0) {
-        console.warn('[Cart] ⚠️ addItem rejected: Invalid quantity', {
-          productId: product.id,
-          productName: product.name,
-          receivedQuantity: qty,
-          type: typeof qty,
-        });
-        return; // Silently ignore corrupt data
+        console.warn('[Cart] ⚠️ addItem rejected: Invalid quantity');
+        return false;
+      }
+
+      // 🛑 Validar Stock
+      if (!checkStockAvailability(product.id, qty)) {
+        console.warn('[Cart] ⚠️ addItem rejected: Insufficient stock');
+        return false;
       }
 
       const existing = items.value.find((i) => i.id === product.id);
       if (existing) {
-        // Add the quantity from the product
         const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
         existing.quantity = currentQty.plus(qty);
-        // Recalculate subtotal if weighable
         if (existing.isWeighable) {
           existing.subtotal = existing.price.times(existing.quantity);
         }
@@ -81,22 +100,19 @@ export const useCartStore = defineStore(
           isWeighable: product.isWeighable || false,
         });
       }
+      return true;
     };
 
-    // Add weighable item with Decimal quantity and pre-calculated subtotal
-    // Includes defensive validation for Decimal values
-    // WO-001: Changed id from number to string for UUID
+    // Add weighable item
     const addWeighableItem = (item: {
-      id: string; // UUID
+      id: string;
       name: string;
       price: Decimal;
       quantity: Decimal;
-      unit: MeasurementUnit; // Keep 'unit' in input param for now to match caller, but map to measurementUnit
+      unit: MeasurementUnit;
       subtotal: Decimal;
-    }) => {
-      // ============================================
-      // DEFENSIVE VALIDATION: Prevent NaN/Infinity in Decimals
-      // ============================================
+    }): boolean => {
+      // Validation helpers...
       const isValidDecimal = (val: unknown): val is Decimal => {
         if (!(val instanceof Decimal)) return false;
         const num = val.toNumber();
@@ -104,22 +120,22 @@ export const useCartStore = defineStore(
       };
 
       if (!isValidDecimal(item.quantity) || !isValidDecimal(item.subtotal)) {
-        console.warn('[Cart] ⚠️ addWeighableItem rejected: Invalid Decimal values', {
-          productId: item.id,
-          productName: item.name,
-          quantity: item.quantity?.toString?.() ?? 'undefined',
-          subtotal: item.subtotal?.toString?.() ?? 'undefined',
-        });
-        return; // Silently ignore corrupt data
+        console.warn('[Cart] ⚠️ addWeighableItem rejected: Invalid Decimal values');
+        return false;
       }
 
-      // 🛡️ SPEC-010: Redondeo híbrido a múltiplos de $50 (defensivo)
-      // Uses imported utility
+      // 🛑 Validar Stock
+      if (!checkStockAvailability(item.id, item.quantity)) {
+        console.warn('[Cart] ⚠️ addWeighableItem rejected: Insufficient stock');
+        return false;
+      }
+
+      // 🛡️ SPEC-010: Redondeo híbrido
       const roundedSubtotal = roundToNearest50(item.subtotal);
 
       const existing = items.value.find((i) => i.id === item.id);
+      // ... same logic
       if (existing) {
-        // For weighable items, add quantity and subtotal
         const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
         existing.quantity = currentQty.plus(item.quantity);
         existing.subtotal = (existing.subtotal || new Decimal(0)).plus(roundedSubtotal);
@@ -129,14 +145,14 @@ export const useCartStore = defineStore(
           name: item.name,
           price: item.price,
           quantity: item.quantity,
-          measurementUnit: item.unit, // Map 'unit' to 'measurementUnit'
+          measurementUnit: item.unit,
           isWeighable: true,
           subtotal: roundedSubtotal,
         });
       }
+      return true;
     };
 
-    // WO-001: Changed id from number to string for UUID
     const removeItem = (id: string) => {
       const index = items.value.findIndex((i) => i.id === id);
       if (index !== -1) {

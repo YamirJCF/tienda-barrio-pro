@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
 import { useInventoryStore } from '../stores/inventory';
@@ -14,7 +14,7 @@ import { useNumpad } from '../composables/useNumpad';
 import { usePOS } from '../composables/usePOS';
 import { logger } from '../utils/logger';
 import { Decimal } from 'decimal.js';
-import CheckoutModal from '../components/CheckoutModal.vue';
+import CheckoutModal from '../components/sales/CheckoutModal.vue';
 import ProductSearchModal from '../components/ProductSearchModal.vue';
 import QuickNoteModal from '../components/QuickNoteModal.vue';
 import WeightCalculatorModal from '../components/WeightCalculatorModal.vue';
@@ -42,8 +42,8 @@ const formatQuantity = (qty: number | Decimal): string => {
 const isProcessing = ref(false); // Loading state for COBRAR button
 
 // Estado operativo de la tienda
-const isStoreClosed = computed(() => storeStatusStore.isClosed);
-const isCashRegisterClosed = computed(() => !salesStore.isStoreOpen);
+const isAdminLocked = computed(() => !authStore.storeOpenStatus);
+const isCashRegisterClosed = computed(() => storeStatusStore.isClosed);
 const isInventoryEmpty = computed(() => inventoryStore.totalProducts === 0);
 
 // Permisos del usuario
@@ -60,8 +60,8 @@ const blockingState = computed(() => {
       action: goToDashboard,
     };
   }
-  if (isStoreClosed.value) {
-    // Bloqueo por Switch Global (AdminHub)
+  if (isAdminLocked.value) {
+    // Bloqueo por Switch Global (AdminHub/Auth)
     return {
       title: 'Tienda Cerrada',
       message: 'La tienda está marcada como "Cerrada" en el panel de administración.',
@@ -139,7 +139,7 @@ const goToDashboard = () => {
 const addProductFromSearch = (product: Product) => {
   const quantity = pendingQuantity.value;
   cartStore.addItem({ ...product, quantity });
-  inventoryStore.updateStock(product.id, -quantity);
+// inventoryStore.updateStock(product.id, -quantity); // REMOVED: Stock deduction happens at Sale Complete
   resetModes();
 };
 
@@ -182,7 +182,7 @@ const handleWeightCalculatorConfirm = (data: {
     unit: data.product.measurementUnit,
     subtotal: data.subtotal,
   });
-  inventoryStore.updateStock(data.product.id, data.quantity.neg());
+// inventoryStore.updateStock(data.product.id, data.quantity.neg()); // REMOVED
 };
 
 // formatCurrency now provided by useCurrencyFormat composable
@@ -191,6 +191,21 @@ const handleCheckout = () => {
   if (cartStore.items.length === 0) return;
   showCheckout.value = true;
 };
+
+const handlePOSKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'F12') {
+    e.preventDefault();
+    handleCheckout();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handlePOSKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handlePOSKeydown);
+});
 
 // WO-001: Changed clientId from number to string
 const completeSale = async (paymentMethod: string, amountReceived?: Decimal, clientId?: string) => {
@@ -235,7 +250,7 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
 
     const change = amountReceived ? amountReceived.minus(effectiveTotal) : undefined;
 
-    salesStore.addSale({
+    await salesStore.addSale({
       items: saleItems,
       total: cartStore.total,
       roundingDifference,

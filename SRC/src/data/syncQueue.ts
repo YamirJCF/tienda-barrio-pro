@@ -25,7 +25,9 @@ const MAX_QUEUE_SIZE = 50;
 /**
  * Transaction Types
  */
-export type TransactionType = 'CREATE_SALE' | 'UPDATE_STOCK' | 'CREATE_CLIENT' | 'UPDATE_DEBT';
+export type TransactionType = 'CREATE_SALE' | 'UPDATE_STOCK' | 'CREATE_CLIENT' | 'UPDATE_DEBT' | 'CREATE_MOVEMENT';
+
+
 
 /**
  * Queue Item Structure
@@ -182,6 +184,13 @@ async function processItem(item: QueueItem): Promise<boolean> {
             // Direct Insert
             const { error: clientError } = await supabase.from('clients').insert(item.payload);
             if (clientError) throw clientError;
+            return true;
+
+        case 'CREATE_MOVEMENT':
+            // Direct Insert to inventory_movements
+            // Trigger trg_inventory_movement will update stock automatically
+            const { error: moveError } = await supabase.from('inventory_movements').insert(item.payload);
+            if (moveError) throw moveError;
             return true;
 
         // Add other cases as needed

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { useCartStore } from '../stores/cart';
-import { useClientsStore, type Client } from '../stores/clients';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useCartStore } from '../../stores/cart';
+import { useClientsStore, type Client } from '../../stores/clients';
 import Decimal from 'decimal.js';
 
 // Props
@@ -34,9 +34,7 @@ const formatQuantity = (qty: number | Decimal): string => {
   const num = qty instanceof Decimal ? qty.toNumber() : Number(qty);
   return Number.isInteger(num) ? num.toString() : num.toFixed(2);
 };
-// WO: initializeSampleData eliminada - SPEC-007
 
-// Computed
 // Computed
 const total = computed(() => cartStore.total);
 const formattedTotal = computed(() => cartStore.formattedTotal);
@@ -157,6 +155,27 @@ const completeSale = () => {
   activeMethod.value = 'cash';
   close();
 };
+
+const handleKeydown = (e: KeyboardEvent) => {
+  if (!props.modelValue) return;
+
+  if (e.key === 'Escape') {
+      close();
+  } else if (e.key === 'F12' || e.key === 'Enter') {
+      // Prevent F12 dev tools or Enter default
+      e.preventDefault(); 
+      completeSale();
+  }
+};
+
+onMounted(() => {
+    window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleKeydown);
+});
+
 </script>
 
 <template>
@@ -541,8 +560,8 @@ const completeSale = () => {
                   class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed"
                 >
                   Solicita al cliente el pago exacto de
-                  <strong class="text-gray-900 dark:text-white">{{ formattedTotal }}</strong
-                  >.
+                  <strong class="text-gray-900 dark:text-white">{{ formattedTotal }}</strong>
+                  .
                 </p>
               </div>
               <div class="w-full max-w-xs mt-4">
@@ -707,7 +726,7 @@ const completeSale = () => {
             >
               <span class="text-white/80 text-sm font-medium">Completar Venta</span>
               <div class="flex flex-col items-end leading-none">
-                <span class="text-white text-lg font-bold tracking-wide">CONFIRMAR</span>
+                <span class="text-white text-lg font-bold tracking-wide">CONFIRMAR (F12)</span>
                 <span
                   v-if="activeMethod === 'cash' && amountReceived"
                   class="text-white/80 text-xs font-medium"

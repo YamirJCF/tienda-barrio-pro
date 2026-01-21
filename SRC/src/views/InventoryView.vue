@@ -10,6 +10,7 @@ import NoPermissionOverlay from '../components/ui/NoPermissionOverlay.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useQuantityFormat } from '../composables/useQuantityFormat';
 import { Decimal } from 'decimal.js';
+import KardexModal from '../components/inventory/KardexModal.vue';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();
@@ -20,8 +21,6 @@ const { formatStock } = useQuantityFormat();
 // Permisos del usuario
 const canViewInventory = computed(() => authStore.canViewInventory);
 const canManageInventory = computed(() => authStore.currentUser?.permissions?.canManageInventory);
-
-// WO-006: initializeSampleData ELIMINADA - SPEC-007
 
 // State
 // Composable: Inventory Filter
@@ -40,6 +39,15 @@ const editingProductId = ref<string | undefined>(undefined);
 const showDeleteModal = ref(false);
 const productToDelete = ref<{ id: string; name: string } | null>(null);
 
+// T1.4: Kardex State
+const showKardexModal = ref(false);
+const kardexProduct = ref<{ id: string; name: string } | null>(null);
+
+// Lifecycle
+onMounted(() => {
+  inventoryStore.initialize();
+});
+
 // Methods
 const goToDashboard = () => {
   router.push('/');
@@ -50,14 +58,18 @@ const openNewProduct = () => {
   showProductModal.value = true;
 };
 
-// WO-001: Changed parameter type from number to string
 const openEditProduct = (id: string) => {
   editingProductId.value = id;
   showProductModal.value = true;
 };
 
-// WO-001: Changed parameter type from number to string
+const openKardex = (product: { id: string; name: string }) => {
+  kardexProduct.value = product;
+  showKardexModal.value = true;
+};
+
 const deleteProduct = (id: string) => {
+// ...
   const product = inventoryStore.products.find((p) => p.id === id);
   if (product) {
     productToDelete.value = { id, name: product.name };
@@ -189,11 +201,19 @@ const cancelDelete = () => {
                 product.measurementUnit || 'un'
               }}</span>
             </span>
-            <button v-if="canManageInventory"
-              class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              @click.stop="deleteProduct(product.id)">
-              <span class="material-symbols-outlined text-[20px]">delete</span>
-            </button>
+            <div class="flex gap-1">
+              <button
+                class="text-slate-400 hover:text-primary p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                @click.stop="openKardex(product)"
+                title="Ver historial">
+                <span class="material-symbols-outlined text-[20px]">history</span>
+              </button>
+              <button v-if="canManageInventory"
+                class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                @click.stop="deleteProduct(product.id)">
+                <span class="material-symbols-outlined text-[20px]">delete</span>
+              </button>
+            </div>
           </div>
         </article>
       </RecycleScroller>
@@ -220,6 +240,13 @@ const cancelDelete = () => {
 
     <!-- Product Form Modal -->
     <ProductFormModal v-model="showProductModal" :product-id="editingProductId" @saved="showProductModal = false" />
+    
+    <!-- T1.4: Kardex Modal -->
+    <KardexModal 
+      v-model="showKardexModal"
+      :product-id="kardexProduct?.id || null"
+      :product-name="kardexProduct?.name || null"
+    />
 
     <!-- T-010: Modal de Confirmación de Eliminación -->
     <Teleport to="body">

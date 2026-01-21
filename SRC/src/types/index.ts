@@ -18,6 +18,7 @@ export interface Product {
     createdAt?: string;
     updatedAt?: string;
     notifiedLowStock?: boolean;
+    storeId?: string; // Reference to Store
 }
 
 export interface CartItem {
