@@ -5,6 +5,7 @@ import { Store, Eye, EyeOff } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
 import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
+import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
 import { logger } from '../utils/logger';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
@@ -13,6 +14,16 @@ const router = useRouter();
 const authStore = useAuthStore();
 const employeesStore = useEmployeesStore();
 const { getFingerprint } = useDeviceFingerprint();
+
+// WO-004 T4.4: Rate Limiting
+const {
+  isLocked,
+  remainingAttempts,
+  remainingLockoutSeconds,
+  canAttempt,
+  recordFailedAttempt,
+  recordSuccess,
+} = useRateLimiter();
 
 const username = ref('');
 const password = ref('');
@@ -28,6 +39,13 @@ const credentialPlaceholder = computed(() => (isAdminLogin.value ? '••••
 const handleLogin = async () => {
   errorMessage.value = '';
   isLoading.value = true;
+
+  // WO-004 T4.4: Check rate limit before attempting
+  if (!canAttempt()) {
+    errorMessage.value = `🔒 Demasiados intentos. Espera ${remainingLockoutSeconds.value}s`;
+    isLoading.value = false;
+    return;
+  }
 
   try {
     // UX Delay
@@ -48,10 +66,12 @@ const handleLogin = async () => {
         // Admin siempre tiene acceso completo
         authStore.setDeviceStatus('approved');
         authStore.setStoreOpenStatus(true); // Admins controlan la tienda
+        recordSuccess(); // WO-004 T4.4: Reset rate limiter on success
         router.push('/');
         return;
       }
-      errorMessage.value = 'Correo o contraseña incorrectos';
+      recordFailedAttempt(); // WO-004 T4.4: Record failed attempt
+      errorMessage.value = `Correo o contraseña incorrectos (${remainingAttempts.value} intentos restantes)`;
     } else {
       // =============================================
       // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos
@@ -103,11 +123,13 @@ const handleLogin = async () => {
           authStore.setStoreOpenStatus(mockServerResponse.store_state?.is_open ?? false);
         }
 
+        recordSuccess(); // WO-004 T4.4: Reset rate limiter on success
         router.push('/');
         return;
       }
 
-      errorMessage.value = 'Usuario o PIN incorrectos';
+      recordFailedAttempt(); // WO-004 T4.4: Record failed attempt
+      errorMessage.value = `Usuario o PIN incorrectos (${remainingAttempts.value} intentos restantes)`;
     }
   } catch (error) {
     console.error('[Login] Error:', error);

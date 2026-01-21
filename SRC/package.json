@@ -13,6 +13,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.91.0",
     "decimal.js": "^10.6.0",
     "lucide-vue-next": "^0.460.0",
     "pinia": "^3.0.4",
