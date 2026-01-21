@@ -4,37 +4,39 @@ import { Decimal } from 'decimal.js';
 import { salesSerializer } from '../data/serializers';
 
 export interface Sale {
-    id: number;
-    items: SaleItem[];
-    total: Decimal;          // Fiscal Total (Exact)
-    roundingDifference?: Decimal; // Legal Adjustment (always negative or zero)
-    effectiveTotal: Decimal; // Amount actually payable (Cash Total or Fiscal Total)
-    paymentMethod: 'cash' | 'nequi' | 'fiado';
-    amountReceived?: Decimal;
-    change?: Decimal;
-    clientId?: number; // For fiado payments
-    timestamp: string;
-    date: string; // YYYY-MM-DD for grouping
+  id: number;
+  items: SaleItem[];
+  total: Decimal; // Fiscal Total (Exact)
+  roundingDifference?: Decimal; // Legal Adjustment (always negative or zero)
+  effectiveTotal: Decimal; // Amount actually payable (Cash Total or Fiscal Total)
+  paymentMethod: 'cash' | 'nequi' | 'fiado';
+  amountReceived?: Decimal;
+  change?: Decimal;
+  clientId?: number; // For fiado payments
+  timestamp: string;
+  date: string; // YYYY-MM-DD for grouping
 }
 
 export interface SaleItem {
-    productId: number;
-    productName: string;
-    quantity: number;
-    price: Decimal;
-    subtotal: Decimal;
+  productId: number;
+  productName: string;
+  quantity: number;
+  price: Decimal;
+  subtotal: Decimal;
 }
 
 export interface DailyStats {
-    date: string;
-    totalSales: Decimal;
-    salesCount: number;
-    cashSales: Decimal;
-    nequiSales: Decimal;
-    fiadoSales: Decimal;
+  date: string;
+  totalSales: Decimal;
+  salesCount: number;
+  cashSales: Decimal;
+  nequiSales: Decimal;
+  fiadoSales: Decimal;
 }
 
-export const useSalesStore = defineStore('sales', () => {
+export const useSalesStore = defineStore(
+  'sales',
+  () => {
     const sales = ref<Sale[]>([]);
     const nextId = ref(1);
     const isStoreOpen = ref(false);
@@ -43,160 +45,159 @@ export const useSalesStore = defineStore('sales', () => {
 
     // Computed
     const todayDate = computed(() => {
-        const now = new Date();
-        return now.toISOString().split('T')[0];
+      const now = new Date();
+      return now.toISOString().split('T')[0];
     });
 
     const todaySales = computed(() => {
-        return sales.value.filter(sale => sale.date === todayDate.value);
+      return sales.value.filter((sale) => sale.date === todayDate.value);
     });
 
     const todayTotal = computed(() => {
-        return todaySales.value.reduce((acc, sale) => acc.plus(sale.total), new Decimal(0));
+      return todaySales.value.reduce((acc, sale) => acc.plus(sale.total), new Decimal(0));
     });
 
     const todayCount = computed(() => todaySales.value.length);
 
     const todayCash = computed(() => {
-        return todaySales.value
-            .filter(sale => sale.paymentMethod === 'cash')
-            .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
+      return todaySales.value
+        .filter((sale) => sale.paymentMethod === 'cash')
+        .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
     const todayNequi = computed(() => {
-        return todaySales.value
-            .filter(sale => sale.paymentMethod === 'nequi')
-            .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
+      return todaySales.value
+        .filter((sale) => sale.paymentMethod === 'nequi')
+        .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
     const todayFiado = computed(() => {
-        return todaySales.value
-            .filter(sale => sale.paymentMethod === 'fiado')
-            .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
+      return todaySales.value
+        .filter((sale) => sale.paymentMethod === 'fiado')
+        .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
     const totalFiado = computed(() => {
-        return sales.value
-            .filter(sale => sale.paymentMethod === 'fiado')
-            .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
+      return sales.value
+        .filter((sale) => sale.paymentMethod === 'fiado')
+        .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
     // Get sales by date range
     const getSalesByDateRange = (startDate: string, endDate: string) => {
-        return sales.value.filter(sale =>
-            sale.date >= startDate && sale.date <= endDate
-        );
+      return sales.value.filter((sale) => sale.date >= startDate && sale.date <= endDate);
     };
 
     // Get daily stats for a date range
     const getDailyStats = (startDate: string, endDate: string): DailyStats[] => {
-        const salesInRange = getSalesByDateRange(startDate, endDate);
-        const statsByDate: Record<string, DailyStats> = {};
+      const salesInRange = getSalesByDateRange(startDate, endDate);
+      const statsByDate: Record<string, DailyStats> = {};
 
-        salesInRange.forEach(sale => {
-            if (!statsByDate[sale.date]) {
-                statsByDate[sale.date] = {
-                    date: sale.date,
-                    totalSales: new Decimal(0),
-                    salesCount: 0,
-                    cashSales: new Decimal(0),
-                    nequiSales: new Decimal(0),
-                    fiadoSales: new Decimal(0),
-                };
-            }
+      salesInRange.forEach((sale) => {
+        if (!statsByDate[sale.date]) {
+          statsByDate[sale.date] = {
+            date: sale.date,
+            totalSales: new Decimal(0),
+            salesCount: 0,
+            cashSales: new Decimal(0),
+            nequiSales: new Decimal(0),
+            fiadoSales: new Decimal(0),
+          };
+        }
 
-            const stats = statsByDate[sale.date];
-            stats.totalSales = stats.totalSales.plus(sale.total);
-            stats.salesCount++;
+        const stats = statsByDate[sale.date];
+        stats.totalSales = stats.totalSales.plus(sale.total);
+        stats.salesCount++;
 
-            if (sale.paymentMethod === 'cash') {
-                stats.cashSales = stats.cashSales.plus(sale.effectiveTotal);
-            } else if (sale.paymentMethod === 'nequi') {
-                stats.nequiSales = stats.nequiSales.plus(sale.effectiveTotal);
-            } else if (sale.paymentMethod === 'fiado') {
-                stats.fiadoSales = stats.fiadoSales.plus(sale.effectiveTotal);
-            }
-        });
+        if (sale.paymentMethod === 'cash') {
+          stats.cashSales = stats.cashSales.plus(sale.effectiveTotal);
+        } else if (sale.paymentMethod === 'nequi') {
+          stats.nequiSales = stats.nequiSales.plus(sale.effectiveTotal);
+        } else if (sale.paymentMethod === 'fiado') {
+          stats.fiadoSales = stats.fiadoSales.plus(sale.effectiveTotal);
+        }
+      });
 
-        return Object.values(statsByDate).sort((a, b) => b.date.localeCompare(a.date));
+      return Object.values(statsByDate).sort((a, b) => b.date.localeCompare(a.date));
     };
 
     // Methods
     const openStore = (cashAmount: Decimal) => {
-        isStoreOpen.value = true;
-        openingCash.value = cashAmount;
-        currentCash.value = cashAmount;
+      isStoreOpen.value = true;
+      openingCash.value = cashAmount;
+      currentCash.value = cashAmount;
     };
 
     const closeStore = () => {
-        // Generate notification for cash close
-        import('./notificationsStore').then(({ useNotificationsStore }) => {
-            const notificationsStore = useNotificationsStore();
-            const balance = currentCash.value.minus(openingCash.value);
-            notificationsStore.addNotification({
-                type: 'finance',
-                icon: 'payments',
-                title: 'Cierre de Caja',
-                message: `Arqueo completado. Balance: $${balance.toFixed(0)}`,
-                isRead: false,
-            });
+      // Generate notification for cash close
+      import('./notificationsStore').then(({ useNotificationsStore }) => {
+        const notificationsStore = useNotificationsStore();
+        const balance = currentCash.value.minus(openingCash.value);
+        notificationsStore.addNotification({
+          type: 'finance',
+          icon: 'payments',
+          title: 'Cierre de Caja',
+          message: `Arqueo completado. Balance: $${balance.toFixed(0)}`,
+          isRead: false,
         });
+      });
 
-        isStoreOpen.value = false;
-        openingCash.value = new Decimal(0);
-        currentCash.value = new Decimal(0);
+      isStoreOpen.value = false;
+      openingCash.value = new Decimal(0);
+      currentCash.value = new Decimal(0);
     };
 
     const addSale = (saleData: Omit<Sale, 'id' | 'timestamp' | 'date'>) => {
-        const now = new Date();
-        const newSale: Sale = {
-            ...saleData,
-            id: nextId.value++,
-            timestamp: now.toISOString(),
-            date: now.toISOString().split('T')[0],
-        };
+      const now = new Date();
+      const newSale: Sale = {
+        ...saleData,
+        id: nextId.value++,
+        timestamp: now.toISOString(),
+        date: now.toISOString().split('T')[0],
+      };
 
-        sales.value.push(newSale);
+      sales.value.push(newSale);
 
-        // Update current cash if cash payment
-        // Use effectiveTotal because that's what physically enters the drawer
-        if (newSale.paymentMethod === 'cash') {
-            currentCash.value = currentCash.value.plus(newSale.effectiveTotal);
-        }
+      // Update current cash if cash payment
+      // Use effectiveTotal because that's what physically enters the drawer
+      if (newSale.paymentMethod === 'cash') {
+        currentCash.value = currentCash.value.plus(newSale.effectiveTotal);
+      }
 
-        return newSale;
+      return newSale;
     };
 
     const getSaleById = (id: number) => {
-        return sales.value.find(sale => sale.id === id);
+      return sales.value.find((sale) => sale.id === id);
     };
 
     return {
-        sales,
-        nextId,
-        isStoreOpen,
-        openingCash,
-        currentCash,
-        todayDate,
-        todaySales,
-        todayTotal,
-        todayCount,
-        todayCash,
-        todayNequi,
-        todayFiado,
-        totalFiado,
-        getSalesByDateRange,
-        getDailyStats,
-        openStore,
-        closeStore,
-        addSale,
-        getSaleById,
+      sales,
+      nextId,
+      isStoreOpen,
+      openingCash,
+      currentCash,
+      todayDate,
+      todaySales,
+      todayTotal,
+      todayCount,
+      todayCash,
+      todayNequi,
+      todayFiado,
+      totalFiado,
+      getSalesByDateRange,
+      getDailyStats,
+      openStore,
+      closeStore,
+      addSale,
+      getSaleById,
     };
-}, {
+  },
+  {
     persist: {
-        key: 'tienda-sales',
-        storage: localStorage,
-        serializer: salesSerializer,
+      key: 'tienda-sales',
+      storage: localStorage,
+      serializer: salesSerializer,
     },
-});
-
+  },
+);

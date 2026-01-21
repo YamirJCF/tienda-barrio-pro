@@ -9,7 +9,7 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  'add': [item: { name: string; price: number }];
+  add: [item: { name: string; price: number }];
 }>();
 
 // State
@@ -30,7 +30,7 @@ const resetForm = () => {
 
 const addItem = () => {
   if (!itemName.value.trim() || !itemPrice.value) return;
-  
+
   emit('add', {
     name: itemName.value.trim(),
     price: parseFloat(itemPrice.value),
@@ -39,19 +39,20 @@ const addItem = () => {
 };
 
 const isValid = () => {
-  return itemName.value.trim() !== '' && 
-         itemPrice.value !== '' && 
-         parseFloat(itemPrice.value) > 0;
+  return itemName.value.trim() !== '' && itemPrice.value !== '' && parseFloat(itemPrice.value) > 0;
 };
 
 // Focus input when modal opens
-watch(() => props.modelValue, (isOpen) => {
-  if (isOpen) {
-    setTimeout(() => {
-      nameInput.value?.focus();
-    }, 100);
-  }
-});
+watch(
+  () => props.modelValue,
+  (isOpen) => {
+    if (isOpen) {
+      setTimeout(() => {
+        nameInput.value?.focus();
+      }, 100);
+    }
+  },
+);
 </script>
 
 <template>
@@ -64,21 +65,25 @@ watch(() => props.modelValue, (isOpen) => {
       >
         <!-- Backdrop -->
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" @click="close"></div>
-        
+
         <!-- Modal -->
-        <div class="relative w-full max-w-md bg-white dark:bg-background-dark rounded-t-2xl shadow-2xl flex flex-col animate-slide-up">
+        <div
+          class="relative w-full max-w-md bg-white dark:bg-background-dark rounded-t-2xl shadow-2xl flex flex-col animate-slide-up"
+        >
           <!-- Header -->
           <div class="border-b border-gray-200 dark:border-gray-700 rounded-t-2xl">
             <!-- Drag Handle -->
             <div class="flex justify-center pt-3 pb-2 cursor-pointer" @click="close">
               <div class="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600"></div>
             </div>
-            
+
             <!-- Title -->
             <div class="flex items-center justify-between px-4 pb-3">
               <div class="flex items-center gap-2">
                 <span class="material-symbols-outlined text-primary text-xl">edit_note</span>
-                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Agregar Nota / Varios</h2>
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white">
+                  Agregar Nota / Varios
+                </h2>
               </div>
               <button
                 class="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -93,7 +98,9 @@ watch(() => props.modelValue, (isOpen) => {
           <div class="p-4 space-y-4">
             <!-- Description -->
             <div>
-              <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+              <label
+                class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5"
+              >
                 Descripción
               </label>
               <input
@@ -157,8 +164,12 @@ watch(() => props.modelValue, (isOpen) => {
 }
 
 @keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .animate-slide-up {

@@ -9,7 +9,7 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  'save': [note: string];
+  save: [note: string];
 }>();
 
 // State
@@ -30,11 +30,14 @@ const clear = () => {
 };
 
 // Sync with current note when modal opens
-watch(() => props.modelValue, (isOpen) => {
-  if (isOpen) {
-    noteText.value = props.currentNote || '';
-  }
-});
+watch(
+  () => props.modelValue,
+  (isOpen) => {
+    if (isOpen) {
+      noteText.value = props.currentNote || '';
+    }
+  },
+);
 </script>
 
 <template>
@@ -47,26 +50,24 @@ watch(() => props.modelValue, (isOpen) => {
       >
         <!-- Backdrop -->
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]" @click="close"></div>
-        
+
         <!-- Modal -->
-        <div class="relative w-full max-w-md bg-white dark:bg-surface-dark rounded-t-3xl shadow-2xl flex flex-col animate-slide-up">
+        <div
+          class="relative w-full max-w-md bg-white dark:bg-surface-dark rounded-t-3xl shadow-2xl flex flex-col animate-slide-up"
+        >
           <!-- Drag Handle -->
           <div class="flex justify-center pt-3 pb-2 cursor-pointer" @click="close">
             <div class="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600"></div>
           </div>
-          
+
           <!-- Header -->
           <div class="px-4 pb-3 flex items-center justify-between">
             <h3 class="text-lg font-bold text-slate-900 dark:text-white">Nota del Ticket</h3>
-            <button 
-              v-if="noteText"
-              @click="clear"
-              class="text-red-500 text-sm font-medium"
-            >
+            <button v-if="noteText" @click="clear" class="text-red-500 text-sm font-medium">
               Limpiar
             </button>
           </div>
-          
+
           <!-- Content -->
           <div class="px-4 pb-4">
             <textarea
@@ -75,11 +76,16 @@ watch(() => props.modelValue, (isOpen) => {
               class="w-full h-32 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm resize-none"
               autofocus
             ></textarea>
-            
+
             <!-- Suggested Notes -->
             <div class="flex flex-wrap gap-2 mt-3">
-              <button 
-                v-for="suggestion in ['Sin bolsa', 'Entrega después', 'Cliente frecuente', 'Pendiente']"
+              <button
+                v-for="suggestion in [
+                  'Sin bolsa',
+                  'Entrega después',
+                  'Cliente frecuente',
+                  'Pendiente',
+                ]"
                 :key="suggestion"
                 @click="noteText = noteText ? `${noteText}, ${suggestion}` : suggestion"
                 class="px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-medium hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 transition-all"
@@ -88,7 +94,7 @@ watch(() => props.modelValue, (isOpen) => {
               </button>
             </div>
           </div>
-          
+
           <!-- Actions -->
           <div class="px-4 pb-6 flex gap-2">
             <button
@@ -123,8 +129,12 @@ watch(() => props.modelValue, (isOpen) => {
 }
 
 @keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .animate-slide-up {

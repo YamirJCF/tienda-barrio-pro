@@ -25,7 +25,9 @@ const totalDebt = computed(() => {
   return clientsStore.totalDebt;
 });
 
-const canManageClients = computed(() => authStore.isAdmin || authStore.currentUser?.permissions?.canManageClients);
+const canManageClients = computed(
+  () => authStore.isAdmin || authStore.currentUser?.permissions?.canManageClients,
+);
 
 // Generate initials and color from name
 const getInitials = (name: string) => {
@@ -51,12 +53,15 @@ const getColor = (name: string) => {
 
 // Methods
 const formatCurrency = (val: Decimal) => {
-  return `$${val.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+  return `$${val
+    .toDecimalPlaces(0)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 };
 
 const formatCedula = (cedula: string) => {
   // Format as 1.020.304
-  return cedula.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return cedula.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
 
 const goToDashboard = () => {
@@ -82,18 +87,26 @@ const handleClientSaved = () => {
 <template>
   <div class="flex flex-col h-screen bg-background-light dark:bg-background-dark pb-24">
     <header
-      class="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 pb-2">
+      class="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 pb-2"
+    >
       <div class="flex items-center px-4 pt-4 pb-2 justify-between">
         <div class="flex items-center gap-2">
-          <button @click="goToDashboard" aria-label="Volver al Dashboard"
-            class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <button
+            @click="goToDashboard"
+            aria-label="Volver al Dashboard"
+            class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
             <span class="material-symbols-outlined">arrow_back</span>
           </button>
           <h2 class="text-slate-900 dark:text-white text-xl font-bold">Cartera de Clientes</h2>
         </div>
-        <div v-if="totalDebt.gt(0)"
-          class="bg-red-100 dark:bg-red-900/30 px-3 py-1.5 rounded-full flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[16px]">warning</span>
+        <div
+          v-if="totalDebt.gt(0)"
+          class="bg-red-100 dark:bg-red-900/30 px-3 py-1.5 rounded-full flex items-center gap-1.5"
+        >
+          <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[16px]"
+            >warning</span
+          >
           <span class="text-red-700 dark:text-red-300 text-xs font-bold whitespace-nowrap">
             Total: {{ formatCurrency(totalDebt) }}
           </span>
@@ -104,27 +117,41 @@ const handleClientSaved = () => {
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <span class="material-symbols-outlined text-gray-400 text-[20px]">search</span>
           </div>
-          <input v-model="searchQuery" type="text"
+          <input
+            v-model="searchQuery"
+            type="text"
             class="block w-full rounded-xl border-none bg-white dark:bg-slate-800 py-3 pl-10 pr-4 text-sm text-slate-900 dark:text-white shadow-sm placeholder-slate-400 focus:ring-2 focus:ring-primary"
-            placeholder="Buscar por nombre o cédula..." />
+            placeholder="Buscar por nombre o cédula..."
+          />
         </div>
       </div>
     </header>
 
     <!-- Empty State -->
-    <div v-if="filteredClients.length === 0" class="flex-1 flex flex-col items-center justify-center px-4 text-center">
+    <div
+      v-if="filteredClients.length === 0"
+      class="flex-1 flex flex-col items-center justify-center px-4 text-center"
+    >
       <div
-        class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4">
+        class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4"
+      >
         <span class="material-symbols-outlined text-[32px]">person_search</span>
       </div>
       <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
         {{ searchQuery ? 'No se encontraron clientes' : 'Sin clientes registrados' }}
       </h3>
       <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-        {{ searchQuery ? 'Intenta con otro término de búsqueda' : 'Agrega tu primer cliente para comenzar' }}
+        {{
+          searchQuery
+            ? 'Intenta con otro término de búsqueda'
+            : 'Agrega tu primer cliente para comenzar'
+        }}
       </p>
-      <button v-if="!searchQuery && canManageClients" @click="openNewClient"
-        class="mt-6 px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center gap-2">
+      <button
+        v-if="!searchQuery && canManageClients"
+        @click="openNewClient"
+        class="mt-6 px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center gap-2"
+      >
         <span class="material-symbols-outlined">person_add</span>
         Agregar Cliente
       </button>
@@ -132,28 +159,38 @@ const handleClientSaved = () => {
 
     <!-- Client List -->
     <main v-else class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-      <div v-for="client in filteredClients" :key="client.id"
+      <div
+        v-for="client in filteredClients"
+        :key="client.id"
         class="relative flex items-center gap-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-3 border-l-[6px] overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.99]"
-        :class="client.balance.gt(0) ? 'border-red-500' : 'border-emerald-500'" @click="openClientDetail(client.id)">
-        <div class="h-12 w-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg"
-          :class="getColor(client.name)">
+        :class="client.balance.gt(0) ? 'border-red-500' : 'border-emerald-500'"
+        @click="openClientDetail(client.id)"
+      >
+        <div
+          class="h-12 w-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg"
+          :class="getColor(client.name)"
+        >
           {{ getInitials(client.name) }}
         </div>
         <div class="flex flex-1 flex-col justify-center min-w-0">
-          <p class="text-slate-900 dark:text-white text-base font-bold truncate">{{ client.name }}</p>
-          <p class="text-gray-500 text-xs font-medium truncate">CC: {{ formatCedula(client.cedula) }}</p>
+          <p class="text-slate-900 dark:text-white text-base font-bold truncate">
+            {{ client.name }}
+          </p>
+          <p class="text-gray-500 text-xs font-medium truncate">
+            CC: {{ formatCedula(client.cedula) }}
+          </p>
         </div>
         <div class="flex flex-col items-end gap-1">
-          <p class="text-base font-bold leading-tight"
-            :class="client.balance.gt(0) ? 'text-red-600' : 'text-emerald-600'">
+          <p
+            class="text-base font-bold leading-tight"
+            :class="client.balance.gt(0) ? 'text-red-600' : 'text-emerald-600'"
+          >
             {{ client.balance.gt(0) ? '-' : '' }}{{ formatCurrency(client.balance.abs()) }}
           </p>
           <span v-if="client.balance.gt(0)" class="text-[10px] text-red-500 font-medium uppercase">
             Debe
           </span>
-          <span v-else class="text-[10px] text-emerald-600 font-medium uppercase">
-            Al día
-          </span>
+          <span v-else class="text-[10px] text-emerald-600 font-medium uppercase"> Al día </span>
         </div>
         <span class="material-symbols-outlined text-gray-400">chevron_right</span>
       </div>
@@ -161,8 +198,11 @@ const handleClientSaved = () => {
 
     <!-- FAB -->
     <div class="absolute bottom-24 right-4 z-40">
-      <button v-if="canManageClients" @click="openNewClient"
-        class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90">
+      <button
+        v-if="canManageClients"
+        @click="openNewClient"
+        class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90"
+      >
         <span class="material-symbols-outlined text-[32px]">add</span>
       </button>
     </div>
@@ -170,6 +210,10 @@ const handleClientSaved = () => {
     <BottomNav />
 
     <!-- Client Form Modal -->
-    <ClientFormModal v-model="showClientModal" :client-id="editingClientId" @saved="handleClientSaved" />
+    <ClientFormModal
+      v-model="showClientModal"
+      :client-id="editingClientId"
+      @saved="handleClientSaved"
+    />
   </div>
 </template>

@@ -10,21 +10,38 @@
         <!-- Current PIN (only for change mode) -->
         <div v-if="mode === 'change' && currentStep === 'current'" class="pin-step">
           <p class="step-label">Ingresa tu PIN actual:</p>
-          <PinKeypad :length="6" :error="error" :disabled="loading" @complete="handleCurrentPinComplete" />
+          <PinKeypad
+            :length="6"
+            :error="error"
+            :disabled="loading"
+            @complete="handleCurrentPinComplete"
+          />
         </div>
 
         <!-- New PIN -->
         <div v-if="currentStep === 'new'" class="pin-step">
-          <p class="step-label">{{ mode === 'setup' ? 'Crea un PIN de 6 dígitos:' : 'Ingresa tu nuevo PIN:' }}</p>
-          <PinKeypad ref="newPinKeypad" :length="6" :error="error" :disabled="loading"
-            @complete="handleNewPinComplete" />
+          <p class="step-label">
+            {{ mode === 'setup' ? 'Crea un PIN de 6 dígitos:' : 'Ingresa tu nuevo PIN:' }}
+          </p>
+          <PinKeypad
+            ref="newPinKeypad"
+            :length="6"
+            :error="error"
+            :disabled="loading"
+            @complete="handleNewPinComplete"
+          />
         </div>
 
         <!-- Confirm PIN -->
         <div v-if="currentStep === 'confirm'" class="pin-step">
           <p class="step-label">Confirma tu PIN:</p>
-          <PinKeypad ref="confirmPinKeypad" :length="6" :error="error" :disabled="loading"
-            @complete="handleConfirmPinComplete" />
+          <PinKeypad
+            ref="confirmPinKeypad"
+            :length="6"
+            :error="error"
+            :disabled="loading"
+            @complete="handleConfirmPinComplete"
+          />
           <button class="btn-back" @click="goBack">← Volver</button>
         </div>
 
@@ -112,7 +129,7 @@ const handleConfirmPinComplete = async (confirmPin: string) => {
   try {
     const result = await cashControlStore.setupPin(
       newPin.value,
-      props.mode === 'change' ? currentPin.value : undefined
+      props.mode === 'change' ? currentPin.value : undefined,
     );
 
     if (result.success) {
@@ -152,11 +169,14 @@ const resetModal = () => {
   error.value = null;
 };
 
-watch(() => props.isVisible, (visible) => {
-  if (visible) {
-    resetModal();
-  }
-});
+watch(
+  () => props.isVisible,
+  (visible) => {
+    if (visible) {
+      resetModal();
+    }
+  },
+);
 </script>
 
 <style scoped>

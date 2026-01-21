@@ -1,6 +1,6 @@
 /**
  * useDeviceFingerprint.ts
- * 
+ *
  * SPEC-005: Generación de huella digital del dispositivo
  * Algoritmo: SHA-256(userAgent + screen + timezone + language)
  * Sin dependencias externas.
@@ -23,7 +23,7 @@ async function generateFingerprint(): Promise<string> {
     `${screen.width}x${screen.height}x${screen.colorDepth}`,
     Intl.DateTimeFormat().resolvedOptions().timeZone,
     navigator.language,
-    new Date().getTimezoneOffset().toString()
+    new Date().getTimezoneOffset().toString(),
   ].join('|');
 
   // Usar Web Crypto API para SHA-256
@@ -33,7 +33,7 @@ async function generateFingerprint(): Promise<string> {
 
   // Convertir a hex string
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 
   return hashHex;
 }
@@ -43,7 +43,6 @@ async function generateFingerprint(): Promise<string> {
  * El fingerprint se genera una sola vez y se cachea.
  */
 export function useDeviceFingerprint() {
-
   const getFingerprint = async (): Promise<string> => {
     // Retornar cache si existe
     if (cachedFingerprint.value) {
@@ -53,7 +52,7 @@ export function useDeviceFingerprint() {
     // Evitar generaciones paralelas
     if (isGenerating.value) {
       // Esperar a que termine la generación actual
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         const interval = setInterval(() => {
           if (cachedFingerprint.value) {
             clearInterval(interval);
@@ -85,7 +84,7 @@ export function useDeviceFingerprint() {
     fingerprint: readonly(cachedFingerprint),
     isGenerating: readonly(isGenerating),
     getFingerprint,
-    getShortFingerprint
+    getShortFingerprint,
   };
 }
 

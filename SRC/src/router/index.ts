@@ -23,37 +23,62 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     name: 'dashboard',
     component: DashboardView,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
   {
     path: '/login',
     name: 'login',
     component: LoginView,
-    meta: { guest: true }
+    meta: { guest: true },
   },
   {
     path: '/register-store',
     name: 'register-store',
     component: RegisterStoreView,
-    meta: { guest: true }
+    meta: { guest: true },
   },
   {
     path: '/forgot-password',
     name: 'forgot-password',
     component: ForgotPasswordView,
-    meta: { guest: true }
+    meta: { guest: true },
   },
   // Rutas Protegidas
   { path: '/admin', name: 'admin', component: AdminHubView, meta: { requiresAuth: true } },
   { path: '/pos', name: 'pos', component: POSView, meta: { requiresAuth: true } },
   { path: '/inventory', name: 'inventory', component: InventoryView, meta: { requiresAuth: true } },
   { path: '/clients', name: 'clients', component: ClientListView, meta: { requiresAuth: true } },
-  { path: '/clients/:id', name: 'client-detail', component: ClientDetailView, meta: { requiresAuth: true } },
-  { path: '/employees', name: 'employees', component: EmployeeManagerView, meta: { requiresAuth: true } },
-  { path: '/stock-entry', name: 'stock-entry', component: StockEntryView, meta: { requiresAuth: true } },
-  { path: '/cash-control', name: 'cash-control', component: CashControlView, meta: { requiresAuth: true } },
+  {
+    path: '/clients/:id',
+    name: 'client-detail',
+    component: ClientDetailView,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/employees',
+    name: 'employees',
+    component: EmployeeManagerView,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/stock-entry',
+    name: 'stock-entry',
+    component: StockEntryView,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/cash-control',
+    name: 'cash-control',
+    component: CashControlView,
+    meta: { requiresAuth: true },
+  },
   { path: '/expenses', name: 'expenses', component: ExpensesView, meta: { requiresAuth: true } },
-  { path: '/notifications', name: 'notifications', component: NotificationCenterView, meta: { requiresAuth: true } },
+  {
+    path: '/notifications',
+    name: 'notifications',
+    component: NotificationCenterView,
+    meta: { requiresAuth: true },
+  },
   // SPEC-009: Ruta de Historiales
   { path: '/history', name: 'history', component: HistoryView, meta: { requiresAuth: true } },
 ];
@@ -68,7 +93,7 @@ if (import.meta.env.DEV) {
     path: '/sys-audit',
     name: 'system-audit',
     component: () => import('../views/SystemAuditView.vue'), // Lazy loading
-    meta: { guest: true, devOnly: true }
+    meta: { guest: true, devOnly: true },
   });
 }
 

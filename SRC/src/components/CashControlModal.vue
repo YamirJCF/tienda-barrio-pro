@@ -11,8 +11,10 @@
       <div class="modal-content">
         <!-- STEP 1: Amount Entry -->
         <div v-if="currentStep === 'amount'" class="step-amount">
-          <p class="step-label">{{ mode === 'open' ? 'Monto inicial en caja:' : '¿Cuánto efectivo hay en caja?' }}</p>
-          
+          <p class="step-label">
+            {{ mode === 'open' ? 'Monto inicial en caja:' : '¿Cuánto efectivo hay en caja?' }}
+          </p>
+
           <!-- Daily Summary (only for close) -->
           <div v-if="mode === 'close'" class="daily-summary">
             <p>Resumen del día:</p>
@@ -27,7 +29,13 @@
 
           <!-- Numeric Keypad -->
           <div class="numeric-keypad">
-            <button v-for="num in ['1','2','3','4','5','6','7','8','9']" :key="num" @click="addDigit(num)">{{ num }}</button>
+            <button
+              v-for="num in ['1', '2', '3', '4', '5', '6', '7', '8', '9']"
+              :key="num"
+              @click="addDigit(num)"
+            >
+              {{ num }}
+            </button>
             <button @click="clearAmount">🗑️</button>
             <button @click="addDigit('0')">0</button>
             <button @click="addDigit('00')">00</button>
@@ -74,7 +82,7 @@
           <div class="divider"></div>
 
           <p class="pin-label">Ingresa tu PIN:</p>
-          
+
           <!-- Lockout Warning -->
           <div v-if="isLocked" class="lockout-warning">
             <p>⏳ Demasiados intentos</p>
@@ -97,7 +105,10 @@
           <div class="success-icon">✅</div>
           <h3>¡Caja {{ mode === 'open' ? 'Abierta' : 'Cerrada' }}!</h3>
           <div class="success-details">
-            <p>{{ mode === 'open' ? 'Monto inicial:' : 'Monto declarado:' }} {{ formatCurrency(amount) }}</p>
+            <p>
+              {{ mode === 'open' ? 'Monto inicial:' : 'Monto declarado:' }}
+              {{ formatCurrency(amount) }}
+            </p>
             <p v-if="mode === 'close'">Diferencia: {{ formatCurrency(difference) }}</p>
             <p>Registrado por: {{ authorizedByName }}</p>
             <p>Hora: {{ formatTime(new Date()) }}</p>
@@ -156,7 +167,7 @@ const headerTitle = computed(() => {
   return '';
 });
 
-const pinLength = computed(() => authStore.isAdmin ? 6 : 4);
+const pinLength = computed(() => (authStore.isAdmin ? 6 : 4));
 
 const authorizedByName = computed(() => authStore.currentUser?.name ?? 'Usuario');
 
@@ -177,7 +188,7 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
     currency: 'COP',
-    minimumFractionDigits: 0
+    minimumFractionDigits: 0,
   }).format(value);
 };
 
@@ -248,7 +259,7 @@ const handlePinComplete = async (pin: string) => {
       currentStep.value = 'success';
     } else {
       pinError.value = result.error ?? 'Error desconocido';
-      
+
       // Check if locked
       if (cashControlStore.isLocked) {
         startLockCountdown();
@@ -294,13 +305,16 @@ const resetModal = () => {
 };
 
 // Watch for visibility changes
-watch(() => props.isVisible, async (visible) => {
-  if (visible) {
-    resetModal();
-    // Check PIN status
-    await cashControlStore.checkPinConfigured();
-  }
-});
+watch(
+  () => props.isVisible,
+  async (visible) => {
+    if (visible) {
+      resetModal();
+      // Check PIN status
+      await cashControlStore.checkPinConfigured();
+    }
+  },
+);
 </script>
 
 <style scoped>
@@ -460,9 +474,15 @@ watch(() => props.isVisible, async (visible) => {
   margin-bottom: 0.5rem;
 }
 
-.difference.balanced { color: #10b981; }
-.difference.surplus { color: #3b82f6; }
-.difference.deficit { color: #ef4444; }
+.difference.balanced {
+  color: #10b981;
+}
+.difference.surplus {
+  color: #3b82f6;
+}
+.difference.deficit {
+  color: #ef4444;
+}
 
 .divider {
   height: 1px;
@@ -529,7 +549,7 @@ watch(() => props.isVisible, async (visible) => {
 .zero-confirm-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -564,7 +584,7 @@ watch(() => props.isVisible, async (visible) => {
 .loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255,255,255,0.8);
+  background: rgba(255, 255, 255, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -580,6 +600,8 @@ watch(() => props.isVisible, async (visible) => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

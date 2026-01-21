@@ -4,11 +4,13 @@ import { ref, computed } from 'vue';
 /**
  * Store para el estado OPERATIVO de la tienda.
  * Diferente del estado de la CAJA (salesStore.isStoreOpen).
- * 
+ *
  * - isOperational: La tienda está disponible para operar (ventas, etc.)
  * - Cerrar Tienda: Bloquea ventas nuevas, marca tienda como "fuera de servicio"
  */
-export const useStoreStatusStore = defineStore('storeStatus', () => {
+export const useStoreStatusStore = defineStore(
+  'storeStatus',
+  () => {
     // Estado operativo de la tienda (diferente de la caja)
     const isOperational = ref(true);
     const closedReason = ref('');
@@ -19,37 +21,39 @@ export const useStoreStatusStore = defineStore('storeStatus', () => {
 
     // Methods
     const closeStore = (reason: string = 'Cierre temporal') => {
-        isOperational.value = false;
-        closedReason.value = reason;
-        closedAt.value = new Date().toISOString();
+      isOperational.value = false;
+      closedReason.value = reason;
+      closedAt.value = new Date().toISOString();
     };
 
     const openStore = () => {
-        isOperational.value = true;
-        closedReason.value = '';
-        closedAt.value = null;
+      isOperational.value = true;
+      closedReason.value = '';
+      closedAt.value = null;
     };
 
     const toggleStatus = () => {
-        if (isOperational.value) {
-            closeStore();
-        } else {
-            openStore();
-        }
+      if (isOperational.value) {
+        closeStore();
+      } else {
+        openStore();
+      }
     };
 
     return {
-        isOperational,
-        closedReason,
-        closedAt,
-        isClosed,
-        closeStore,
-        openStore,
-        toggleStatus,
+      isOperational,
+      closedReason,
+      closedAt,
+      isClosed,
+      closeStore,
+      openStore,
+      toggleStatus,
     };
-}, {
+  },
+  {
     persist: {
-        key: 'tienda-store-status',
-        storage: localStorage,
+      key: 'tienda-store-status',
+      storage: localStorage,
     },
-});
+  },
+);

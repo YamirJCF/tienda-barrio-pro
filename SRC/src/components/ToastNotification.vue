@@ -28,11 +28,17 @@ const getIcon = (notification: Notification) => {
 <template>
   <Teleport to="body">
     <!-- T-012: Movido de bottom-20 a top-20 para no bloquear botones del POS -->
-    <div class="fixed top-20 left-0 right-0 z-[100] flex flex-col items-center gap-2 pointer-events-none px-4">
+    <div
+      class="fixed top-20 left-0 right-0 z-[100] flex flex-col items-center gap-2 pointer-events-none px-4"
+    >
       <TransitionGroup name="toast">
-        <div v-for="notification in notifications" :key="notification.id"
+        <div
+          v-for="notification in notifications"
+          :key="notification.id"
           class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg max-w-sm w-full animate-slide-up"
-          :class="getTypeClasses(notification.type)" @click="dismiss(notification.id)">
+          :class="getTypeClasses(notification.type)"
+          @click="dismiss(notification.id)"
+        >
           <!-- Icon -->
           <span class="material-symbols-outlined text-xl shrink-0">
             {{ getIcon(notification) }}
@@ -44,8 +50,10 @@ const getIcon = (notification: Notification) => {
           </p>
 
           <!-- Close button -->
-          <button class="shrink-0 opacity-70 hover:opacity-100 transition-opacity"
-            @click.stop="dismiss(notification.id)">
+          <button
+            class="shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+            @click.stop="dismiss(notification.id)"
+          >
             <span class="material-symbols-outlined text-lg">close</span>
           </button>
         </div>

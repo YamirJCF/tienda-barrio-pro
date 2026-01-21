@@ -36,7 +36,7 @@ const emit = defineEmits<{
           {{ icon }}
         </span>
       </div>
-      
+
       <!-- Label -->
       <span class="text-sm font-medium text-slate-700 dark:text-slate-200">
         {{ label }}
@@ -44,10 +44,7 @@ const emit = defineEmits<{
     </div>
 
     <!-- Chevron -->
-    <span
-      v-if="showChevron !== false"
-      class="material-symbols-outlined text-slate-400"
-    >
+    <span v-if="showChevron !== false" class="material-symbols-outlined text-slate-400">
       chevron_right
     </span>
   </button>

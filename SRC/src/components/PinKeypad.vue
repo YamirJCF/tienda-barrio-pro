@@ -2,13 +2,13 @@
   <div class="pin-keypad">
     <!-- PIN Display -->
     <div class="pin-display" :class="{ 'has-error': error }">
-      <div 
-        v-for="(_, index) in length" 
-        :key="index" 
+      <div
+        v-for="(_, index) in length"
+        :key="index"
         class="pin-dot"
-        :class="{ 
-          'filled': index < pin.length,
-          'error': error && index < pin.length
+        :class="{
+          filled: index < pin.length,
+          error: error && index < pin.length,
         }"
       >
         <span v-if="index < pin.length" class="dot-filled">●</span>
@@ -23,9 +23,9 @@
 
     <!-- Keypad Grid -->
     <div class="keypad-grid" :class="{ disabled }">
-      <button 
-        v-for="num in numbers" 
-        :key="num" 
+      <button
+        v-for="num in numbers"
+        :key="num"
         class="keypad-btn"
         :disabled="disabled || pin.length >= length"
         @click="addDigit(num)"
@@ -33,14 +33,14 @@
         {{ num }}
       </button>
       <button class="keypad-btn empty"></button>
-      <button 
+      <button
         class="keypad-btn"
         :disabled="disabled || pin.length >= length"
         @click="addDigit('0')"
       >
         0
       </button>
-      <button 
+      <button
         class="keypad-btn backspace"
         :disabled="disabled || pin.length === 0"
         @click="deleteDigit"
@@ -54,17 +54,20 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 
-const props = withDefaults(defineProps<{
-  length?: number;
-  autoSubmit?: boolean;
-  disabled?: boolean;
-  error?: string | null;
-}>(), {
-  length: 6,
-  autoSubmit: true,
-  disabled: false,
-  error: null
-});
+const props = withDefaults(
+  defineProps<{
+    length?: number;
+    autoSubmit?: boolean;
+    disabled?: boolean;
+    error?: string | null;
+  }>(),
+  {
+    length: 6,
+    autoSubmit: true,
+    disabled: false,
+    error: null,
+  },
+);
 
 const emit = defineEmits<{
   complete: [pin: string];
@@ -76,7 +79,7 @@ const numbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
 const addDigit = (digit: string) => {
   if (props.disabled || pin.value.length >= props.length) return;
-  
+
   pin.value += digit;
   emit('change', pin.value);
 
@@ -97,12 +100,15 @@ const clear = () => {
 };
 
 // Watch for error to shake the display
-watch(() => props.error, (newError) => {
-  if (newError) {
-    // Clear PIN on error
-    pin.value = '';
-  }
-});
+watch(
+  () => props.error,
+  (newError) => {
+    if (newError) {
+      // Clear PIN on error
+      pin.value = '';
+    }
+  },
+);
 
 // Expose clear method for parent components
 defineExpose({ clear });
@@ -128,10 +134,19 @@ defineExpose({ clear });
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-8px); }
-  50% { transform: translateX(8px); }
-  75% { transform: translateX(-8px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-8px);
+  }
+  50% {
+    transform: translateX(8px);
+  }
+  75% {
+    transform: translateX(-8px);
+  }
 }
 
 .pin-dot {
@@ -153,9 +168,17 @@ defineExpose({ clear });
 }
 
 @keyframes popIn {
-  0% { transform: scale(0.5); opacity: 0; }
-  50% { transform: scale(1.2); }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .dot-empty {
@@ -174,8 +197,14 @@ defineExpose({ clear });
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-5px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .keypad-grid {

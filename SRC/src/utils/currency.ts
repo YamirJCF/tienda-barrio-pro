@@ -36,9 +36,9 @@ export const getMarginLoss = (price: Decimal | number): Decimal => {
  * @returns Rounded value to nearest 50
  */
 export const roundToNearest50 = (val: Decimal | number): Decimal => {
-    const value = typeof val === 'number' ? val : val.toNumber();
-    const remainder = value % 50;
-    return remainder <= 25
-        ? new Decimal(Math.floor(value / 50) * 50)
-        : new Decimal(Math.ceil(value / 50) * 50);
+  const value = typeof val === 'number' ? val : val.toNumber();
+  const remainder = value % 50;
+  return remainder <= 25
+    ? new Decimal(Math.floor(value / 50) * 50)
+    : new Decimal(Math.ceil(value / 50) * 50);
 };

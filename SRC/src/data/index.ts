@@ -11,15 +11,15 @@ export type { StorageKey } from './storageKeys';
 
 // Storage utilities
 export {
-    getStorageSize,
-    formatBytes,
-    clearStore,
-    clearAllData,
-    exportData,
-    downloadData,
-    importData,
-    debugLogAllData,
-    hasData,
-    getDataSummary,
+  getStorageSize,
+  formatBytes,
+  clearStore,
+  clearAllData,
+  exportData,
+  downloadData,
+  importData,
+  debugLogAllData,
+  hasData,
+  getDataSummary,
 } from './storageUtils';
 export type { StorageSnapshot } from './storageUtils';

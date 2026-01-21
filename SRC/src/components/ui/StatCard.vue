@@ -57,7 +57,9 @@ const colorClasses: Record<IconColor, { bg: string; text: string }> = {
 
     <!-- Content -->
     <div>
-      <p class="text-slate-500 dark:text-slate-400 text-[10px] font-semibold uppercase tracking-wide">
+      <p
+        class="text-slate-500 dark:text-slate-400 text-[10px] font-semibold uppercase tracking-wide"
+      >
         {{ title }}
       </p>
       <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ value }}</h3>

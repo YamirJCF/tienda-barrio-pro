@@ -31,7 +31,10 @@ const emit = defineEmits<{
 
       <!-- Message -->
       <p class="text-slate-400 text-sm mb-6">
-        {{ message || 'No tienes permiso para acceder a esta sección. Contacta a tu administrador si necesitas acceso.' }}
+        {{
+          message ||
+          'No tienes permiso para acceder a esta sección. Contacta a tu administrador si necesitas acceso.'
+        }}
       </p>
 
       <!-- Action Button -->
