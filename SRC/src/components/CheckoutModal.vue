@@ -36,15 +36,26 @@ const formatQuantity = (qty: number | Decimal): string => {
 // WO: initializeSampleData eliminada - SPEC-007
 
 // Computed
+// Computed
 const total = computed(() => cartStore.total);
 const formattedTotal = computed(() => cartStore.formattedTotal);
+
+// BR-04: Cash Payable Logic
+const effectiveTotal = computed(() => {
+  if (activeMethod.value === 'cash') {
+    return cartStore.totalCashPayable;
+  }
+  return total.value;
+});
+
+const roundingDifference = computed(() => cartStore.roundingDifference);
 
 const change = computed(() => {
   if (!amountReceived.value || activeMethod.value !== 'cash') {
     return new Decimal(0);
   }
   const received = new Decimal(amountReceived.value);
-  return received.minus(total.value);
+  return received.minus(effectiveTotal.value); // Use rounded total for change calc
 });
 
 const formattedChange = computed(() => {
@@ -97,7 +108,7 @@ const handleNumpad = (value: string) => {
 };
 
 const useExactAmount = () => {
-  amountReceived.value = total.value.toString();
+  amountReceived.value = effectiveTotal.value.toString();
 };
 
 const selectMethod = (method: PaymentMethod) => {
@@ -158,16 +169,35 @@ const completeSale = () => {
           <!-- Header (Total Summary) -->
           <header
             class="flex flex-col items-center justify-center py-4 bg-gray-50 dark:bg-background-dark border-b border-gray-100 dark:border-gray-800">
-            <h3 class="text-gray-500 dark:text-gray-400 text-sm font-semibold tracking-wide uppercase mb-1">
-              Total a Pagar
+
+            <!-- BR-03: Always show Fiscal Total as 'Total Factura' -->
+            <h3 class="text-gray-400 dark:text-gray-500 text-xs font-semibold tracking-wide uppercase mb-1">
+              Total Factura
             </h3>
-            <div class="flex items-baseline gap-1">
-              <span class="text-3xl font-bold text-gray-800 dark:text-white">$</span>
-              <span class="text-4xl font-black text-gray-900 dark:text-accent-green tracking-tight">
+            <div class="flex items-baseline gap-1" :class="{ 'opacity-60 scale-90': activeMethod === 'cash' }">
+              <span class="text-2xl font-bold text-gray-700 dark:text-gray-300">$</span>
+              <span class="text-3xl font-black text-gray-800 dark:text-gray-200 tracking-tight">
                 {{ total.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") }}
               </span>
             </div>
-            <span class="text-xs text-gray-400 mt-1">{{ cartStore.items.length }} producto(s)</span>
+
+            <!-- BR-04: Show Cash Payable if Adjusting -->
+            <div v-if="activeMethod === 'cash' && !total.equals(effectiveTotal)"
+              class="flex flex-col items-center mt-2 animate-slide-up">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="material-symbols-outlined text-red-500 text-md">trending_down</span>
+                <span class="text-red-500 font-bold text-xs">Ajuste Legal: ${{ roundingDifference.abs() }}</span>
+              </div>
+              <div
+                class="bg-emerald-100 dark:bg-emerald-900/30 px-4 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 transform scale-110">
+                <span class="text-emerald-800 dark:text-emerald-300 text-xs font-bold uppercase mr-2">A Pagar:</span>
+                <span class="text-emerald-900 dark:text-emerald-200 text-xl font-black">
+                  ${{ effectiveTotal.toDecimalPlaces(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") }}
+                </span>
+              </div>
+            </div>
+
+            <span class="text-xs text-gray-400 mt-2">{{ cartStore.items.length }} producto(s)</span>
           </header>
 
           <!-- Lista de Productos (Scrollable, No Editable) -->
@@ -183,7 +213,7 @@ const completeSale = () => {
               <button @click="isListExpanded = !isListExpanded"
                 class="text-xs text-primary hover:text-primary-dark font-medium flex items-center gap-1">
                 <span class="material-symbols-outlined text-sm">{{ isListExpanded ? 'expand_less' : 'expand_more'
-                  }}</span>
+                }}</span>
                 {{ isListExpanded ? 'Contraer' : 'Ver Todo' }} ({{ cartStore.items.length }})
               </button>
             </div>

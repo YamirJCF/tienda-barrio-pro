@@ -1,6 +1,6 @@
 # Mapa de Lógica Global - Tienda de Barrio Pro
 
-> **Última actualización:** 2026-01-15 (v11 - Agregado 03_UI_UX_DESIGN)  
+> **Última actualización:** 2026-01-20 (v12 - Backend Verification & Standards)  
 > **Rama:** master  
 > **Propósito:** Hoja de ruta para sincronización código ↔ documentación
 
@@ -44,11 +44,25 @@ prueba/
 ├── README.md           # Índice de la carpeta
 ├── dashboard.md        # ✅ [FINAL]
 ├── pos.md              # ✅ [FINAL]
-├── inventory.md        # ✅ [FINAL]
-├── cash-control.md     # ✅ [FINAL]
-├── expenses.md         # ✅ [FINAL]
-└── ... (16 documentos finales)
+├── decimal-format-standard.md # 🆕 [ESTÁNDAR]
+├── rounding-policy.md         # 🆕 [ESTÁNDAR]
+└── ... (26 documentos finales)
 ```
+
+## 📏 Estándares y Estrategias Técnicas (NUEVO)
+
+Documentos transversales que rigen la calidad y arquitectura:
+
+| Documento | Propósito | Estado |
+|-----------|-----------|--------|
+| `decimal-format-standard.md` | Estandarización de visualización de precios y pesos | ✅ Definido |
+| `rounding-policy.md` | Reglas matemáticas de redondeo y almacenamiento | ✅ Definido |
+| `cache-strategy.md` | Estrategia de invalidación y persistencia | ✅ Definido |
+| `backend-verification-strategy.md` | Plan de pruebas aisladas SQL | ✅ En Ejecución |
+| `pin-cash-control.md` | Seguridad en manejo de dineros y PINs | ✅ Auditado |
+| `DEPENDENCIES.md` | Arquitectura de librerías y auditoría QA | ✅ Auditado |
+| `pwa-strategy.md` | Estrategia Offline-First e Instalación | ✅ Auditado |
+| `SECURITY_STANDARDS.md` | Especificación Técnica de Seguridad y Encriptación | ✅ Estándar |
 
 > 📖 Ver **SISTEMA_TRAZABILIDAD.md** para reglas de gobernanza completas.
 
@@ -59,10 +73,11 @@ prueba/
 | Métrica | Valor |
 |---------|-------|
 | Vistas en código (`03_SRC/src/views/`) | 15 |
-| Módulos documentados (`01_REQUIREMENTS/`) | 21 |
+| Módulos documentados (`01_REQUIREMENTS/`) | 26 ⬆️ |
 | Módulos sincronizados (100%) | 20 ✅ |
 | Documentos de diseño UX/UI (`03_UI_UX_DESIGN/`) | 6 |
-| Especificaciones implementadas | SPEC-005 IAM ✅ |
+| Estándares Técnicos | 5 (Decimal, Rounding, Cache, Security, Verif) 🆕 |
+| Especificaciones implementadas | SPEC-005 IAM ✅, Backend RPCs ✅ |
 | Vistas sin documentación | 1 (SystemAuditView - solo DEV) |
 
 ---
@@ -97,7 +112,10 @@ prueba/
 ## 🎯 Estado del Proyecto
 
 > [!TIP]
-> **🎉 SPEC-005 IMPLEMENTADO** - Sistema de autenticación unificada con fingerprinting y rate limiting completado.
+> **🎉 HITOS LOGRADOS (Ene 20):**
+> 1. **SPEC-005 IAM Implementado:** Autenticación unificada + Fingerprinting.
+> 2. **Backend RPCs Completos:** Funciones críticas SQL implementadas (`procesar_venta`, etc).
+> 3. **Estándares de Calidad:** Definición estricta de decimales y redondeo.
 
 ### ✅ Logros Alcanzados
 
@@ -217,7 +235,10 @@ graph TD
 - [x] Crear `notifications.md` - Centro de notificaciones
 - [x] Crear `forgot-password.md` - Recuperación de contraseña
 
-### Semana 4: Validación y Cierre
+### Semana 4: Validación y Cierre (EN PROCESO)
+- [x] Crear `backend-verification-strategy.md`
+- [x] Implementar RPCs faltantes (`procesar_venta`, `validar_pin`)
+- [x] Estandarizar formatos (`decimal-format`, `rounding-policy`)
 - [ ] Auditoría final de todos los módulos
 - [ ] Actualizar PRD principal (`prd_tienda_de_barrio.md`)
 - [ ] Generar CHANGELOG de sincronización
@@ -245,4 +266,5 @@ graph TD
 2. **0 vistas sin documentar** - Todas las vistas tienen requisitos.
 3. **6 módulos** parcialmente sincronizados requieren revisión menor (Inventory, Clients, ClientDetail, AdminHub, ProductForm, ClientForm, EmployeeForm).
 4. **Fase de Documentación Crítica COMPLETADA**.
-5. Próximo objetivo: Sincronizar módulos restantes al 100% y ejecutar `npm run build` en main.
+5. **Fase de Hardening Backend COMPLETADA**.
+6. Próximo objetivo: Ejecución de Verify Scripts y Release v1.0.

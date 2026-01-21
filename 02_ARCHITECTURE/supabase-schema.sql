@@ -1376,3 +1376,91 @@ ON CONFLICT DO NOTHING;
 -- 4. Para desactivar:
 -- SELECT cron.unschedule('cleanup-expired-sessions');
 
+-- =============================================
+-- SPEC-009: Sistema de Historiales y Trazabilidad
+-- =============================================
+
+-- 1. Log de Auditoría del Sistema (Seguridad)
+CREATE TABLE IF NOT EXISTS system_audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES employees(id), -- Puede ser nulo si es un intento de login fallido desconocido
+    event_type TEXT NOT NULL, -- 'login_success', 'login_failed', 'pin_change', 'unauthorized_access', 'price_change'
+    severity TEXT DEFAULT 'info' CHECK (severity IN ('info', 'warning', 'critical')),
+    details JSONB DEFAULT '{}'::jsonb, -- IP, dispositivo, input fallido
+    ip_address TEXT
+);
+
+-- Índices para búsqueda rápida
+CREATE INDEX IF NOT EXISTS idx_audit_store_date ON system_audit_logs(store_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON system_audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_event_type ON system_audit_logs(store_id, event_type);
+
+-- RLS para system_audit_logs
+ALTER TABLE system_audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Solo admins pueden ver logs de su tienda
+CREATE POLICY "audit_select_admins" ON system_audit_logs
+    FOR SELECT USING (
+        store_id IN (
+            SELECT store_id FROM employees 
+            WHERE id = auth.uid() 
+            AND (permissions->>'canViewReports')::boolean = true
+        )
+    );
+
+-- Inserción validando pertenencia a tienda (corrige vulnerabilidad QA)
+CREATE POLICY "audit_insert_own_store" ON system_audit_logs
+    FOR INSERT WITH CHECK (
+        store_id IN (
+            SELECT store_id FROM employees WHERE id = auth.uid()
+        )
+        OR auth.uid() IS NULL -- Permitir logs de intentos fallidos de login
+    );
+
+-- 2. Historial de Cambios de Precio
+CREATE TABLE IF NOT EXISTS price_change_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    changed_by UUID NOT NULL REFERENCES employees(id),
+    old_price NUMERIC(12,2),
+    new_price NUMERIC(12,2),
+    old_cost NUMERIC(12,2),
+    new_cost NUMERIC(12,2),
+    reason TEXT CHECK (reason IN ('inflation', 'correction', 'promotion', 'supplier_update', 'other'))
+);
+
+-- Índices para price_change_logs
+CREATE INDEX IF NOT EXISTS idx_price_log_store_date ON price_change_logs(store_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_price_log_product ON price_change_logs(product_id);
+
+-- RLS para price_change_logs
+ALTER TABLE price_change_logs ENABLE ROW LEVEL SECURITY;
+
+-- Miembros de la tienda pueden ver historial de precios
+CREATE POLICY "price_log_select_store" ON price_change_logs
+    FOR SELECT USING (
+        store_id IN (
+            SELECT store_id FROM employees WHERE id = auth.uid()
+        )
+    );
+
+-- Solo usuarios con permisos de inventario pueden insertar
+CREATE POLICY "price_log_insert_inventory" ON price_change_logs
+    FOR INSERT WITH CHECK (
+        store_id IN (
+            SELECT store_id FROM employees 
+            WHERE id = auth.uid() 
+            AND (permissions->>'canViewInventory')::boolean = true
+        )
+    );
+
+-- Índices adicionales para historiales existentes (filtro por empleado)
+CREATE INDEX IF NOT EXISTS idx_sales_employee ON sales(employee_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cash_control_events_store ON cash_control_events(store_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_created_by ON inventory_movements(created_by, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_created_by ON expenses(created_by, created_at DESC);
+

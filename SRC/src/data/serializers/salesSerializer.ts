@@ -14,6 +14,8 @@ interface SerializedSale {
     id: number;
     items: SerializedSaleItem[];
     total: string;
+    roundingDifference?: string;
+    effectiveTotal: string;
     paymentMethod: 'cash' | 'nequi' | 'fiado';
     amountReceived?: string;
     change?: string;
@@ -58,6 +60,8 @@ export const serializeSale = (sale: Sale): SerializedSale => ({
     id: sale.id,
     items: sale.items.map(serializeSaleItem),
     total: sale.total.toString(),
+    roundingDifference: fromDecimal(sale.roundingDifference),
+    effectiveTotal: sale.effectiveTotal.toString(),
     paymentMethod: sale.paymentMethod,
     amountReceived: fromDecimal(sale.amountReceived),
     change: fromDecimal(sale.change),
@@ -70,6 +74,8 @@ export const deserializeSale = (data: SerializedSale): Sale => ({
     id: data.id,
     items: data.items.map(deserializeSaleItem),
     total: toDecimal(data.total),
+    roundingDifference: data.roundingDifference ? toDecimal(data.roundingDifference) : undefined,
+    effectiveTotal: toDecimal(data.effectiveTotal || data.total), // Fallback for backward compatibility
     paymentMethod: data.paymentMethod,
     amountReceived: data.amountReceived ? toDecimal(data.amountReceived) : undefined,
     change: data.change ? toDecimal(data.change) : undefined,

@@ -6,7 +6,9 @@ import { salesSerializer } from '../data/serializers';
 export interface Sale {
     id: number;
     items: SaleItem[];
-    total: Decimal;
+    total: Decimal;          // Fiscal Total (Exact)
+    roundingDifference?: Decimal; // Legal Adjustment (always negative or zero)
+    effectiveTotal: Decimal; // Amount actually payable (Cash Total or Fiscal Total)
     paymentMethod: 'cash' | 'nequi' | 'fiado';
     amountReceived?: Decimal;
     change?: Decimal;
@@ -58,25 +60,25 @@ export const useSalesStore = defineStore('sales', () => {
     const todayCash = computed(() => {
         return todaySales.value
             .filter(sale => sale.paymentMethod === 'cash')
-            .reduce((acc, sale) => acc.plus(sale.total), new Decimal(0));
+            .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
     const todayNequi = computed(() => {
         return todaySales.value
             .filter(sale => sale.paymentMethod === 'nequi')
-            .reduce((acc, sale) => acc.plus(sale.total), new Decimal(0));
+            .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
     const todayFiado = computed(() => {
         return todaySales.value
             .filter(sale => sale.paymentMethod === 'fiado')
-            .reduce((acc, sale) => acc.plus(sale.total), new Decimal(0));
+            .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
     const totalFiado = computed(() => {
         return sales.value
             .filter(sale => sale.paymentMethod === 'fiado')
-            .reduce((acc, sale) => acc.plus(sale.total), new Decimal(0));
+            .reduce((acc, sale) => acc.plus(sale.effectiveTotal), new Decimal(0));
     });
 
     // Get sales by date range
@@ -108,11 +110,11 @@ export const useSalesStore = defineStore('sales', () => {
             stats.salesCount++;
 
             if (sale.paymentMethod === 'cash') {
-                stats.cashSales = stats.cashSales.plus(sale.total);
+                stats.cashSales = stats.cashSales.plus(sale.effectiveTotal);
             } else if (sale.paymentMethod === 'nequi') {
-                stats.nequiSales = stats.nequiSales.plus(sale.total);
+                stats.nequiSales = stats.nequiSales.plus(sale.effectiveTotal);
             } else if (sale.paymentMethod === 'fiado') {
-                stats.fiadoSales = stats.fiadoSales.plus(sale.total);
+                stats.fiadoSales = stats.fiadoSales.plus(sale.effectiveTotal);
             }
         });
 
@@ -157,8 +159,9 @@ export const useSalesStore = defineStore('sales', () => {
         sales.value.push(newSale);
 
         // Update current cash if cash payment
+        // Use effectiveTotal because that's what physically enters the drawer
         if (newSale.paymentMethod === 'cash') {
-            currentCash.value = currentCash.value.plus(newSale.total);
+            currentCash.value = currentCash.value.plus(newSale.effectiveTotal);
         }
 
         return newSale;

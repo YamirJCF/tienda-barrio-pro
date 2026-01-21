@@ -394,11 +394,22 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
       };
     });
 
-    const change = amountReceived ? amountReceived.minus(cartStore.total) : undefined;
+    // Determine totals based on payment method (SPEC-010-REV5)
+    let effectiveTotal = cartStore.total;
+    let roundingDifference = new Decimal(0);
+
+    if (paymentMethod === 'cash') {
+      effectiveTotal = cartStore.totalCashPayable;
+      roundingDifference = cartStore.roundingDifference;
+    }
+
+    const change = amountReceived ? amountReceived.minus(effectiveTotal) : undefined;
 
     salesStore.addSale({
       items: saleItems,
       total: cartStore.total,
+      roundingDifference,
+      effectiveTotal,
       paymentMethod: paymentMethod as 'cash' | 'nequi' | 'fiado',
       amountReceived,
       change,

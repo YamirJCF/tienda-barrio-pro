@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import type { MeasurementUnit } from './inventory';
 import { cartSerializer } from '../data/serializers';
+import { getLegalCashPayable, roundToNearest50 } from '../utils/currency';
 
 export interface CartItem {
   id: number;
@@ -17,12 +18,23 @@ export interface CartItem {
 export const useCartStore = defineStore('cart', () => {
   const items = ref<CartItem[]>([]);
 
+  // BR-03: Fiscal Calculation (Exact Math)
   const total = computed(() => {
     return items.value.reduce((acc, item) => {
       // Use subtotal if available (for weighable items), otherwise calculate
       const itemTotal = item.subtotal || item.price.times(item.quantity);
       return acc.plus(itemTotal);
     }, new Decimal(0));
+  });
+
+  // BR-04: Cash Payable (Floored to nearest 50)
+  const totalCashPayable = computed(() => {
+    return getLegalCashPayable(total.value);
+  });
+
+  // BR-06: Rounding Adjustment for Cash
+  const roundingDifference = computed(() => {
+    return totalCashPayable.value.minus(total.value);
   });
 
   const formattedTotal = computed(() => {
@@ -104,14 +116,8 @@ export const useCartStore = defineStore('cart', () => {
     }
 
     // 🛡️ SPEC-010: Redondeo híbrido a múltiplos de $50 (defensivo)
-    const roundHybrid50 = (val: Decimal): Decimal => {
-      const value = val.toNumber();
-      const remainder = value % 50;
-      return remainder <= 25
-        ? new Decimal(Math.floor(value / 50) * 50)
-        : new Decimal(Math.ceil(value / 50) * 50);
-    };
-    const roundedSubtotal = roundHybrid50(item.subtotal);
+    // Uses imported utility
+    const roundedSubtotal = roundToNearest50(item.subtotal);
 
     const existing = items.value.find(i => i.id === item.id);
     if (existing) {
@@ -145,6 +151,8 @@ export const useCartStore = defineStore('cart', () => {
   return {
     items,
     total,
+    totalCashPayable,
+    roundingDifference,
     formattedTotal,
     addItem,
     addWeighableItem,

@@ -4,6 +4,7 @@ import { useInventoryStore, type Product } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { logger } from '../utils/logger';
+import { getMarginLoss } from '../utils/currency';
 
 // Props
 interface Props {
@@ -18,7 +19,7 @@ const emit = defineEmits<{
 }>();
 
 const inventoryStore = useInventoryStore();
-const { roundHybrid50 } = useCurrencyFormat();
+// const { roundHybrid50 } = useCurrencyFormat(); // No longer needed for saving
 
 // WO-003: Preservar stock original para evitar pérdida de precisión
 const originalStock = ref<Decimal | null>(null);
@@ -72,6 +73,16 @@ const margin = computed(() => {
   const price = parseFloat(formData.value.price);
   if (cost === 0) return 0;
   return (price - cost) / cost * 100;
+});
+
+// BR-02: Alerta de Ineficiencia Financiera
+const marginLoss = computed(() => {
+  if (!formData.value.price) return 0;
+  const price = parseFloat(formData.value.price);
+  if (isNaN(price) || price <= 0) return 0;
+
+  // Calculate loss per unit if paid in cash
+  return getMarginLoss(price).toNumber();
 });
 
 // T-007: Validación de precio vs costo
@@ -144,6 +155,7 @@ const save = () => {
     ? originalStock.value
     : new Decimal(formData.value.stock || 0);
 
+  // BR-01: Libertad de Precios. No se fuerza el redondeo aquí.
   const productData = {
     name: formData.value.name.trim(),
     brand: formData.value.brand.trim() || undefined,
@@ -151,7 +163,7 @@ const save = () => {
     plu: formData.value.plu.trim() || undefined,
     isWeighable: formData.value.saleMode === 'weight',
     measurementUnit: formData.value.saleMode === 'weight' ? formData.value.measurementUnit : 'un' as const,
-    price: roundHybrid50(parseFloat(formData.value.price)),
+    price: new Decimal(formData.value.price), // Exact price
     cost: formData.value.cost ? new Decimal(formData.value.cost) : undefined,
     stock: stockToSave,
     minStock: parseInt(formData.value.minStock) || 5,
@@ -305,7 +317,7 @@ watch(() => formData.value.measurementUnit, (newUnit, oldUnit) => {
                   class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1">
                   Cód. Rápido
                 </label>
-                <input v-model="formData.plu"
+                <input v-model="formData.plu" @input="formData.plu = formData.plu.replace(/[^0-9]/g, '')"
                   class="w-full h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center font-medium"
                   placeholder="PLU" type="tel" maxlength="4" />
               </div>
@@ -414,6 +426,22 @@ watch(() => formData.value.measurementUnit, (newUnit, oldUnit) => {
                   <input v-model="formData.price"
                     class="w-full h-10 rounded-lg border border-primary/30 bg-primary/5 dark:bg-primary/10 pl-7 pr-3 text-sm text-primary dark:text-primary-400 placeholder:text-primary/40 focus:border-primary focus:ring-1 focus:ring-primary outline-none shadow-sm font-bold"
                     placeholder="0" type="number" step="0.01" required />
+                </div>
+              </div>
+
+              <!-- BR-02: Warning Fuga de Margen (Efectivo) -->
+              <div v-if="marginLoss > 0" class="col-span-12 -mt-1">
+                <div
+                  class="flex items-center gap-2 p-2.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-lg">
+                  <span class="material-symbols-outlined text-yellow-600 dark:text-yellow-400 text-lg">paid</span>
+                  <div class="flex flex-col">
+                    <span class="text-xs font-bold text-yellow-700 dark:text-yellow-300">
+                      ⚠️ Alerta de Eficiencia
+                    </span>
+                    <span class="text-[10px] font-medium text-yellow-700 dark:text-yellow-300 leading-tight">
+                      Perderás <b>${{ marginLoss }}</b> por unidad en ventas en efectivo debido al redondeo obligatorio.
+                    </span>
+                  </div>
                 </div>
               </div>
 

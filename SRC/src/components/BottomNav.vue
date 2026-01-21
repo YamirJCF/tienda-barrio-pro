@@ -28,7 +28,7 @@ const isActive = (name: string) => route.name === name;
       </button>
 
       <!-- REPORTES - Core Value Prominente -->
-      <button @click="router.push('/admin')"
+      <button @click="router.push({ path: '/admin', query: { tab: 'reportes' } })"
         class="group flex flex-col items-center justify-center gap-1 transition-colors"
         :class="isActive('admin') && route.query.tab === 'reportes' ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500 hover:text-emerald-500'">
         <BarChart3 :size="22" :stroke-width="2" />

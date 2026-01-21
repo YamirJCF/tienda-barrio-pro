@@ -321,7 +321,7 @@ const goBack = () => {
                 <h4 class="text-sm font-semibold text-slate-900 dark:text-white truncate">{{ product.name }}</h4>
                 <p class="text-xs text-gray-500">
                   Stock: <span class="font-bold text-red-500">{{ formatStock(product.stock, product.measurementUnit)
-                    }}</span> / Min: {{ product.minStock }}
+                  }}</span> / Min: {{ product.minStock }}
                 </p>
               </div>
             </div>
@@ -345,6 +345,24 @@ const goBack = () => {
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- SPEC-009: Acceso a Historiales -->
+    <div class="mt-8 mx-4">
+      <button @click="router.push('/history')"
+        class="w-full flex items-center justify-between p-4 rounded-xl bg-slate-800 dark:bg-slate-800 text-white shadow-lg hover:bg-slate-700 transition-colors group">
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+            <span class="material-symbols-outlined text-emerald-400">history</span>
+          </div>
+          <div class="text-left">
+            <p class="font-semibold">Auditoría y Registros</p>
+            <p class="text-xs text-slate-400">Ver historial detallado de transacciones</p>
+          </div>
+        </div>
+        <span
+          class="material-symbols-outlined text-slate-400 group-hover:text-emerald-400 transition-colors">chevron_right</span>
+      </button>
     </div>
 
     <div class="h-10"></div>
