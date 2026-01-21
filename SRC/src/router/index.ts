@@ -2,20 +2,6 @@ import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
-import AdminHubView from '../views/AdminHubView.vue';
-import POSView from '../views/POSView.vue';
-import InventoryView from '../views/InventoryView.vue';
-import ClientListView from '../views/ClientListView.vue';
-import ClientDetailView from '../views/ClientDetailView.vue';
-import EmployeeManagerView from '../views/EmployeeManagerView.vue';
-import StockEntryView from '../views/StockEntryView.vue';
-import CashControlView from '../views/CashControlView.vue';
-import ExpensesView from '../views/ExpensesView.vue';
-import NotificationCenterView from '../views/NotificationCenterView.vue';
-import RegisterStoreView from '../views/RegisterStoreView.vue';
-import ForgotPasswordView from '../views/ForgotPasswordView.vue';
-// SPEC-009: Vista de Historiales
-import HistoryView from '../views/HistoryView.vue';
 // ⚠️ SystemAuditView se importa dinámicamente solo en DEV (ver abajo)
 
 const routes: RouteRecordRaw[] = [
@@ -34,53 +20,83 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/register-store',
     name: 'register-store',
-    component: RegisterStoreView,
+    component: () => import('../views/RegisterStoreView.vue'),
     meta: { guest: true },
   },
   {
     path: '/forgot-password',
     name: 'forgot-password',
-    component: ForgotPasswordView,
+    component: () => import('../views/ForgotPasswordView.vue'),
     meta: { guest: true },
   },
   // Rutas Protegidas
-  { path: '/admin', name: 'admin', component: AdminHubView, meta: { requiresAuth: true } },
-  { path: '/pos', name: 'pos', component: POSView, meta: { requiresAuth: true } },
-  { path: '/inventory', name: 'inventory', component: InventoryView, meta: { requiresAuth: true } },
-  { path: '/clients', name: 'clients', component: ClientListView, meta: { requiresAuth: true } },
+  {
+    path: '/admin',
+    name: 'admin',
+    component: () => import('../views/AdminHubView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/pos',
+    name: 'pos',
+    component: () => import('../views/POSView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/inventory',
+    name: 'inventory',
+    component: () => import('../views/InventoryView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/clients',
+    name: 'clients',
+    component: () => import('../views/ClientListView.vue'),
+    meta: { requiresAuth: true }
+  },
   {
     path: '/clients/:id',
     name: 'client-detail',
-    component: ClientDetailView,
+    component: () => import('../views/ClientDetailView.vue'),
     meta: { requiresAuth: true },
   },
   {
     path: '/employees',
     name: 'employees',
-    component: EmployeeManagerView,
+    component: () => import('../views/EmployeeManagerView.vue'),
     meta: { requiresAuth: true },
   },
   {
     path: '/stock-entry',
     name: 'stock-entry',
-    component: StockEntryView,
+    component: () => import('../views/StockEntryView.vue'),
     meta: { requiresAuth: true },
   },
   {
     path: '/cash-control',
     name: 'cash-control',
-    component: CashControlView,
+    component: () => import('../views/CashControlView.vue'),
     meta: { requiresAuth: true },
   },
-  { path: '/expenses', name: 'expenses', component: ExpensesView, meta: { requiresAuth: true } },
+  {
+    path: '/expenses',
+    name: 'expenses',
+    component: () => import('../views/ExpensesView.vue'),
+    meta: { requiresAuth: true }
+  },
   {
     path: '/notifications',
     name: 'notifications',
-    component: NotificationCenterView,
+    component: () => import('../views/NotificationCenterView.vue'),
     meta: { requiresAuth: true },
   },
   // SPEC-009: Ruta de Historiales
-  { path: '/history', name: 'history', component: HistoryView, meta: { requiresAuth: true } },
+  {
+    path: '/history',
+    name: 'history',
+    component: () => import('../views/HistoryView.vue'),
+    meta: { requiresAuth: true }
+  },
 ];
 
 // ============================================
