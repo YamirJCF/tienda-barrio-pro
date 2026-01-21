@@ -87,7 +87,16 @@ const handleLogin = async () => {
 
         // Establecer estados IAM
         authStore.setDeviceStatus('approved');
-        authStore.setStoreOpenStatus(mockServerResponse.store_state?.is_open ?? false);
+
+        // SPEC-006: Si tiene permiso de caja, ignorar estado del servidor y permitir gestión
+        // "El sistema no valida con el admin si no que pasa directo"
+        if (employee.permissions.canOpenCloseCash) {
+          console.log('[Login] Empleado con permiso de caja: Acceso directo permitido');
+          // Mantener el estado real de la tienda (cerrada/abierta) para que la UI de apertura aparezca
+          authStore.setStoreOpenStatus(mockServerResponse.store_state?.is_open ?? false);
+        } else {
+          authStore.setStoreOpenStatus(mockServerResponse.store_state?.is_open ?? false);
+        }
 
         router.push('/');
         return;

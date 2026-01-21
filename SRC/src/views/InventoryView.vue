@@ -18,6 +18,7 @@ const { formatStock } = useQuantityFormat();
 
 // Permisos del usuario
 const canViewInventory = computed(() => authStore.canViewInventory);
+const canManageInventory = computed(() => authStore.currentUser?.permissions?.canManageInventory);
 
 // WO-006: initializeSampleData ELIMINADA - SPEC-007
 
@@ -163,8 +164,9 @@ const getCategoryLabel = (category: string) => {
       <RecycleScroller v-if="filteredProducts.length > 0" class="flex-1" :items="filteredProducts" :item-size="140"
         key-field="id" v-slot="{ item: product }">
         <article
-          class="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3 active:scale-[0.99] transition-transform mb-3 mx-4"
-          @click="openEditProduct(product.id)">
+          class="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3 transition-transform mb-3 mx-4"
+          :class="{ 'active:scale-[0.99] cursor-pointer': canManageInventory, 'cursor-default': !canManageInventory }"
+          @click="canManageInventory ? openEditProduct(product.id) : null">
           <div class="flex justify-between items-start gap-4">
             <div class="flex-1">
               <h3 class="text-slate-900 dark:text-white text-base font-bold leading-tight">{{ product.name }}</h3>
@@ -192,7 +194,7 @@ const getCategoryLabel = (category: string) => {
               {{ formatStock(product.stock, product.measurementUnit) }} <span class="text-xs font-medium opacity-70">{{
                 product.measurementUnit || 'un' }}</span>
             </span>
-            <button
+            <button v-if="canManageInventory"
               class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               @click.stop="deleteProduct(product.id)">
               <span class="material-symbols-outlined text-[20px]">delete</span>
@@ -204,14 +206,14 @@ const getCategoryLabel = (category: string) => {
 
     <!-- FAB (Floating Action Buttons) -->
     <div class="fixed bottom-24 right-4 z-40 flex flex-col gap-3">
-      <!-- Stock Entry FAB -->
-      <button
+      <!-- Stock Entry FAB - Only if canManageInventory -->
+      <button v-if="canManageInventory"
         class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 hover:bg-emerald-600 transition-all active:scale-90"
         @click="router.push('/stock-entry')" title="Entrada de inventario">
         <span class="material-symbols-outlined text-[24px]">inventory</span>
       </button>
-      <!-- Add Product FAB -->
-      <button
+      <!-- Add Product FAB - Only if canManageInventory -->
+      <button v-if="canManageInventory"
         class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-blue-500/40 hover:bg-blue-600 transition-all active:scale-90"
         @click="openNewProduct" title="Agregar producto">
         <span class="material-symbols-outlined text-[32px]">add</span>

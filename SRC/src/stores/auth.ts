@@ -28,6 +28,8 @@ export interface CurrentUser {
         canViewReports: boolean;
         canFiar: boolean;
         canOpenCloseCash: boolean;  // SPEC-006
+        canManageInventory?: boolean; // New granular permission
+        canManageClients?: boolean;   // New granular permission
     };
 }
 

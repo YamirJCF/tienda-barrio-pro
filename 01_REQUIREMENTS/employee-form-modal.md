@@ -49,12 +49,14 @@ Modal para crear o editar información de empleados y sus permisos.
 
 ## Permisos (Checkboxes)
 
-| Permiso | Default (Nuevo) | Descripción |
-|---------|-----------------|-------------|
-| Puede Vender | ✅ On | Acceso a POS |
-| Puede Ver Inventario | ✅ On | Acceso a productos |
-| Puede Ver Reportes | ❌ Off | Acceso a estadísticas |
-| Puede Fiar | ❌ Off | Puede hacer ventas fiadas |
+| Etiqueta UI | Variable Map | Estado Default | Descripción |
+|-------------|--------------|----------------|-------------|
+| **Puede Vender** | `canSell` | ✅ Checked (Locked) | El empleado siempre puede acceder al POS. |
+| **Inventario (Acceso Completo)** | `canManageInventory` | ⬜ Unchecked | Habilita botones de +/Edit/Delete en inventario. |
+| **Caja (Abrir/Cerrar)** | `canOpenCloseCash` | ⬜ Unchecked | Permite abrir tienda y acceder a control de efectivo. |
+
+> [!IMPORTANT]
+> Los permisos "Ver Reportes" y "Fiar" han sido ocultados y se guardan como `false` por seguridad. "Ver Inventario" se guarda como `true` implícitamente.
 
 ## Datos de Salida
 

@@ -18,6 +18,7 @@ Vista de gestión de productos que permite ver, buscar, agregar y editar product
 
 ### Agregar Producto
 1. Click en FAB azul (+)
+   > **Restricción:** Solo visible si tiente permiso `canManageInventory`.
 2. Se abre `ProductFormModal`
 3. Llena los campos requeridos
 4. Click "Guardar"
@@ -25,12 +26,14 @@ Vista de gestión de productos que permite ver, buscar, agregar y editar product
 
 ### Editar Producto
 1. Click en tarjeta de producto
+   > **Restricción:** Solo interactuable si tiene permiso `canManageInventory`.
 2. Se abre `ProductFormModal` con datos cargados
 3. Modifica los campos deseados
 4. Click "Guardar"
 
 ### Entrada de Inventario
 1. Click en FAB verde (icono inventario)
+   > **Restricción:** Solo visible si tiene permiso `canManageInventory`.
 2. Navega a `/stock-entry`
 3. Flujo de entrada masiva de stock
 
@@ -47,7 +50,8 @@ Vista de gestión de productos que permite ver, buscar, agregar y editar product
 ### useAuthStore
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| `canViewInventory` | `boolean` | Permiso para ver inventario |
+| `canViewInventory` | `boolean` | Permiso para ver inventario (siempre true) |
+| `canManageInventory` | `boolean` | **Nuevo:** Permiso para crear/editar/eliminar |
 
 ---
 

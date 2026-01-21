@@ -23,6 +23,7 @@ Vista que muestra todos los clientes registrados con su saldo pendiente y permit
 
 ### Agregar Cliente
 1. Click en botón FAB (+)
+   > **Restricción:** Solo visible si tiene permiso `canManageClients`.
 2. Se abre `ClientFormModal`
 3. Llena campos requeridos (nombre, cédula)
 4. Click "Guardar Cliente"
@@ -40,6 +41,11 @@ Vista que muestra todos los clientes registrados con su saldo pendiente y permit
 |-------|------|-------------|
 | `clients` | `Client[]` | Lista de todos los clientes |
 | `totalDebt` | `Decimal` | Suma total de deudas |
+
+### useAuthStore
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `canManageClients` | `boolean` | Permiso bloquear creación/edición |
 
 ---
 

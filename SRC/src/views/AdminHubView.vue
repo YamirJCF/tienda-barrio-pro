@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useStoreStatusStore } from '../stores/storeStatus';
 import { useCashControlStore } from '../stores/cashControl';
+import { useAuthStore } from '../stores/auth'; // Import auth store
 import BottomNav from '../components/BottomNav.vue';
 import ReportsContent from '../components/ReportsContent.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
@@ -17,6 +18,7 @@ const route = useRoute();
 const salesStore = useSalesStore();
 const storeStatusStore = useStoreStatusStore();
 const cashControlStore = useCashControlStore();
+const authStore = useAuthStore(); // Use auth store
 
 // State
 const activeTab = ref<'reportes' | 'gestion'>('gestion');
@@ -32,13 +34,33 @@ const showProfileSidebar = ref(false);
 const hasPinConfigured = computed(() => cashControlStore.hasPinConfigured);
 const pinSetupMode = computed(() => hasPinConfigured.value ? 'change' : 'setup');
 
-// Check PIN status on mount
+const isAdmin = computed(() => authStore.isAdmin);
+const canViewReports = computed(() => authStore.canViewReports);
+
+// Check PIN status on mount & Permission Check
 onMounted(() => {
+  // Security Check: If not admin and can't view reports, kick out
+  if (!isAdmin.value && !canViewReports.value) {
+    router.replace('/');
+    return;
+  }
+
   cashControlStore.checkPinConfigured();
+
   // A-02: Leer query param para seleccionar tab automáticamente
-  if (route.query.tab === 'gestion') {
+  if (route.query.tab === 'gestion' && isAdmin.value) {
     activeTab.value = 'gestion';
   } else if (route.query.tab === 'reportes') {
+    activeTab.value = 'reportes';
+  } else if (!isAdmin.value) {
+    // Force reports for non-admins
+    activeTab.value = 'reportes';
+  }
+});
+
+// Watch for unauthorized tab switches
+watch(activeTab, (newTab) => {
+  if (newTab === 'gestion' && !isAdmin.value) {
     activeTab.value = 'reportes';
   }
 });
@@ -103,7 +125,7 @@ const navigateTo = (route: string) => {
     <div
       class="sticky top-[65px] z-30 w-full bg-background-light dark:bg-background-dark px-4 pb-4 pt-2 shadow-[0_4px_10px_-10px_rgba(0,0,0,0.1)]">
       <div class="flex h-12 w-full items-center justify-center rounded-xl bg-slate-200 dark:bg-slate-800 p-1">
-        <label
+        <label v-if="isAdmin || canViewReports"
           class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all"
           :class="activeTab === 'reportes'
             ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'
@@ -114,7 +136,7 @@ const navigateTo = (route: string) => {
             Reportes
           </span>
         </label>
-        <label
+        <label v-if="isAdmin"
           class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all"
           :class="activeTab === 'gestion'
             ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'

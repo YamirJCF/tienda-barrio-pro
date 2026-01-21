@@ -2,12 +2,14 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useClientsStore } from '../stores/clients';
+import { useAuthStore } from '../stores/auth';
 import BottomNav from '../components/BottomNav.vue';
 import ClientFormModal from '../components/ClientFormModal.vue';
 import { Decimal } from 'decimal.js';
 
 const router = useRouter();
 const clientsStore = useClientsStore();
+const authStore = useAuthStore();
 
 // State
 const searchQuery = ref('');
@@ -22,6 +24,8 @@ const filteredClients = computed(() => {
 const totalDebt = computed(() => {
   return clientsStore.totalDebt;
 });
+
+const canManageClients = computed(() => authStore.isAdmin || authStore.currentUser?.permissions?.canManageClients);
 
 // Generate initials and color from name
 const getInitials = (name: string) => {
@@ -119,7 +123,7 @@ const handleClientSaved = () => {
       <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
         {{ searchQuery ? 'Intenta con otro término de búsqueda' : 'Agrega tu primer cliente para comenzar' }}
       </p>
-      <button v-if="!searchQuery" @click="openNewClient"
+      <button v-if="!searchQuery && canManageClients" @click="openNewClient"
         class="mt-6 px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center gap-2">
         <span class="material-symbols-outlined">person_add</span>
         Agregar Cliente
@@ -157,7 +161,7 @@ const handleClientSaved = () => {
 
     <!-- FAB -->
     <div class="absolute bottom-24 right-4 z-40">
-      <button @click="openNewClient"
+      <button v-if="canManageClients" @click="openNewClient"
         class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90">
         <span class="material-symbols-outlined text-[32px]">add</span>
       </button>

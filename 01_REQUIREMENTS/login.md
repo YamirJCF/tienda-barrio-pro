@@ -122,7 +122,8 @@ Si ambos intentos fallan → Mensaje de error genérico
 | Credenciales | Email + Contraseña | Username + PIN |
 | Validación | `authStore.loginWithCredentials` | `employeesStore.validatePin` |
 | `currentUser.type` | `'admin'` | `'employee'` |
-| Permisos | Todos (implícito) | Basados en `employee.permissions` |
+| Permisos | Todos (implícito) | **Granulares:** Vender y Ver Inventario (Default), Caja e Inventario Completo (Opcionales) |
+| Tienda Cerrada | Acceso Total | Bloqueado (excepto si tiene `canOpenCloseCash`) |
 
 ---
 
@@ -146,6 +147,8 @@ handleLogin() {
     const store = authStore.getFirstStore();
     const employee = employeesStore.validatePin(username, password);
     if (employee) {
+        // La lógica de bypass "Tienda Cerrada" se maneja dentro de authStore o Router
+        // Si tiene canOpenCloseCash, se permite el acceso al Dashboard
         authStore.loginAsEmployee(employee, store.id);
         router.push('/');
         return;

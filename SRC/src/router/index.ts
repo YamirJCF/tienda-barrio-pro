@@ -100,6 +100,31 @@ router.beforeEach((to, from, next) => {
   }
 
   // =============================================
+  // SPEC-005: Permissions Guards
+  // =============================================
+
+  // 1. Employee Management: STRICTLY Admin only
+  if (to.name === 'employees' && !authStore.isAdmin) {
+    return next({ name: 'dashboard' });
+  }
+
+  // 2. Admin Hub: Admin OR Reports Viewer
+  if (to.name === 'admin') {
+    if (!authStore.isAdmin && !authStore.canViewReports) {
+      return next({ name: 'dashboard' });
+    }
+    // Block "Gestión" tab for non-admins
+    if (to.query.tab === 'gestion' && !authStore.isAdmin) {
+      return next({ name: 'admin', query: { tab: 'reportes' } });
+    }
+  }
+
+  // 3. Cash Control: Needs permission
+  if (to.name === 'cash-control' && !authStore.canOpenCloseCash) {
+    return next({ name: 'dashboard' });
+  }
+
+  // =============================================
   // SPEC-005: Guard para POS - Tienda Abierta
   // =============================================
   // Empleados no pueden acceder al POS si la tienda está cerrada

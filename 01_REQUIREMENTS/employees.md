@@ -86,22 +86,27 @@ interface Employee {
 }
 
 interface EmployeePermissions {
-  canSell: boolean;         // Por defecto: true
-  canViewInventory: boolean; // Por defecto: true
-  canViewReports: boolean;   // Por defecto: false
-  canFiar: boolean;          // Por defecto: false
+  canSell: boolean;          // ✅ Locked (Siempre true)
+  canViewInventory: boolean; // ✅ Implícito (Siempre true)
+  canManageInventory?: boolean; // 🆕 Control total de inventario
+  canManageClients?: boolean;   // 🆕 Control total de clientes
+  canOpenCloseCash?: boolean;   // 🆕 Abrir/Cerrar Caja
+  canViewReports: boolean;   // ❌ Hidden (Siempre false)
+  canFiar: boolean;          // ❌ Hidden (Siempre false)
 }
 ```
 
 ---
 
-## Permisos por Defecto (Nuevo Empleado)
-| Permiso | Valor |
-|---------|-------|
-| Puede Vender | ✅ Sí |
-| Puede Ver Inventario | ✅ Sí |
-| Puede Ver Reportes | ❌ No |
-| Puede Fiar | ❌ No |
+## Permisos Configurables (UI)
+| Permiso | Variable | Comportamiento |
+|---------|----------|----------------|
+| **Puede Vender** | `canSell` | ✅ **Bloqueado**. Todo empleado puede vender. |
+| **Inventario (Acceso Completo)** | `canManageInventory` | Habilita Crear/Editar/Eliminar productos. |
+| **Caja (Abrir/Cerrar)** | `canOpenCloseCash` | Permite abrir la tienda y gestionar cortes de caja. |
+
+> [!NOTE]
+> `canViewInventory` es siempre `true`. `canViewReports` y `canFiar` son siempre `false` por defecto y no se muestran en el formulario.
 
 ---
 
