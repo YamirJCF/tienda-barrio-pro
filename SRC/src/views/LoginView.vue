@@ -120,7 +120,12 @@ const handleLogin = async () => {
 // SPEC-005: Simular respuesta del servidor (reemplazar con RPC real)
 type ServerResponse = {
   success: boolean;
-  employee?: any;
+  employee?: {
+    id: string;
+    name: string;
+    username: string;
+    permissions: any; // Keep 'any' for nested permissions or strictly type it if possible
+  };
   store_state?: { is_open: boolean };
   error_code?: string;
   error?: string;

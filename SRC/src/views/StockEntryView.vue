@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useInventoryStore, type Product } from '../stores/inventory';
+import { useInventoryStore } from '../stores/inventory';
+import type { Product } from '../types';
 import { Decimal } from 'decimal.js';
 import { useQuantityFormat } from '../composables/useQuantityFormat';
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { useInventoryStore, type Product } from '../stores/inventory';
+import { useInventoryStore } from '../stores/inventory';
+import type { Product } from '../types';
 
 // Props
 interface Props {
@@ -38,8 +39,16 @@ const selectProduct = (product: Product) => {
   close();
 };
 
-const formatCurrency = (price: any) => {
-  const value = typeof price === 'object' && price.toNumber ? price.toNumber() : parseFloat(price);
+import { Decimal } from 'decimal.js';
+
+const formatCurrency = (price: Decimal | number | string) => {
+  let value: number;
+  if (typeof price === 'object' && 'toNumber' in price) {
+    value = price.toNumber();
+  } else {
+    value = typeof price === 'string' ? parseFloat(price) : price;
+  }
+  
   return `$ ${Math.round(value)
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
@@ -146,12 +155,12 @@ watch(
                   <span
                     class="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
                     :class="
-                      product.stock <= product.minStock
+                      product.stock.lte(product.minStock)
                         ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
                         : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
                     "
                   >
-                    {{ product.stock }} {{ product.unit }}
+                    {{ product.stock }} {{ product.measurementUnit }}
                   </span>
                 </div>
               </button>

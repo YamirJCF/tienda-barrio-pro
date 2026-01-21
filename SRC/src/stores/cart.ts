@@ -1,19 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
-import type { MeasurementUnit } from './inventory';
 import { cartSerializer } from '../data/serializers';
 import { getLegalCashPayable, roundToNearest50 } from '../utils/currency';
-
-export interface CartItem {
-  id: number;
-  name: string;
-  price: Decimal;
-  quantity: Decimal; // Decimal to support fractional quantities (0.5 lb)
-  unit: MeasurementUnit; // 'kg', 'lb', 'g', 'un'
-  isWeighable: boolean; // true for weight-based products
-  subtotal?: Decimal; // Pre-calculated subtotal for weighable items
-}
+import type { CartItem, MeasurementUnit } from '../types';
 
 export const useCartStore = defineStore(
   'cart',
@@ -74,7 +64,8 @@ export const useCartStore = defineStore(
       const existing = items.value.find((i) => i.id === product.id);
       if (existing) {
         // Add the quantity from the product
-        existing.quantity = existing.quantity.plus(qty);
+        const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
+        existing.quantity = currentQty.plus(qty);
         // Recalculate subtotal if weighable
         if (existing.isWeighable) {
           existing.subtotal = existing.price.times(existing.quantity);
@@ -85,7 +76,7 @@ export const useCartStore = defineStore(
           name: product.name,
           price: product.price,
           quantity: new Decimal(qty),
-          unit: product.measurementUnit || 'un',
+          measurementUnit: product.measurementUnit || 'un',
           isWeighable: product.isWeighable || false,
         });
       }
@@ -98,7 +89,7 @@ export const useCartStore = defineStore(
       name: string;
       price: Decimal;
       quantity: Decimal;
-      unit: MeasurementUnit;
+      unit: MeasurementUnit; // Keep 'unit' in input param for now to match caller, but map to measurementUnit
       subtotal: Decimal;
     }) => {
       // ============================================
@@ -127,7 +118,8 @@ export const useCartStore = defineStore(
       const existing = items.value.find((i) => i.id === item.id);
       if (existing) {
         // For weighable items, add quantity and subtotal
-        existing.quantity = existing.quantity.plus(item.quantity);
+        const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
+        existing.quantity = currentQty.plus(item.quantity);
         existing.subtotal = (existing.subtotal || new Decimal(0)).plus(roundedSubtotal);
       } else {
         items.value.push({
@@ -135,7 +127,7 @@ export const useCartStore = defineStore(
           name: item.name,
           price: item.price,
           quantity: item.quantity,
-          unit: item.unit,
+          measurementUnit: item.unit, // Map 'unit' to 'measurementUnit'
           isWeighable: true,
           subtotal: roundedSubtotal,
         });

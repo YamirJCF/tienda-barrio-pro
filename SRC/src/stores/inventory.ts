@@ -3,25 +3,7 @@ import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { inventorySerializer } from '../data/serializers';
 import { useNotificationsStore } from './notificationsStore';
-
-export type MeasurementUnit = 'kg' | 'lb' | 'g' | 'un';
-
-export interface Product {
-  id: number;
-  name: string;
-  brand?: string;
-  category?: string;
-  plu?: string;
-  price: Decimal; // Si isWeighable: precio por unidad de medida (PUM)
-  cost?: Decimal;
-  isWeighable: boolean; // true = producto por peso, false = por unidad
-  measurementUnit: MeasurementUnit; // 'kg', 'lb', 'g', 'un'
-  stock: Decimal; // Stock en decimales para soportar 0.5 lb, etc.
-  minStock: number;
-  notifiedLowStock?: boolean; // Flag anti-duplicado (QA)
-  createdAt: string;
-  updatedAt: string;
-}
+import type { Product } from '../types';
 
 export const useInventoryStore = defineStore(
   'inventory',

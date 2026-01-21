@@ -2,28 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { salesSerializer } from '../data/serializers';
-
-export interface Sale {
-  id: number;
-  items: SaleItem[];
-  total: Decimal; // Fiscal Total (Exact)
-  roundingDifference?: Decimal; // Legal Adjustment (always negative or zero)
-  effectiveTotal: Decimal; // Amount actually payable (Cash Total or Fiscal Total)
-  paymentMethod: 'cash' | 'nequi' | 'fiado';
-  amountReceived?: Decimal;
-  change?: Decimal;
-  clientId?: number; // For fiado payments
-  timestamp: string;
-  date: string; // YYYY-MM-DD for grouping
-}
-
-export interface SaleItem {
-  productId: number;
-  productName: string;
-  quantity: number;
-  price: Decimal;
-  subtotal: Decimal;
-}
+import type { Sale } from '../types';
 
 export interface DailyStats {
   date: string;

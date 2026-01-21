@@ -2,7 +2,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
-import { useInventoryStore, type Product } from '../stores/inventory';
+import { useInventoryStore } from '../stores/inventory';
+import type { Product } from '../types';
 import { useSalesStore } from '../stores/sales';
 import { useClientsStore } from '../stores/clients';
 import { useStoreStatusStore } from '../stores/storeStatus';
@@ -311,7 +312,7 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
               {{ item.name }}
             </p>
             <p class="text-gray-500 dark:text-gray-400 text-xs">
-              {{ formatCurrency(item.price) }} {{ item.unit }}.
+              {{ formatCurrency(item.price) }} {{ item.measurementUnit }}.
             </p>
           </div>
           <div class="flex items-center gap-3">

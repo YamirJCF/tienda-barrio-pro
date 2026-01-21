@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import type { Product, MeasurementUnit } from '../stores/inventory';
+import type { Product, MeasurementUnit } from '../types';
 import { Decimal } from 'decimal.js';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 

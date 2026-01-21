@@ -136,9 +136,11 @@ const props = defineProps<{
   isVisible: boolean;
 }>();
 
+import type { CashControlEvent } from '@/stores/cashControl';
+
 const emit = defineEmits<{
   close: [];
-  success: [event: any];
+  success: [event: CashControlEvent | null];
 }>();
 
 const cashControlStore = useCashControlStore();
