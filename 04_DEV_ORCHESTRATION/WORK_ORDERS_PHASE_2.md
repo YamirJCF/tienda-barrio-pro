@@ -174,12 +174,12 @@ flowchart LR
 
 ### Tareas
 
-- [ ] **T5.1**: Pruebas E2E de Flujo de Venta
-- [ ] **T5.2**: Validación de Cálculos Contables (Caja)
-- [ ] **T5.3**: Pruebas de Estrés de Inventario
-- [ ] **T5.4**: Auditoría de Permisos (Cajero vs Admin en reportes)
+- [x] **T5.1**: Pruebas E2E de Flujo de Venta
+- [x] **T5.2**: Validación de Cálculos Contables (Caja)
+- [x] **T5.3**: Pruebas de Estrés de Inventario
+- [x] **T5.4**: Auditoría de Permisos (Cajero vs Admin en reportes)
 
 ### Criterios de Aceptación
 
-- [ ] Sin errores de cálculo financiero
-- [ ] Flujos bloqueantes (Caja cerrada) funcionan 100%
+- [x] Sin errores de cálculo financiero
+- [x] Flujos bloqueantes (Caja cerrada) funcionan 100%
