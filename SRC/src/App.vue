@@ -9,6 +9,7 @@ import { useStoreStatusStore } from './stores/storeStatus';
 // SPEC-008: Alertas críticas bloqueantes
 import CriticalAlertModal from './components/CriticalAlertModal.vue';
 import { useCriticalAlerts } from './composables/useCriticalAlerts';
+import OfflineBanner from './components/common/OfflineBanner.vue';
 
 // ============================================
 // DATA INTEGRITY CHECK (FIRST THING!)
@@ -96,6 +97,7 @@ const resetApp = () => {
       </transition>
     </RouterView>
 
+    <OfflineBanner />
     <ToastNotification />
   </div>
 </template>

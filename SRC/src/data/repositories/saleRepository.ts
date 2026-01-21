@@ -12,6 +12,7 @@ import { Sale } from '../../types';
 import { createSupabaseRepository, EntityRepository } from './supabaseAdapter';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
+import { addToSyncQueue } from '../syncQueue';
 
 // Constants
 const TABLE_NAME = 'sales';
@@ -36,11 +37,13 @@ export const saleRepository: SaleRepository = {
 
     /**
      * Process a new sale (Atomic Transaction)
-     * Uses RPC 'procesar_venta' if online, fallback to localStorage if offline
+     * Uses RPC 'procesar_venta' if online, fallback to Sync Queue if offline
      */
     async processSale(saleData: any, storeId: string): Promise<{ success: boolean; id?: string; error?: string }> {
-        // 1. Check if we can use Supabase RPC
-        if (isSupabaseConfigured()) {
+        const isOnline = navigator.onLine && isSupabaseConfigured();
+
+        // 1. Try Online (RPC)
+        if (isOnline) {
             const supabase = getSupabaseClient();
             if (supabase) {
                 try {
@@ -55,53 +58,46 @@ export const saleRepository: SaleRepository = {
 
                     if (error) {
                         logger.error('[SaleRepo] RPC error:', error);
-                        // Don't fallback automatically for server errors to avoid double billing risks
-                        // unless connection error is explicit. For now, return error.
-                        return { success: false, error: error.message };
-                    }
-
-                    if (data && data.success) {
-                        // Fetch the full object locally to match return type if needed, 
-                        // but usually ID is enough.
-                        return { success: true, id: data.id };
+                        // If network error, fall through to offline handling
+                        // Supabase network errors often don't throw but return error object with message
+                        if (error.message && (error.message.includes('FetchError') || error.message.includes('Network request failed'))) {
+                            // Fallthrough
+                        } else {
+                            return { success: false, error: error.message };
+                        }
                     } else {
-                        return { success: false, error: data?.error || 'Unknown RPC error' };
+                        if (data && data.success) {
+                            return { success: true, id: data.id };
+                        } else {
+                            return { success: false, error: data?.error || 'Unknown RPC error' };
+                        }
                     }
 
                 } catch (e) {
                     logger.error('[SaleRepo] RPC exception:', e);
-                    // Network errors -> Fallback to localStorage
+                    // Fallthrough to offline
                 }
             }
         }
 
-        // 2. Fallback: LocalStorage (Offline Mode)
-        // This is essentially "Optimistic UI" for the store perspective
+        // 2. Offline Mode (Sync Queue)
+        // Add to IndexedDB queue for later processing
         try {
-            // Generate ID
+            // Generate ID client-side for UI consistency
             const newId = crypto.randomUUID();
-            const newSale = {
-                ...saleData,
-                id: newId,
-                syncStatus: 'pending' // Mark for synchronization (WO-003)
-            };
+            const enrichedPayload = { ...saleData, storeId, id: newId };
 
-            const existing = await baseRepository.getAll(storeId);
-            existing.push(newSale); // Adapter handles writing to localStorage via `set`
+            const queued = await addToSyncQueue('CREATE_SALE', enrichedPayload);
 
-            // Need direct access to adapter to specific key? 
-            // Actually baseRepository.create does this but without the complex logic.
-            // Let's use baseRepository.create but we need to pass the full object with ID mapping
+            if (queued) {
+                return { success: true, id: newId };
+                // Note: UI should treating this as "Pending Sync"
+            } else {
+                return { success: false, error: 'Queue full or storage error' };
+            }
 
-            // Since baseRepository methods are tailored for simple CRUD, 
-            // for complex transaction fallback we might need custom logic or just trust creating the header.
-            // Ideally WO-003 will handle the robust SyncQueue.
-            // For now, simple create:
-            await baseRepository.create(newSale);
-
-            return { success: true, id: newId };
-        } catch (e) {
-            return { success: false, error: 'Offline save failed' };
+        } catch (e: any) {
+            return { success: false, error: e.message || 'Offline save failed' };
         }
     },
 
