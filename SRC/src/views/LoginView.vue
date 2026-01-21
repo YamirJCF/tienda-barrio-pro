@@ -206,8 +206,8 @@ const handleServerError = (errorCode: string, errorMsg: string) => {
             :disabled="isLoading" />
 
           <div class="relative">
-            <BaseInput v-model="password" :type="showPassword ? 'text' : 'password'" label="Contraseña" icon="lock"
-              placeholder="••••••••" :disabled="isLoading" />
+            <BaseInput v-model="password" :type="showPassword ? 'text' : 'password'" :label="credentialLabel" icon="lock"
+              :placeholder="credentialPlaceholder" :disabled="isLoading" />
             <button type="button" @click="showPassword = !showPassword"
               class="absolute top-[29px] right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
               tabindex="-1">
