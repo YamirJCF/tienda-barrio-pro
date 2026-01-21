@@ -2,19 +2,22 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { clientsSerializer } from '../data/serializers';
+import { generateUUID } from '../utils/uuid';
 
+// WO-001: Changed all IDs from number to string (UUID)
 export interface ClientTransaction {
-  id: number;
-  clientId: number;
+  id: string; // UUID
+  clientId: string; // UUID - references Client.id
   type: 'purchase' | 'payment';
   amount: Decimal;
   description: string;
   date: string;
-  saleId?: number;
+  saleId?: string; // UUID - references Sale.id
 }
 
+// WO-001: Changed id from number to string (UUID)
 export interface Client {
-  id: number;
+  id: string; // UUID
   name: string;
   cedula: string;
   phone?: string;
@@ -29,8 +32,6 @@ export const useClientsStore = defineStore(
   () => {
     const clients = ref<Client[]>([]);
     const transactions = ref<ClientTransaction[]>([]);
-    const nextClientId = ref(1);
-    const nextTransactionId = ref(1);
 
     // Computed
     const totalDebt = computed(() => {
@@ -45,10 +46,11 @@ export const useClientsStore = defineStore(
     });
 
     // Methods
+    // WO-001: Changed to use UUID instead of numeric ID
     const addClient = (data: Omit<Client, 'id' | 'balance' | 'createdAt' | 'updatedAt'>) => {
       const now = new Date().toISOString();
       const client: Client = {
-        id: nextClientId.value++,
+        id: generateUUID(), // WO-001: Use UUID
         ...data,
         balance: new Decimal(0),
         createdAt: now,
@@ -58,7 +60,8 @@ export const useClientsStore = defineStore(
       return client;
     };
 
-    const updateClient = (id: number, data: Partial<Omit<Client, 'id' | 'createdAt'>>) => {
+    // WO-001: Changed parameter type from number to string
+    const updateClient = (id: string, data: Partial<Omit<Client, 'id' | 'createdAt'>>) => {
       const index = clients.value.findIndex((c) => c.id === id);
       if (index !== -1) {
         clients.value[index] = {
@@ -71,7 +74,8 @@ export const useClientsStore = defineStore(
       return null;
     };
 
-    const deleteClient = (id: number) => {
+    // WO-001: Changed parameter type from number to string
+    const deleteClient = (id: string) => {
       const index = clients.value.findIndex((c) => c.id === id);
       if (index !== -1) {
         clients.value.splice(index, 1);
@@ -80,7 +84,8 @@ export const useClientsStore = defineStore(
       }
     };
 
-    const getClientById = (id: number) => {
+    // WO-001: Changed parameter type from number to string
+    const getClientById = (id: string) => {
       return clients.value.find((c) => c.id === id);
     };
 
@@ -96,17 +101,18 @@ export const useClientsStore = defineStore(
       );
     };
 
+    // WO-001: Changed parameter type from number to string
     const addPurchaseDebt = (
-      clientId: number,
+      clientId: string,
       amount: Decimal,
       description: string,
-      saleId?: number,
+      saleId?: string,
     ) => {
       const client = getClientById(clientId);
       if (!client) return null;
 
       const tx: ClientTransaction = {
-        id: nextTransactionId.value++,
+        id: generateUUID(), // WO-001: Use UUID
         clientId,
         type: 'purchase',
         amount,
@@ -123,12 +129,13 @@ export const useClientsStore = defineStore(
       return tx;
     };
 
-    const registerPayment = (clientId: number, amount: Decimal, description = 'Abono') => {
+    // WO-001: Changed parameter type from number to string
+    const registerPayment = (clientId: string, amount: Decimal, description = 'Abono') => {
       const client = getClientById(clientId);
       if (!client) return null;
 
       const tx: ClientTransaction = {
-        id: nextTransactionId.value++,
+        id: generateUUID(), // WO-001: Use UUID
         clientId,
         type: 'payment',
         amount,
@@ -144,19 +151,21 @@ export const useClientsStore = defineStore(
       return tx;
     };
 
-    const getClientTransactions = (clientId: number) => {
+    // WO-001: Changed parameter type from number to string
+    const getClientTransactions = (clientId: string) => {
       return transactions.value
         .filter((t) => t.clientId === clientId)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     };
 
-    const getAvailableCredit = (clientId: number) => {
+    // WO-001: Changed parameter type from number to string
+    const getAvailableCredit = (clientId: string) => {
       const client = getClientById(clientId);
       if (!client) return new Decimal(0);
       return client.creditLimit.minus(client.balance);
     };
 
-    // Initialize with sample data
+    // WO-001: Initialize with sample data using UUID
     const initializeSampleData = () => {
       if (clients.value.length > 0) return;
 
@@ -182,29 +191,34 @@ export const useClientsStore = defineStore(
         },
       ];
 
+      // WO-001: Store generated client IDs for sample transactions
+      const generatedClients: Client[] = [];
+
       sampleClients.forEach((c) => {
         const now = new Date().toISOString();
-        clients.value.push({
-          id: nextClientId.value++,
+        const newClient: Client = {
+          id: generateUUID(), // WO-001: Use UUID
           ...c,
           balance: new Decimal(0),
           createdAt: now,
           updatedAt: now,
-        });
+        };
+        clients.value.push(newClient);
+        generatedClients.push(newClient);
       });
 
-      // Add some sample transactions
-      addPurchaseDebt(1, new Decimal(120000), 'Compra inicial');
-      addPurchaseDebt(2, new Decimal(45000), 'Mercado semanal');
-      addPurchaseDebt(4, new Decimal(35500), 'Productos varios');
-      registerPayment(4, new Decimal(20000), 'Abono efectivo');
+      // Add some sample transactions using the generated client IDs
+      if (generatedClients.length >= 4) {
+        addPurchaseDebt(generatedClients[0].id, new Decimal(120000), 'Compra inicial');
+        addPurchaseDebt(generatedClients[1].id, new Decimal(45000), 'Mercado semanal');
+        addPurchaseDebt(generatedClients[3].id, new Decimal(35500), 'Productos varios');
+        registerPayment(generatedClients[3].id, new Decimal(20000), 'Abono efectivo');
+      }
     };
 
     return {
       clients,
       transactions,
-      nextClientId,
-      nextTransactionId,
       totalDebt,
       clientsWithDebt,
       addClient,

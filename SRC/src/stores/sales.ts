@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { salesSerializer } from '../data/serializers';
+import { generateUUID } from '../utils/uuid';
 import type { Sale } from '../types';
 
 export interface DailyStats {
@@ -17,7 +18,7 @@ export const useSalesStore = defineStore(
   'sales',
   () => {
     const sales = ref<Sale[]>([]);
-    const nextId = ref(1);
+    const nextTicketNumber = ref(1); // WO-001: Changed from nextId to nextTicketNumber
     const isStoreOpen = ref(false);
     const openingCash = ref<Decimal>(new Decimal(0));
     const currentCash = ref<Decimal>(new Decimal(0));
@@ -126,13 +127,16 @@ export const useSalesStore = defineStore(
       currentCash.value = new Decimal(0);
     };
 
-    const addSale = (saleData: Omit<Sale, 'id' | 'timestamp' | 'date'>) => {
+    // WO-001: Changed to use UUID and ticketNumber
+    const addSale = (saleData: Omit<Sale, 'id' | 'ticketNumber' | 'timestamp' | 'date'>) => {
       const now = new Date();
       const newSale: Sale = {
         ...saleData,
-        id: nextId.value++,
+        id: generateUUID(), // WO-001: Use UUID
+        ticketNumber: nextTicketNumber.value++, // Sequential for UI display
         timestamp: now.toISOString(),
         date: now.toISOString().split('T')[0],
+        syncStatus: 'synced', // SPEC-012: Default to synced when online
       };
 
       sales.value.push(newSale);
@@ -146,13 +150,19 @@ export const useSalesStore = defineStore(
       return newSale;
     };
 
-    const getSaleById = (id: number) => {
+    // WO-001: Changed parameter type from number to string
+    const getSaleById = (id: string) => {
       return sales.value.find((sale) => sale.id === id);
+    };
+
+    // WO-001: New function to find by ticket number (for UI)
+    const getSaleByTicketNumber = (ticketNumber: number) => {
+      return sales.value.find((sale) => sale.ticketNumber === ticketNumber);
     };
 
     return {
       sales,
-      nextId,
+      nextTicketNumber, // WO-001: Renamed from nextId
       isStoreOpen,
       openingCash,
       currentCash,
@@ -170,6 +180,7 @@ export const useSalesStore = defineStore(
       closeStore,
       addSale,
       getSaleById,
+      getSaleByTicketNumber, // WO-001: New function
     };
   },
   {

@@ -12,7 +12,8 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  complete: [paymentMethod: string, amountReceived?: Decimal, clientId?: number];
+  // WO-001: Changed clientId from number to string for UUID
+  complete: [paymentMethod: string, amountReceived?: Decimal, clientId?: string];
 }>();
 
 // Store

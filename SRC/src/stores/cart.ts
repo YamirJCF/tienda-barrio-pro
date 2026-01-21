@@ -37,8 +37,9 @@ export const useCartStore = defineStore(
     });
 
     // Add regular item (integer quantity) with defensive validation
+    // WO-001: Changed id from number to string for UUID
     const addItem = (product: {
-      id: number;
+      id: string; // UUID
       name: string;
       price: Decimal;
       quantity: number;
@@ -84,8 +85,9 @@ export const useCartStore = defineStore(
 
     // Add weighable item with Decimal quantity and pre-calculated subtotal
     // Includes defensive validation for Decimal values
+    // WO-001: Changed id from number to string for UUID
     const addWeighableItem = (item: {
-      id: number;
+      id: string; // UUID
       name: string;
       price: Decimal;
       quantity: Decimal;
@@ -134,7 +136,8 @@ export const useCartStore = defineStore(
       }
     };
 
-    const removeItem = (id: number) => {
+    // WO-001: Changed id from number to string for UUID
+    const removeItem = (id: string) => {
       const index = items.value.findIndex((i) => i.id === id);
       if (index !== -1) {
         items.value.splice(index, 1);

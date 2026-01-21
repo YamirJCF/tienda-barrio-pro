@@ -14,7 +14,8 @@ const authStore = useAuthStore();
 // State
 const searchQuery = ref('');
 const showClientModal = ref(false);
-const editingClientId = ref<number | undefined>(undefined);
+// WO-001: Changed from number to string for UUID
+const editingClientId = ref<string | undefined>(undefined);
 
 // Computed
 const filteredClients = computed(() => {
@@ -73,7 +74,8 @@ const openNewClient = () => {
   showClientModal.value = true;
 };
 
-const openClientDetail = (clientId: number) => {
+// WO-001: Changed parameter type from number to string
+const openClientDetail = (clientId: string) => {
   router.push(`/clients/${clientId}`);
 };
 

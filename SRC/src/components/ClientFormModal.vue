@@ -4,9 +4,10 @@ import { useClientsStore, type Client } from '../stores/clients';
 import { Decimal } from 'decimal.js';
 
 // Props
+// WO-001: Changed clientId from number to string for UUID
 interface Props {
   modelValue: boolean;
-  clientId?: number;
+  clientId?: string; // UUID for editing existing client
 }
 
 const props = defineProps<Props>();
@@ -77,7 +78,8 @@ watch(
   () => [props.modelValue, props.clientId],
   ([show, clientId]) => {
     if (show && clientId) {
-      const client = clientsStore.getClientById(clientId as number);
+      // WO-001: clientId is now string
+      const client = clientsStore.getClientById(clientId as string);
       if (client) {
         formData.value = {
           name: client.name,

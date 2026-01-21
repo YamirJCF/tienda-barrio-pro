@@ -2,8 +2,9 @@ import { Decimal } from 'decimal.js';
 
 export type MeasurementUnit = 'un' | 'kg' | 'lb' | 'g';
 
+// WO-001: UUID Refactoring - All IDs changed from number to string
 export interface Product {
-    id: number;
+    id: string; // UUID
     name: string;
     price: Decimal;
     stock: Decimal;
@@ -20,7 +21,7 @@ export interface Product {
 }
 
 export interface CartItem {
-    id: number;
+    id: string; // UUID - references Product.id
     name: string;
     price: Decimal;
     quantity: number | Decimal;
@@ -34,7 +35,7 @@ export interface CartItem {
 }
 
 export interface SaleItem {
-    productId: number;
+    productId: string; // UUID - references Product.id
     productName: string;
     quantity: number;
     price: Decimal;
@@ -42,7 +43,8 @@ export interface SaleItem {
 }
 
 export interface Sale {
-    id: number;
+    id: string; // UUID
+    ticketNumber: number; // Sequential number for UI display (SPEC-012)
     date: string; // YYYY-MM-DD
     timestamp: string; // ISO Full
     items: SaleItem[];
@@ -52,15 +54,46 @@ export interface Sale {
     effectiveTotal: Decimal;
     amountReceived?: Decimal;
     change?: Decimal;
-    clientId?: number;
+    clientId?: string; // UUID - references Client.id
+    employeeId?: string; // UUID - references Employee.id
+    syncStatus?: 'synced' | 'pending' | 'failed'; // SPEC-012: Sync Protocol
 }
 
 export interface Client {
-    id: number;
+    id: string; // UUID
     name: string;
     cc: string;
     phone?: string;
     email?: string;
     totalDebt: Decimal;
     notes?: string;
+    creditLimit?: Decimal;
+    createdAt?: string;
+    updatedAt?: string;
 }
+
+// WO-001: New interface for employees (consolidating from auth.ts)
+export interface Employee {
+    id: string; // UUID
+    name: string;
+    username: string;
+    storeId: string; // UUID - references Store.id
+    permissions: EmployeePermissions;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface EmployeePermissions {
+    canSell: boolean;
+    canViewInventory: boolean;
+    canViewReports: boolean;
+    canFiar: boolean;
+    canOpenCloseCash: boolean;
+    canManageInventory?: boolean;
+    canManageClients?: boolean;
+}
+
+// WO-001: Helper type for generating UUIDs
+export type UUID = string;
+

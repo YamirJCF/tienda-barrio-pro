@@ -35,9 +35,10 @@ const {
 
 // State
 const showProductModal = ref(false);
-const editingProductId = ref<number | undefined>(undefined);
+// WO-001: Changed from number to string for UUID
+const editingProductId = ref<string | undefined>(undefined);
 const showDeleteModal = ref(false);
-const productToDelete = ref<{ id: number; name: string } | null>(null);
+const productToDelete = ref<{ id: string; name: string } | null>(null);
 
 // Methods
 const goToDashboard = () => {
@@ -49,12 +50,14 @@ const openNewProduct = () => {
   showProductModal.value = true;
 };
 
-const openEditProduct = (id: number) => {
+// WO-001: Changed parameter type from number to string
+const openEditProduct = (id: string) => {
   editingProductId.value = id;
   showProductModal.value = true;
 };
 
-const deleteProduct = (id: number) => {
+// WO-001: Changed parameter type from number to string
+const deleteProduct = (id: string) => {
   const product = inventoryStore.products.find((p) => p.id === id);
   if (product) {
     productToDelete.value = { id, name: product.name };

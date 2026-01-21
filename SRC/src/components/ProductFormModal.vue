@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { useInventoryStore, type Product } from '../stores/inventory';
+import { useInventoryStore } from '../stores/inventory';
+import type { Product } from '../types';
 import { Decimal } from 'decimal.js';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { logger } from '../utils/logger';
 import { getMarginLoss } from '../utils/currency';
 
 // Props
+// WO-001: Changed productId from number to string for UUID
 interface Props {
   modelValue: boolean;
-  productId?: number; // For editing existing product
+  productId?: string; // UUID for editing existing product
 }
 
 const props = defineProps<Props>();

@@ -3,13 +3,13 @@ import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { inventorySerializer } from '../data/serializers';
 import { useNotificationsStore } from './notificationsStore';
+import { generateUUID } from '../utils/uuid';
 import type { Product } from '../types';
 
 export const useInventoryStore = defineStore(
   'inventory',
   () => {
     const products = ref<Product[]>([]);
-    const nextId = ref(1);
 
     // Computed
     const totalProducts = computed(() => products.value.length);
@@ -38,12 +38,13 @@ export const useInventoryStore = defineStore(
     };
 
     // Methods
+    // WO-001: Changed to use UUID instead of numeric ID
     const addProduct = (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
       const now = new Date().toISOString();
       const newProduct: Product = {
         ...productData,
         price: roundHybrid50(productData.price), // SPEC-010: Forzar redondeo
-        id: nextId.value++,
+        id: generateUUID(), // WO-001: Use UUID
         createdAt: now,
         updatedAt: now,
       };
@@ -51,7 +52,8 @@ export const useInventoryStore = defineStore(
       return newProduct;
     };
 
-    const updateProduct = (id: number, updates: Partial<Omit<Product, 'id' | 'createdAt'>>) => {
+    // WO-001: Changed parameter type from number to string
+    const updateProduct = (id: string, updates: Partial<Omit<Product, 'id' | 'createdAt'>>) => {
       const index = products.value.findIndex((p) => p.id === id);
       if (index !== -1) {
         // SPEC-010: Si se actualiza el precio, forzar redondeo
@@ -68,7 +70,8 @@ export const useInventoryStore = defineStore(
       return null;
     };
 
-    const deleteProduct = (id: number) => {
+    // WO-001: Changed parameter type from number to string
+    const deleteProduct = (id: string) => {
       const index = products.value.findIndex((p) => p.id === id);
       if (index !== -1) {
         products.value.splice(index, 1);
@@ -77,7 +80,8 @@ export const useInventoryStore = defineStore(
       return false;
     };
 
-    const getProductById = (id: number) => {
+    // WO-001: Changed parameter type from number to string
+    const getProductById = (id: string) => {
       return products.value.find((p) => p.id === id);
     };
 
@@ -97,8 +101,9 @@ export const useInventoryStore = defineStore(
       });
     };
 
+    // WO-001: Changed parameter type from number to string
     const updateStock = (
-      id: number,
+      id: string,
       quantity: number | Decimal,
     ): { success: boolean; product?: Product; error?: string } => {
       const product = products.value.find((p) => p.id === id);
@@ -148,7 +153,6 @@ export const useInventoryStore = defineStore(
 
     return {
       products,
-      nextId,
       totalProducts,
       lowStockProducts,
       productsByCategory,

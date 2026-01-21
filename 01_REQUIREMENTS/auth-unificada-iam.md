@@ -141,8 +141,84 @@ END IF;
 
 ---
 
+---
+
+## 7. Handshake PIN → Token (Extensión 2026-01-21)
+
+> [!IMPORTANT]
+> Esta sección extiende SPEC-005 con el flujo técnico de intercambio de credenciales.
+
+### 7.1 Flujo de Autenticación Empleado
+
+```mermaid
+sequenceDiagram
+    participant C as Cajero
+    participant F as Frontend
+    participant B as Supabase RPC
+    
+    C->>F: Ingresa username + PIN (4 dígitos)
+    F->>F: Detecta: NO contiene @ → Flujo Empleado
+    F->>F: Genera fingerprint (SHA-256)
+    F->>B: RPC: login_empleado_unificado(user, pin, fingerprint)
+    
+    alt PIN correcto + Dispositivo aprobado
+        B-->>F: { success: true, session_token: "jwt...", employee: {...} }
+        F->>F: Guarda token en sessionStorage (no localStorage)
+        F->>F: Configura Supabase Auth header
+        F-->>C: Acceso al Dashboard
+    else Dispositivo pendiente
+        B-->>F: { error_code: "GATEKEEPER_PENDING" }
+        F-->>C: Pantalla de espera de aprobación
+    else PIN incorrecto
+        B-->>F: { error_code: "INVALID_CREDENTIALS" }
+        F->>F: Incrementa contador de intentos
+        F-->>C: "Credenciales inválidas"
+    end
+```
+
+### 7.2 Política de Sesión Volátil
+
+> [!WARNING]
+> **Decisión Consciente (Mitigación QA R-02)**: La sesión de empleado es intencionalmente efímera.
+
+| Escenario | Comportamiento | Justificación |
+|-----------|----------------|---------------|
+| **Cierre de pestaña** | Sesión se pierde | Seguridad: otro usuario no reutiliza sesión |
+| **Inactividad > 30 min** | Auto-logout + re-PIN | Prevención de acceso no autorizado |
+| **Navegador reabierto** | Solicitar PIN nuevamente | Confirma identidad del cajero actual |
+| **Checkbox "Recordarme"** | **PROHIBIDO** | Solo Admin con 2FA puede persistir sesión |
+
+**Almacenamiento:**
+
+```typescript
+// ❌ PROHIBIDO: localStorage persiste entre sesiones
+localStorage.setItem('session_token', token);
+
+// ✅ CORRECTO: sessionStorage se limpia al cerrar
+sessionStorage.setItem('employee_session', token);
+```
+
+### 7.3 Rate Limiting en Frontend
+
+Para complementar el rate limiting del servidor:
+
+| Parámetro | Valor |
+|-----------|-------|
+| Intentos antes de bloqueo UI | 3 |
+| Cooldown UI | 30 segundos |
+| Mensaje | "Demasiados intentos. Espera 30s." |
+
+**Nota**: El servidor tiene su propio límite de 5 intentos / 15 min. El frontend añade UX preventiva.
+
+### 7.4 Regla de Oro
+
+> **El PIN NUNCA retorna al frontend después del login.** Solo se recibe el token JWT.
+
+---
+
 ## Conexiones con Documentación
 
 - **Implementación actual:** [login.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/01_REQUIREMENTS/login.md)
 - **Arquitectura Supabase:** [supabase-schema.sql](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/02_ARCHITECTURE/supabase-schema.sql)
 - **Protocolos Backend:** [SECURITY_PROTOCOLS.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/02_ARCHITECTURE/SECURITY_PROTOCOLS.md)
+- **Protocolo Sync:** [sync_protocol_spec.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/01_REQUIREMENTS/sync_protocol_spec.md)

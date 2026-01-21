@@ -146,16 +146,19 @@ const addProductFromSearch = (product: Product) => {
 // Computed
 const formattedTotal = computed(() => cartStore.formattedTotal);
 
-// Current ticket number (next sale ID)
+// Current ticket number (next sale ticket number)
 const ticketNumber = computed(() => {
-  return `#${salesStore.nextId.toString().padStart(3, '0')}`;
+  return `#${salesStore.nextTicketNumber.toString().padStart(3, '0')}`;
 });
 
 // Add note/custom item
+// WO-001: Using generateUUID for custom items
+import { generateUUID } from '../utils/uuid';
+
 const addNoteItem = (item: { name: string; price: number }) => {
   const quantity = pendingQuantity.value;
   cartStore.addItem({
-    id: Date.now(),
+    id: generateUUID(), // WO-001: Use UUID
     name: item.name,
     price: new Decimal(item.price),
     quantity,
@@ -189,7 +192,8 @@ const handleCheckout = () => {
   showCheckout.value = true;
 };
 
-const completeSale = async (paymentMethod: string, amountReceived?: Decimal, clientId?: number) => {
+// WO-001: Changed clientId from number to string
+const completeSale = async (paymentMethod: string, amountReceived?: Decimal, clientId?: string) => {
   // Prevent double-click
   if (isProcessing.value) return;
 
