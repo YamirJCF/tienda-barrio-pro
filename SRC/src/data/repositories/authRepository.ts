@@ -10,6 +10,8 @@ export interface LoginResponse {
     error?: string;
 }
 
+import { isAuditMode } from '../../data/supabaseClient';
+
 export const authRepository = {
     /**
      * SPEC-005: Login unificado de empleado (Gatekeeper de 3 capas)
@@ -20,6 +22,32 @@ export const authRepository = {
         fingerprint: string,
         userAgent: string
     ): Promise<LoginResponse> {
+        // 🛡️ AUDIT MODE MOCK
+        if (isAuditMode()) {
+            logger.log('[AuthRepo] 🛡️ Audit Mode: Mocking login success');
+            return {
+                success: true,
+                employee: {
+                    id: 'mock-emp-001',
+                    name: 'Empleado Demo (Auditoría)',
+                    email: username || 'demo@audit.com',
+                    type: 'employee',
+                    storeId: 'audit-store-001',
+                    employeeId: 999,
+                    permissions: {
+                        canSell: true,
+                        canViewInventory: true,
+                        canViewReports: true,
+                        canFiar: true,
+                        canOpenCloseCash: true,
+                        canManageInventory: true,
+                        canManageClients: true
+                    }
+                },
+                store_state: { is_open: true }
+            };
+        }
+
         try {
             const { data, error } = await supabase.rpc('login_empleado_unificado', {
                 p_username: username.toLowerCase(),
@@ -37,7 +65,7 @@ export const authRepository = {
             }
 
             const response = data as any;
-
+            // ... rest of the code
             if (!response.success) {
                 return {
                     success: false,

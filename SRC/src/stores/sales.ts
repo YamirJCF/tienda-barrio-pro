@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { salesSerializer } from '../data/serializers';
+import { getStorageKey } from '../utils/storage';
 import { generateUUID } from '../utils/uuid';
 import type { Sale } from '../types';
 import { useCashRegisterStore } from './cashRegister';
@@ -243,8 +244,9 @@ export const useSalesStore = defineStore(
     };
   },
   {
+
     persist: {
-      key: 'tienda-sales',
+      key: getStorageKey('tienda-sales'),
       storage: localStorage,
       serializer: salesSerializer,
     },

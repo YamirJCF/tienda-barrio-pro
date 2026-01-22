@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { logger } from '../utils/logger';
+import { getStorageKey } from '../utils/storage';
 
 export type UserType = 'admin' | 'employee';
 
@@ -36,26 +37,19 @@ export interface CurrentUser {
 // =============================================
 // CUENTA DEMO POR DEFECTO
 // =============================================
-const DEMO_ACCOUNT: StoreAccount = {
-  id: 'demo-store-001',
-  storeName: 'Mi Tienda Demo',
-  ownerName: 'Usuario Demo',
-  email: 'demo@tienda.com',
-  password: 'demo123',
-  createdAt: new Date().toISOString(),
-};
+// Demo Account definition removed for Audit Mode security
 
 export const useAuthStore = defineStore(
   'auth',
   () => {
-    // State - inicializado con cuenta demo
-    const stores = ref<StoreAccount[]>([DEMO_ACCOUNT]);
+    // State - inicializado vacío (sin cuenta demo)
+    const stores = ref<StoreAccount[]>([]);
     const currentUser = ref<CurrentUser | null>(null);
     const isAuthenticated = ref(false);
 
     // SPEC-005: Estados IAM
     const deviceApproved = ref<'pending' | 'approved' | 'rejected' | null>(null);
-    const storeOpenStatus = ref<boolean>(false);
+    // storeOpenStatus removed - replaced by Offline Accountability logic
 
     // Computed
     const isAdmin = computed(() => currentUser.value?.type === 'admin');
@@ -102,8 +96,8 @@ export const useAuthStore = defineStore(
       if (!isAuthenticated.value) return false;
       // Admins siempre pueden acceder
       if (isAdmin.value) return true;
-      // Empleados: dispositivo aprobado Y tienda abierta
-      return deviceApproved.value === 'approved' && storeOpenStatus.value;
+      // Empleados: dispositivo aprobado (ya no se chequea storeOpenStatus)
+      return deviceApproved.value === 'approved';
     });
 
     // Methods
@@ -200,7 +194,6 @@ export const useAuthStore = defineStore(
       isAuthenticated.value = false;
       // Reset IAM states
       deviceApproved.value = null;
-      storeOpenStatus.value = false;
     };
 
     // SPEC-005: Actions para estados IAM
@@ -208,31 +201,19 @@ export const useAuthStore = defineStore(
       deviceApproved.value = status;
     };
 
-    const setStoreOpenStatus = (isOpen: boolean) => {
-      storeOpenStatus.value = isOpen;
-    };
+    // storeOpenStatus setter removed
 
-    // Resetear a cuenta demo (limpia todo excepto la cuenta demo)
+    // Reset function removed to prevent demo account restoration
     const resetToDemo = () => {
-      stores.value = [DEMO_ACCOUNT];
+      // Logic removed for audit integrity
       currentUser.value = null;
       isAuthenticated.value = false;
-      deviceApproved.value = null;
-      storeOpenStatus.value = false;
-      // Limpiar otros stores del localStorage
-      localStorage.removeItem('tienda-employees');
-      localStorage.removeItem('tienda-inventory');
-      localStorage.removeItem('tienda-sales');
-      localStorage.removeItem('tienda-cart');
-      localStorage.removeItem('tienda-clients');
-      localStorage.removeItem('tienda-expenses');
-      logger.log('✅ Sistema reseteado a cuenta demo');
+      stores.value = [];
+      localStorage.clear();
+      logger.log('✅ System cleared (No Demo restored)');
     };
 
-    // Auto-inicializar: asegurar que siempre exista la cuenta demo
-    if (!stores.value.find((s) => s.id === DEMO_ACCOUNT.id)) {
-      stores.value = [DEMO_ACCOUNT];
-    }
+    // Auto-initialization removed
 
     const getStoreById = (id: string) => {
       return stores.value.find((s) => s.id === id);
@@ -251,7 +232,7 @@ export const useAuthStore = defineStore(
       isAuthenticated,
       // SPEC-005: IAM States
       deviceApproved,
-      storeOpenStatus,
+      // storeOpenStatus removed
       // Computed
       isAdmin,
       isEmployee,
@@ -276,12 +257,12 @@ export const useAuthStore = defineStore(
       resetToDemo, // Nueva función
       // SPEC-005: IAM Methods
       setDeviceStatus,
-      setStoreOpenStatus,
     };
   },
   {
+
     persist: {
-      key: 'tienda-auth',
+      key: getStorageKey('tienda-auth'),
     },
   },
 );

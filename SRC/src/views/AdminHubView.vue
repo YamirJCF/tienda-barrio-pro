@@ -28,80 +28,17 @@ const activeTab = ref<'reportes' | 'gestion' | 'config'>('gestion');
 const showDeviceModal = ref(false);
 // WO-004: State para modal de PIN (consolidado)
 const showPinSetupModal = ref(false);
-// T-008: State para confirmación de cierre de tienda
-const showCloseStoreConfirm = ref(false);
-// A-02: State para sidebar de perfil
-const showProfileSidebar = ref(false);
+// T-008: State para confirmación de cierre de tienda - REMOVED
 
-// Computed: detectar si ya hay PIN configurado para determinar modo
-const hasPinConfigured = computed(() => cashControlStore.hasPinConfigured);
-const pinSetupMode = computed(() => (hasPinConfigured.value ? 'change' : 'setup'));
-
-const isAdmin = computed(() => authStore.isAdmin);
-const canViewReports = computed(() => authStore.canViewReports);
-
-// Check PIN status on mount & Permission Check
-onMounted(() => {
-  // Security Check: If not admin and can't view reports, kick out
-  if (!isAdmin.value && !canViewReports.value) {
-    router.replace('/');
-    return;
-  }
-
-  cashControlStore.checkPinConfigured();
-
-  // A-02: Leer query param para seleccionar tab automáticamente
-  if (route.query.tab === 'gestion' && isAdmin.value) {
-    activeTab.value = 'gestion';
-  } else if (route.query.tab === 'reportes') {
-    activeTab.value = 'reportes';
-  } else if (!isAdmin.value) {
-    // Force reports for non-admins
-    activeTab.value = 'reportes';
-  }
-});
-
-// Watch for unauthorized tab switches
-watch(activeTab, (newTab) => {
-  if (newTab === 'gestion' && !isAdmin.value) {
-    activeTab.value = 'reportes';
-  }
-});
-
-// Computed - Estado operativo de la tienda (diferente de la caja)
-// const isStoreClosed = computed(() => storeStatusStore.isClosed); // Replacing with cash register status
-const isStoreClosed = computed(() => !cashRegisterStore.isOpen);
+// Computed - Estado operativo de la tienda - REMOVED
 
 // Methods
 const goBack = () => {
-  router.push('/');
-};
-
-const toggleStoreStatus = () => {
-  // Solo cambiar estado operativo, NO afecta la caja
-  // storeStatusStore.toggleStatus(); // Deprecated
-  // If we want to toggle status we should likely act on auth or just redirect to cash control
-  // For now let's just log or no-op as status is derived from session
-};
-
-// T-008: Confirmar antes de cerrar tienda
-const confirmCloseStore = () => {
-  // Si la tienda está cerrada, abrir directamente (sin confirmación)
-  if (isStoreClosed.value) {
-    toggleStoreStatus();
-  } else {
-    // Si está abierta, pedir confirmación antes de cerrar
-    showCloseStoreConfirm.value = true;
-  }
-};
-
-const executeCloseStore = () => {
-  showCloseStoreConfirm.value = false;
-  toggleStoreStatus();
+    router.push('/');
 };
 
 const navigateTo = (route: string) => {
-  router.push(route);
+    router.push(route);
 };
 </script>
 
@@ -343,41 +280,6 @@ const navigateTo = (route: string) => {
             >
           </button>
         </div>
-      </section>
-
-      <!-- Cerrar Tienda Toggle -->
-      <section v-if="activeTab === 'gestion'">
-        <div
-          class="mt-4 overflow-hidden rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 p-4"
-        >
-          <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-              <div
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white dark:bg-red-900/20 text-red-500 shadow-sm"
-              >
-                <span class="material-symbols-outlined">storefront</span>
-              </div>
-              <div>
-                <h4 class="text-base font-bold text-red-700 dark:text-red-400">Cerrar Tienda</h4>
-                <p class="text-xs font-medium text-red-600/80 dark:text-red-400/70">
-                  Temporalmente fuera de servicio
-                </p>
-              </div>
-            </div>
-            <button
-              @click="confirmCloseStore"
-              class="relative inline-flex h-6 w-12 items-center rounded-full transition-colors duration-300"
-              :class="isStoreClosed ? 'bg-red-500' : 'bg-slate-300'"
-            >
-              <span
-                class="inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300"
-                :class="isStoreClosed ? 'translate-x-6' : 'translate-x-1'"
-              ></span>
-            </button>
-          </div>
-        </div>
-      </section>
-
       <!-- Reportes Tab Content -->
       <section v-if="activeTab === 'reportes'">
         <ReportsContent />
@@ -404,52 +306,6 @@ const navigateTo = (route: string) => {
         cashControlStore.checkPinConfigured();
       "
     />
-
-    <!-- T-008: Modal de Confirmación para Cerrar Tienda -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="showCloseStoreConfirm"
-          class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-        >
-          <div
-            class="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            @click="showCloseStoreConfirm = false"
-          ></div>
-          <div
-            class="relative w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 animate-scale-in"
-          >
-            <div class="flex flex-col items-center text-center gap-4">
-              <div
-                class="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
-              >
-                <span class="material-symbols-outlined text-3xl text-red-500">warning</span>
-              </div>
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">¿Cerrar Tienda?</h3>
-              <p class="text-sm text-slate-600 dark:text-slate-300">
-                Esta acción bloqueará las ventas para todo el equipo hasta que vuelvas a abrir.
-              </p>
-              <div class="flex gap-3 w-full mt-2">
-                <button
-                  @click="showCloseStoreConfirm = false"
-                  class="flex-1 h-12 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  @click="executeCloseStore"
-                  class="flex-1 h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold shadow-lg shadow-red-500/20 transition-colors"
-                >
-                  Cerrar Tienda
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- A-02: UserProfileSidebar para icono de perfil -->
     <UserProfileSidebar
       :isOpen="showProfileSidebar"
       @close="showProfileSidebar = false"

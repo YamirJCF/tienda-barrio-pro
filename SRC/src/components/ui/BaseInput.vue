@@ -12,6 +12,7 @@ interface Props {
     icon?: string;
     id?: string;
     list?: string;
+    autocomplete?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -20,6 +21,7 @@ const props = withDefaults(defineProps<Props>(), {
     disabled: false,
     required: false,
     id: () => `input-${Math.random().toString(36).substr(2, 9)}`,
+    autocomplete: 'off', // Default to off to prevent browser dirty suggestions
 });
 
 const emit = defineEmits<{
@@ -62,6 +64,7 @@ defineExpose({
             </div>
 
             <input ref="inputRef" :id="id" :type="type" :value="modelValue" :disabled="disabled" :placeholder="placeholder" :list="list"
+                :autocomplete="autocomplete"
                 :aria-invalid="!!error" :aria-describedby="error ? `${id}-error` : undefined" :class="inputClasses"
                 class="py-2 pr-3" @input="handleInput" @blur="emit('blur', $event)" @focus="emit('focus', $event)" />
         </div>

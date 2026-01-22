@@ -1,3 +1,4 @@
+import './init';
 import './index.css';
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
 import { createApp } from 'vue';
