@@ -1,260 +1,149 @@
 # 🎨 Diseño UX/UI - Adaptación a Identificadores Globales (UUID)
 
-> **Fecha**: 2026-01-21  
+> **Fecha**: 2026-01-21 (Actualizado: Post-Auditoría)  
 > **Rol**: Estratega de UX/UI  
-> **Contexto**: El sistema migra de IDs numéricos locales a UUIDs para sincronización en la nube  
+> **Contexto**: Definición de la migración de IDs numéricos locales (Legacy) a UUIDs (Cloud Native).
 
 ---
 
 ## 📋 Resumen Ejecutivo
 
-Los UUIDs son **ilegibles para el usuario** (36 caracteres alfanuméricos). Este documento define los **Identificadores Funcionales** que el usuario verá en cada módulo crítico, garantizando que NUNCA se exponga un UUID directamente en la interfaz.
+El sistema actualmente opera con **IDs numéricos locales** en memoria (`nextId`). La migración a Supabase introduce **UUIDs** (36 caracteres) como claves primarias.
+
+Este documento define la estrategia para **ocultar esta complejidad técnica** al usuario, estableciendo "Identificadores Funcionales" amigables.
 
 > [!IMPORTANT]
-> **Regla de Oro UX**: El usuario NUNCA debe ver, escribir ni buscar por UUID. Cada entidad tendrá un identificador amigable.
+> **Estado de Migración**: 
+> - **Backend**: Ya preparado para UUIDs.
+> - **Frontend**: Requiere refactorización crítica para dejar de usar `number` en rutas y stores.
+> - **Regla de Oro**: El usuario NUNCA debe ver, escribir ni buscar por UUID.
 
 ---
 
 ## 1️⃣ Ventas y Recibos (/pos)
 
-### Estado Actual Verificado ✅
-El sistema **YA usa** `ticket_number` como identificador visual:
-- El esquema SQL define: `ticket_number SERIAL` en tabla `sales`
-- POSView muestra: `Ticket #045` en el header
+### Diagnóstico
+- **Estado Frontend**: Genera IDs locales secuenciales (ej: 1, 2, 3) que se reinician o desincronizan.
+- **Estado Backend**: Tabla `sales` tiene `ticket_number` pero es global (`SERIAL`), no por tienda.
 
-### Decisión UX: CONFIRMADO
+### Definición UX (El Objetivo)
 
-| Aspecto | Decisión |
-|---------|----------|
-| **Historial de ventas** | Mostrar solo `ticket_number` formateado como `#0001`, `#0045`, etc. |
-| **Recibo impreso** | Header: `Ticket #0045` - NUNCA el UUID |
-| **Modal de checkout** | Confirmar venta mostrando número de ticket |
-| **Búsqueda en historial** | Permitir buscar por número de ticket |
+| Aspecto | Identificador Visual | Requisito Técnico |
+|---------|----------------------|-------------------|
+| **Historial** | `Ticket #0045` | Frontend debe leer `ticket_number` del backend, NO el ID de la fila. |
+| **Recibo** | `Ticket #0045` | El número debe ser correlativo **por tienda** (ej: Tienda A #1, Tienda B #1). |
+| **Búsqueda** | "Buscar por ticket" | Input numérico que mapea internamente a consulta SQL. |
 
 ### Mapa de Navegación
 ```
-[POS] → [Checkout Modal] → [Confirmación: "Ticket #0045 creado"]
-                                    ↓
-                           [Historial de Ventas]
-                                    ↓
-                           [Detalle: Ticket #0045]
-```
-
-### Lógica de Componentes
-```
-📍 POSView.vue
-- computed: ticketNumber → salesStore.nextId.toString().padStart(4, '0')
-- Muestra: "Ticket #0045"
-
-📍 SalesHistory (futuro)
-- Columna principal: "N° Ticket"
-- Valor: sale.ticket_number formateado
-- UUID: Solo en background para DB queries
+[POS] → [Cobrar] → [Backend genera UUID + Ticket # único]
+                           ↓
+                  [Confirmación: "Venta #0045 Exitosa"]
+                           ↓
+                  [Historial: Muestra #0045, Link a /sales/uuid-largo]
 ```
 
 ### Instrucción para el Orquestador
-1. **Verificar** que `salesStore` use `ticket_number` del backend, no IDs locales
-2. **Crear constraint** en UI: nunca renderizar `sale.id` (UUID) en texto visible
-3. **Historial de ventas**: La columna de identificación debe ser `ticket_number`
+1. **Modelado**: Implementar `unique_ticket_per_store` en SQL (evitar colisiones globales).
+2. **Frontend**: Refactorizar tipos `Sale.id` de `number` a `string` (UUID).
+3. **Store**: Eliminar lógica `nextId++`.
 
 ---
 
 ## 2️⃣ Listado de Productos (/inventory)
 
-### Estado Actual Verificado ✅
-- InventoryView.vue muestra: `PLU: {{ product.plu }}` (línea 161)
-- **NO hay columna visible de ID numérico**
-- Esquema SQL: `products.id UUID`, `products.plu TEXT` (único por tienda)
+### Diagnóstico
+El inventario visualmente ya depende del PLU, lo cual es correcto.
 
-### Decisión UX: CONFIRMADO - Sin cambios necesarios
+### Definición UX
 
 | Aspecto | Decisión |
 |---------|----------|
-| **Columna principal** | PLU (Código Rápido) - ya implementado |
-| **Columna de ID de BD** | **ELIMINADA** - No existe y no debe agregarse |
-| **Búsqueda** | Por nombre o PLU - ya implementado |
-| **SKU opcional** | Si se agrega, usar SKU externo (código de barras) |
+| **Identificador Principal** | **PLU** (Código Rápido, ej: 105). |
+| **Identificador Secundario** | **SKU / Código de Barras** (si aplica). |
+| **UUID (products.id)** | **INVISIBLE**. Solo usado para operaciones CRUD. |
 
 ### Detalle de Pantalla
-```
-┌─────────────────────────────────────────────┐
-│ [←] Buscar producto...            [Filter]  │
-├─────────────────────────────────────────────┤
-│ [Tag: Todos] [Bebidas] [Lácteos] [Aseo]     │
-├─────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────┐    │
-│  │ Leche Entera Colanta              $5,200│
-│  │ Colanta | PLU: 1001                     │
-│  │ [Lácteos]                               │
-│  │ ────────────────────────────────────    │
-│  │ 24 un                        [🗑️]      │
-│  └─────────────────────────────────────┘    │
-│                                             │
-│  ┌─────────────────────────────────────┐    │
-│  │ Arroz Diana 1kg                  $4,800│
-│  │ Diana | PLU: 2045                       │
-│  │ [Abarrotes]                             │
-│  └─────────────────────────────────────┘    │
-└─────────────────────────────────────────────┘
-```
-
-> [!NOTE]
-> El PLU es numérico y asignado por el usuario (1-4 dígitos). No confundir con UUID.
-
-### Instrucción para el Orquestador
-1. **Mantener** el diseño actual de tarjetas de producto
-2. **PROHIBIR** agregar columnas o campos que muestren `product.id`
-3. **Futuro SKU**: Si se implementa código de barras, usar columna `barcode` separada
+Las tarjetas de producto mantendrán su diseño actual.
+- **Correcto**: `Leche Colanta | PLU: 50`
+- **Prohibido**: Mostrar el hash UUID en la tarjeta o tooltips.
 
 ---
 
 ## 3️⃣ URLs y Navegación
 
-### Cambio Arquitectural
+### Análisis de Impacto (Breaking Change)
+
+Esta es la zona de mayor impacto en la refactorización.
+
 ```
-ANTES: /clients/15  → /clients/45  → /clients/8546
-AHORA: /clients/550e8400-e29b-41d4-a716-446655440000
+ANTES (Actual):   /clients/15
+DESPUÉS (Deseado): /clients/550e8400-e29b-41d4-a716-446655440000
 ```
 
-### Análisis de Impacto UX
+### Decisión UX
 
-| Escenario | Impacto | Decisión |
-|-----------|---------|----------|
-| **Copy-paste URL al navegador** | Bajo | Funciona igual, solo es más largo |
-| **Compartir enlace a compañero** | Medio | URLs largas en WhatsApp/SMS se ven feas |
-| **Bookmarks del navegador** | Ninguno | El nombre del bookmark es el título de la página |
-| **Depuración/Soporte técnico** | Alto positivo | UUID es más útil para debugging |
-
-### Decisión UX: ACEPTABLE ✅
-
-> [!TIP]
-> La URL larga es **aceptable** siempre que la interfaz visual esté limpia. El usuario no necesita copiar/pegar URLs en el flujo normal de trabajo.
-
-### Mitigaciones Opcionales (Futuro)
-1. **Friendly slug en título de página**: La pestaña del navegador muestra "María García - Clientes" no el UUID
-2. **Botón "Copiar Código"**: Si se necesita compartir una referencia, generar código corto temporal
-3. **Deep linking QR**: Para compartir, generar QR code que contiene el UUID
-
-### Instrucción para el Orquestador
-1. **Rutas Vue Router**: Aceptar UUID como parámetro `:id`
-2. **Título de pestaña**: `document.title = "Producto: Leche Colanta"` (nombre humano)
-3. **NO crear** sistema de URLs cortas - overhead innecesario para MVP
+| Escenario | Decisión |
+|-----------|----------|
+| **Estética URL** | **Se acepta URL larga**. No se usarán "slugs" numéricos para evitar consultas extra a DB. |
+| **Router Vue** | Debe actualizarse para aceptar `string` en lugar de `number` en params. |
+| **Compartir Links** | El título de la página (`document.title`) debe ser descriptivo ("Cliente: Juana") para compensar la URL ilegible. |
 
 ---
 
-## 4️⃣ Buscadores
+## 4️⃣ Buscadores y Filtros
 
 ### Principio UX Fundamental
-
 > [!CAUTION]
-> El usuario **NUNCA** debe necesitar buscar por UUID. Todos los campos de búsqueda deben estar etiquetados con los criterios de búsqueda permitidos.
+> Los placeholders actuales ("Buscar...") son ambiguos. Deben ser explícitos para evitar que el usuario intente buscar códigos de sistema.
 
-### Mapeo de Buscadores por Módulo
+### Estandarización de Placeholders
 
-| Módulo | Campo de Búsqueda | Criterios Válidos | Etiqueta Sugerida |
-|--------|-------------------|-------------------|-------------------|
-| **POS** | Buscar productos | Nombre, PLU | "Buscar por nombre o PLU" |
-| **Inventario** | Header search | Nombre, Marca, PLU | "Buscar producto..." |
-| **Clientes** | Lista de clientes | Nombre, Cédula, Teléfono | "Buscar por nombre, cédula o teléfono" |
-| **Historial Ventas** | Filtro de ventas | N° Ticket, Fecha | "Buscar por número de ticket" |
-| **Empleados** | Admin Hub | Nombre, Usuario | "Buscar por nombre o usuario" |
-
-### Detalle de Pantalla: Ejemplo Cliente
-```
-┌─────────────────────────────────────────────┐
-│ 🔍 Buscar por nombre, cédula o teléfono     │
-│ ┌─────────────────────────────────────────┐ │
-│ │ maría garcía                            │ │
-│ └─────────────────────────────────────────┘ │
-├─────────────────────────────────────────────┤
-│ Resultado:                                  │
-│ ┌─────────────────────────────────────────┐ │
-│ │ 👤 María García                         │ │
-│ │    CC 1.234.567.890 | 📱 311-234-5678  │ │
-│ │    Saldo: $45,000 (Debe)                │ │
-│ └─────────────────────────────────────────┘ │
-└─────────────────────────────────────────────┘
-```
-
-### Instrucción para el Orquestador
-1. **Actualizar placeholders** de todos los inputs de búsqueda con criterios explícitos
-2. **Eliminar** cualquier referencia a "Código de Sistema" o "ID"
-3. **Backend filters**: Asegurar que las APIs nunca requieran UUID como input del usuario
+| Módulo | Placeholder Aprobado | Criterios Backend |
+|--------|----------------------|-------------------|
+| **POS** | "Buscar por nombre o PLU..." | `name ILIKE` OR `plu =` |
+| **Inventario** | "Nombre, marca o PLU..." | `name`, `brand`, `plu` |
+| **Clientes** | "Nombre, cédula o teléfono..." | `name`, `cedula`, `phone` |
+| **Ventas** | "Buscar N° de Ticket..." | `ticket_number` |
 
 ---
 
-## 5️⃣ Tabla de Identificadores Funcionales
+## 5️⃣ Matriz de Identificadores (Target State)
 
-| Entidad | UUID (Interno) | Identificador Funcional (Usuario) | Formato Visual |
-|---------|----------------|-----------------------------------|----------------|
-| **Venta** | `sales.id` | `ticket_number` | `#0001`, `#0045` |
-| **Producto** | `products.id` | `plu` | `PLU: 1001`, `PLU: 45` |
-| **Cliente** | `clients.id` | `cedula` + `name` | `1.234.567.890 - María García` |
-| **Empleado** | `employees.id` | `username` + `name` | `@vendedor1 (Juan Pérez)` |
-| **Tienda** | `stores.id` | `name` | `Tienda La Esquina` |
-| **Gasto** | `expenses.id` | `fecha` + `descripción` | `21/01 - Compra bolsas` |
-| **Movimiento Inv.** | `inventory_movements.id` | `tipo` + `fecha` | `Entrada 21/01/2026` |
+| Entidad | Clave Primaria (Invisible) | Identificador Funcional (Visible) | Formato Visual |
+|---------|----------------------------|-----------------------------------|----------------|
+| **Venta** | `UUID` | `ticket_number` | `#0001` (4 dígitos padding) |
+| **Producto** | `UUID` | `plu` | `PLU: 101` |
+| **Cliente** | `UUID` | `cedula` | `CC 71.234.567` |
+| **Empleado** | `UUID` | `username` | `@juanp` |
+| **Tienda** | `UUID` | `name` | Nombre Fantasía |
 
 ---
 
-## 6️⃣ Guía de Implementación para Desarrolladores
+## 6️⃣ Guía de Implementación Técnica
 
-### ❌ PROHIBIDO
-```vue
-<!-- NUNCA hacer esto -->
-<span>ID: {{ product.id }}</span>
-<p>Código: {{ sale.id }}</p>
-<td>{{ client.id }}</td>
-```
-
-### ✅ CORRECTO
-```vue
-<!-- Siempre usar identificadores funcionales -->
-<span>PLU: {{ product.plu }}</span>
-<p>Ticket: #{{ sale.ticket_number.toString().padStart(4, '0') }}</p>
-<td>{{ client.cedula }} - {{ client.name }}</td>
-```
-
-### Utilidades Sugeridas
+### 🚩 Banderas Rojas (Code Audit)
+Si ves esto en el código, **ESTÁ MAL**:
 ```typescript
-// utils/formatters.ts
+// MAL: Uso de contadores en memoria
+const nextId = ref(1);
+function add() { id: nextId.value++ } 
 
-export const formatTicketNumber = (num: number): string => {
-  return `#${num.toString().padStart(4, '0')}`;
-};
-
-export const formatClientRef = (client: Client): string => {
-  return `${client.cedula} - ${client.name}`;
-};
-
-export const formatProductRef = (product: Product): string => {
-  return product.plu ? `PLU: ${product.plu}` : product.name;
-};
+// MAL: Asumir que ID es número en rutas
+route.params.id as number
 ```
 
----
+### ✅ Patrón Correcto
+```typescript
+// BIEN: IDs generados por Base de Datos o crypto.randomUUID()
+interface Sale {
+  id: string; // UUID
+  ticketNumber: number; // Secuencial humano
+}
+```
 
-## 7️⃣ Checklist de Verificación QA
-
-- [ ] **POS**: Ticket muestra `#0045`, no UUID
-- [ ] **Inventario**: Productos identificados por PLU o nombre
-- [ ] **Clientes**: Identificados por Cédula + Nombre
-- [ ] **Búsquedas**: Ningún placeholder sugiere buscar por "ID" o "Código de sistema"
-- [ ] **Recibos impresos**: Solo ticket_number visible
-- [ ] **URLs**: Aceptan UUID pero UI muestra nombres amigables
-- [ ] **Consola/Logs**: UUID puede aparecer en logs de desarrollo (aceptable)
-
----
-
-## 📝 Resumen de Decisiones
-
-| Pregunta Original | Decisión |
-|-------------------|----------|
-| ¿Mostrar ID de venta en historial? | **NO** - Usar `ticket_number` (#0045) |
-| ¿Columna de ID en inventario? | **NO EXISTE** - Mantener PLU como identificador |
-| ¿URLs largas son problema? | **ES ACEPTABLE** - UI limpia compensa |
-| ¿Usuario busca por UUID? | **NUNCA** - Etiquetas claras de búsqueda |
-
----
-
-> **Aprobación requerida**: Este documento define las directrices UX para la migración a UUIDs. Tras aprobación, el Orquestador puede generar Work Orders para implementación.
+### checklist de Migración (Dev)
+1. [ ] Actualizar interfaces TypeScript (`number` -> `string`).
+2. [ ] Eliminar toda referencia a `nextId` en Pinia stores.
+3. [ ] Actualizar `vue-router` para manejar UUIDs.
+4. [ ] Implementar trigger SQL para `ticket_number` por tienda.
