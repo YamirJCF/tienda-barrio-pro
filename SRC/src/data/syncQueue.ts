@@ -82,7 +82,18 @@ const getDB = async () => {
 /**
  * Add item to sync queue
  */
+import { isAuditMode } from './supabaseClient';
+
+/**
+ * Add item to sync queue
+ */
 export const addToSyncQueue = async (type: TransactionType, payload: any): Promise<boolean> => {
+    // 🛡️ SECURITY WALL: Audit Mode
+    if (isAuditMode()) {
+        logger.log(`[SyncQueue] 🛡️ Audit Mode: Intercepted ${type} (Not saved to DB)`);
+        return true; // Pretend success
+    }
+
     const db = await getDB();
 
     // Check limit

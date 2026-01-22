@@ -21,11 +21,31 @@ const supabaseEnabled = import.meta.env.VITE_SUPABASE_ENABLED === 'true';
 
 // Singleton instance
 let supabaseInstance: SupabaseClient | null = null;
+let isForcedOffline = false; // Audit Mode Flag
+
+/**
+ * Force offline mode (Audit Mode)
+ * @param value - true to force offline, false to resume normal operation
+ */
+export const forceOffline = (value: boolean): void => {
+    isForcedOffline = value;
+    if (value) {
+        logger.log('[Supabase] Forced OFFLINE (Audit Mode)');
+    } else {
+        logger.log('[Supabase] Resumed ONLINE mode');
+    }
+};
+
+export const isAuditMode = (): boolean => isForcedOffline;
 
 /**
  * Check if Supabase is properly configured
  */
+/**
+ * Check if Supabase is properly configured
+ */
 export const isSupabaseConfigured = (): boolean => {
+    if (isForcedOffline) return false;
     return Boolean(supabaseUrl && supabaseAnonKey && supabaseEnabled);
 };
 
@@ -36,6 +56,10 @@ export const isSupabaseConfigured = (): boolean => {
  * @returns SupabaseClient or null if not configured
  */
 export const getSupabaseClient = (): SupabaseClient | null => {
+    if (isForcedOffline) {
+        return null;
+    }
+
     if (!isSupabaseConfigured()) {
         logger.log('[Supabase] Not configured - using localStorage fallback');
         return null;

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { cartSerializer } from '../data/serializers';
+import { getStorageKey } from '../utils/storage';
 import { getLegalCashPayable, roundToNearest50 } from '../utils/currency';
 import { useInventoryStore } from './inventory';
 import type { CartItem, MeasurementUnit } from '../types';
@@ -177,8 +178,9 @@ export const useCartStore = defineStore(
     };
   },
   {
+
     persist: {
-      key: 'tienda-cart',
+      key: getStorageKey('tienda-cart'),
       storage: localStorage,
       serializer: cartSerializer,
     },

@@ -231,6 +231,7 @@ const handleSubmit = async () => {
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
                 id="password"
+                autocomplete="off"
                 class="w-full pl-11 pr-11 bg-white dark:bg-white/5 border border-[#cee9e0] dark:border-white/10 rounded-xl px-4 py-3.5 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 placeholder="Mínimo 6 caracteres"
               />
@@ -261,6 +262,7 @@ const handleSubmit = async () => {
                 v-model="confirmPassword"
                 :type="showConfirmPassword ? 'text' : 'password'"
                 id="confirmPassword"
+                autocomplete="off"
                 class="w-full pl-11 pr-11 bg-white dark:bg-white/5 border rounded-xl px-4 py-3.5 text-base outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 :class="
                   confirmPassword.length > 0
