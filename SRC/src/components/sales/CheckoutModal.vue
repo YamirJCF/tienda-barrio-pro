@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useCartStore } from '../../stores/cart';
+import { useConfigStore } from '../../stores/configStore';
 import { useClientsStore, type Client } from '../../stores/clients';
 import Decimal from 'decimal.js';
 import BaseModal from '../ui/BaseModal.vue';
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 // Store
 const cartStore = useCartStore();
 const clientsStore = useClientsStore();
+const configStore = useConfigStore();
 
 // State
 type PaymentMethod = 'cash' | 'nequi' | 'fiado';
@@ -189,7 +191,28 @@ onUnmounted(() => {
     content-class="flex flex-col overflow-hidden"
   >
     <template #header>
-        <div class="flex flex-col items-center justify-center w-full">
+        <div class="flex flex-col items-center justify-center w-full pt-2">
+            <!-- Store Branding -->
+            <div class="flex flex-col items-center mb-4">
+              <img 
+                v-if="configStore.logoUrl" 
+                :src="configStore.logoUrl" 
+                class="h-12 w-auto mb-1 opacity-90 grayscale-[0.2]" 
+                alt="Logo"
+              />
+              <div v-else class="h-8 w-8 mb-1 rounded-full bg-primary/10 flex items-center justify-center">
+                 <span class="material-symbols-outlined text-primary text-sm">storefront</span>
+              </div>
+              <h2 class="text-sm font-bold text-gray-800 dark:text-gray-100 uppercase tracking-wide">
+                {{ configStore.storeName }}
+              </h2>
+              <p v-if="configStore.documentId" class="text-[10px] text-gray-400">
+                NIT: {{ configStore.documentId }}
+              </p>
+            </div>
+
+            <div class="w-full border-t border-dashed border-gray-200 dark:border-gray-700 my-2"></div>
+            
             <h3
               class="text-gray-400 dark:text-gray-500 text-xs font-semibold tracking-wide uppercase mb-1"
             >
@@ -725,6 +748,14 @@ onUnmounted(() => {
               </div>
               <span class="material-symbols-outlined text-white">check_circle</span>
             </BaseButton>
+            
+            <!-- Ticket Footer Message -->
+            <p 
+               v-if="configStore.ticketFooter"
+               class="text-center text-[10px] text-gray-400 mt-3 whitespace-pre-line leading-tight"
+            >
+              {{ configStore.ticketFooter }}
+            </p>
           </div>
     </template>
   </BaseModal>

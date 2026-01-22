@@ -9,9 +9,12 @@ import BottomNav from '../components/BottomNav.vue';
 import ReportsContent from '../components/ReportsContent.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
 // WO-004: Modal de PIN para SPEC-006 (consolidado)
+// T-008: Modal de PIN para SPEC-006 (consolidado)
 import PinSetupModal from '../components/PinSetupModal.vue';
 // A-02: UserProfileSidebar para icono de perfil
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
+// WO-PHASE4-001: Store Configuration Form
+import StoreConfigForm from '../components/admin/StoreConfigForm.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -21,7 +24,7 @@ const cashControlStore = useCashControlStore();
 const authStore = useAuthStore(); // Use auth store
 
 // State
-const activeTab = ref<'reportes' | 'gestion'>('gestion');
+const activeTab = ref<'reportes' | 'gestion' | 'config'>('gestion');
 const showDeviceModal = ref(false);
 // WO-004: State para modal de PIN (consolidado)
 const showPinSetupModal = ref(false);
@@ -168,6 +171,21 @@ const navigateTo = (route: string) => {
           <span class="flex items-center gap-2 truncate text-sm">
             <span class="material-symbols-outlined text-[20px]">settings</span>
             Gestión
+          </span>
+        </label>
+        <label
+          v-if="isAdmin"
+          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all"
+          :class="
+            activeTab === 'config'
+              ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'
+              : 'text-slate-500 dark:text-slate-400 font-semibold hover:bg-white/50 dark:hover:bg-slate-700/50'
+          "
+          @click="activeTab = 'config'"
+        >
+          <span class="flex items-center gap-2 truncate text-sm">
+            <span class="material-symbols-outlined text-[20px]">tune</span>
+            Config
           </span>
         </label>
       </div>
@@ -363,6 +381,11 @@ const navigateTo = (route: string) => {
       <!-- Reportes Tab Content -->
       <section v-if="activeTab === 'reportes'">
         <ReportsContent />
+      </section>
+
+      <!-- Store Configuration Tab Content -->
+      <section v-if="activeTab === 'config'">
+        <StoreConfigForm />
       </section>
 
       <div class="h-10"></div>

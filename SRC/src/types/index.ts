@@ -1,8 +1,10 @@
 import { Decimal } from 'decimal.js';
+import type { Database } from './supabase';
 
 export type MeasurementUnit = 'un' | 'kg' | 'lb' | 'g';
 
 // WO-001: UUID Refactoring - All IDs changed from number to string
+// Maps to: Database['public']['Tables']['products']['Row']
 export interface Product {
     id: string; // UUID
     name: string;
@@ -43,6 +45,7 @@ export interface SaleItem {
     subtotal: Decimal;
 }
 
+// Maps to: Database['public']['Tables']['sales']['Row']
 export interface Sale {
     id: string; // UUID
     ticketNumber: number; // Sequential number for UI display (SPEC-012)
@@ -60,6 +63,7 @@ export interface Sale {
     syncStatus?: 'synced' | 'pending' | 'failed'; // SPEC-012: Sync Protocol
 }
 
+// Maps to: Database['public']['Tables']['clients']['Row']
 export interface Client {
     id: string; // UUID
     name: string;
@@ -74,6 +78,7 @@ export interface Client {
 }
 
 // WO-001: New interface for employees (consolidating from auth.ts)
+// Maps to: Database['public']['Tables']['employees']['Row']
 export interface Employee {
     id: string; // UUID
     name: string;
@@ -109,6 +114,7 @@ export interface CashTransaction {
     relatedSaleId?: string; // Optional link to a sale
 }
 
+// Maps to: Database['public']['Tables']['cash_register']['Row'] (partially)
 export interface CashSession {
     id: string;
     employeeId: string; // ID of employee who opened the register
