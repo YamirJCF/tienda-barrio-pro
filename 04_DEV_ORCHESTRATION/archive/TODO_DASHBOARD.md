@@ -88,15 +88,15 @@
 
 ### Actualización de Requisitos (01_REQUIREMENTS/dashboard.md)
 
-- [ ] Cambiar `todayStats` por propiedades individuales: `todayTotal`, `todayCount`, `todayFiado`, `currentCash`
-- [ ] Eliminar `sales` de "Datos de Entrada" (no se consume directamente)
-- [ ] Agregar datos de `authStore`: `isAdmin`, `isEmployee`, `currentUser`, `currentStore`
-- [ ] Agregar `inventoryStore.totalProducts` a datos de entrada
-- [ ] Agregar navegación a `/notifications`
-- [ ] Documentar toggle de apertura/cierre de tienda
-- [ ] Documentar modal de apertura de jornada
-- [ ] Documentar banner de onboarding para nuevos usuarios
-- [ ] Documentar sección "Gestión de Tienda" (Admin Only)
+- [x] Cambiar `todayStats` por propiedades individuales: `todayTotal`, `todayCount`, `todayFiado`, `currentCash`
+- [x] Eliminar `sales` de "Datos de Entrada" (no se consume directamente)
+- [x] Agregar datos de `authStore`: `isAdmin`, `isEmployee`, `currentUser`, `currentStore`
+- [x] Agregar `inventoryStore.totalProducts` a datos de entrada
+- [x] Agregar navegación a `/notifications`
+- [x] Documentar toggle de apertura/cierre de tienda
+- [x] Documentar modal de apertura de jornada
+- [x] Documentar banner de onboarding para nuevos usuarios
+- [x] Documentar sección "Gestión de Tienda" (Admin Only)
 
 ### Verificación de Implementación
 

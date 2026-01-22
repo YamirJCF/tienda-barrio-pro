@@ -112,25 +112,21 @@ Documentos transversales que rigen la calidad y arquitectura:
 ## 🎯 Estado del Proyecto
 
 > [!TIP]
-> **🎉 HITOS LOGRADOS (Ene 20):**
-> 1. **SPEC-005 IAM Implementado:** Autenticación unificada + Fingerprinting.
-> 2. **Backend RPCs Completos:** Funciones críticas SQL implementadas (`procesar_venta`, etc).
-> 3. **Estándares de Calidad:** Definición estricta de decimales y redondeo.
+> **🎉 HITOS LOGRADOS (Ene 21):**
+> 1. **FASE 2 COMPLETADA:** Lógica de negocio (POS, Inventario, Caja) validada al 100%.
+> 2. **Refactorización de Caja:** Implementación de `cashRegisterStore` unificando ingresos/egresos.
+> 3. **Backend RPCs:** Funciones críticas SQL operativas.
 
 ### ✅ Logros Alcanzados
 
-- 19 módulos documentados y sincronizados
-- Sistema de trazabilidad implementado
-- Estructura de carpetas profesionalizada
-- Gobernanza de documentación establecida
+- POS con reducción de stock y redondeo legal.
+- Control de caja con arqueo y registro de gastos integrado.
+- Refactorización a Arquitectura de Caja (v2) para mayor robustez.
 
-### � Notas
-
-- `SystemAuditView.vue` es una herramienta de desarrollo, no requiere documentación de requisitos
-- Los modales de formulario están documentados como componentes independientes
+### 🚀 Próximo Objetivo: Fase 3 (Seguridad y Auditoría)
+- Implementar SPEC-005 (IAM avanzado) y SPEC-009 (Sistema de Historiales).
 
 ---
-
 
 ## 🔗 Grafo de Dependencias
 

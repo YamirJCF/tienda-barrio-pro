@@ -6,7 +6,7 @@
  * @security Resuelve QA Riesgo #1 - Exposición de datos sensibles
  */
 
-const isDev = import.meta.env.DEV;
+const isDev = (import.meta as any).env?.DEV;
 
 export const logger = {
   /**

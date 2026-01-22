@@ -3,6 +3,9 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useClientsStore, type ClientTransaction } from '../stores/clients';
 import { Decimal } from 'decimal.js';
+import BaseModal from '../components/ui/BaseModal.vue';
+import BaseInput from '../components/ui/BaseInput.vue';
+import BaseButton from '../components/ui/BaseButton.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -15,7 +18,7 @@ const showOptionsMenu = ref(false);
 const showDeleteConfirm = ref(false);
 
 // Get client ID from route
-const clientId = computed(() => Number(route.params.id));
+const clientId = computed(() => String(route.params.id));
 
 const client = computed(() => clientsStore.getClientById(clientId.value));
 
@@ -267,109 +270,90 @@ const registerPayment = () => {
     <div
       class="fixed bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
     >
-      <button
-        @click="showPaymentModal = true"
-        class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-lg font-bold rounded-lg shadow-lg shadow-emerald-200 dark:shadow-none flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+      <BaseButton
+         @click="showPaymentModal = true"
+         variant="success"
+         class="w-full h-14 text-lg font-bold shadow-lg shadow-emerald-200 dark:shadow-none"
+         icon="add_circle"
       >
-        <span class="material-symbols-outlined">add_circle</span>
         REGISTRAR ABONO
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Payment Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="showPaymentModal"
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          @click.self="showPaymentModal = false"
-        >
-          <div
-            class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-scale-in"
-          >
-            <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Registrar Abono</h3>
-            <div class="mb-4">
-              <label class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2 block"
-                >Monto del abono</label
-              >
-              <div class="relative">
-                <span
-                  class="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600 font-bold text-xl"
-                  >$</span
-                >
-                <input
-                  v-model="paymentAmount"
-                  type="number"
-                  inputmode="numeric"
-                  class="w-full h-14 pl-10 pr-4 text-2xl font-bold text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-700 border-2 border-slate-200 dark:border-slate-600 rounded-xl focus:border-emerald-500 focus:ring-0"
-                  placeholder="0"
-                  autofocus
-                />
-              </div>
-            </div>
-            <div class="flex gap-3">
-              <button
-                @click="showPaymentModal = false"
-                class="flex-1 h-12 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                @click="registerPayment"
-                :disabled="!paymentAmount"
-                class="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                <span class="material-symbols-outlined">check</span>
-                Confirmar
-              </button>
-            </div>
-          </div>
+    <BaseModal
+      v-model="showPaymentModal"
+      title="Registrar Abono"
+    >
+        <div class="p-6">
+            <BaseInput
+                v-model="paymentAmount"
+                type="number"
+                inputmode="numeric"
+                label="Monto del abono"
+                placeholder="0"
+                icon="attach_money"
+                autofocus
+            />
         </div>
-      </Transition>
-    </Teleport>
+
+        <template #footer>
+            <div class="p-6 pt-0 flex gap-3">
+                 <BaseButton
+                    @click="showPaymentModal = false"
+                    variant="secondary"
+                    class="flex-1"
+                >
+                    Cancelar
+                </BaseButton>
+                <BaseButton
+                    @click="registerPayment"
+                    :disabled="!paymentAmount"
+                    variant="success"
+                    class="flex-1"
+                    icon="check"
+                >
+                    Confirmar
+                </BaseButton>
+            </div>
+        </template>
+    </BaseModal>
 
     <!-- Delete Confirmation Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="showDeleteConfirm"
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          @click.self="showDeleteConfirm = false"
-        >
-          <div
-            class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-scale-in"
-          >
-            <div
-              class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4"
-            >
+    <BaseModal
+      v-model="showDeleteConfirm"
+      title="¿Eliminar cliente?"
+    >
+        <div class="p-6 text-center">
+            <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
               <span class="material-symbols-outlined text-red-600 text-[28px]">warning</span>
             </div>
-            <h3 class="text-xl font-bold text-slate-900 dark:text-white text-center mb-2">
-              ¿Eliminar cliente?
-            </h3>
-            <p class="text-slate-500 dark:text-slate-400 text-sm text-center mb-6">
-              Esta acción eliminará al cliente y todo su historial de transacciones. No se puede
-              deshacer.
+            <p class="text-slate-500 dark:text-slate-400 text-sm mb-2">
+              Esta acción eliminará al cliente y todo su historial de transacciones.
             </p>
-            <div class="flex gap-3">
-              <button
-                @click="showDeleteConfirm = false"
-                class="flex-1 h-12 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                @click="deleteClient"
-                class="flex-1 h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors flex items-center justify-center gap-2"
-              >
-                <span class="material-symbols-outlined text-[20px]">delete</span>
-                Eliminar
-              </button>
-            </div>
-          </div>
+            <p class="text-red-500 font-bold text-sm">No se puede deshacer.</p>
         </div>
-      </Transition>
-    </Teleport>
+
+        <template #footer>
+            <div class="p-6 pt-0 flex gap-3">
+                 <BaseButton
+                    @click="showDeleteConfirm = false"
+                    variant="secondary"
+                    class="flex-1"
+                >
+                    Cancelar
+                </BaseButton>
+                <BaseButton
+                    @click="deleteClient"
+                    variant="danger"
+                    class="flex-1"
+                    icon="delete"
+                >
+                    Eliminar
+                </BaseButton>
+            </div>
+        </template>
+    </BaseModal>
   </div>
 </template>
 

@@ -43,20 +43,16 @@ const CRITICAL_STORAGE_KEYS: StorageKeyConfig[] = [
     key: 'tienda-inventory',
     description: 'Inventario de productos',
     validator: (data: unknown): boolean => {
-      if (typeof data !== 'object' || data === null) return false;
-      const obj = data as Record<string, unknown>;
-      // Debe tener un array de 'products'
-      return Array.isArray(obj.products);
+      // Repository pattern saves directly as T[]
+      return Array.isArray(data);
     },
   },
   {
     key: 'tienda-sales',
     description: 'Historial de ventas',
     validator: (data: unknown): boolean => {
-      if (typeof data !== 'object' || data === null) return false;
-      const obj = data as Record<string, unknown>;
-      // Debe tener un array de 'sales'
-      return Array.isArray(obj.sales);
+      // Repository pattern saves directly as T[]
+      return Array.isArray(data);
     },
   },
   {
@@ -91,10 +87,17 @@ const CRITICAL_STORAGE_KEYS: StorageKeyConfig[] = [
   },
   {
     key: 'tienda-store-status',
-    description: 'Estado de la tienda',
+    description: 'Estado de la tienda (Legacy/Repo)',
     validator: (data: unknown): boolean => {
       if (typeof data !== 'object' || data === null) return false;
-      // Solo necesita ser un objeto válido
+      return true;
+    },
+  },
+  {
+    key: 'tienda-store-status-v2',
+    description: 'Estado de la tienda (Store v2)',
+    validator: (data: unknown): boolean => {
+      if (typeof data !== 'object' || data === null) return false;
       return true;
     },
   },
@@ -197,11 +200,11 @@ export function repairNegativeStock(): { repaired: number; products: string[] } 
     if (!rawData) return result;
 
     const data = JSON.parse(rawData);
-    if (!data.products || !Array.isArray(data.products)) return result;
+    if (!Array.isArray(data)) return result;
 
     let modified = false;
 
-    for (const product of data.products) {
+    for (const product of data) {
       // Stock puede ser string (serializado de Decimal.js) o número
       const stockValue =
         typeof product.stock === 'string' ? parseFloat(product.stock) : product.stock;

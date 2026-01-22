@@ -2,6 +2,8 @@
 
 ### Sistema de Historiales y Trazabilidad (SPEC-009)
 
+> **Estado**: ✅ Implementado (Fase 3)
+
 #### Descripción
 Implementación de un sistema centralizado de historiales ("Evidence Hub") que permita auditar todas las operaciones críticas del negocio. Este módulo servirá como la fuente de verdad para la integridad financiera y operativa, accesible estratégicamente desde la vista de Reportes.
 

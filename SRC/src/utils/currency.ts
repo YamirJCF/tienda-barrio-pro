@@ -42,3 +42,18 @@ export const roundToNearest50 = (val: Decimal | number): Decimal => {
     ? new Decimal(Math.floor(value / 50) * 50)
     : new Decimal(Math.ceil(value / 50) * 50);
 };
+
+/**
+ * Format currency to Colombian Peso
+ * @param amount - The amount to format
+ * @returns Formatted string (e.g. $ 25.000)
+ */
+export const formatCurrency = (amount: Decimal | number): string => {
+  const val = new Decimal(amount).toNumber();
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(val);
+};

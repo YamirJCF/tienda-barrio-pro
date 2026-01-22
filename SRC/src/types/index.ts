@@ -1,8 +1,10 @@
 import { Decimal } from 'decimal.js';
+import type { Database } from './supabase';
 
 export type MeasurementUnit = 'un' | 'kg' | 'lb' | 'g';
 
 // WO-001: UUID Refactoring - All IDs changed from number to string
+// Maps to: Database['public']['Tables']['products']['Row']
 export interface Product {
     id: string; // UUID
     name: string;
@@ -18,6 +20,7 @@ export interface Product {
     createdAt?: string;
     updatedAt?: string;
     notifiedLowStock?: boolean;
+    storeId?: string; // Reference to Store
 }
 
 export interface CartItem {
@@ -42,6 +45,7 @@ export interface SaleItem {
     subtotal: Decimal;
 }
 
+// Maps to: Database['public']['Tables']['sales']['Row']
 export interface Sale {
     id: string; // UUID
     ticketNumber: number; // Sequential number for UI display (SPEC-012)
@@ -59,6 +63,7 @@ export interface Sale {
     syncStatus?: 'synced' | 'pending' | 'failed'; // SPEC-012: Sync Protocol
 }
 
+// Maps to: Database['public']['Tables']['clients']['Row']
 export interface Client {
     id: string; // UUID
     name: string;
@@ -73,6 +78,7 @@ export interface Client {
 }
 
 // WO-001: New interface for employees (consolidating from auth.ts)
+// Maps to: Database['public']['Tables']['employees']['Row']
 export interface Employee {
     id: string; // UUID
     name: string;
@@ -96,4 +102,30 @@ export interface EmployeePermissions {
 
 // WO-001: Helper type for generating UUIDs
 export type UUID = string;
+
+// WO-004: Cash Register Types
+export interface CashTransaction {
+    id: string;
+    type: 'income' | 'expense';
+    amount: Decimal;
+    description: string;
+    timestamp: string;
+    category?: string;
+    relatedSaleId?: string; // Optional link to a sale
+}
+
+// Maps to: Database['public']['Tables']['cash_register']['Row'] (partially)
+export interface CashSession {
+    id: string;
+    employeeId: string; // ID of employee who opened the register
+    status: 'open' | 'closed';
+    openingTime: string;
+    closingTime?: string;
+    openingBalance: Decimal;
+    closingBalance?: Decimal; // Physical count at closing
+    calculatedBalance?: Decimal; // System calculated balance at closing
+    discrepancy?: Decimal; // Difference
+    transactions: CashTransaction[];
+    notes?: string;
+}
 

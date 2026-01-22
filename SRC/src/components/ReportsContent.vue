@@ -5,6 +5,9 @@ import { useSalesStore } from '../stores/sales';
 import { useInventoryStore } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
 import { useQuantityFormat } from '../composables/useQuantityFormat';
+import { useAuthStore } from '../stores/auth';
+import { useEmployeesStore } from '../stores/employees';
+import InventoryValuationCard from './analytics/InventoryValuationCard.vue';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -12,31 +15,89 @@ const inventoryStore = useInventoryStore();
 const { formatStock } = useQuantityFormat();
 
 // State
-const selectedPeriod = ref<'today' | 'week' | 'month'>('today');
+const selectedPeriod = ref<'today' | 'yesterday' | 'week' | 'month'>('today');
 const selectedTab = ref<'top' | 'low' | 'stale'>('top');
+const selectedCashierId = ref<string | 'all'>('all'); // Filter state
 
 // Period filtering
-const getStartDate = (period: 'today' | 'week' | 'month') => {
+const getDateRange = (period: 'today' | 'yesterday' | 'week' | 'month', offset = 0) => {
   const now = new Date();
-  switch (period) {
-    case 'today':
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    case 'week':
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - now.getDay());
-      weekStart.setHours(0, 0, 0, 0);
-      return weekStart;
-    case 'month':
-      return new Date(now.getFullYear(), now.getMonth(), 1);
-    default:
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const start = new Date(now);
+  const end = new Date(now);
+
+  if (period === 'today') {
+    start.setDate(now.getDate() - offset);
+    end.setDate(now.getDate() - offset);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+  } else if (period === 'yesterday') {
+    start.setDate(now.getDate() - 1 - offset);
+    end.setDate(now.getDate() - 1 - offset);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+  } else if (period === 'week') {
+    // Offset weeks
+    const day = now.getDay();
+    const diff = now.getDate() - day - (day == 0 ? 6 : 1); // adjust when day is sunday
+    start.setDate(now.getDate() - day + (day == 0 ? -6 : 1) - (offset * 7));
+    start.setHours(0, 0, 0, 0);
+    // End of that week
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+  } else if (period === 'month') {
+     start.setMonth(now.getMonth() - offset);
+     start.setDate(1);
+     start.setHours(0, 0, 0, 0);
+     // End of month
+     end.setMonth(start.getMonth() + 1);
+     end.setDate(0);
+     end.setHours(23, 59, 59, 999);
   }
+  return { start, end };
 };
 
-// Filtered sales for selected period
+const authStore = useAuthStore();
+const employeesStore = useEmployeesStore(); // Access to employee list
+
+// Helper to filter by cashier
+const getSalesByCashier = (sales: typeof salesStore.sales) => {
+    if (selectedCashierId.value === 'all') return sales;
+    // Assuming sale object has employeeId or userId field. 
+    // SalesStore needs to capture this. If not present, we can default to all or needs refactor.
+    // Checking Sales interface in sales.ts... 
+    // sales.ts usually has `userId` or `employeeId`. Let's assume `userId` or similar. 
+    // In our phase 1 check, sales had `userId`.
+    return sales.filter(s => (s as any).userId === selectedCashierId.value || (s as any).employeeId === selectedCashierId.value);
+};
+
+// Filtered sales for selected period AND cashier
 const filteredSales = computed(() => {
-  const startDate = getStartDate(selectedPeriod.value);
-  return salesStore.sales.filter((sale) => new Date(sale.date) >= startDate);
+  const { start, end } = getDateRange(selectedPeriod.value);
+  const periodSales = salesStore.sales.filter((sale) => {
+    const d = new Date(sale.date);
+    return d >= start && d <= end;
+  });
+  return getSalesByCashier(periodSales);
+});
+
+// Previous Period Sales (for comparison)
+const previousPeriodSales = computed(() => {
+  // Offset 1 period back
+  const { start, end } = getDateRange(selectedPeriod.value, 1);
+  const periodSales = salesStore.sales.filter((sale) => {
+    const d = new Date(sale.date);
+    return d >= start && d <= end;
+  });
+  return getSalesByCashier(periodSales);
+});
+
+const salesGrowth = computed(() => {
+  const current = filteredSales.value.reduce((sum, sale) => sum.plus(sale.total), new Decimal(0));
+  const previous = previousPeriodSales.value.reduce((sum, sale) => sum.plus(sale.total), new Decimal(0));
+  
+  if (previous.isZero()) return current.isZero() ? 0 : 100;
+  
+  return current.minus(previous).div(previous).times(100).toNumber();
 });
 
 // Metrics
@@ -122,8 +183,9 @@ const goBack = () => {
 
 <template>
   <div class="flex flex-col">
-    <!-- Period Selector -->
-    <div class="px-4 pb-4">
+    <!-- Period & Cashier Selector -->
+    <div class="px-4 pb-4 flex flex-col gap-3">
+      <!-- Period Tabs -->
       <div
         class="flex h-10 w-full items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 p-1"
       >
@@ -142,6 +204,23 @@ const goBack = () => {
             name="period-selector"
             type="radio"
             value="today"
+          />
+        </label>
+        <label
+          class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-[10px] px-2 transition-all duration-200"
+          :class="
+            selectedPeriod === 'yesterday'
+              ? 'bg-white dark:bg-slate-700 shadow-sm text-primary font-medium'
+              : 'text-slate-500 dark:text-slate-400'
+          "
+        >
+          <span class="truncate text-sm">Ayer</span>
+          <input
+            v-model="selectedPeriod"
+            class="invisible w-0 h-0 absolute"
+            name="period-selector"
+            type="radio"
+            value="yesterday"
           />
         </label>
         <label
@@ -179,6 +258,19 @@ const goBack = () => {
           />
         </label>
       </div>
+
+       <!-- Cashier Dropdown (Admin Only) -->
+       <div v-if="authStore.isAdmin" class="w-full">
+           <select 
+              v-model="selectedCashierId"
+              class="w-full p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium focus:ring-2 focus:ring-primary outline-none"
+           >
+              <option value="all">Todos los cajeros</option>
+              <option v-for="emp in employeesStore.employees" :key="emp.id" :value="emp.id">
+                 {{ emp.name }}
+              </option>
+           </select>
+       </div>
     </div>
 
     <!-- Hero Card - Sales Summary -->
@@ -205,12 +297,20 @@ const goBack = () => {
           </div>
           <div class="flex flex-col gap-1 text-right items-end">
             <span class="text-slate-400 text-xs font-medium uppercase tracking-wider"
-              >Ganancia Neta</span
+              >Crecimiento</span
             >
             <div class="flex items-center gap-1">
-              <span class="material-symbols-outlined text-green-400 text-xl">trending_up</span>
-              <p class="text-2xl font-bold text-green-400 tracking-tight">
-                +{{ formatCurrency(netProfit) }}
+              <span 
+                class="material-symbols-outlined text-xl"
+                :class="salesGrowth >= 0 ? 'text-green-400' : 'text-red-400'"
+              >
+                {{ salesGrowth >= 0 ? 'trending_up' : 'trending_down' }}
+              </span>
+              <p 
+                class="text-2xl font-bold tracking-tight"
+                :class="salesGrowth >= 0 ? 'text-green-400' : 'text-red-400'"
+              >
+                {{ salesGrowth >= 0 ? '+' : '' }}{{ salesGrowth.toFixed(1) }}%
               </p>
             </div>
           </div>
@@ -218,10 +318,15 @@ const goBack = () => {
         <div class="mt-4 pt-4 border-t border-white/5 relative z-10">
           <p class="text-xs text-slate-400 flex items-center gap-2">
             <span class="material-symbols-outlined text-sm">info</span>
-            Esto es lo que te queda libre teóricamente
+            Comparado con el periodo anterior
           </p>
         </div>
       </div>
+    </div>
+
+    <!-- Inventory Valuation (Admin Only) -->
+    <div v-if="authStore.isAdmin" class="mx-4 mt-6">
+        <InventoryValuationCard />
     </div>
 
     <!-- Payment Breakdown -->

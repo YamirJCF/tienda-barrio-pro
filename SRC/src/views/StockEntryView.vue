@@ -1,572 +1,362 @@
+<template>
+  <div class="min-h-screen bg-gray-900 text-gray-100 pb-20">
+    <!-- Header -->
+    <header class="sticky top-0 z-30 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <button @click="router.back()" class="p-2 hover:bg-gray-800 rounded-lg transition-colors">
+          <span class="material-icons text-gray-400">arrow_back</span>
+        </button>
+        <h1 class="text-xl font-bold text-white">Nueva Entrada</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-gray-400">{{ currentDate }}</span>
+      </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto p-4 space-y-6">
+      <!-- Movement Type & Reason -->
+      <section class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50 flex flex-col md:flex-row gap-4">
+        <div class="flex-1 space-y-1">
+          <label class="text-xs text-gray-400">Tipo de Movimiento</label>
+          <div class="flex bg-gray-900 p-1 rounded-lg">
+             <button 
+               v-for="type in ['entrada', 'salida', 'ajuste']" 
+               :key="type"
+               @click="movementType = type"
+               class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-all capitalize"
+               :class="movementType === type ? getTypeColor(type) : 'text-gray-400 hover:text-white'"
+             >
+               {{ type }}
+             </button>
+          </div>
+        </div>
+        
+        <div class="flex-1 space-y-1">
+           <label class="text-xs text-gray-400">Motivo</label>
+           <select 
+             v-model="reason"
+             class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white outline-none focus:ring-2 focus:ring-blue-500"
+           >
+             <option v-for="r in availableReasons" :key="r" :value="r">{{ r }}</option>
+           </select>
+        </div>
+      </section>
+
+      <!-- Supplier Section (Only for Entry) -->
+      <section v-if="movementType === 'entrada'" class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50">
+        <h2 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">Datos del Proveedor</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="space-y-1">
+            <BaseInput
+              v-model="supplierName"
+              label="Proveedor"
+              placeholder="Ej: Distribuidora Central"
+            />
+          </div>
+          <div class="space-y-1">
+            <BaseInput
+              v-model="invoiceRef"
+              label="Ref. Factura"
+              placeholder="Ej: FAC-2024-001"
+            />
+          </div>
+        </div>
+
+        <!-- Payment Toggle -->
+        <div class="mt-4 flex bg-gray-900 p-1 rounded-lg">
+          <button 
+            v-for="type in ['contado', 'credito']" 
+            :key="type"
+            @click="paymentType = type"
+            class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-all capitalize"
+            :class="paymentType === type ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'"
+          >
+            {{ type }}
+          </button>
+        </div>
+      </section>
+
+      <!-- Items List -->
+      <section class="space-y-3">
+         <div v-if="entryItems.length === 0" class="text-center py-10 opacity-50">
+           <span class="material-icons text-4xl mb-2">playlist_add</span>
+           <p>Busca productos abajo para agregarlos</p>
+         </div>
+
+         <div 
+           v-for="(item, index) in entryItems" 
+           :key="item.productId"
+           class="bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-700 flex flex-col gap-3 relative overflow-hidden group"
+         >
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="font-medium text-white">{{ item.productName }}</h3>
+                <p class="text-xs text-gray-400">{{ item.measurementUnit }}</p>
+              </div>
+              <button @click="removeItem(index)" class="text-gray-500 hover:text-red-400 p-1">
+                <span class="material-icons text-sm">close</span>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div class="space-y-1">
+                <label class="text-[10px] text-gray-400 uppercase">Cantidad</label>
+                <div class="relative">
+                  <input 
+                    v-model.number="item.quantity"
+                    type="number" 
+                    min="0"
+                    step="0.01"
+                    class="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-right text-white font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+              
+              <div class="space-y-1">
+                 <label class="text-[10px] text-gray-400 uppercase">Vencimiento</label>
+                 <input 
+                   v-model="item.expirationDate"
+                   type="date"
+                   class="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                 />
+              </div>
+
+              <!-- Cost visible only for Entry -->
+              <div v-if="movementType === 'entrada'" class="space-y-1">
+                <label class="text-[10px] text-gray-400 uppercase">Costo Unit.</label>
+                <div class="relative">
+                  <span class="absolute left-2 top-1.5 text-gray-500 text-xs">$</span>
+                  <input 
+                    v-model.number="item.unitCost"
+                    type="number" 
+                    min="0"
+                    step="50"
+                    class="w-full bg-gray-900 border border-gray-700 rounded-lg pl-5 pr-2 py-1.5 text-right text-white font-mono focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            
+            <div class="text-right text-xs font-mono text-emerald-400 pt-2 border-t border-gray-700/50">
+              Subtotal: {{ formatCurrency(item.quantity * item.unitCost) }}
+            </div>
+         </div>
+      </section>
+    </main>
+
+    <!-- Footer Search & Actions -->
+    <div class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-3 pb-6 z-40">
+       <div class="max-w-3xl mx-auto space-y-3">
+          <!-- Total -->
+          <div class="flex justify-between items-end px-2">
+            <div class="text-xs text-gray-400">
+              {{ entryItems.length }} items
+            </div>
+            <div class="text-right">
+              <div class="text-xs text-gray-400 mb-0.5">Total Entrada</div>
+              <div class="text-2xl font-bold text-white font-mono leading-none">
+                {{ formatCurrency(totalInvoice) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Search Input -->
+          <div class="relative">
+             <BaseInput
+               v-model="searchQuery"
+               placeholder="Buscar producto..."
+               icon="search"
+               @input="handleSearch"
+             />
+             
+             <!-- Dropdown Results -->
+             <div 
+               v-if="searchResults.length > 0 && searchQuery"
+               class="absolute bottom-full left-0 right-0 mb-2 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl max-h-60 overflow-y-auto"
+             >
+               <div 
+                 v-for="product in searchResults" 
+                 :key="product.id"
+                 @click="addItem(product)"
+                 class="p-3 border-b border-gray-700 last:border-0 hover:bg-gray-700 cursor-pointer flex justify-between items-center"
+               >
+                 <div>
+                   <div class="font-medium text-white">{{ product.name }}</div>
+                   <div class="text-xs text-gray-400">{{ product.plu }} • {{ product.brand }}</div>
+                 </div>
+                 <div class="text-xs bg-gray-900 px-2 py-1 rounded text-gray-300">
+                   Stock: {{ product.stock }}
+                 </div>
+               </div>
+             </div>
+          </div>
+
+          <!-- Main Actions -->
+          <BaseButton
+            @click="saveEntry"
+            :disabled="entryItems.length === 0 || isSaving"
+            :loading="isSaving"
+            variant="primary"
+            class="w-full h-12"
+            icon="save"
+          >
+            GUARDAR ENTRADA
+          </BaseButton>
+       </div>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useInventoryStore } from '../stores/inventory';
-import type { Product } from '../types';
 import { Decimal } from 'decimal.js';
-import { useQuantityFormat } from '../composables/useQuantityFormat';
+import type { Product } from '../types';
+import BaseInput from '@/components/ui/BaseInput.vue';
+import BaseButton from '@/components/ui/BaseButton.vue';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();
-const { formatStock } = useQuantityFormat();
 
-// Form state
+// State
 const supplierName = ref('');
 const invoiceRef = ref('');
-const paymentType = ref<'contado' | 'credito'>('contado');
+const paymentType = ref('contado');
+const movementType = ref('entrada');
+const reason = ref('Compra');
+const searchQuery = ref('');
+const searchResults = ref<Product[]>([]);
+const isSaving = ref(false);
 
-// Product entry state
 interface EntryItem {
-  productId: number;
-  productName: string;
-  quantity: string;
-  unitCost: string;
-  measurementUnit: string; // Unidad del producto (destino)
-  entryUnit: string; // Unidad elegida por usuario (entrada)
-  isWeighable: boolean; // Para mostrar selector de unidad
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitCost: number;
+    measurementUnit: string;
+    expirationDate?: string;
 }
 
 const entryItems = ref<EntryItem[]>([]);
-const searchQuery = ref('');
-const showSearchResults = ref(false);
-
-// UX-FIX: Toast notification state
-const toastMessage = ref('');
-const toastType = ref<'success' | 'error'>('success');
-const showToast = ref(false);
-
-const showToastNotification = (message: string, type: 'success' | 'error' = 'success') => {
-  toastMessage.value = message;
-  toastType.value = type;
-  showToast.value = true;
-  setTimeout(() => {
-    showToast.value = false;
-  }, 3000);
-};
 
 // Computed
-const filteredProducts = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return [];
-  }
-  return inventoryStore.searchProducts(searchQuery.value);
-});
-
-const productNotFound = computed(() => {
-  return searchQuery.value.trim() && filteredProducts.value.length === 0;
-});
-
-const totalItems = computed(() => entryItems.value.length);
+const currentDate = computed(() => new Date().toLocaleDateString('es-CO', { 
+  weekday: 'long', 
+  year: 'numeric', 
+  month: 'long', 
+  day: 'numeric' 
+}));
 
 const totalInvoice = computed(() => {
-  return entryItems.value.reduce((sum, item) => {
-    const qty = parseFloat(item.quantity) || 0;
-    const cost = parseFloat(item.unitCost) || 0;
-    return sum + qty * cost;
-  }, 0);
+  return entryItems.value.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
 });
 
-// Watch search query to show/hide results
-watch(searchQuery, (val) => {
-  showSearchResults.value = val.trim().length > 0;
+const availableReasons = computed(() => {
+  switch(movementType.value) {
+    case 'entrada': return ['Compra', 'Devolución Cliente', 'Ajuste Positivo'];
+    case 'salida': return ['Devolución Proveedor', 'Pérdida/Merma', 'Consumo Interno', 'Ajuste Negativo'];
+    case 'ajuste': return ['Inventario Físico'];
+    default: return [];
+  }
 });
 
-// UX-FIX: Persistir borrador en sessionStorage
-const DRAFT_KEY = 'stock-entry-draft';
-
-watch(
-  entryItems,
-  (items) => {
-    if (items.length > 0) {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(items));
-    } else {
-      sessionStorage.removeItem(DRAFT_KEY);
-    }
-  },
-  { deep: true },
-);
-
-// Restaurar borrador al montar
-onMounted(() => {
-  const saved = sessionStorage.getItem(DRAFT_KEY);
-  if (saved) {
-    try {
-      entryItems.value = JSON.parse(saved);
-    } catch {
-      sessionStorage.removeItem(DRAFT_KEY);
-    }
+// Watch for type change to reset reason
+import { watch } from 'vue';
+watch(movementType, (newVal) => {
+  if (availableReasons.value.length > 0) {
+    reason.value = availableReasons.value[0];
   }
 });
 
 // Methods
-const goBack = () => {
-  router.push('/inventory');
-};
-
-const formatCurrency = (val: number) => {
-  return val.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-};
-
-const getSubtotal = (item: EntryItem) => {
-  let qty = parseFloat(item.quantity) || 0;
-  const cost = parseFloat(item.unitCost) || 0;
-
-  // CRITICAL FIX: Convertir cantidad a unidad del producto para cálculo correcto
-  // El costo está en measurementUnit, la cantidad en entryUnit
-  if (item.isWeighable && item.entryUnit !== item.measurementUnit) {
-    qty = convertWeight(qty, item.entryUnit, item.measurementUnit);
+const getTypeColor = (type: string) => {
+  switch(type) {
+    case 'entrada': return 'bg-emerald-600 text-white shadow-sm';
+    case 'salida': return 'bg-rose-600 text-white shadow-sm';
+    case 'ajuste': return 'bg-amber-600 text-white shadow-sm';
+    default: return 'bg-gray-700';
   }
-
-  return qty * cost;
 };
 
-// WO-002: Conversión de peso con redondeo UX
-const convertWeight = (value: number, from: string, to: string): number => {
-  if (from === to) return value;
-
-  // Paso 1: Convertir a gramos (unidad base)
-  let grams: number;
-  switch (from) {
-    case 'kg':
-      grams = value * 1000;
-      break;
-    case 'lb':
-      grams = value * 453.592;
-      break;
-    case 'g':
-      grams = value;
-      break;
-    default:
-      return value;
+const handleSearch = () => {
+  if (!searchQuery.value) {
+    searchResults.value = [];
+    return;
   }
-
-  // Paso 2: Convertir de gramos a unidad destino
-  let result: number;
-  switch (to) {
-    case 'kg':
-      result = grams / 1000;
-      break;
-    case 'lb':
-      result = grams / 453.592;
-      break;
-    case 'g':
-      result = grams;
-      break;
-    default:
-      return value;
-  }
-
-  // Redondeo UX: gramos enteros, kg/lb 2 decimales
-  return to === 'g' ? Math.round(result) : Math.round(result * 100) / 100;
+  searchResults.value = inventoryStore.searchProducts(searchQuery.value);
 };
 
-const selectProduct = (product: Product) => {
-  // Check if product already in list
-  const exists = entryItems.value.find((item) => item.productId === product.id);
-  if (exists) {
+const addItem = (product: Product) => {
+  const existing = entryItems.value.find(i => i.productId === product.id);
+  if (existing) {
     searchQuery.value = '';
-    showSearchResults.value = false;
+    searchResults.value = [];
     return;
   }
 
-  // UX-FIX: Agregar al principio (unshift) para acceso rápido
-  entryItems.value.unshift({
+  // Cost default: if entry, use cost. if exit, use average cost (logic to be refined, but for now cost)
+  entryItems.value.push({
     productId: product.id,
     productName: product.name,
-    quantity: '1',
-    unitCost: product.cost?.toString() || product.price.toString(),
-    measurementUnit: product.measurementUnit || 'un',
-    entryUnit: product.measurementUnit || 'un', // Iniciar con unidad del producto
-    isWeighable: product.isWeighable,
+    quantity: 1,
+    unitCost: product.cost ? new Decimal(product.cost).toNumber() : 0,
+    measurementUnit: product.measurementUnit,
+    expirationDate: ''
   });
 
+  // Reset search
   searchQuery.value = '';
-  showSearchResults.value = false;
-};
-
-const createNewProduct = () => {
-  // Navigate to inventory with the product name as a param or open modal
-  // For now, just clear search
-  alert(`Funcionalidad para crear "${searchQuery.value}" próximamente`);
-  searchQuery.value = '';
-  showSearchResults.value = false;
+  searchResults.value = [];
 };
 
 const removeItem = (index: number) => {
   entryItems.value.splice(index, 1);
 };
 
-const clearDraft = () => {
-  if (entryItems.value.length > 0) {
-    if (!confirm('¿Limpiar todos los productos?')) return;
-  }
-  entryItems.value = [];
-  supplierName.value = '';
-  invoiceRef.value = '';
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('es-CO', { 
+    style: 'currency', 
+    currency: 'COP',
+    maximumFractionDigits: 0 
+  }).format(amount);
 };
 
-const saveEntry = () => {
-  if (entryItems.value.length === 0) {
-    showToastNotification('Agrega al menos un producto', 'error');
-    return;
+const saveEntry = async () => {
+  if (entryItems.value.length === 0) return;
+  
+  isSaving.value = true;
+  
+  // Procesar cada item
+  // En fase 2 real, haríamos un batch update o una transacción
+  // Por ahora iteramos updateStock
+  let successCount = 0;
+
+  for (const item of entryItems.value) {
+    const qty = new Decimal(item.quantity);
+    if (qty.gt(0)) {
+        // T1.2: Register logical movement
+        const result = await inventoryStore.registerStockMovement({
+          productId: item.productId,
+          type: movementType.value as any, // Cast to match store type
+          quantity: qty,
+          reason: reason.value,
+          expirationDate: item.expirationDate
+        });
+        
+        if (result.success) successCount++;
+    }
   }
 
-  // Update stock for each item with unit conversion
-  entryItems.value.forEach((item) => {
-    let qty = parseFloat(item.quantity);
-
-    // WO-005: Convertir si es pesable y unidades diferentes
-    if (item.isWeighable && item.entryUnit !== item.measurementUnit) {
-      qty = convertWeight(qty, item.entryUnit, item.measurementUnit);
-    }
-
-    if (qty > 0) {
-      inventoryStore.updateStock(item.productId, new Decimal(qty));
-    }
-  });
-
-  // Success feedback and navigate back
-  sessionStorage.removeItem(DRAFT_KEY); // Limpiar borrador
-  showToastNotification(
-    `Entrada guardada: ${totalItems.value} productos, $${formatCurrency(totalInvoice.value)} total`,
-    'success',
-  );
-  setTimeout(() => router.push('/inventory'), 1500);
-};
-
-const clearSearch = () => {
-  searchQuery.value = '';
-  showSearchResults.value = false;
+  isSaving.value = false;
+  
+  if (successCount > 0) {
+    // Notificación simple (podría usar toastStore)
+    alert(`Entrada guardada exitosamente. ${successCount} productos actualizados.`);
+    router.push('/inventory');
+  } else {
+    alert('Hubo errores al guardar algunos productos.');
+  }
 };
 </script>
-
-<template>
-  <div class="flex flex-col h-screen bg-gray-50 dark:bg-slate-900">
-    <!-- Header -->
-    <header
-      class="sticky top-0 z-30 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-4 py-4"
-    >
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <button
-            @click="goBack"
-            aria-label="Volver"
-            class="p-1 -ml-1 text-slate-700 dark:text-slate-200"
-          >
-            <span class="material-symbols-outlined text-2xl">arrow_back</span>
-          </button>
-          <h1 class="text-lg font-bold text-slate-900 dark:text-white">Nueva Entrada</h1>
-        </div>
-        <button class="text-orange-500 font-semibold text-sm">Ayuda</button>
-      </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="flex-1 overflow-y-auto pb-44">
-      <!-- Supplier & Invoice Section -->
-      <section
-        class="bg-white dark:bg-slate-800 mx-4 mt-4 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700"
-      >
-        <!-- Proveedor -->
-        <div class="mb-4">
-          <label
-            class="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5"
-            >Proveedor</label
-          >
-          <div class="relative">
-            <input
-              v-model="supplierName"
-              type="text"
-              placeholder="Distribuidora Central"
-              class="w-full px-4 py-3 bg-white dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
-            />
-            <span
-              class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl"
-              >content_paste</span
-            >
-          </div>
-        </div>
-
-        <!-- Ref. Factura -->
-        <div class="mb-4">
-          <label
-            class="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5"
-            >Ref. Factura</label
-          >
-          <input
-            v-model="invoiceRef"
-            type="text"
-            placeholder="FAC-2023-891"
-            class="w-full px-4 py-3 bg-white dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
-          />
-        </div>
-
-        <!-- Payment Type Toggle -->
-        <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-          <button
-            @click="paymentType = 'contado'"
-            :class="[
-              'flex-1 py-2.5 text-sm font-medium transition-colors',
-              paymentType === 'contado'
-                ? 'bg-gray-100 dark:bg-slate-700 text-slate-900 dark:text-white'
-                : 'bg-white dark:bg-slate-800 text-slate-500',
-            ]"
-          >
-            Contado
-          </button>
-          <button
-            @click="paymentType = 'credito'"
-            :class="[
-              'flex-1 py-2.5 text-sm font-medium transition-colors border-l border-gray-200 dark:border-slate-600',
-              paymentType === 'credito'
-                ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-500'
-                : 'bg-white dark:bg-slate-800 text-slate-500',
-            ]"
-          >
-            Crédito
-          </button>
-        </div>
-      </section>
-
-      <!-- Products Section -->
-      <section class="mx-4 mt-6">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-base font-bold text-slate-900 dark:text-white">
-            Productos ({{ totalItems }})
-          </h2>
-          <button
-            v-if="totalItems > 0"
-            @click="clearDraft"
-            class="text-xs font-medium text-slate-500 bg-gray-100 dark:bg-slate-700 px-3 py-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-          >
-            Borrador
-          </button>
-        </div>
-
-        <!-- Empty State -->
-        <div
-          v-if="entryItems.length === 0"
-          class="bg-white dark:bg-slate-800 rounded-xl p-8 text-center border border-gray-100 dark:border-slate-700"
-        >
-          <span class="material-symbols-outlined text-5xl text-slate-300 mb-2">inventory_2</span>
-          <p class="text-sm text-slate-400">Busca productos abajo para agregarlos</p>
-        </div>
-
-        <!-- Product Cards -->
-        <div v-else class="space-y-3">
-          <article
-            v-for="(item, index) in entryItems"
-            :key="item.productId"
-            class="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700"
-          >
-            <!-- Product Header -->
-            <div class="flex items-start justify-between mb-3">
-              <h3 class="text-sm font-bold text-slate-900 dark:text-white">
-                {{ item.productName }}
-              </h3>
-              <button
-                @click="removeItem(index)"
-                class="text-orange-400 hover:text-orange-500 p-1 -mr-1 -mt-1"
-              >
-                <span class="material-symbols-outlined text-xl">delete</span>
-              </button>
-            </div>
-
-            <!-- Quantity and Cost Inputs -->
-            <div class="flex items-end gap-3 mb-3">
-              <div class="flex-1">
-                <label
-                  class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1"
-                  >Cant. ({{ item.entryUnit }})</label
-                >
-                <!-- Selector de unidad para pesables -->
-                <div v-if="item.isWeighable" class="flex gap-1 mb-1.5">
-                  <button
-                    v-for="unit in ['kg', 'lb', 'g']"
-                    :key="unit"
-                    @click="item.entryUnit = unit"
-                    type="button"
-                    :class="
-                      item.entryUnit === unit
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-gray-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
-                    "
-                    class="px-2 py-1 text-xs font-bold rounded transition-colors"
-                  >
-                    {{ unit }}
-                  </button>
-                </div>
-                <input
-                  v-model="item.quantity"
-                  type="number"
-                  :step="item.entryUnit === 'un' ? '1' : '0.01'"
-                  min="0"
-                  class="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 text-slate-900 dark:text-white text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-              </div>
-              <div class="flex-[2]">
-                <label
-                  class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1"
-                  >Costo Unit.</label
-                >
-                <div class="flex items-center gap-1">
-                  <span class="text-slate-400 font-medium">$</span>
-                  <input
-                    v-model="item.unitCost"
-                    type="number"
-                    step="100"
-                    min="0"
-                    class="flex-1 px-3 py-2.5 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 text-slate-900 dark:text-white text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <!-- Subtotal -->
-            <div
-              class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-700"
-            >
-              <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider"
-                >Subtotal</span
-              >
-              <span class="text-sm font-bold text-slate-900 dark:text-white"
-                >${{ formatCurrency(getSubtotal(item)) }}</span
-              >
-            </div>
-          </article>
-        </div>
-      </section>
-    </main>
-
-    <!-- Bottom Search Bar -->
-    <div
-      class="fixed bottom-[76px] left-0 right-0 bg-slate-100 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 px-4 py-3 z-20"
-    >
-      <!-- Search Results Dropdown -->
-      <Transition name="slide-up">
-        <div
-          v-if="showSearchResults && (filteredProducts.length > 0 || productNotFound)"
-          class="absolute bottom-full left-0 right-0 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-t-xl shadow-lg max-h-64 overflow-y-auto"
-        >
-          <!-- Product not found - Create option -->
-          <div v-if="productNotFound" class="p-4">
-            <div class="flex items-center gap-2 text-slate-500 mb-3">
-              <span class="material-symbols-outlined text-xl">person_search</span>
-              <span class="text-sm"
-                >No existe un producto llamado "<strong class="text-slate-700 dark:text-white">{{
-                  searchQuery
-                }}</strong
-                >"</span
-              >
-            </div>
-            <button
-              @click="createNewProduct"
-              class="w-full flex items-center justify-center gap-2 py-3 bg-orange-50 dark:bg-orange-900/20 text-orange-500 font-semibold rounded-xl border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
-            >
-              <span class="material-symbols-outlined text-xl">add_circle</span>
-              Crear "{{ searchQuery }}" (Nuevo)
-            </button>
-          </div>
-
-          <!-- Product results list -->
-          <div v-else class="divide-y divide-gray-100 dark:divide-slate-700">
-            <button
-              v-for="product in filteredProducts"
-              :key="product.id"
-              @click="selectProduct(product)"
-              class="w-full p-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between"
-            >
-              <div>
-                <p class="font-semibold text-slate-900 dark:text-white text-sm">
-                  {{ product.name }}
-                </p>
-                <p class="text-xs text-slate-500">
-                  Stock: {{ formatStock(product.stock, product.measurementUnit) }}
-                  {{ product.measurementUnit }}
-                </p>
-              </div>
-              <span class="material-symbols-outlined text-orange-500">add_circle</span>
-            </button>
-          </div>
-        </div>
-      </Transition>
-
-      <!-- Search Input -->
-      <div class="relative">
-        <span
-          class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl"
-          >search</span
-        >
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Buscar producto..."
-          class="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-700 rounded-full border border-gray-200 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
-        />
-        <button
-          v-if="searchQuery"
-          @click="clearSearch"
-          class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-        >
-          <span class="material-symbols-outlined text-xl">close</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Bottom Total Bar -->
-    <footer
-      class="fixed bottom-0 left-0 right-0 bg-slate-800 dark:bg-slate-900 px-4 py-3 z-30 flex items-center justify-between"
-    >
-      <div>
-        <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-          Total Factura
-        </p>
-        <p class="text-2xl font-bold text-white">${{ formatCurrency(totalInvoice) }}</p>
-      </div>
-      <button
-        @click="saveEntry"
-        :disabled="entryItems.length === 0"
-        class="flex items-center gap-2 px-6 py-3 bg-orange-500 text-white font-bold rounded-xl hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
-      >
-        <span class="material-symbols-outlined text-xl">save</span>
-        GUARDAR
-      </button>
-    </footer>
-
-    <!-- Toast Notification -->
-    <Transition name="toast">
-      <div
-        v-if="showToast"
-        class="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-xl shadow-lg font-medium"
-        :class="toastType === 'success' ? 'bg-green-600 text-white' : 'bg-red-500 text-white'"
-      >
-        {{ toastMessage }}
-      </div>
-    </Transition>
-  </div>
-</template>
-
-<style scoped>
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.2s ease;
-}
-
-.slide-up-enter-from,
-.slide-up-leave-to {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-/* Toast animations */
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -20px);
-}
-</style>

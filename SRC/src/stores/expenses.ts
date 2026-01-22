@@ -1,91 +1,76 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
-import { expensesSerializer } from '../data/serializers';
+import { expenseRepository, type Expense } from '../data/repositories/expenseRepository';
+import { useAuthStore } from './auth';
+import { logger } from '../utils/logger';
 
-export interface Expense {
-  id: number;
-  description: string;
-  amount: Decimal;
-  category: string;
-  note: string;
-  timestamp: string;
-  date: string; // YYYY-MM-DD
-}
+export const useExpensesStore = defineStore('expenses', () => {
+  const expenses = ref<Expense[]>([]);
+  const isLoading = ref(false);
+  const error = ref<string | null>(null);
 
-export const useExpensesStore = defineStore(
-  'expenses',
-  () => {
-    const expenses = ref<Expense[]>([]);
-    const nextId = ref(1);
+  const todayTotal = computed(() => {
+    return expenses.value.reduce((acc, expense) => {
+      return acc.plus(new Decimal(expense.amount));
+    }, new Decimal(0));
+  });
 
-    // Computed
-    const todayDate = computed(() => {
-      return new Date().toISOString().split('T')[0];
-    });
+  const fetchTodayExpenses = async () => {
+    const authStore = useAuthStore();
+    if (!authStore.currentUser?.storeId) return;
 
-    const todayExpenses = computed(() => {
-      return expenses.value.filter((e) => e.date === todayDate.value);
-    });
+    isLoading.value = true;
+    try {
+      expenses.value = await expenseRepository.getTodayExpenses(authStore.currentUser.storeId);
+    } catch (e: any) {
+      error.value = e.message;
+      logger.error('[ExpensesStore] Fetch failed', e);
+    } finally {
+      isLoading.value = false;
+    }
+  };
 
-    const todayTotal = computed(() => {
-      return todayExpenses.value.reduce((sum, e) => sum.plus(e.amount), new Decimal(0));
-    });
+  const addExpense = async (data: { amount: number, description: string, category: string }) => {
+    const authStore = useAuthStore();
+    if (!authStore.currentUser?.storeId) return null;
 
-    const todayCount = computed(() => todayExpenses.value.length);
+    isLoading.value = true;
+    try {
+      const newExpense = await expenseRepository.createExpense({
+        store_id: authStore.currentUser.storeId,
+        amount: data.amount,
+        description: data.description,
+        category: data.category,
+        created_by: authStore.currentUser.id
+      });
 
-    // Methods
-    const addExpense = (data: Omit<Expense, 'id' | 'timestamp' | 'date'>) => {
-      const now = new Date();
-      const newExpense: Expense = {
-        ...data,
-        id: nextId.value++,
-        timestamp: now.toISOString(),
-        date: now.toISOString().split('T')[0],
-      };
-      expenses.value.push(newExpense);
-      return newExpense;
-    };
-
-    const deleteExpense = (id: number) => {
-      const index = expenses.value.findIndex((e) => e.id === id);
-      if (index !== -1) {
-        expenses.value.splice(index, 1);
+      if (newExpense) {
+        // Optimistic update if repo returns it (it should)
+        // If offline it might return null depending on repo implementation, but we standardized it
+        // Actually repo generic create returns T
+        expenses.value.push(newExpense);
       }
-    };
+      return newExpense;
+    } catch (e: any) {
+      error.value = e.message;
+      throw e;
+    } finally {
+      isLoading.value = false;
+    }
+  };
 
-    const getExpensesByDate = (date: string) => {
-      return expenses.value.filter((e) => e.date === date);
-    };
+  const clearTodayExpenses = () => {
+    expenses.value = [];
+  };
 
-    const getTotalByDate = (date: string) => {
-      return getExpensesByDate(date).reduce((sum, e) => sum.plus(e.amount), new Decimal(0));
-    };
-
-    // Clear expenses for the day (when closing cash register)
-    const clearTodayExpenses = () => {
-      expenses.value = expenses.value.filter((e) => e.date !== todayDate.value);
-    };
-
-    return {
-      expenses,
-      nextId,
-      todayDate,
-      todayExpenses,
-      todayTotal,
-      todayCount,
-      addExpense,
-      deleteExpense,
-      getExpensesByDate,
-      getTotalByDate,
-      clearTodayExpenses,
-    };
-  },
-  {
-    persist: {
-      key: 'tienda-expenses',
-      storage: localStorage,
-      serializer: expensesSerializer,
-    },
-  },
-);
+  return {
+    expenses,
+    isLoading,
+    error,
+    todayTotal,
+    fetchTodayExpenses,
+    addExpense,
+    clearTodayExpenses
+  };
+});

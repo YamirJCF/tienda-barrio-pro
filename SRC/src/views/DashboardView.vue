@@ -19,8 +19,7 @@ const notificationsStore = useNotificationsStore();
 const { formatWithSign } = useCurrencyFormat();
 
 // State
-const openingModalOpen = ref(false);
-const baseMoney = ref('');
+
 const profileSidebarOpen = ref(false);
 
 // WO: initializeSampleData eliminada - SPEC-007
@@ -49,11 +48,7 @@ const toggleStore = () => {
   router.push('/cash-control');
 };
 
-const confirmOpen = () => {
-  // This modal should not be used - redirect to proper flow with PIN
-  openingModalOpen.value = false;
-  router.push('/cash-control');
-};
+
 
 const navigateTo = (route: string) => {
   router.push(route);
@@ -210,6 +205,7 @@ const navigateToNotifications = () => {
           icon-color="orange"
           title="Por Cobrar"
           :value="formattedTodayFiado"
+          :subtitle="`${salesStore.todayFiadoCount} fiados`"
         />
         <StatCard
           icon="inventory_2"
@@ -269,65 +265,6 @@ const navigateToNotifications = () => {
         </div>
       </section>
     </main>
-
-    <!-- Opening Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="openingModalOpen" class="fixed inset-0 z-50 flex items-end justify-center">
-          <div
-            class="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]"
-            @click="openingModalOpen = false"
-          ></div>
-          <div
-            class="relative w-full max-w-md bg-white dark:bg-surface-dark rounded-t-3xl p-6 shadow-2xl animate-slide-up"
-          >
-            <div
-              class="mx-auto mb-6 h-1.5 w-12 rounded-full bg-slate-200 dark:bg-slate-700 cursor-pointer"
-              @click="openingModalOpen = false"
-            ></div>
-            <div class="flex flex-col gap-6">
-              <div class="text-center">
-                <div
-                  class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 ring-1 ring-green-100 dark:ring-green-900"
-                >
-                  <span class="material-symbols-outlined text-[32px]">storefront</span>
-                </div>
-                <h3 class="text-xl font-bold text-slate-900 dark:text-white">Iniciar Jornada</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  Confirma el valor base en caja.
-                </p>
-              </div>
-
-              <div class="space-y-2">
-                <label class="text-xs font-semibold uppercase tracking-wide text-slate-500 ml-1"
-                  >Base / Sencillo</label
-                >
-                <div class="relative">
-                  <span
-                    class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg"
-                    >$</span
-                  >
-                  <input
-                    v-model="baseMoney"
-                    type="number"
-                    placeholder="0"
-                    class="w-full rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-800 py-4 pl-9 pr-4 text-xl font-bold text-slate-900 dark:text-white focus:border-primary focus:bg-white dark:focus:bg-slate-900 focus:ring-primary transition-all outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                @click="confirmOpen"
-                class="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 py-4 text-base font-bold text-white shadow-lg shadow-emerald-600/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-              >
-                CONFIRMAR APERTURA
-                <span class="material-symbols-outlined text-[22px]">lock_open_right</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
 
     <!-- User Profile Sidebar -->
     <UserProfileSidebar

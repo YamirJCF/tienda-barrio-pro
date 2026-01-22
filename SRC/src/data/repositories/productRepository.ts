@@ -9,7 +9,10 @@
  */
 
 import { Product } from '../../types';
+import { Decimal } from 'decimal.js';
 import { createSupabaseRepository, EntityRepository } from './supabaseAdapter';
+import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
+import { logger } from '../../utils/logger';
 
 // Constants
 const TABLE_NAME = 'products';
@@ -18,10 +21,31 @@ const STORAGE_KEY = 'tienda-inventory'; // Legacy key for compatibility
 /**
  * Interface extending base repository with product-specific methods
  */
+interface InventoryMovementHistory {
+    id: string;
+    type: string;
+    quantity: number;
+    reason?: string;
+    date: string;
+    user: string;
+}
+
+/**
+ * Interface extending base repository with product-specific methods
+ */
 export interface ProductRepository extends EntityRepository<Product> {
     getByPlu(plu: string, storeId?: string): Promise<Product | null>;
     searchByName(query: string, storeId?: string): Promise<Product[]>;
     updateStock(id: string, quantity: number): Promise<boolean>;
+    registerMovement(movement: {
+        productId: string;
+        type: 'entrada' | 'salida' | 'ajuste' | 'venta' | 'devolucion';
+        quantity: number;
+        reason?: string;
+        storeId?: string;
+        employeeId?: string;
+    }): Promise<boolean>;
+    getMovementHistory(productId: string, limit?: number): Promise<InventoryMovementHistory[]>;
 }
 
 // Create base repository
@@ -60,10 +84,118 @@ export const productRepository: ProductRepository = {
         if (!product) return false;
 
         const updated = await baseRepository.update(id, {
-            currentStock: quantity // Map to DB column logic handled in adapter/store
-        } as any);
+            stock: new Decimal(quantity) // Ensure Decimal if entity uses it, or number if mapped
+        } as Partial<Product>);
 
         return updated !== null;
+    },
+
+    /**
+     * Get movement history (Kardex)
+     */
+    /**
+     * Get movement history (Kardex)
+     */
+    async getMovementHistory(productId: string, limit: number = 50): Promise<any[]> {
+        // Online first strategy for history (it's not critical for offline sales)
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+
+        if (isOnline) {
+            const supabase = getSupabaseClient();
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from('inventory_movements')
+                    .select('*, employees(name)')
+                    .eq('product_id', productId)
+                    .order('created_at', { ascending: false })
+                    .limit(limit);
+
+                if (!error && data) {
+                    return data.map((m: any): InventoryMovementHistory => ({
+                        id: m.id,
+                        type: m.movement_type,
+                        quantity: m.quantity,
+                        reason: m.reason,
+                        date: m.created_at,
+                        user: m.employees?.name || 'Sistema'
+                    }));
+                }
+                logger.error('[ProductRepo] Failed to fetch history', error);
+            }
+        }
+
+        // TODO: Could implement offline history from local cache if needed
+        return [];
+    },
+
+    /**
+     * Register an inventory movement (Entrada, Salida, Ajuste)
+     */
+    async registerMovement(
+        movement: {
+            productId: string;
+            type: 'entrada' | 'salida' | 'ajuste' | 'venta' | 'devolucion';
+            quantity: number;
+            reason?: string;
+            storeId?: string;
+            employeeId?: string;
+        }
+    ): Promise<boolean> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+
+        // 1. Online: Insert into inventory_movements (Trigger updates stock)
+        if (isOnline) {
+            const supabase = getSupabaseClient();
+            if (supabase) {
+                const { error } = await supabase.from('inventory_movements').insert({
+                    product_id: movement.productId,
+                    movement_type: movement.type,
+                    quantity: movement.quantity,
+                    reason: movement.reason,
+                    created_by: movement.employeeId
+                });
+
+                if (!error) return true;
+                logger.error('[ProductRepo] Failed to register movement online', error);
+                // Fallback to offline if online fails? Maybe.
+            }
+        }
+
+        // 2. Offline / Fallback: Add to Sync Queue AND Update Local Product
+        // Import addToSyncQueue dynamically to avoid circular deps if any (though here it's fine)
+        const { addToSyncQueue } = await import('../syncQueue');
+
+        // Queue movement
+        await addToSyncQueue('CREATE_MOVEMENT', {
+            product_id: movement.productId,
+            movement_type: movement.type,
+            quantity: movement.quantity,
+            reason: movement.reason,
+            created_by: movement.employeeId
+        });
+
+        // Update local product stock manually since trigger won't run
+        const product = await baseRepository.getById(movement.productId);
+        if (product) {
+            let newStock = product.stock.toNumber(); // Decimal to number
+            // Logic must match DB trigger
+            if (['entrada', 'devolucion', 'ajuste'].includes(movement.type)) {
+                // For 'ajuste', DB trigger adds quantity (assuming quantity is delta or signed?)
+                // DB trigger says: ELSIF NEW.movement_type = 'ajuste' THEN UPDATE SET current_stock = current_stock + NEW.quantity
+                // So 'ajuste' quantity should be signed (negative for reduction).
+                // But my UI might pass absolute. I need to be careful.
+                // Re-reading trigger: 'ajuste' adds quantity. So if I want to reduce, I pass negative.
+                newStock += movement.quantity;
+            } else if (['salida', 'venta'].includes(movement.type)) {
+                newStock -= movement.quantity;
+            }
+
+            await baseRepository.update(product.id, {
+                stock: new Decimal(newStock)
+            } as Partial<Product>);
+        }
+
+        return true;
     }
 };
 

@@ -1,303 +1,175 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useExpensesStore } from '../stores/expenses';
-import { Decimal } from 'decimal.js';
+import { useCashRegisterStore } from '../stores/cashRegister';
+import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { useNotifications } from '../composables/useNotifications';
+import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
+import Decimal from 'decimal.js';
+import BaseInput from '@/components/ui/BaseInput.vue';
+import BaseButton from '@/components/ui/BaseButton.vue';
 
 const router = useRouter();
-const expensesStore = useExpensesStore();
+const cashRegisterStore = useCashRegisterStore(); // Changed from expensesStore
+const { formatCurrency } = useCurrencyFormat();
+const { showSuccess, showError } = useNotifications();
 
 // State
-const amount = ref('0');
-const selectedCategory = ref('proveedor');
-const note = ref('');
+const showAddModal = ref(false);
+const newExpense = ref({
+    amount: 0,
+    description: '',
+    category: 'General'
+});
 
-// Categories
-const categories = [
-  { value: 'proveedor', label: 'Pago Proveedor', icon: 'local_shipping' },
-  { value: 'servicios', label: 'Servicios', icon: 'electric_bolt' },
-  { value: 'retiro', label: 'Retiro Personal', icon: 'person' },
-  { value: 'varios', label: 'Gastos Varios', icon: 'inventory_2' },
-];
+const isSubmitting = ref(false);
+
+const categories = ['General', 'Proveedor', 'Servicios', 'Comida', 'Transporte', 'Mantenimiento'];
 
 // Computed
-const displayAmount = computed(() => {
-  return amount.value === '0' ? '0' : amount.value;
+const currentExpenses = computed(() => {
+    // Get from cash register session
+    const transactions = cashRegisterStore.currentSession?.transactions || [];
+    return transactions
+        .filter(t => t.type === 'expense')
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 });
 
-const canSubmit = computed(() => {
-  return amount.value !== '0' && selectedCategory.value;
-});
+const totalExpenses = computed(() => cashRegisterStore.totalExpenses);
+const isSessionOpen = computed(() => cashRegisterStore.isOpen);
 
-// Methods
-const goBack = () => {
-  router.push('/admin');
-};
-
-const handleNumpadClick = (key: string) => {
-  if (key === 'C') {
-    amount.value = '0';
-  } else if (key === 'backspace') {
-    if (amount.value.length > 1) {
-      amount.value = amount.value.slice(0, -1);
-    } else {
-      amount.value = '0';
+const handleSubmit = async () => {
+    if (newExpense.value.amount <= 0 || !newExpense.value.description) {
+        showError('Completa todos los campos');
+        return;
     }
-  } else {
-    if (amount.value === '0') {
-      amount.value = key;
-    } else if (amount.value.length < 10) {
-      amount.value += key;
+
+    isSubmitting.value = true;
+    try {
+        cashRegisterStore.registerExpense(
+            new Decimal(newExpense.value.amount),
+            newExpense.value.description,
+            newExpense.value.category
+        );
+        
+        showSuccess('Gasto registrado');
+        showAddModal.value = false;
+        // Reset form
+        newExpense.value = { amount: 0, description: '', category: 'General' };
+    } catch (e: any) {
+        showError(e.message || 'Error al registrar');
+    } finally {
+        isSubmitting.value = false;
     }
-  }
 };
 
-const selectCategory = (value: string) => {
-  selectedCategory.value = value;
-};
+const goBack = () => router.push('/');
 
-const getCategoryLabel = (value: string) => {
-  return categories.find((c) => c.value === value)?.label || 'General';
-};
-
-const registerExpense = () => {
-  if (!canSubmit.value) {
-    alert('Ingresa un monto válido');
-    return;
-  }
-
-  const amountValue = parseInt(amount.value);
-
-  // Guardar en el store
-  expensesStore.addExpense({
-    description: getCategoryLabel(selectedCategory.value),
-    amount: new Decimal(amountValue),
-    category: selectedCategory.value,
-    note: note.value.trim(),
-  });
-
-  alert(`✅ Salida registrada: $${amountValue.toLocaleString('es-CO')}`);
-  router.push('/admin');
-};
 </script>
 
 <template>
-  <div class="flex flex-col h-screen bg-background-light dark:bg-background-dark overflow-hidden">
-    <!-- 1. Header -->
-    <header
-      class="flex items-center bg-white dark:bg-surface-dark px-4 py-3 justify-between border-b border-gray-100 dark:border-gray-800 shrink-0 z-30"
-    >
-      <button
-        @click="goBack"
-        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-gray-800 dark:text-white transition-colors"
-      >
-        <span class="material-symbols-outlined text-[24px]">arrow_back</span>
-      </button>
-      <h2
-        class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-10"
-      >
-        Registrar Salida
-      </h2>
-    </header>
-
-    <!-- Scrollable Main Content -->
-    <main
-      class="flex-1 overflow-y-auto no-scrollbar flex flex-col bg-background-light dark:bg-background-dark"
-    >
-      <!-- 2. Amount Display (Hero) -->
-      <div
-        class="bg-orange-50 dark:bg-orange-950/20 py-8 flex flex-col items-center justify-center shrink-0 border-b border-orange-100 dark:border-orange-900/30"
-      >
-        <label
-          class="text-orange-900/60 dark:text-orange-200/60 text-sm font-bold tracking-wide uppercase mb-1"
-          >Monto a retirar de caja</label
-        >
-        <div class="flex items-baseline justify-center gap-1 w-full px-4 text-center cursor-text">
-          <span
-            class="text-red-600 dark:text-red-400 text-5xl font-black tracking-tighter leading-none"
-            >$</span
-          >
-          <span
-            class="text-red-600 dark:text-red-400 text-[64px] font-black tracking-tighter leading-none"
-            >{{ displayAmount }}</span
-          >
+    <div class="bg-gray-50 dark:bg-gray-900 min-h-screen flex flex-col">
+        <!-- Header -->
+        <div class="bg-white dark:bg-gray-800 p-4 shadow-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between sticky top-0 z-10">
+            <button @click="goBack" class="p-2 -ml-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+                <span class="material-symbols-outlined">arrow_back</span>
+            </button>
+            <h1 class="text-lg font-bold text-gray-800 dark:text-gray-100">Gastos del Día</h1>
+            <div class="w-10"></div>
         </div>
-      </div>
 
-      <!-- 3. Category Selection (Grid) -->
-      <div class="px-4 pt-6 pb-2">
-        <h2 class="text-lg font-bold leading-tight text-gray-900 dark:text-white mb-4 px-1">
-          ¿En qué se gastó?
-        </h2>
-        <div class="grid grid-cols-2 gap-3">
-          <button
-            v-for="cat in categories"
-            :key="cat.value"
-            @click="selectCategory(cat.value)"
-            :class="[
-              'group relative flex flex-col items-center justify-center gap-3 p-4 aspect-[4/3] rounded-2xl transition-all shadow-sm active:scale-95',
-              selectedCategory === cat.value
-                ? 'border-[3px] border-primary bg-orange-50/50 dark:bg-primary/10'
-                : 'border border-gray-200 dark:border-gray-700 bg-white dark:bg-surface-dark hover:bg-gray-50 dark:hover:bg-gray-800',
-            ]"
-          >
-            <div
-              :class="[
-                'h-10 w-10 rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform',
-                selectedCategory === cat.value
-                  ? 'bg-white dark:bg-background-dark text-primary'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
-              ]"
-            >
-              <span class="material-symbols-outlined text-[24px]">{{ cat.icon }}</span>
+        <!-- Session Status Warning -->
+         <div v-if="!isSessionOpen" class="p-4">
+             <div class="bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 p-4 rounded-xl flex items-center gap-3">
+                <span class="material-symbols-outlined text-2xl">lock</span>
+                <div>
+                   <p class="font-bold">Caja Cerrada</p>
+                   <p class="text-sm opacity-80">Abre la caja para registrar gastos.</p>
+                </div>
+             </div>
+         </div>
+
+        <!-- Summary Card -->
+        <div class="p-4 bg-white dark:bg-gray-800 mb-2 shadow-sm" v-if="isSessionOpen">
+            <p class="text-xs font-bold uppercase text-gray-400 mb-1">Total Salidas (Sesión)</p>
+            <p class="text-3xl font-black text-red-500">{{ formatCurrency(totalExpenses) }}</p>
+        </div>
+
+        <!-- Expense List -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-3">
+             <div v-if="currentExpenses.length === 0" class="flex flex-col items-center justify-center h-40 text-gray-400">
+                 <span class="material-symbols-outlined text-4xl mb-2 opacity-30">receipt_long</span>
+                 <p class="text-sm">No hay gastos registrados en esta sesión</p>
+             </div>
+
+             <div v-for="expense in currentExpenses" :key="expense.id" 
+                  class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center animate-fade-in">
+                 <div>
+                     <p class="font-bold text-gray-800 dark:text-gray-200">{{ expense.description }}</p>
+                     <span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-medium">{{ expense.category }}</span>
+                 </div>
+                 <span class="font-bold text-red-500">-{{ formatCurrency(expense.amount) }}</span>
+             </div>
+        </div>
+
+        <!-- FAB Add -->
+        <button 
+            v-if="isSessionOpen"
+            @click="showAddModal = true"
+            class="fixed bottom-6 right-6 w-14 h-14 bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 rounded-full flex items-center justify-center text-white transition-all active:scale-90"
+        >
+            <span class="material-symbols-outlined text-3xl">add</span>
+        </button>
+
+        <!-- Add Modal -->
+        <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4" @click.self="showAddModal = false">
+            <div class="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-xl animate-slide-up">
+                <h2 class="text-lg font-bold mb-4 text-gray-900 dark:text-white">Registrar Salida</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Monto</label>
+                        <FormInputCurrency v-model="newExpense.amount" placeholder="0" class="text-2xl font-bold" :autofocus="true" />
+                    </div>
+
+                    <div>
+                        <BaseInput
+                            v-model="newExpense.description"
+                            label="Concepto"
+                            placeholder="Ej. Pago Proveedor Pan"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Categoría</label>
+                        <div class="flex flex-wrap gap-2">
+                            <button v-for="cat in categories" :key="cat"
+                                    @click="newExpense.category = cat"
+                                    class="px-3 py-1 rounded-full text-xs font-bold border transition-colors"
+                                    :class="newExpense.category === cat ? 'bg-red-500 border-red-500 text-white' : 'bg-transparent border-gray-200 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'">
+                                {{ cat }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <BaseButton
+                        @click="handleSubmit"
+                        :disabled="isSubmitting"
+                        :loading="isSubmitting"
+                        variant="danger"
+                        class="w-full mt-4 flex justify-center"
+                    >
+                        GUARDAR SALIDA
+                    </BaseButton>
+                </div>
             </div>
-            <span
-              :class="[
-                'font-bold text-sm leading-tight text-center',
-                selectedCategory === cat.value
-                  ? 'text-primary-dark dark:text-primary'
-                  : 'text-gray-600 dark:text-gray-300',
-              ]"
-              >{{ cat.label }}</span
-            >
-            <!-- Active Indicator -->
-            <div
-              v-if="selectedCategory === cat.value"
-              class="absolute top-2 right-2 bg-primary text-white rounded-full p-0.5 shadow-sm"
-            >
-              <span class="material-symbols-outlined text-[16px]">check</span>
-            </div>
-          </button>
         </div>
-      </div>
-
-      <!-- 4. Optional Note -->
-      <div class="px-5 pt-2 pb-6">
-        <div class="relative group/input">
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <span
-              class="material-symbols-outlined text-gray-400 group-focus-within/input:text-primary transition-colors"
-              >edit_note</span
-            >
-          </div>
-          <input
-            v-model="note"
-            type="text"
-            class="block w-full pl-10 pr-3 py-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-surface-dark text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all shadow-sm text-base"
-            placeholder="Nota (Opcional) - Ej: Factura #123"
-          />
-        </div>
-      </div>
-    </main>
-
-    <!-- Bottom Section: Numpad + Action Button -->
-    <div
-      class="bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800 shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.1)] z-40 shrink-0"
-    >
-      <!-- 5. Visual Numpad -->
-      <div
-        class="grid grid-cols-3 bg-gray-50 dark:bg-gray-800/50 gap-px border-b border-gray-100 dark:border-gray-800"
-      >
-        <!-- Row 1 -->
-        <button
-          @click="handleNumpadClick('1')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          1
-        </button>
-        <button
-          @click="handleNumpadClick('2')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          2
-        </button>
-        <button
-          @click="handleNumpadClick('3')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          3
-        </button>
-        <!-- Row 2 -->
-        <button
-          @click="handleNumpadClick('4')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          4
-        </button>
-        <button
-          @click="handleNumpadClick('5')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          5
-        </button>
-        <button
-          @click="handleNumpadClick('6')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          6
-        </button>
-        <!-- Row 3 -->
-        <button
-          @click="handleNumpadClick('7')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          7
-        </button>
-        <button
-          @click="handleNumpadClick('8')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          8
-        </button>
-        <button
-          @click="handleNumpadClick('9')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          9
-        </button>
-        <!-- Row 4 -->
-        <button
-          @click="handleNumpadClick('C')"
-          class="h-14 bg-gray-50 dark:bg-[#261f18] active:bg-gray-100 dark:active:bg-gray-800 flex items-center justify-center text-lg font-semibold text-gray-400 dark:text-gray-500 transition-colors"
-        >
-          C
-        </button>
-        <button
-          @click="handleNumpadClick('0')"
-          class="h-14 bg-white dark:bg-surface-dark active:bg-gray-50 dark:active:bg-gray-800 flex items-center justify-center text-2xl font-medium text-gray-900 dark:text-white transition-colors"
-        >
-          0
-        </button>
-        <button
-          @click="handleNumpadClick('backspace')"
-          class="h-14 bg-gray-50 dark:bg-[#261f18] active:bg-gray-100 dark:active:bg-gray-800 flex items-center justify-center text-gray-900 dark:text-white transition-colors"
-        >
-          <span class="material-symbols-outlined text-gray-600 dark:text-gray-400">backspace</span>
-        </button>
-      </div>
-
-      <!-- 6. Action Button -->
-      <div class="p-4 pt-4 pb-6 bg-white dark:bg-surface-dark">
-        <button
-          @click="registerExpense"
-          :disabled="!canSubmit"
-          class="w-full h-14 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-lg rounded-2xl shadow-lg shadow-orange-600/20 dark:shadow-none flex items-center justify-center gap-3 transition-transform active:scale-[0.98]"
-        >
-          <span>REGISTRAR SALIDA</span>
-          <span class="material-symbols-outlined">output</span>
-        </button>
-      </div>
     </div>
-  </div>
 </template>
 
 <style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+.animate-fade-in { animation: fadeIn 0.3s ease-out; }
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 </style>

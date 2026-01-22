@@ -10,6 +10,10 @@ import NoPermissionOverlay from '../components/ui/NoPermissionOverlay.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useQuantityFormat } from '../composables/useQuantityFormat';
 import { Decimal } from 'decimal.js';
+import KardexModal from '../components/inventory/KardexModal.vue';
+import BaseInput from '../components/ui/BaseInput.vue';
+import BaseButton from '../components/ui/BaseButton.vue';
+import BaseModal from '../components/ui/BaseModal.vue';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();
@@ -20,8 +24,6 @@ const { formatStock } = useQuantityFormat();
 // Permisos del usuario
 const canViewInventory = computed(() => authStore.canViewInventory);
 const canManageInventory = computed(() => authStore.currentUser?.permissions?.canManageInventory);
-
-// WO-006: initializeSampleData ELIMINADA - SPEC-007
 
 // State
 // Composable: Inventory Filter
@@ -40,6 +42,15 @@ const editingProductId = ref<string | undefined>(undefined);
 const showDeleteModal = ref(false);
 const productToDelete = ref<{ id: string; name: string } | null>(null);
 
+// T1.4: Kardex State
+const showKardexModal = ref(false);
+const kardexProduct = ref<{ id: string; name: string } | null>(null);
+
+// Lifecycle
+onMounted(() => {
+  inventoryStore.initialize();
+});
+
 // Methods
 const goToDashboard = () => {
   router.push('/');
@@ -50,14 +61,18 @@ const openNewProduct = () => {
   showProductModal.value = true;
 };
 
-// WO-001: Changed parameter type from number to string
 const openEditProduct = (id: string) => {
   editingProductId.value = id;
   showProductModal.value = true;
 };
 
-// WO-001: Changed parameter type from number to string
+const openKardex = (product: { id: string; name: string }) => {
+  kardexProduct.value = product;
+  showKardexModal.value = true;
+};
+
 const deleteProduct = (id: string) => {
+// ...
   const product = inventoryStore.products.find((p) => p.id === id);
   if (product) {
     productToDelete.value = { id, name: product.name };
@@ -94,13 +109,13 @@ const cancelDelete = () => {
           class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
           <span class="material-symbols-outlined">arrow_back</span>
         </button>
-        <div class="relative flex-1">
-          <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <span class="material-symbols-outlined text-gray-400 text-[20px]">search</span>
-          </div>
-          <input v-model="searchQuery" type="text"
-            class="block w-full rounded-lg border-none bg-gray-100 dark:bg-slate-800 py-2 pl-10 pr-3 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-primary placeholder-slate-500"
-            placeholder="Buscar producto..." />
+        <div class="flex-1">
+          <BaseInput
+            v-model="searchQuery"
+            placeholder="Buscar producto..."
+            icon="search"
+            class="w-full"
+          />
         </div>
         <button class="p-2 rounded-full bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
           <span class="material-symbols-outlined text-[20px]">filter_list</span>
@@ -108,19 +123,22 @@ const cancelDelete = () => {
       </div>
 
       <!-- Category Tags -->
-      <div class="flex gap-2 overflow-x-auto px-4 pb-3 no-scrollbar">
-        <button v-for="cat in categories" :key="cat"
-          class="whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium shadow-sm transition-colors" :class="selectedCategory === cat
-            ? 'bg-primary text-white'
-            : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-            " @click="selectedCategory = cat">
+      <div class="flex gap-2 overflow-x-auto px-4 pb-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <BaseButton 
+          v-for="cat in categories" 
+          :key="cat"
+          @click="selectedCategory = cat"
+          :variant="selectedCategory === cat ? 'primary' : 'outline'"
+          size="sm"
+          class="!rounded-full whitespace-nowrap"
+        >
           {{ getCategoryLabel(cat) }}
-        </button>
+        </BaseButton>
       </div>
     </header>
 
     <!-- Products List -->
-    <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 no-scrollbar">
+    <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       <div class="flex justify-between items-end px-1">
         <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
           Productos ({{ filteredProducts.length }})
@@ -136,10 +154,14 @@ const cancelDelete = () => {
         <p class="text-sm">
           {{ searchQuery ? 'No se encontraron productos' : 'No hay productos aún' }}
         </p>
-        <button v-if="!searchQuery" class="mt-4 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium"
-          @click="openNewProduct">
+        <BaseButton 
+          v-if="!searchQuery" 
+          @click="openNewProduct"
+          class="mt-4"
+          variant="primary"
+        >
           Crear primer producto
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Product Cards with Virtual Scrolling -->
@@ -189,11 +211,19 @@ const cancelDelete = () => {
                 product.measurementUnit || 'un'
               }}</span>
             </span>
-            <button v-if="canManageInventory"
-              class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              @click.stop="deleteProduct(product.id)">
-              <span class="material-symbols-outlined text-[20px]">delete</span>
-            </button>
+            <div class="flex gap-1">
+              <button
+                class="text-slate-400 hover:text-primary p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                @click.stop="openKardex(product)"
+                title="Ver historial">
+                <span class="material-symbols-outlined text-[20px]">history</span>
+              </button>
+              <button v-if="canManageInventory"
+                class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                @click.stop="deleteProduct(product.id)">
+                <span class="material-symbols-outlined text-[20px]">delete</span>
+              </button>
+            </div>
           </div>
         </article>
       </RecycleScroller>
@@ -202,17 +232,22 @@ const cancelDelete = () => {
     <!-- FAB (Floating Action Buttons) -->
     <div class="fixed bottom-24 right-4 z-40 flex flex-col gap-3">
       <!-- Stock Entry FAB - Only if canManageInventory -->
-      <button v-if="canManageInventory"
-        class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 hover:bg-emerald-600 transition-all active:scale-90"
-        @click="router.push('/stock-entry')" title="Entrada de inventario">
-        <span class="material-symbols-outlined text-[24px]">inventory</span>
-      </button>
+      <BaseButton 
+        v-if="canManageInventory"
+        @click="router.push('/stock-entry')"
+        variant="success"
+        class="size-12 !rounded-full shadow-lg shadow-emerald-500/40"
+        icon="inventory"
+      />
+      
       <!-- Add Product FAB - Only if canManageInventory -->
-      <button v-if="canManageInventory"
-        class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-blue-500/40 hover:bg-blue-600 transition-all active:scale-90"
-        @click="openNewProduct" title="Agregar producto">
-        <span class="material-symbols-outlined text-[32px]">add</span>
-      </button>
+      <BaseButton 
+        v-if="canManageInventory"
+        @click="openNewProduct"
+        variant="primary"
+        class="size-14 !rounded-full shadow-lg shadow-blue-500/40"
+        icon="add"
+      />
     </div>
 
     <!-- Bottom Navigation -->
@@ -220,47 +255,49 @@ const cancelDelete = () => {
 
     <!-- Product Form Modal -->
     <ProductFormModal v-model="showProductModal" :product-id="editingProductId" @saved="showProductModal = false" />
+    
+    <!-- T1.4: Kardex Modal -->
+    <KardexModal 
+      v-model="showKardexModal"
+      :product-id="kardexProduct?.id || null"
+      :product-name="kardexProduct?.name || null"
+    />
 
     <!-- T-010: Modal de Confirmación de Eliminación -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showDeleteModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="cancelDelete"></div>
-          <div class="relative w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6">
-            <div class="flex flex-col items-center text-center gap-4">
-              <div class="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-                <span class="material-symbols-outlined text-2xl text-red-500">delete</span>
-              </div>
-              <h3 class="text-lg font-bold text-slate-900 dark:text-white">¿Eliminar producto?</h3>
-              <p class="text-sm text-slate-600 dark:text-slate-300">
-                <span class="font-semibold">{{ productToDelete?.name }}</span> será eliminado
-                permanentemente.
-              </p>
-              <div class="flex gap-3 w-full mt-2">
-                <button @click="cancelDelete"
-                  class="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                  Cancelar
-                </button>
-                <button @click="confirmDelete"
-                  class="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold transition-colors">
-                  Eliminar
-                </button>
-              </div>
+    <BaseModal
+      v-model="showDeleteModal"
+      title="¿Eliminar producto?"
+    >
+        <div class="p-6 text-center">
+            <div class="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
+               <span class="material-symbols-outlined text-2xl text-red-500">delete</span>
             </div>
-          </div>
+            <p class="text-sm text-slate-600 dark:text-slate-300">
+               <span class="font-semibold">{{ productToDelete?.name }}</span> será eliminado
+               permanentemente.
+            </p>
         </div>
-      </Transition>
-    </Teleport>
+
+        <template #footer>
+            <div class="p-6 pt-0 flex gap-3">
+                <BaseButton
+                    @click="cancelDelete"
+                    variant="secondary"
+                    class="flex-1"
+                >
+                    Cancelar
+                </BaseButton>
+                <BaseButton
+                    @click="confirmDelete"
+                    variant="danger"
+                    class="flex-1"
+                >
+                    Eliminar
+                </BaseButton>
+            </div>
+        </template>
+    </BaseModal>
   </div>
 </template>
 
-<style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
 
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

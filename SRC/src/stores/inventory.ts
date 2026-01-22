@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed, onUnmounted } from 'vue';
 import { Decimal } from 'decimal.js';
 import { useNotificationsStore } from './notificationsStore';
+import { useAuthStore } from './auth';
 import type { Product } from '../types';
 import { productRepository } from '../data/repositories/productRepository';
 import { logger } from '../utils/logger';
@@ -22,9 +23,9 @@ export const useInventoryStore = defineStore(
     const lowStockProducts = computed(() => products.value.filter((p) => p.stock.lte(p.minStock)));
 
     // Helper to ensure Decimal types after loading from raw JSON/Repo
-    const ensureDecimals = (product: any): Product => {
+    const ensureDecimals = (product: Partial<Product> & Record<string, any>): Product => {
       return {
-        ...product,
+        ...product as Product,
         price: new Decimal(product.price || 0),
         stock: new Decimal(product.stock || 0),
         cost: product.cost ? new Decimal(product.cost) : undefined,
@@ -120,14 +121,17 @@ export const useInventoryStore = defineStore(
     const initialize = async (storeId?: string) => {
       if (initialized.value && products.value.length > 0) return;
 
+      const authStore = useAuthStore();
+      const effectiveStoreId = storeId || authStore.currentUser?.storeId;
+
       isLoading.value = true;
       try {
-        const rawProducts = await productRepository.getAll(storeId);
+        const rawProducts = await productRepository.getAll(effectiveStoreId);
         products.value = rawProducts.map(ensureDecimals);
 
         // Setup realtime if available
         if (isSupabaseConfigured()) {
-          setupRealtimeSubscription(storeId);
+          setupRealtimeSubscription(effectiveStoreId);
         }
 
         initialized.value = true;
@@ -148,11 +152,14 @@ export const useInventoryStore = defineStore(
 
       const priceRounded = roundHybrid50(productData.price);
 
+      const authStore = useAuthStore();
       const newProductData = {
         ...productData,
         price: priceRounded,
         createdAt: now,
         updatedAt: now,
+        store_id: authStore.currentUser?.storeId,
+        storeId: authStore.currentUser?.storeId
       };
 
       try {
@@ -241,17 +248,54 @@ export const useInventoryStore = defineStore(
       });
     };
 
-    const updateStock = async (
-      id: string,
-      quantity: number | Decimal,
+    const registerStockMovement = async (
+      movement: {
+        productId: string;
+        type: 'entrada' | 'salida' | 'ajuste' | 'venta' | 'devolucion';
+        quantity: number | Decimal;
+        reason?: string;
+        expirationDate?: string;
+      }
     ): Promise<{ success: boolean; product?: Product; error?: string }> => {
-      const product = products.value.find((p) => p.id === id);
+      const product = products.value.find((p) => p.id === movement.productId);
       if (!product) {
         return { success: false, error: 'Producto no encontrado' };
       }
 
-      const delta = quantity instanceof Decimal ? quantity : new Decimal(quantity);
-      const newStock = product.stock.plus(delta);
+      const qty = movement.quantity instanceof Decimal ? movement.quantity : new Decimal(movement.quantity);
+      let newStock = product.stock;
+
+      // Calculate new stock based on type
+      if (['entrada', 'devolucion', 'ajuste'].includes(movement.type)) {
+        // Ajuste logic matches DB trigger: addition (signed logic if needed, but here usually positive for entry)
+        // IF type is adjustment, user should provide signed value OR type handled differently?
+        // For simplicity and matching trigger: Ajuste is ADDED. If user wants to reduce, they use AJUSTE NEGATIVO?
+        // No, usually "Quantity" is absolute.
+        // DB Trigger: ELSIF NEW.movement_type = 'ajuste' THEN UPDATE SET current_stock = current_stock + NEW.quantity;
+        // IF UI provides 'Ajuste Negativo' (via reason), type is still 'ajuste'? 
+        // WO-201 says: StockEntryView handles Entradas/Salidas/Ajustes.
+        // T1.2: "Lógica de movimientos".
+
+        // Let's assume quantity is absolute.
+        // If type is 'salida' or 'venta', we subtract.
+        // If type is 'entrada', 'devolucion', 'ajuste', we add? 
+        // Wait, 'ajuste' usually implies setting to a value or adding a delta. 
+        // If kardex stores movement, it stores the DELTA usually.
+        // Let's assume input quantity is always POSITIVE in UI usually.
+
+        if (movement.type === 'ajuste') {
+          // For safety, let's treat 'ajuste' as a delta.
+          // If from UI "Ajuste" usually implies Correction.
+          // If logic is "Set to X", we calculate delta.
+          // But here we receive "quantity".
+          // Let's assume it's a delta.
+          newStock = newStock.plus(qty);
+        } else {
+          newStock = newStock.plus(qty);
+        }
+      } else if (['salida', 'venta'].includes(movement.type)) {
+        newStock = newStock.minus(qty);
+      }
 
       // 🛡️ T-001: Validación crítica - Rechazar si resultaría en stock negativo
       if (newStock.lt(0)) {
@@ -267,25 +311,25 @@ export const useInventoryStore = defineStore(
       product.updatedAt = new Date().toISOString();
 
       try {
-        // Send update to repo (async)
-        // Note: repository updateStock logic might vary, here we send the absolute value usually?
-        // Repository generic update expects the partial object.
-        // ProductRepository has a specific `updateStock` but let's stick to standard update for now
-        // unless we want to use the specific one which might use RPC.
-        // For now, simple update is enough for WO-002
-        const success = await productRepository.update(id, {
-          stock: newStock, // Decimal will be serialized by adapter/supabase
-          updatedAt: product.updatedAt
-        } as any);
+        let finalReason = movement.reason;
+        if (movement.expirationDate) {
+          finalReason = `${finalReason || ''} [Vence: ${movement.expirationDate}]`.trim();
+        }
+
+        const success = await productRepository.registerMovement({
+          productId: movement.productId,
+          type: movement.type,
+          quantity: qty.toNumber(), // Convert to number for DB/JSON
+          reason: finalReason
+        });
 
         if (!success) {
-          // Rollback on failure
           product.stock = oldStock;
-          return { success: false, error: 'Error al guardar stock' };
+          return { success: false, error: 'Error al registrar movimiento' };
         }
       } catch (e) {
         product.stock = oldStock;
-        return { success: false, error: 'Excepción al guardar stock' };
+        return { success: false, error: 'Excepción al registrar movimiento' };
       }
 
       // Check for low stock notification
@@ -304,7 +348,6 @@ export const useInventoryStore = defineStore(
         product.notifiedLowStock = true;
       }
 
-      // Reset flag if stock is restored above min
       if (product.stock.gte(product.minStock) && product.notifiedLowStock) {
         product.notifiedLowStock = false;
       }
@@ -316,6 +359,17 @@ export const useInventoryStore = defineStore(
     onUnmounted(() => {
       unsubscribeRealtime();
     });
+
+    // OPTIMISTIC ONLY: Update stock locally without DB calls
+    // Used when another process (like Sale RPC) handles the DB persistence
+    const adjustStockLocal = (productId: string, delta: number | Decimal) => {
+      const product = products.value.find((p) => p.id === productId);
+      if (!product) return;
+
+      const deltaDecimal = delta instanceof Decimal ? delta : new Decimal(delta);
+      product.stock = product.stock.plus(deltaDecimal);
+      product.updatedAt = new Date().toISOString();
+    };
 
     return {
       products,
@@ -332,7 +386,8 @@ export const useInventoryStore = defineStore(
       getProductById,
       getProductByPLU,
       searchProducts,
-      updateStock,
+      registerStockMovement,
+      adjustStockLocal,
     };
   },
 );

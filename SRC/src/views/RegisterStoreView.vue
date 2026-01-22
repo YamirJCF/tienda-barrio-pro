@@ -3,6 +3,8 @@ import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { logger } from '../utils/logger';
+import BaseInput from '@/components/ui/BaseInput.vue';
+import BaseButton from '@/components/ui/BaseButton.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -158,19 +160,14 @@ const handleSubmit = async () => {
               >Nombre de la Tienda</label
             >
             <div class="relative">
-              <input
+              <BaseInput
                 v-model="storeName"
-                type="text"
                 id="storeName"
-                class="w-full bg-white dark:bg-white/5 border border-[#cee9e0] dark:border-white/10 rounded-xl px-4 py-3.5 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 placeholder="Ej. Abastos La Estrella"
+                :icon="isStoreNameValid ? 'check_circle' : undefined"
+                :class="{'text-emerald-500': isStoreNameValid}"
               />
-              <span
-                v-if="isStoreNameValid"
-                class="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500 transition-opacity"
-              >
-                <span class="material-symbols-outlined">check_circle</span>
-              </span>
+  
             </div>
             <p class="text-xs text-[#489d82] dark:text-gray-400 ml-1">
               Así aparecerá en tus recibos digitales.
@@ -183,11 +180,9 @@ const handleSubmit = async () => {
               for="ownerName"
               >Nombre del Dueño</label
             >
-            <input
+            <BaseInput
               v-model="ownerName"
-              type="text"
               id="ownerName"
-              class="w-full bg-white dark:bg-white/5 border border-[#cee9e0] dark:border-white/10 rounded-xl px-4 py-3.5 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
               placeholder="Ej. Juan Pérez"
             />
             <p class="text-xs text-[#489d82] dark:text-gray-400 ml-1">
@@ -213,18 +208,13 @@ const handleSubmit = async () => {
             <label class="text-sm font-semibold text-[#0d1c17] dark:text-gray-200 ml-1" for="email"
               >Correo Electrónico</label
             >
-            <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                <span class="material-symbols-outlined text-xl">mail</span>
-              </span>
-              <input
+            <BaseInput
                 v-model="email"
                 type="email"
                 id="email"
-                class="w-full pl-11 bg-white dark:bg-white/5 border border-[#cee9e0] dark:border-white/10 rounded-xl px-4 py-3.5 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                icon="mail"
                 placeholder="tucorreo@ejemplo.com"
-              />
-            </div>
+            />
           </div>
 
           <div class="flex flex-col gap-1.5">
@@ -314,14 +304,17 @@ const handleSubmit = async () => {
 
       <!-- Submit Button -->
       <div class="w-full p-4 mt-4 max-w-lg mx-auto">
-        <button
+        <BaseButton
           @click="handleSubmit"
           :disabled="!canSubmit"
-          class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-lg font-bold shadow-lg shadow-emerald-600/30 disabled:shadow-none transition-all transform active:scale-[0.98] flex items-center justify-center gap-2"
+          :loading="isLoading"
+          size="lg"
+          variant="primary"
+          class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"
         >
           <span>Abrir mi Tienda</span>
           <span class="material-symbols-outlined text-xl">storefront</span>
-        </button>
+        </BaseButton>
         <p class="text-xs text-center text-[#489d82] mt-3">
           Al crear la cuenta aceptas los
           <a class="underline hover:text-emerald-600" href="#">términos de servicio</a>.

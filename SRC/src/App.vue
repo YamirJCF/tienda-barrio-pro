@@ -4,8 +4,6 @@ import { RouterView } from 'vue-router';
 import ToastNotification from './components/ToastNotification.vue';
 import { useNetworkStatus } from './composables/useNetworkStatus';
 import { checkDataIntegrity } from './composables/useDataIntegrity';
-// T-009: Import para banner de tienda cerrada
-import { useStoreStatusStore } from './stores/storeStatus';
 // SPEC-008: Alertas críticas bloqueantes
 import CriticalAlertModal from './components/CriticalAlertModal.vue';
 import { useCriticalAlerts } from './composables/useCriticalAlerts';
@@ -27,8 +25,10 @@ const { currentAlert, isVisible, handlePrimary, handleSecondary, dismissAlert } 
   useCriticalAlerts();
 
 // T-009: Estado de tienda para banner global
-const storeStatusStore = useStoreStatusStore();
-const isStoreClosed = computed(() => storeStatusStore.isClosed);
+// T-009: Estado de tienda para banner global
+import { useCashRegisterStore } from './stores/cashRegister'; // Use new store
+const cashRegisterStore = useCashRegisterStore();
+const isStoreClosed = computed(() => !cashRegisterStore.isOpen); // Invert isOpen
 
 const errorDetected = ref(false);
 

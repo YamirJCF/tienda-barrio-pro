@@ -11,6 +11,7 @@ interface Props {
     required?: boolean;
     icon?: string;
     id?: string;
+    list?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -40,6 +41,13 @@ const handleInput = (event: Event) => {
     const target = event.target as HTMLInputElement;
     emit('update:modelValue', target.value);
 };
+
+import { ref } from 'vue';
+const inputRef = ref<HTMLInputElement | null>(null);
+
+defineExpose({
+    focus: () => inputRef.value?.focus(),
+});
 </script>
 
 <template>
@@ -53,7 +61,7 @@ const handleInput = (event: Event) => {
                 <span class="material-symbols-outlined text-gray-400 text-lg">{{ icon }}</span>
             </div>
 
-            <input :id="id" :type="type" :value="modelValue" :disabled="disabled" :placeholder="placeholder"
+            <input ref="inputRef" :id="id" :type="type" :value="modelValue" :disabled="disabled" :placeholder="placeholder" :list="list"
                 :aria-invalid="!!error" :aria-describedby="error ? `${id}-error` : undefined" :class="inputClasses"
                 class="py-2 pr-3" @input="handleInput" @blur="emit('blur', $event)" @focus="emit('focus', $event)" />
         </div>
