@@ -19,6 +19,8 @@ import ProductSearchModal from '../components/ProductSearchModal.vue';
 import QuickNoteModal from '../components/QuickNoteModal.vue';
 import WeightCalculatorModal from '../components/WeightCalculatorModal.vue';
 import NoPermissionOverlay from '../components/ui/NoPermissionOverlay.vue';
+import BaseButton from '../components/ui/BaseButton.vue';
+import POSNumpad from '../components/pos/POSNumpad.vue';
 
 const router = useRouter();
 const cartStore = useCartStore();
@@ -305,23 +307,31 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
       <div
         class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between shrink-0 border-b border-gray-200/50">
         <div class="flex items-center gap-2">
-          <button @click="goToDashboard" aria-label="Volver al Dashboard"
-            class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <BaseButton 
+            @click="goToDashboard" 
+            variant="ghost" 
+            size="icon"
+            class="-ml-2"
+          >
             <span class="material-symbols-outlined">arrow_back</span>
-          </button>
+          </BaseButton>
           <h2 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-tight">
             Ticket {{ ticketNumber }}
           </h2>
         </div>
-        <button aria-label="Clear Ticket"
-          class="flex items-center justify-center rounded-xl size-10 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          @click="cartStore.clearCart">
+        <BaseButton 
+          aria-label="Clear Ticket"
+          variant="ghost"
+          size="icon"
+          class="text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+          @click="cartStore.clearCart"
+        >
           <span class="material-symbols-outlined">delete</span>
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Ticket List (Scrollable) -->
-      <div class="flex-1 overflow-y-auto ticket-scroll bg-background-light dark:bg-background-dark px-2 pb-20">
+      <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700 bg-background-light dark:bg-background-dark px-2 pb-20">
         <!-- Cart Items -->
         <div v-for="item in cartStore.items" :key="item.id"
           class="flex items-center gap-3 bg-white dark:bg-gray-800 p-3 rounded-lg mb-2 shadow-sm border border-gray-100 dark:border-gray-700 animate-fade-in">
@@ -395,95 +405,47 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
       <div class="px-3 pt-3 pb-4 flex flex-col gap-2">
         <!-- Extra Toolbar -->
         <div class="grid grid-cols-2 gap-2 mb-1">
-          <button
-            class="flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 h-10 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95 transition-transform"
-            @click="showSearch = true">
-            <span class="material-symbols-outlined text-lg">search</span>
+          <BaseButton
+            variant="secondary"
+            class="h-10 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
+            @click="showSearch = true"
+            icon="search"
+          >
             Buscar
-          </button>
-          <button
-            class="flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 h-10 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95 transition-transform"
-            @click="showNote = true">
-            <span class="material-symbols-outlined text-lg">edit_note</span>
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            class="h-10 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
+            @click="showNote = true"
+            icon="edit_note"
+          >
             Nota
-          </button>
+          </BaseButton>
         </div>
 
         <!-- Numpad Grid -->
-        <div class="grid grid-cols-4 gap-2 h-auto">
-          <!-- Row 1 -->
-          <button v-for="num in [7, 8, 9]" :key="num"
-            class="h-14 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-2xl font-medium text-gray-800 dark:text-white shadow-sm active:bg-gray-100 dark:active:bg-gray-700 touch-manipulation"
-            @click="onNumpadClick(num.toString())">
-            {{ num }}
-          </button>
-          <!-- CANT. × Button -->
-          <button
-            class="h-14 border rounded-lg flex items-center justify-center active:scale-95 touch-manipulation transition-all"
-            :class="isQuantityMode
-              ? 'bg-amber-500 border-amber-600 text-white'
-              : 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
-              " @click="handleQuantity">
-            <span class="text-xs font-bold uppercase block w-full text-center leading-none">
-              Cant.<br /><span class="text-xl">×</span>
-            </span>
-          </button>
-
-          <!-- Row 2 -->
-          <button v-for="num in [4, 5, 6]" :key="num"
-            class="h-14 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-2xl font-medium text-gray-800 dark:text-white shadow-sm active:bg-gray-100 dark:active:bg-gray-700 touch-manipulation"
-            @click="onNumpadClick(num.toString())">
-            {{ num }}
-          </button>
-          <button
-            class="h-14 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg flex items-center justify-center text-red-600 dark:text-red-400 active:bg-red-100 dark:active:bg-red-900/50 touch-manipulation"
-            @click="onNumpadClick('backspace')">
-            <span class="material-symbols-outlined">backspace</span>
-          </button>
-
-          <!-- Row 3 & 4 (Special Layout) -->
-          <!-- Column 1-3 Wrapper -->
-          <div class="col-span-3 grid grid-cols-3 gap-2">
-            <button v-for="num in [1, 2, 3]" :key="num"
-              class="h-14 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-2xl font-medium text-gray-800 dark:text-white shadow-sm active:bg-gray-100 dark:active:bg-gray-700 touch-manipulation"
-              @click="onNumpadClick(num.toString())">
-              {{ num }}
-            </button>
-            <button
-              class="h-14 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-2xl font-medium text-gray-800 dark:text-white shadow-sm active:bg-gray-100 dark:active:bg-gray-700 touch-manipulation"
-              @click="onNumpadClick('0')">
-              0
-            </button>
-            <button
-              class="h-14 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-2xl font-medium text-gray-800 dark:text-white shadow-sm active:bg-gray-100 dark:active:bg-gray-700 touch-manipulation"
-              @click="onNumpadClick('00')">
-              00
-            </button>
-            <button
-              class="h-14 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-2xl font-medium text-gray-800 dark:text-white shadow-sm active:bg-gray-100 dark:active:bg-gray-700 touch-manipulation"
-              @click="onNumpadClick('.')">
-              .
-            </button>
-          </div>
-
-          <!-- Add Button (Row Span 2) -->
-          <button
-            class="col-span-1 row-span-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 text-white rounded-lg shadow-md active:scale-95 active:shadow-inner transition-all flex flex-col items-center justify-center gap-1 border-b-4 border-blue-800 touch-manipulation"
-            @click="addProductByPLU">
-            <span class="material-symbols-outlined text-3xl font-bold">add</span>
-            <span class="text-[10px] font-bold uppercase tracking-wider">Agregar</span>
-          </button>
-        </div>
+        <POSNumpad 
+          :is-quantity-mode="isQuantityMode"
+          @click="onNumpadClick"
+          @backspace="onNumpadClick('backspace')"
+          @quantity="handleQuantity"
+          @add="addProductByPLU"
+        />
 
         <!-- Master Action Button (COBRAR) -->
-        <button
-          class="w-full h-14 bg-accent-green hover:bg-emerald-600 text-black font-black text-xl tracking-wide rounded-xl shadow-lg shadow-emerald-500/30 active:scale-[0.98] active:translate-y-0.5 transition-all mt-2 flex items-center justify-center gap-3 border-b-4 border-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-          :disabled="cartStore.items.length === 0 || isProcessing" @click="handleCheckout">
-          <!-- Spinner when processing -->
-          <span v-if="isProcessing" class="material-symbols-outlined text-2xl animate-spin">progress_activity</span>
-          <span v-else class="material-symbols-outlined text-2xl">payments</span>
-          {{ isProcessing ? 'Procesando...' : `COBRAR ${formattedTotal}` }}
-        </button>
+        <BaseButton
+          class="w-full h-14 mt-2 text-xl font-black rounded-xl shadow-lg border-b-4 disabled:opacity-50"
+          :class="isProcessing ? 'cursor-not-allowed' : ''"
+          variant="success"
+          :disabled="cartStore.items.length === 0 || isProcessing"
+          :loading="isProcessing"
+          @click="handleCheckout"
+        >
+             <div class="flex items-center justify-center gap-3">
+                 <span class="material-symbols-outlined text-2xl">payments</span>
+                 COBRAR {{ formattedTotal }}
+             </div>
+        </BaseButton>
       </div>
     </section>
 
@@ -499,20 +461,4 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
   </div>
 </template>
 
-<style scoped>
-/* Custom Scrollbar for the ticket list */
-.ticket-scroll::-webkit-scrollbar {
-  width: 4px;
-}
 
-.ticket-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.ticket-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-}
-
-/* animate-fade-in is now global in index.css */
-</style>

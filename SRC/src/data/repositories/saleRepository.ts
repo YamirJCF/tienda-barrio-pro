@@ -21,8 +21,23 @@ const STORAGE_KEY = 'tienda-sales';
 /**
  * Interface extending base repository with sale-specific methods
  */
+interface SalePayload {
+    items: {
+        productId: string;
+        productName: string;
+        quantity: number;
+        price: any; // Decimal or number
+        subtotal: any; // Decimal or number
+    }[];
+    total: any; // Decimal or number
+    paymentMethod: 'cash' | 'nequi' | 'fiado';
+    amountReceived?: any; // Decimal or number
+    clientId?: string;
+    employeeId?: string;
+}
+
 export interface SaleRepository extends EntityRepository<Sale> {
-    processSale(saleData: any, storeId: string): Promise<{ success: boolean; id?: string; error?: string }>;
+    processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; error?: string }>;
     getByDateRange(startDate: string, endDate: string, storeId?: string): Promise<Sale[]>;
 }
 
@@ -39,7 +54,7 @@ export const saleRepository: SaleRepository = {
      * Process a new sale (Atomic Transaction)
      * Uses RPC 'procesar_venta' if online, fallback to Sync Queue if offline
      */
-    async processSale(saleData: any, storeId: string): Promise<{ success: boolean; id?: string; error?: string }> {
+    async processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; error?: string }> {
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
         // 1. Try Online (RPC)

@@ -6,6 +6,8 @@ import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
 import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
 import Decimal from 'decimal.js';
+import BaseInput from '@/components/ui/BaseInput.vue';
+import BaseButton from '@/components/ui/BaseButton.vue';
 
 const router = useRouter();
 const cashRegisterStore = useCashRegisterStore(); // Changed from expensesStore
@@ -131,9 +133,11 @@ const goBack = () => router.push('/');
                     </div>
 
                     <div>
-                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Concepto</label>
-                        <input type="text" v-model="newExpense.description" placeholder="Ej. Pago Proveedor Pan" 
-                               class="w-full bg-gray-50 dark:bg-gray-700 border-none rounded-lg p-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500" />
+                        <BaseInput
+                            v-model="newExpense.description"
+                            label="Concepto"
+                            placeholder="Ej. Pago Proveedor Pan"
+                        />
                     </div>
 
                     <div>
@@ -148,11 +152,15 @@ const goBack = () => router.push('/');
                         </div>
                     </div>
 
-                    <button @click="handleSubmit" :disabled="isSubmitting" 
-                            class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl mt-4 disabled:opacity-50 flex justify-center">
-                        <span v-if="isSubmitting" class="material-symbols-outlined animate-spin">progress_activity</span>
-                        <span v-else>GUARDAR SALIDA</span>
-                    </button>
+                    <BaseButton
+                        @click="handleSubmit"
+                        :disabled="isSubmitting"
+                        :loading="isSubmitting"
+                        variant="danger"
+                        class="w-full mt-4 flex justify-center"
+                    >
+                        GUARDAR SALIDA
+                    </BaseButton>
                 </div>
             </div>
         </div>

@@ -6,6 +6,9 @@ import { Decimal } from 'decimal.js';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { logger } from '../utils/logger';
 import { getMarginLoss } from '../utils/currency';
+import BaseModal from './ui/BaseModal.vue';
+import BaseInput from './ui/BaseInput.vue';
+import BaseButton from './ui/BaseButton.vue';
 
 // Props
 // WO-001: Changed productId from number to string for UUID
@@ -148,7 +151,7 @@ const resetForm = () => {
   stockWasModified.value = false;
 };
 
-const save = () => {
+const save = async () => {
   logger.log('[ProductForm] Save called');
   logger.log('[ProductForm] isValid:', isValid.value);
   logger.log('[ProductForm] formData:', formData.value);
@@ -181,21 +184,27 @@ const save = () => {
 
   logger.log('[ProductForm] productData:', productData);
 
-  let savedProduct: Product;
+  let savedProduct: Product | undefined;
 
-  if (props.productId) {
-    // Update existing
-    logger.log('[ProductForm] Updating product:', props.productId);
-    savedProduct = inventoryStore.updateProduct(props.productId, productData)!;
-  } else {
-    // Create new
-    logger.log('[ProductForm] Creating new product');
-    savedProduct = inventoryStore.addProduct(productData);
+  try {
+    if (props.productId) {
+      // Update existing
+      logger.log('[ProductForm] Updating product:', props.productId);
+      savedProduct = await inventoryStore.updateProduct(props.productId, productData);
+    } else {
+      // Create new
+      logger.log('[ProductForm] Creating new product');
+      savedProduct = await inventoryStore.addProduct(productData);
+    }
+
+    if (savedProduct) {
+      logger.log('[ProductForm] Saved product:', savedProduct);
+      emit('saved', savedProduct);
+      close();
+    }
+  } catch (err) {
+    logger.error('[ProductForm] Error saving product:', err);
   }
-
-  logger.log('[ProductForm] Saved product:', savedProduct);
-  emit('saved', savedProduct);
-  close();
 };
 
 const toggleSaleMode = (mode: 'unit' | 'weight') => {
@@ -270,138 +279,58 @@ watch(
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-end justify-center bg-gray-800/80"
-        @click.self="close"
-      >
-        <!-- Modal Container -->
-        <div
-          class="w-full h-[90vh] bg-white dark:bg-background-dark rounded-t-xl shadow-2xl flex flex-col relative max-w-[480px] mx-auto animate-slide-up"
-        >
-          <!-- Header -->
-          <div
-            class="flex-none bg-white dark:bg-background-dark border-b border-gray-100 dark:border-gray-800 z-20 sticky top-0 rounded-t-xl"
-          >
-            <!-- Drag Handle -->
-            <div class="flex justify-center pt-3 pb-1 cursor-grab" @click="close">
-              <div class="h-1.5 w-12 rounded-full bg-gray-200 dark:bg-gray-700"></div>
-            </div>
-            <!-- Title Bar -->
-            <div class="flex items-center justify-between px-4 pb-3">
-              <div class="flex items-center gap-2">
-                <h2
-                  class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-tight"
-                >
-                  {{ productId ? 'Editar Producto' : 'Nuevo Producto' }}
-                </h2>
-                <!-- WO-004: Badge tipo producto (solo al editar) -->
-                <span
-                  v-if="productId"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                  :class="
-                    formData.saleMode === 'weight'
-                      ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300'
-                      : 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                  "
-                >
-                  <span class="material-symbols-outlined text-[12px]">
-                    {{ formData.saleMode === 'weight' ? 'scale' : 'package_2' }}
-                  </span>
-                  {{ formData.saleMode === 'weight' ? 'Peso' : 'Unidad' }}
-                </span>
-              </div>
-              <button
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 text-slate-900 dark:text-white transition-colors"
-                @click="close"
-              >
-                <span class="material-symbols-outlined text-[24px]">close</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Scrollable Form Body -->
-          <div
-            class="flex-1 overflow-y-auto bg-white dark:bg-background-dark p-4 pb-24 no-scrollbar"
-          >
-            <form class="grid grid-cols-12 gap-3" @submit.prevent="save">
+  <BaseModal
+    :model-value="modelValue"
+    @update:model-value="close"
+    :title="productId ? 'Editar Producto' : 'Nuevo Producto'"
+  >
+    <!-- Custom Header Badge Slot if needed, or put in title with logic -->
+    <!-- Content Slot -->
+    <div class="p-4 space-y-4">
+          <div class="grid grid-cols-12 gap-3 pb-4">
               <!-- Nombre del Producto -->
               <div class="col-span-12">
-                <label
-                  class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1"
-                >
-                  Nombre del Producto
-                </label>
-                <input
+                <BaseInput
                   v-model="formData.name"
-                  class="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm"
+                  label="Nombre del Producto"
                   placeholder="Ej. Coca Cola 3L Original"
-                  type="text"
                   required
                 />
               </div>
 
               <!-- Marca y PLU -->
-              <div class="col-span-8 relative">
-                <label
-                  class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1"
-                >
-                  Marca
-                </label>
-                <div class="relative">
-                  <input
-                    v-model="formData.brand"
-                    class="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 pl-3 pr-9 text-sm text-slate-900 dark:text-white placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm"
-                    placeholder="Buscar..."
-                    type="text"
-                  />
-                  <span
-                    class="material-symbols-outlined absolute right-2.5 top-2 text-gray-400 text-[20px] pointer-events-none"
-                    >search</span
-                  >
-                </div>
+              <div class="col-span-8">
+                <BaseInput
+                  v-model="formData.brand"
+                  label="Marca"
+                  placeholder="Buscar..."
+                  icon="search"
+                />
               </div>
               <div class="col-span-4">
-                <label
-                  class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1"
-                >
-                  Cód. Rápido
-                </label>
-                <input
-                  v-model="formData.plu"
-                  @input="formData.plu = formData.plu.replace(/[^0-9]/g, '')"
-                  class="w-full h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-center font-medium"
+                <BaseInput
+                  :model-value="formData.plu"
+                  @update:model-value="val => formData.plu = String(val).replace(/[^0-9]/g, '')"
+                  label="Cód. Rápido"
                   placeholder="PLU"
-                  type="tel"
+                  class="text-center font-medium"
                   maxlength="4"
+                  inputmode="numeric"
                 />
               </div>
 
               <!-- Categoría -->
-              <div class="col-span-12 relative">
-                <label
-                  class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1"
-                >
-                  Categoría
-                </label>
-                <div class="relative">
-                  <input
+              <div class="col-span-12">
+                 <BaseInput
                     v-model="formData.category"
-                    class="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 pl-3 pr-10 text-sm text-slate-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm"
+                    label="Categoría"
                     placeholder="Ej. Bebidas, Despensa, Lácteos..."
-                    type="text"
                     list="categories"
+                    icon="category"
                   />
                   <datalist id="categories">
                     <option v-for="cat in existingCategories" :key="cat" :value="cat" />
                   </datalist>
-                  <span
-                    class="material-symbols-outlined absolute right-3 top-2.5 text-gray-500 pointer-events-none text-[20px]"
-                    >arrow_drop_down</span
-                  >
-                </div>
               </div>
 
               <!-- Modo de Venta (Segmented Control) -->
@@ -495,40 +424,27 @@ watch(
               </div>
 
               <!-- Costo y Precio -->
-              <div class="col-span-6 pt-2">
-                <label
-                  class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1"
-                >
-                  Costo ($)
-                </label>
-                <div class="relative">
-                  <span class="absolute left-3 top-2.5 text-gray-400 text-sm font-medium">$</span>
-                  <input
-                    v-model="formData.cost"
-                    class="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 pl-7 pr-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none shadow-sm font-medium"
-                    placeholder="0"
-                    type="number"
-                    step="0.01"
-                  />
-                </div>
+              <div class="col-span-6">
+                <BaseInput
+                  v-model="formData.cost"
+                  label="Costo ($)"
+                  placeholder="0"
+                  type="number"
+                  step="0.01"
+                  icon="attach_money"
+                />
               </div>
-              <div class="col-span-6 pt-2">
-                <label
-                  class="block text-[10px] uppercase font-bold text-primary dark:text-primary-400 tracking-wider mb-1"
-                >
-                  Precio Venta ($)
-                </label>
-                <div class="relative">
-                  <span class="absolute left-3 top-2.5 text-primary/70 text-sm font-bold">$</span>
-                  <input
-                    v-model="formData.price"
-                    class="w-full h-10 rounded-lg border border-primary/30 bg-primary/5 dark:bg-primary/10 pl-7 pr-3 text-sm text-primary dark:text-primary-400 placeholder:text-primary/40 focus:border-primary focus:ring-1 focus:ring-primary outline-none shadow-sm font-bold"
-                    placeholder="0"
-                    type="number"
-                    step="0.01"
-                    required
-                  />
-                </div>
+              <div class="col-span-6">
+                 <BaseInput
+                  v-model="formData.price"
+                  label="Precio Venta ($)"
+                  placeholder="0"
+                  type="number"
+                  step="0.01"
+                  required
+                  icon="attach_money"
+                  class="font-bold text-emerald-600"
+                />
               </div>
 
               <!-- BR-02: Warning Fuga de Margen (Efectivo) -->
@@ -581,111 +497,47 @@ watch(
               <!-- Inventario -->
               <div class="col-span-12 border-t border-gray-100 dark:border-gray-800 my-2"></div>
               <div class="col-span-6">
-                <label
-                  class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1"
-                >
-                  Stock Actual
-                  <!-- WO-004: Mostrar unidad de medida -->
-                  <span
-                    v-if="formData.saleMode === 'weight'"
-                    class="text-primary dark:text-primary-400"
-                  >
-                    ({{ formData.measurementUnit }})
-                  </span>
-                  <span v-else class="text-gray-400">(un)</span>
-                </label>
-                <input
+                <BaseInput
                   v-model="formData.stock"
-                  class="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm"
+                  :label="formData.saleMode === 'weight' ? `Stock Actual (${formData.measurementUnit})` : 'Stock Actual (un)'"
                   placeholder="0"
                   type="number"
+                  step="any"
                   min="0"
                 />
               </div>
               <div class="col-span-6">
-                <label
-                  class="block text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider mb-1"
-                >
-                  Stock Mínimo
-                </label>
-                <input
-                  v-model="formData.minStock"
-                  class="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-slate-900 dark:text-white placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm"
-                  placeholder="5"
-                  type="number"
-                  min="0"
+                <BaseInput
+                    v-model="formData.minStock"
+                    label="Stock Mínimo"
+                    placeholder="5"
+                    type="number"
+                    min="0"
                 />
               </div>
-
-              <!-- Spacer for scroll -->
-              <div class="col-span-12 h-20"></div>
-
-              <!-- Sticky Footer (inside form) -->
-              <div
-                class="col-span-12 fixed bottom-0 left-0 right-0 max-w-[480px] mx-auto bg-white dark:bg-background-dark border-t border-gray-200 dark:border-gray-700 p-4 z-30 pb-8"
-              >
-                <div class="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    class="h-11 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 font-bold text-sm tracking-wide hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                    @click="close"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    class="h-11 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm tracking-wide shadow-lg shadow-primary/20 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    :disabled="!isValid"
-                  >
-                    <span class="material-symbols-outlined text-[18px]">save</span>
-                    Guardar
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
+    </div> 
+
+    <template #footer>
+        <div class="p-6 pt-2 flex gap-3 bg-white dark:bg-surface-dark">
+             <BaseButton
+                    @click="close"
+                    variant="secondary"
+                    class="flex-1"
+                >
+                    Cancelar
+                </BaseButton>
+                <BaseButton
+                    @click="save"
+                    :disabled="!isValid"
+                    variant="primary"
+                    class="flex-1"
+                    icon="save"
+                >
+                    Guardar
+                </BaseButton>
         </div>
-      </div>
-    </Transition>
-  </Teleport>
+    </template>
+  </BaseModal>
 </template>
-
-<style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-active .animate-slide-up {
-  animation: slideUp 0.3s ease-out;
-}
-
-.modal-leave-active .animate-slide-up {
-  animation: slideDown 0.3s ease-in;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(0);
-  }
-
-  to {
-    transform: translateY(100%);
-  }
-}
-
-/* Hide scrollbar */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>
+```

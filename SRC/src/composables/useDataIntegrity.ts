@@ -87,10 +87,17 @@ const CRITICAL_STORAGE_KEYS: StorageKeyConfig[] = [
   },
   {
     key: 'tienda-store-status',
-    description: 'Estado de la tienda',
+    description: 'Estado de la tienda (Legacy/Repo)',
     validator: (data: unknown): boolean => {
       if (typeof data !== 'object' || data === null) return false;
-      // Solo necesita ser un objeto válido
+      return true;
+    },
+  },
+  {
+    key: 'tienda-store-status-v2',
+    description: 'Estado de la tienda (Store v2)',
+    validator: (data: unknown): boolean => {
+      if (typeof data !== 'object' || data === null) return false;
       return true;
     },
   },

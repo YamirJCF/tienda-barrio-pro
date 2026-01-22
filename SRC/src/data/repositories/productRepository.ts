@@ -9,6 +9,7 @@
  */
 
 import { Product } from '../../types';
+import { Decimal } from 'decimal.js';
 import { createSupabaseRepository, EntityRepository } from './supabaseAdapter';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
@@ -16,6 +17,18 @@ import { logger } from '../../utils/logger';
 // Constants
 const TABLE_NAME = 'products';
 const STORAGE_KEY = 'tienda-inventory'; // Legacy key for compatibility
+
+/**
+ * Interface extending base repository with product-specific methods
+ */
+interface InventoryMovementHistory {
+    id: string;
+    type: string;
+    quantity: number;
+    reason?: string;
+    date: string;
+    user: string;
+}
 
 /**
  * Interface extending base repository with product-specific methods
@@ -32,7 +45,7 @@ export interface ProductRepository extends EntityRepository<Product> {
         storeId?: string;
         employeeId?: string;
     }): Promise<boolean>;
-    getMovementHistory(productId: string, limit?: number): Promise<any[]>;
+    getMovementHistory(productId: string, limit?: number): Promise<InventoryMovementHistory[]>;
 }
 
 // Create base repository
@@ -71,8 +84,8 @@ export const productRepository: ProductRepository = {
         if (!product) return false;
 
         const updated = await baseRepository.update(id, {
-            stock: quantity // Changed from currentStock to stock to match type
-        } as any);
+            stock: new Decimal(quantity) // Ensure Decimal if entity uses it, or number if mapped
+        } as Partial<Product>);
 
         return updated !== null;
     },
@@ -80,7 +93,11 @@ export const productRepository: ProductRepository = {
     /**
      * Get movement history (Kardex)
      */
+    /**
+     * Get movement history (Kardex)
+     */
     async getMovementHistory(productId: string, limit: number = 50): Promise<any[]> {
+        // Online first strategy for history (it's not critical for offline sales)
         const isOnline = isSupabaseConfigured() && navigator.onLine;
 
         if (isOnline) {
@@ -94,7 +111,7 @@ export const productRepository: ProductRepository = {
                     .limit(limit);
 
                 if (!error && data) {
-                    return data.map(m => ({
+                    return data.map((m: any): InventoryMovementHistory => ({
                         id: m.id,
                         type: m.movement_type,
                         quantity: m.quantity,
@@ -107,6 +124,7 @@ export const productRepository: ProductRepository = {
             }
         }
 
+        // TODO: Could implement offline history from local cache if needed
         return [];
     },
 
@@ -173,8 +191,8 @@ export const productRepository: ProductRepository = {
             }
 
             await baseRepository.update(product.id, {
-                stock: newStock
-            } as any);
+                stock: new Decimal(newStock)
+            } as Partial<Product>);
         }
 
         return true;

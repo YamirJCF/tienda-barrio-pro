@@ -3,6 +3,8 @@ import { ref, computed, watch } from 'vue';
 import type { Product, MeasurementUnit } from '../types';
 import { Decimal } from 'decimal.js';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import BaseModal from './ui/BaseModal.vue';
+import BaseButton from './ui/BaseButton.vue';
 
 // WO: UNIT_LABELS definido localmente (antes importado de sampleData eliminado)
 const UNIT_LABELS: Record<string, string> = {
@@ -178,29 +180,25 @@ const clear = () => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="modelValue && product"
-        class="fixed inset-0 z-50 flex items-end justify-center bg-gray-800/80"
-        @click.self="close"
-      >
-        <div
-          class="w-full max-w-[480px] mx-auto bg-white dark:bg-background-dark rounded-t-2xl shadow-2xl flex flex-col animate-slide-up"
-        >
-          <!-- Header -->
-          <div class="bg-gradient-to-r from-primary to-blue-600 text-white p-4 rounded-t-2xl">
+  <BaseModal
+    :model-value="modelValue"
+    @update:model-value="close"
+    content-class="flex flex-col"
+  >
+    <template #header>
+        <div class="bg-gradient-to-r from-primary to-blue-600 text-white p-4 w-full">
             <div class="flex justify-center mb-2">
               <div class="h-1.5 w-12 rounded-full bg-white/30" @click="close"></div>
             </div>
             <div class="flex items-center justify-between">
               <div>
-                <h2 class="text-lg font-bold">{{ product.name }}</h2>
+                <h2 class="text-lg font-bold">{{ product?.name }}</h2>
                 <p class="text-sm opacity-90">{{ formattedPrice }} / {{ sellUnitLabel }}</p>
               </div>
               <span class="material-symbols-outlined text-3xl opacity-70">scale</span>
             </div>
-          </div>
+        </div>
+    </template>
 
           <!-- Sell Unit Selector -->
           <div
@@ -212,51 +210,16 @@ const clear = () => {
               Vender en:
             </div>
             <div class="flex gap-2">
-              <button
-                type="button"
-                class="flex-1 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
-                :class="
-                  sellUnit === 'kg'
-                    ? 'bg-primary text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
-                "
-                @click="
-                  sellUnit = 'kg';
-                  clear();
-                "
+              <BaseButton
+                v-for="unit in ['kg', 'lb', 'g']" 
+                :key="unit"
+                :variant="sellUnit === unit ? 'primary' : 'outline'"
+                size="sm"
+                class="flex-1"
+                @click="sellUnit = unit as any; clear();"
               >
-                kg
-              </button>
-              <button
-                type="button"
-                class="flex-1 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
-                :class="
-                  sellUnit === 'lb'
-                    ? 'bg-primary text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
-                "
-                @click="
-                  sellUnit = 'lb';
-                  clear();
-                "
-              >
-                Libras
-              </button>
-              <button
-                type="button"
-                class="flex-1 h-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
-                :class="
-                  sellUnit === 'g'
-                    ? 'bg-primary text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
-                "
-                @click="
-                  sellUnit = 'g';
-                  clear();
-                "
-              >
-                Gramos
-              </button>
+                {{ unit === 'lb' ? 'Libras' : unit === 'g' ? 'Gramos' : 'kg' }}
+              </BaseButton>
             </div>
           </div>
 
@@ -316,66 +279,43 @@ const clear = () => {
 
           <!-- Numpad -->
           <div class="grid grid-cols-3 gap-2 p-4 bg-gray-50 dark:bg-gray-900">
-            <button
+            <BaseButton
               v-for="num in ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00']"
               :key="num"
-              class="h-12 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-xl shadow-sm active:scale-95 transition-transform border border-gray-100 dark:border-gray-700"
               @click="handleNumpad(num)"
+              variant="secondary"
+              class="h-12 text-xl font-bold bg-white dark:bg-gray-800"
             >
               {{ num }}
-            </button>
+            </BaseButton>
+            <BaseButton
+                @click="handleNumpad('backspace')"
+                variant="danger"
+                class="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-none col-span-3 h-12"
+            >
+                <span class="material-symbols-outlined">backspace</span>
+            </BaseButton>
           </div>
 
-          <!-- Actions -->
-          <div
-            class="grid grid-cols-2 gap-3 p-4 bg-white dark:bg-background-dark border-t border-gray-100 dark:border-gray-800 pb-8"
-          >
-            <button
-              type="button"
-              class="h-12 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+    <template #footer>
+          <div class="grid grid-cols-2 gap-3 p-4 bg-white dark:bg-background-dark border-t border-gray-100 dark:border-gray-800 pb-8">
+            <BaseButton
               @click="close"
+              variant="secondary"
             >
-              <span class="material-symbols-outlined text-[18px]">close</span>
               Cancelar
-            </button>
-            <button
-              type="button"
-              class="h-12 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-sm shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="!isValid"
+            </BaseButton>
+            <BaseButton
               @click="confirm"
+              :disabled="!isValid"
+              variant="primary"
+              icon="add_shopping_cart"
             >
-              <span class="material-symbols-outlined text-[18px]">add_shopping_cart</span>
               Agregar {{ formatCurrency(calculatedValue) }}
-            </button>
+            </BaseButton>
           </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+    </template>
+  </BaseModal>
 </template>
 
-<style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.3s ease;
-}
 
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.animate-slide-up {
-  animation: slideUp 0.3s ease-out;
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(100%);
-  }
-
-  to {
-    transform: translateY(0);
-  }
-}
-</style>

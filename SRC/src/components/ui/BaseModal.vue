@@ -3,14 +3,16 @@
  * BaseModal - Reusable modal wrapper component.
  * Encapsulates: Teleport, Transition, overlay, drag handle, and animations.
  */
-defineProps<{
+interface Props {
   modelValue: boolean;
   title?: string;
   maxHeight?: string;
   showDragHandle?: boolean;
   showCloseButton?: boolean;
-}>();
+  contentClass?: string;
+}
 
+const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
 }>();
@@ -44,12 +46,14 @@ const close = () => {
 
           <!-- Header (optional) -->
           <header
-            v-if="title || showCloseButton"
+            v-if="title || showCloseButton || $slots.header"
             class="flex items-center justify-between px-4 pb-3 shrink-0"
           >
-            <h2 v-if="title" class="text-lg font-bold text-slate-900 dark:text-white">
-              {{ title }}
-            </h2>
+            <slot name="header">
+              <h2 v-if="title" class="text-lg font-bold text-slate-900 dark:text-white">
+                {{ title }}
+              </h2>
+            </slot>
             <button
               v-if="showCloseButton"
               class="p-2 -mr-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -60,7 +64,7 @@ const close = () => {
           </header>
 
           <!-- Content Slot -->
-          <div class="flex-1 overflow-y-auto">
+          <div class="flex-1" :class="contentClass ?? 'overflow-y-auto'">
             <slot></slot>
           </div>
 

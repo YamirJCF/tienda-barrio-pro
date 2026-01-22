@@ -6,6 +6,8 @@ import { useAuthStore } from '../stores/auth';
 import BottomNav from '../components/BottomNav.vue';
 import ClientFormModal from '../components/ClientFormModal.vue';
 import { Decimal } from 'decimal.js';
+import BaseInput from '@/components/ui/BaseInput.vue';
+import BaseButton from '@/components/ui/BaseButton.vue';
 
 const router = useRouter();
 const clientsStore = useClientsStore();
@@ -115,17 +117,11 @@ const handleClientSaved = () => {
         </div>
       </div>
       <div class="px-4 py-2">
-        <div class="relative">
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <span class="material-symbols-outlined text-gray-400 text-[20px]">search</span>
-          </div>
-          <input
-            v-model="searchQuery"
-            type="text"
-            class="block w-full rounded-xl border-none bg-white dark:bg-slate-800 py-3 pl-10 pr-4 text-sm text-slate-900 dark:text-white shadow-sm placeholder-slate-400 focus:ring-2 focus:ring-primary"
-            placeholder="Buscar por nombre o cédula..."
-          />
-        </div>
+           <BaseInput
+             v-model="searchQuery"
+             placeholder="Buscar por nombre o cédula..."
+             icon="search"
+           />
       </div>
     </header>
 
@@ -149,14 +145,14 @@ const handleClientSaved = () => {
             : 'Agrega tu primer cliente para comenzar'
         }}
       </p>
-      <button
+      <BaseButton
         v-if="!searchQuery && canManageClients"
         @click="openNewClient"
-        class="mt-6 px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center gap-2"
+        class="mt-6"
+        icon="person_add"
       >
-        <span class="material-symbols-outlined">person_add</span>
         Agregar Cliente
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Client List -->

@@ -4,9 +4,6 @@ import { RouterView } from 'vue-router';
 import ToastNotification from './components/ToastNotification.vue';
 import { useNetworkStatus } from './composables/useNetworkStatus';
 import { checkDataIntegrity } from './composables/useDataIntegrity';
-// T-009: Import para banner de tienda cerrada
-// T-009: Import para banner de tienda cerrada
-// import { useStoreStatusStore } from './stores/storeStatus'; // DEPRECATED
 // SPEC-008: Alertas críticas bloqueantes
 import CriticalAlertModal from './components/CriticalAlertModal.vue';
 import { useCriticalAlerts } from './composables/useCriticalAlerts';

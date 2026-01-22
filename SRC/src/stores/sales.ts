@@ -4,7 +4,7 @@ import { Decimal } from 'decimal.js';
 import { salesSerializer } from '../data/serializers';
 import { generateUUID } from '../utils/uuid';
 import type { Sale } from '../types';
-import { useStoreStatusStore } from './storeStatus';
+import { useCashRegisterStore } from './cashRegister';
 
 export interface DailyStats {
   date: string;
@@ -24,15 +24,17 @@ export const useSalesStore = defineStore(
     // const openingCash = ref<Decimal>(new Decimal(0)); // REMOVED: Managed by storeStatus
 
     // Dependencies
-    const storeStatusStore = useStoreStatusStore();
+    const cashRegisterStore = useCashRegisterStore();
 
-    // const currentCash = ref<Decimal>(new Decimal(0)); // REMOVED: Computed
-
-    // Computed Properties delegating to StoreStatus
-    const isStoreOpen = computed(() => storeStatusStore.isOperational);
+    // Computed Properties delegating to CashRegister
+    const isStoreOpen = computed(() => cashRegisterStore.isOpen);
 
     // Convert openingAmount (number) to Decimal for consistency
-    const openingCash = computed(() => new Decimal(storeStatusStore.openingAmount || 0));
+    const openingCash = computed(() => {
+      return cashRegisterStore.currentSession
+        ? new Decimal(cashRegisterStore.currentSession.openingBalance)
+        : new Decimal(0);
+    });
 
     const todayDate = computed(() => {
       const now = new Date();
@@ -158,19 +160,20 @@ export const useSalesStore = defineStore(
       // Import dynamically to avoid circular dependencies if any, or static import better
       const { saleRepository } = await import('../data/repositories/saleRepository');
       // Construct payload expected by repository (simplified structure usually)
+      // Construct payload expected by repository (simplified structure usually)
       const repoPayload = {
         items: saleData.items.map(item => ({
-          ...item,
-          price: item.price.toNumber(),
-          subtotal: item.subtotal.toNumber(),
-          // Ensure quantity is number too if it was Decimal (though interface says number)
-          quantity: Number(item.quantity)
+          productId: item.productId,
+          productName: item.productName,
+          quantity: typeof item.quantity === 'number' ? item.quantity : Number(item.quantity),
+          price: item.price instanceof Decimal ? item.price.toNumber() : Number(item.price),
+          subtotal: item.subtotal instanceof Decimal ? item.subtotal.toNumber() : Number(item.subtotal),
         })),
+        total: saleData.total instanceof Decimal ? saleData.total.toNumber() : Number(saleData.total),
         paymentMethod: saleData.paymentMethod,
-        amountReceived: saleData.amountReceived?.toNumber(),
+        amountReceived: saleData.amountReceived ? (saleData.amountReceived instanceof Decimal ? saleData.amountReceived.toNumber() : Number(saleData.amountReceived)) : undefined,
         clientId: saleData.clientId,
-        // Add other fields as needed
-        total: saleData.total.toNumber(),
+        employeeId: saleData.employeeId
       };
 
       const result = await saleRepository.processSale(repoPayload, 'default-store'); // Store ID hardcoded for now

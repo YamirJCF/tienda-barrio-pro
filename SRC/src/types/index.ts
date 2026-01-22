@@ -98,3 +98,28 @@ export interface EmployeePermissions {
 // WO-001: Helper type for generating UUIDs
 export type UUID = string;
 
+// WO-004: Cash Register Types
+export interface CashTransaction {
+    id: string;
+    type: 'income' | 'expense';
+    amount: Decimal;
+    description: string;
+    timestamp: string;
+    category?: string;
+    relatedSaleId?: string; // Optional link to a sale
+}
+
+export interface CashSession {
+    id: string;
+    employeeId: string; // ID of employee who opened the register
+    status: 'open' | 'closed';
+    openingTime: string;
+    closingTime?: string;
+    openingBalance: Decimal;
+    closingBalance?: Decimal; // Physical count at closing
+    calculatedBalance?: Decimal; // System calculated balance at closing
+    discrepancy?: Decimal; // Difference
+    transactions: CashTransaction[];
+    notes?: string;
+}
+

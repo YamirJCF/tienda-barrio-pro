@@ -3,6 +3,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useCartStore } from '../../stores/cart';
 import { useClientsStore, type Client } from '../../stores/clients';
 import Decimal from 'decimal.js';
+import BaseModal from '../ui/BaseModal.vue';
+import BaseInput from '../ui/BaseInput.vue';
+import BaseButton from '../ui/BaseButton.vue';
 
 // Props
 interface Props {
@@ -179,30 +182,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="modelValue"
-        class="fixed inset-0 z-50 flex flex-col justify-end bg-gray-900/40"
-        @click.self="close"
-      >
-        <!-- Modal Container -->
-        <div
-          class="relative w-full bg-surface-light dark:bg-surface-dark rounded-t-2xl shadow-2xl flex flex-col h-[85vh] md:h-[75vh] max-h-[800px] overflow-hidden animate-slide-up"
-        >
-          <!-- Drag Handle -->
-          <div
-            class="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing"
-            @click="close"
-          >
-            <div class="h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600"></div>
-          </div>
-
-          <!-- Header (Total Summary) -->
-          <header
-            class="flex flex-col items-center justify-center py-4 bg-gray-50 dark:bg-background-dark border-b border-gray-100 dark:border-gray-800"
-          >
-            <!-- BR-03: Always show Fiscal Total as 'Total Factura' -->
+  <BaseModal
+    :model-value="modelValue"
+    @update:model-value="close"
+    max-height="85vh"
+    content-class="flex flex-col overflow-hidden"
+  >
+    <template #header>
+        <div class="flex flex-col items-center justify-center w-full">
             <h3
               class="text-gray-400 dark:text-gray-500 text-xs font-semibold tracking-wide uppercase mb-1"
             >
@@ -251,9 +238,9 @@ onUnmounted(() => {
                 </span>
               </div>
             </div>
-
             <span class="text-xs text-gray-400 mt-2">{{ cartStore.items.length }} producto(s)</span>
-          </header>
+        </div>
+    </template>
 
           <!-- Lista de Productos (Scrollable, No Editable) -->
           <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -495,46 +482,51 @@ onUnmounted(() => {
                   </div>
 
                   <!-- Quick Action for exact cash -->
-                  <button
-                    class="mt-auto py-2 px-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-center"
+                  <BaseButton
+                    variant="outline"
+                    class="mt-auto border-dashed w-full text-xs"
                     @click="useExactAmount"
                   >
                     Usar monto exacto
-                  </button>
+                  </BaseButton>
                 </div>
 
                 <!-- Right Column: Numpad -->
                 <div class="col-span-7 pl-2">
                   <div class="grid grid-cols-3 gap-2.5 h-full max-h-[320px]">
                     <!-- Numbers 1-9 -->
-                    <button
+                    <BaseButton
                       v-for="num in [1, 2, 3, 4, 5, 6, 7, 8, 9]"
                       :key="num"
-                      class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation"
                       @click="handleNumpad(num.toString())"
+                      variant="secondary"
+                      class="text-xl font-bold bg-gray-100 dark:bg-gray-800"
                     >
                       {{ num }}
-                    </button>
+                    </BaseButton>
 
                     <!-- Bottom row: 000, 0, Backspace -->
-                    <button
-                      class="flex items-center justify-center rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-lg font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation tracking-tighter"
+                    <BaseButton
                       @click="handleNumpad('000')"
+                      variant="secondary"
+                      class="text-lg font-bold bg-gray-200 dark:bg-gray-700 tracking-tighter"
                     >
                       000
-                    </button>
-                    <button
-                      class="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation"
+                    </BaseButton>
+                    <BaseButton
                       @click="handleNumpad('0')"
+                      variant="secondary"
+                      class="text-xl font-bold bg-gray-100 dark:bg-gray-800"
                     >
                       0
-                    </button>
-                    <button
-                      class="flex items-center justify-center rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation"
+                    </BaseButton>
+                    <BaseButton
                       @click="handleNumpad('backspace')"
+                      variant="danger"
+                      class="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-none"
                     >
                       <span class="material-symbols-outlined">backspace</span>
-                    </button>
+                    </BaseButton>
                   </div>
                 </div>
               </div>
@@ -568,12 +560,13 @@ onUnmounted(() => {
                 <label class="block text-left mb-1 text-xs font-semibold text-gray-500 uppercase">
                   Referencia (Opcional)
                 </label>
-                <input
+                <BaseInput
                   v-model="nequiReference"
-                  class="w-full h-12 rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-center text-lg font-medium focus:ring-pink-500 focus:border-pink-500"
+                  class="w-full text-center text-lg font-medium"
                   placeholder="Últimos 4 dígitos"
                   type="number"
                   maxlength="4"
+                  inputmode="numeric"
                 />
               </div>
             </div>
@@ -644,14 +637,10 @@ onUnmounted(() => {
                   Seleccionar Cliente
                 </label>
                 <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    <span class="material-symbols-outlined text-[20px]">search</span>
-                  </span>
-                  <input
+                  <BaseInput
                     v-model="clientSearch"
-                    type="text"
-                    class="w-full h-12 pl-10 pr-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                     placeholder="Buscar por nombre o cédula..."
+                    icon="search"
                   />
                 </div>
               </div>
@@ -708,22 +697,22 @@ onUnmounted(() => {
             </div>
           </main>
 
-          <!-- Footer (Action) -->
-          <footer
-            class="p-4 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800"
-          >
-            <button
-              class="w-full h-14 rounded-xl shadow-lg flex items-center justify-between px-6 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+    <template #footer>
+          <div class="p-4 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800">
+             <BaseButton
+              class="w-full h-14 rounded-xl shadow-lg flex items-center justify-between px-6 transition-all duration-200"
               :class="
                 activeMethod === 'cash'
-                  ? 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-emerald-200 dark:shadow-none'
+                  ? '!bg-emerald-600 !hover:bg-emerald-700 !active:bg-emerald-800 shadow-emerald-200 dark:shadow-none'
                   : activeMethod === 'nequi'
-                    ? 'bg-pink-600 hover:bg-pink-700 active:bg-pink-800'
-                    : 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800'
+                    ? '!bg-pink-600 !hover:bg-pink-700 !active:bg-pink-800'
+                    : '!bg-amber-600 !hover:bg-amber-700 !active:bg-amber-800'
               "
               :disabled="!canComplete"
               @click="completeSale"
+              variant="success" 
             >
+              <!-- Variant custom trick: pass classes manually or use 'success' etc but overriding colors with class works often -->
               <span class="text-white/80 text-sm font-medium">Completar Venta</span>
               <div class="flex flex-col items-end leading-none">
                 <span class="text-white text-lg font-bold tracking-wide">CONFIRMAR (F12)</span>
@@ -735,40 +724,10 @@ onUnmounted(() => {
                 </span>
               </div>
               <span class="material-symbols-outlined text-white">check_circle</span>
-            </button>
-          </footer>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+            </BaseButton>
+          </div>
+    </template>
+  </BaseModal>
 </template>
 
-<style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.3s ease;
-}
 
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-active .animate-slide-up {
-  animation: slideUp 0.3s ease-out;
-}
-
-.modal-leave-active .animate-slide-up {
-  animation: slideDown 0.3s ease-in;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(0);
-  }
-
-  to {
-    transform: translateY(100%);
-  }
-}
-</style>

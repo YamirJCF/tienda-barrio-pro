@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
 import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
 import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
+import { authRepository } from '../data/repositories/authRepository';
 import { logger } from '../utils/logger';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
@@ -62,15 +63,17 @@ const handleLogin = async () => {
       // =============================================
       // FLUJO ADMIN (contiene @)
       // =============================================
+      // En un sistema real, esto iría a Supabase Auth. 
+      // Por ahora mantenemos el login local de admin o lo movemos a authRepository si se prefiere.
       if (authStore.loginWithCredentials(username.value, password.value)) {
         // Admin siempre tiene acceso completo
         authStore.setDeviceStatus('approved');
         authStore.setStoreOpenStatus(true); // Admins controlan la tienda
-        recordSuccess(); // WO-004 T4.4: Reset rate limiter on success
+        recordSuccess(); 
         router.push('/');
         return;
       }
-      recordFailedAttempt(); // WO-004 T4.4: Record failed attempt
+      recordFailedAttempt();
       errorMessage.value = `Correo o contraseña incorrectos (${remainingAttempts.value} intentos restantes)`;
     } else {
       // =============================================
@@ -84,52 +87,41 @@ const handleLogin = async () => {
 
       // Obtener fingerprint del dispositivo
       const fingerprint = await getFingerprint();
-      logger.log('[Login] Fingerprint:', fingerprint.substring(0, 16) + '...');
+      const userAgent = navigator.userAgent;
 
-      // Validar credenciales localmente (simulación - en producción sería RPC)
-      const employee = employeesStore.validatePin(username.value, password.value);
+      // SPEC-005: Llamada al RPC real via Repository
+      const response = await authRepository.loginEmpleado(
+        username.value,
+        password.value,
+        fingerprint,
+        userAgent
+      );
 
-      if (employee) {
-        // Simular respuesta del servidor con diferentes estados
-        // En producción esto vendría del RPC login_empleado_unificado
-        const mockServerResponse = simulateServerResponse(employee, fingerprint);
-
-        if (!mockServerResponse.success) {
-          handleServerError(mockServerResponse.error_code, mockServerResponse.error);
-          return;
-        }
-
-        // Login exitoso
-        authStore.loginAsEmployee(
-          {
-            id: employee.id,
-            name: employee.name,
-            username: employee.username,
-            permissions: employee.permissions,
-          },
-          firstStore.id,
-        );
-
-        // Establecer estados IAM
-        authStore.setDeviceStatus('approved');
-
-        // SPEC-006: Si tiene permiso de caja, ignorar estado del servidor y permitir gestión
-        // "El sistema no valida con el admin si no que pasa directo"
-        if (employee.permissions.canOpenCloseCash) {
-          console.log('[Login] Empleado con permiso de caja: Acceso directo permitido');
-          // Mantener el estado real de la tienda (cerrada/abierta) para que la UI de apertura aparezca
-          authStore.setStoreOpenStatus(mockServerResponse.store_state?.is_open ?? false);
-        } else {
-          authStore.setStoreOpenStatus(mockServerResponse.store_state?.is_open ?? false);
-        }
-
-        recordSuccess(); // WO-004 T4.4: Reset rate limiter on success
-        router.push('/');
+      if (!response.success) {
+        handleServerError(response.error_code || 'UNKNOWN', response.error || 'Error desconocido');
+        recordFailedAttempt();
         return;
       }
 
-      recordFailedAttempt(); // WO-004 T4.4: Record failed attempt
-      errorMessage.value = `Usuario o PIN incorrectos (${remainingAttempts.value} intentos restantes)`;
+      // Login exitoso
+      if (response.employee) {
+        authStore.loginAsEmployee(
+          {
+            id: Number(response.employee.employeeId) || 0,
+            name: response.employee.name,
+            username: response.employee.email,
+            permissions: response.employee.permissions as any,
+          },
+          response.employee.storeId,
+        );
+
+        // Establecer estados IAM desde la respuesta del servidor
+        authStore.setDeviceStatus('approved');
+        authStore.setStoreOpenStatus(response.store_state?.is_open ?? false);
+
+        recordSuccess();
+        router.push('/');
+      }
     }
   } catch (error) {
     console.error('[Login] Error:', error);

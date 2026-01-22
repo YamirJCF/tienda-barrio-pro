@@ -8,6 +8,7 @@ import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
 import Decimal from 'decimal.js';
 
 import { useAuthStore } from '../stores/auth'; // Import auth store
+import BaseButton from '@/components/ui/BaseButton.vue';
 
 const router = useRouter();
 const cashRegisterStore = useCashRegisterStore(); // Replaced storeStatusStore
@@ -163,16 +164,19 @@ const goBack = () => router.back();
             </div>
 
             <!-- Action Button -->
-            <button 
+            <BaseButton 
                 @click="handleSubmit" 
+                :loading="isSubmitting"
                 :disabled="isSubmitting"
-                class="w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                :class="isOpening ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30' : 'bg-slate-800 hover:bg-slate-900 shadow-slate-500/30'"
+                :variant="isOpening ? 'success' : 'dark'"
+                class="w-full h-14 text-lg shadow-lg"
+                :class="isOpening ? 'shadow-emerald-500/30' : 'shadow-slate-500/30'"
             >
-                <span v-if="isSubmitting" class="material-symbols-outlined animate-spin">progress_activity</span>
-                <span v-else class="material-symbols-outlined">{{ isOpening ? 'store' : 'lock' }}</span>
-                {{ buttonText }}
-            </button>
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined">{{ isOpening ? 'store' : 'lock' }}</span>
+                    {{ buttonText }}
+                </div>
+            </BaseButton>
 
         </div>
     </div>

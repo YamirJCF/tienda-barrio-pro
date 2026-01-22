@@ -1,201 +1,137 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useSalesStore } from '../stores/sales';
-import { useEmployeesStore } from '../stores/employees';
-import BottomNav from '../components/BottomNav.vue';
+import { useHistory, type HistoryType } from '../composables/useHistory';
+import HistoryItemCard from '../components/history/HistoryItemCard.vue';
+import BaseButton from '../components/ui/BaseButton.vue';
 
 const router = useRouter();
-const salesStore = useSalesStore();
-const employeesStore = useEmployeesStore();
+const { items, isLoading, error, currentType, fetchHistory } = useHistory();
 
-// State
-type HistoryType =
-  | 'ventas'
-  | 'caja'
-  | 'inventario'
-  | 'gastos'
-  | 'creditos'
-  | 'auditoria'
-  | 'precios';
-const activeType = ref<HistoryType>('ventas');
-const selectedPeriod = ref<'today' | 'week' | 'month'>('today');
-const selectedEmployee = ref<string | null>(null);
-const isLoading = ref(false);
-
-// History types config
-const historyTypes: { id: HistoryType; label: string; icon: string; color: string }[] = [
-  { id: 'ventas', label: 'Ventas', icon: 'receipt_long', color: 'emerald' },
-  { id: 'caja', label: 'Caja', icon: 'point_of_sale', color: 'blue' },
-  { id: 'inventario', label: 'Inventario', icon: 'inventory_2', color: 'orange' },
-  { id: 'gastos', label: 'Gastos', icon: 'payments', color: 'red' },
-  { id: 'creditos', label: 'Créditos', icon: 'credit_card', color: 'purple' },
-  { id: 'auditoria', label: 'Seguridad', icon: 'shield', color: 'slate' },
-  { id: 'precios', label: 'Precios', icon: 'sell', color: 'cyan' },
+const filters: { label: string; value: HistoryType; icon: string }[] = [
+  { label: 'Ventas', value: 'sales', icon: 'shopping_cart' },
+  { label: 'Caja', value: 'cash', icon: 'point_of_sale' }, // Note: 'cash' fetch not fully implemented in composable yet, mapped to logic stub?
+  { label: 'Auditoría', value: 'audit', icon: 'shield' },
+  { label: 'Inventario', value: 'inventory', icon: 'inventory_2' },
+  { label: 'Gastos', value: 'expenses', icon: 'payments' },
+  { label: 'Precios', value: 'prices', icon: 'price_change' },
 ];
 
-// Computed: employees for filter
-const employees = computed(() => employeesStore.employees || []);
-
-// Computed: show employee filter for certain types
-const showEmployeeFilter = computed(() =>
-  ['ventas', 'caja', 'inventario', 'gastos'].includes(activeType.value),
-);
-
-// Computed: filtered history items (mock for now)
-const historyItems = computed(() => {
-  // TODO: Replace with actual data from useHistory composable
-  return [];
-});
-
-// Methods
 const goBack = () => {
-  router.push({ path: '/admin', query: { tab: 'reportes' } });
+  router.back();
 };
 
-const getTypeClass = (type: HistoryType) => {
-  const config = historyTypes.find((t) => t.id === type);
-  if (!config) return '';
-
-  if (activeType.value === type) {
-    return `bg-${config.color}-50 dark:bg-${config.color}-900/30 text-${config.color}-700 dark:text-${config.color}-300 ring-1 ring-${config.color}-200 dark:ring-${config.color}-800`;
-  }
-  return 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700';
+const selectFilter = (type: HistoryType) => {
+  fetchHistory(type);
 };
 
-// Employees are loaded from persisted store automatically
+onMounted(() => {
+  fetchHistory();
+});
 </script>
 
 <template>
-  <div
-    class="relative flex min-h-screen w-full flex-col overflow-x-hidden pb-20 bg-background-light dark:bg-background-dark"
-  >
+  <div class="min-h-screen bg-slate-50 dark:bg-[#0f172a] flex flex-col">
     <!-- Header -->
     <header
-      class="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
+      class="sticky top-0 z-30 bg-white dark:bg-[#1e293b] border-b border-slate-100 dark:border-slate-800 shadow-sm"
     >
-      <div class="flex items-center justify-between px-4 py-3 gap-3">
-        <button
+      <div class="px-4 py-3 flex items-center gap-3">
+        <BaseButton
           @click="goBack"
-          aria-label="Volver atrás"
-          class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          variant="ghost"
+          size="icon"
+          class="-ml-2"
         >
           <span class="material-symbols-outlined">arrow_back</span>
-        </button>
-        <h2 class="text-xl font-bold leading-tight tracking-tight flex-1 dark:text-white">
-          Historiales
-        </h2>
+        </BaseButton>
+        <h1 class="text-lg font-bold text-slate-900 dark:text-white">
+          Historial y Auditoría
+        </h1>
+      </div>
+
+      <!-- Filters Toolbar -->
+      <div class="px-4 pb-3 overflow-x-auto no-scrollbar">
+        <div class="flex gap-2">
+          <BaseButton
+            v-for="filter in filters"
+            :key="filter.value"
+            @click="selectFilter(filter.value)"
+            :variant="currentType === filter.value ? 'primary' : 'outline'"
+            size="sm"
+            class="!rounded-full whitespace-nowrap"
+          >
+            <span class="material-symbols-outlined text-lg">{{ filter.icon }}</span>
+            {{ filter.label }}
+          </BaseButton>
+        </div>
       </div>
     </header>
 
-    <!-- Type Filter Chips -->
-    <div
-      class="sticky top-[57px] z-30 bg-background-light dark:bg-background-dark px-4 pt-3 pb-2 overflow-x-auto"
-    >
-      <div class="flex items-center gap-2 hide-scrollbar">
-        <button
-          v-for="type in historyTypes"
-          :key="type.id"
-          @click="activeType = type.id"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all shrink-0 text-sm font-medium"
-          :class="getTypeClass(type.id)"
-        >
-          <span class="material-symbols-outlined text-[18px]">{{ type.icon }}</span>
-          {{ type.label }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Filters Bar -->
-    <div class="px-4 py-3 flex flex-wrap gap-3">
-      <!-- Period Filter -->
-      <div class="flex h-9 items-center rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5">
-        <button
-          v-for="period in [
-            { id: 'today', label: 'Hoy' },
-            { id: 'week', label: 'Semana' },
-            { id: 'month', label: 'Mes' },
-          ]"
-          :key="period.id"
-          @click="selectedPeriod = period.id as 'today' | 'week' | 'month'"
-          class="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
-          :class="
-            selectedPeriod === period.id
-              ? 'bg-white dark:bg-slate-700 shadow-sm text-primary'
-              : 'text-slate-500 dark:text-slate-400'
-          "
-        >
-          {{ period.label }}
-        </button>
-      </div>
-
-      <!-- Employee Filter -->
-      <select
-        v-if="showEmployeeFilter"
-        v-model="selectedEmployee"
-        class="h-9 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 border-0 focus:ring-2 focus:ring-primary"
-      >
-        <option :value="null">Todos los empleados</option>
-        <option v-for="emp in employees" :key="emp.id" :value="emp.id">
-          {{ emp.name }}
-        </option>
-      </select>
-    </div>
-
-    <!-- History List -->
-    <main class="flex-1 px-4">
+    <!-- Main Content -->
+    <main class="flex-1 p-4 overflow-y-auto">
       <!-- Loading State -->
-      <div v-if="isLoading" class="flex flex-col gap-3">
+      <div v-if="isLoading" class="flex flex-col items-center justify-center py-20">
         <div
-          v-for="i in 5"
-          :key="i"
-          class="h-20 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse"
+          class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"
         ></div>
+        <p class="mt-4 text-sm font-medium text-slate-500">Cargando registros...</p>
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="error" class="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl text-center">
+        <p class="text-red-600 dark:text-red-400 font-medium pb-2">{{ error }}</p>
+        <BaseButton
+          @click="fetchHistory(currentType)"
+          variant="ghost"
+          size="sm"
+          class="underline font-bold text-primary"
+        >
+          Reintentar
+        </BaseButton>
       </div>
 
       <!-- Empty State -->
       <div
-        v-else-if="historyItems.length === 0"
-        class="flex flex-col items-center justify-center py-16 text-center"
+        v-else-if="items.length === 0"
+        class="flex flex-col items-center justify-center py-20 text-center opacity-60"
       >
-        <div
-          class="h-20 w-20 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4"
-        >
-          <span class="material-symbols-outlined text-4xl text-slate-400">history</span>
+        <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+          <span class="material-symbols-outlined text-4xl text-slate-400">history_toggle_off</span>
         </div>
-        <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">Sin registros</h3>
-        <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-          No hay eventos de
-          {{ historyTypes.find((t) => t.id === activeType)?.label.toLowerCase() }} en el período
-          seleccionado.
+        <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">
+          Sin registros
+        </h3>
+        <p class="text-sm text-slate-500">
+          No hay movimientos recientes en esta categoría.
         </p>
       </div>
 
-      <!-- Items List -->
-      <div v-else class="flex flex-col gap-3">
-        <!-- TODO: Render HistoryItemCard components here -->
+      <!-- List -->
+      <div v-else class="space-y-3 max-w-3xl mx-auto">
+        <HistoryItemCard
+          v-for="item in items"
+          :key="item.id"
+          :item="item"
+        />
+        
+        <!-- Pagination / Load More Hint -->
+        <div class="pt-4 text-center">
+          <p class="text-xs text-slate-400">
+            Mostrando {{ items.length }} registros recientes
+          </p>
+        </div>
       </div>
     </main>
-
-    <BottomNav />
   </div>
 </template>
 
 <style scoped>
-.hide-scrollbar::-webkit-scrollbar {
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
-
-.hide-scrollbar {
+.no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-
-.material-symbols-outlined {
-  font-variation-settings:
-    'FILL' 0,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24;
 }
 </style>

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { logger } from '../utils/logger';
+import { authRepository } from '../data/repositories/authRepository';
+import { useAuthStore } from '../stores/auth';
 
 // Props y Emits
 const props = defineProps<{
@@ -11,7 +13,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean];
 }>();
 
-// Tipo para solicitud de acceso
+// Tipo para solicitud de acceso (desde SPEC-005)
 interface AccessRequest {
   id: string;
   employeeId: string;
@@ -22,38 +24,35 @@ interface AccessRequest {
   requestedAt: string;
 }
 
-// Estado local (simulado - en producción vendría de Supabase)
+const authStore = useAuthStore();
 const requests = ref<AccessRequest[]>([]);
 const isLoading = ref(false);
 
 // Computed
 const pendingRequests = computed(() => requests.value.filter((r) => r.status === 'pending'));
-
 const approvedDevices = computed(() => requests.value.filter((r) => r.status === 'approved'));
 
-// Simular carga de datos (en producción: Supabase query)
+// Cargar datos reales de Supabase
+const loadRequests = async () => {
+  if (!authStore.currentStore) return;
+  
+  isLoading.value = true;
+  try {
+    const pending = await authRepository.getPendingAccessRequests(authStore.currentStore.id);
+    const approved = await authRepository.getAuthorizedDevices(authStore.currentStore.id);
+    
+    // Unir ambos
+    requests.value = [...pending, ...approved];
+    logger.log('[DeviceApproval] Data loaded:', requests.value.length, 'records');
+  } catch (error) {
+    logger.error('[DeviceApproval] Error loading requests:', error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
 onMounted(() => {
-  // Datos de ejemplo para demostración
-  requests.value = [
-    {
-      id: '1',
-      employeeId: 'emp1',
-      employeeName: 'Juan Pérez',
-      deviceFingerprint: 'abc123def456',
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0)',
-      status: 'pending',
-      requestedAt: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      employeeId: 'emp2',
-      employeeName: 'María García',
-      deviceFingerprint: 'xyz789ghi012',
-      userAgent: 'Mozilla/5.0 (Android 13; SM-G998B)',
-      status: 'approved',
-      requestedAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ];
+  loadRequests();
 });
 
 // Métodos
@@ -61,24 +60,57 @@ const close = () => {
   emit('update:modelValue', false);
 };
 
-const approveDevice = (request: AccessRequest) => {
-  const idx = requests.value.findIndex((r) => r.id === request.id);
-  if (idx !== -1) {
-    requests.value[idx].status = 'approved';
+const approveDevice = async (request: AccessRequest) => {
+  if (!authStore.currentUser?.id) return;
+  
+  try {
+    isLoading.value = true;
+    await authRepository.updateAccessRequestStatus(
+      request.id, 
+      'approved', 
+      authStore.currentUser.id
+    );
+    
+    // Actualizar localmente
+    const idx = requests.value.findIndex((r) => r.id === request.id);
+    if (idx !== -1) {
+      requests.value[idx].status = 'approved';
+    }
     logger.log('[DeviceApproval] Aprobado:', request.employeeName);
+  } catch (error) {
+    logger.error('[DeviceApproval] Error approving device:', error);
+  } finally {
+    isLoading.value = false;
   }
 };
 
-const rejectDevice = (request: AccessRequest) => {
-  const idx = requests.value.findIndex((r) => r.id === request.id);
-  if (idx !== -1) {
-    requests.value[idx].status = 'rejected';
+const rejectDevice = async (request: AccessRequest) => {
+  if (!authStore.currentUser?.id) return;
+  
+  try {
+    isLoading.value = true;
+    await authRepository.updateAccessRequestStatus(
+      request.id, 
+      'rejected', 
+      authStore.currentUser.id
+    );
+    
+    // Actualizar localmente
+    const idx = requests.value.findIndex((r) => r.id === request.id);
+    if (idx !== -1) {
+      requests.value[idx].status = 'rejected';
+    }
     logger.log('[DeviceApproval] Rechazado:', request.employeeName);
+  } catch (error) {
+    logger.error('[DeviceApproval] Error rejecting device:', error);
+  } finally {
+    isLoading.value = false;
   }
 };
 
 // Parsear User Agent para mostrar dispositivo resumido
 const parseDevice = (ua: string): string => {
+  if (!ua) return '📱 Dispositivo';
   if (ua.includes('iPhone')) return '📱 iPhone';
   if (ua.includes('Android')) return '📱 Android';
   if (ua.includes('Windows')) return '💻 Windows';
@@ -141,6 +173,11 @@ const formatDate = (isoDate: string): string => {
 
           <!-- Content -->
           <div class="flex-1 overflow-y-auto p-4 space-y-4">
+            <!-- Loading State -->
+            <div v-if="isLoading && requests.length === 0" class="flex justify-center py-10">
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+
             <!-- Solicitudes Pendientes -->
             <section v-if="pendingRequests.length > 0">
               <h4
@@ -169,6 +206,7 @@ const formatDate = (isoDate: string): string => {
                     <button
                       @click="approveDevice(request)"
                       class="flex-1 py-2 px-3 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-bold flex items-center justify-center gap-1 transition-colors"
+                      :disabled="isLoading"
                     >
                       <span class="material-symbols-outlined text-lg">check</span>
                       Aprobar
@@ -176,6 +214,7 @@ const formatDate = (isoDate: string): string => {
                     <button
                       @click="rejectDevice(request)"
                       class="flex-1 py-2 px-3 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold flex items-center justify-center gap-1 transition-colors"
+                      :disabled="isLoading"
                     >
                       <span class="material-symbols-outlined text-lg">close</span>
                       Rechazar
@@ -186,7 +225,7 @@ const formatDate = (isoDate: string): string => {
             </section>
 
             <!-- Empty State Pendientes -->
-            <div v-else class="text-center py-6">
+            <div v-else-if="!isLoading" class="text-center py-6">
               <div
                 class="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mb-3"
               >

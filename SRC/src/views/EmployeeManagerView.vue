@@ -4,6 +4,9 @@ import { useRouter } from 'vue-router';
 import { useEmployeesStore, type Employee } from '../stores/employees';
 import EmployeeFormModal from '../components/EmployeeFormModal.vue';
 import BottomNav from '../components/BottomNav.vue';
+import BaseModal from '../components/ui/BaseModal.vue';
+import BaseInput from '../components/ui/BaseInput.vue';
+import BaseButton from '../components/ui/BaseButton.vue';
 
 const router = useRouter();
 const employeesStore = useEmployeesStore();
@@ -61,9 +64,9 @@ const openPinModal = (employee: Employee) => {
   showPinModal.value = true;
 };
 
-const handlePinInput = (e: Event) => {
-  const input = e.target as HTMLInputElement;
-  newPin.value = input.value.replace(/\D/g, '').slice(0, 4);
+
+const handlePinInput = (value: string | number) => {
+  newPin.value = String(value).replace(/\D/g, '').slice(0, 4);
 };
 
 const savePin = () => {
@@ -119,13 +122,13 @@ const handleEmployeeSaved = () => {
         <p class="text-sm text-gray-500 max-w-xs">
           Agrega empleados para que puedan acceder al sistema
         </p>
-        <button
+        <BaseButton
           @click="openNewEmployee"
-          class="mt-6 px-6 py-3 bg-primary text-white rounded-xl font-bold flex items-center gap-2"
+          class="mt-6"
+          icon="person_add"
         >
-          <span class="material-symbols-outlined">person_add</span>
           Agregar Empleado
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Employee List -->
@@ -196,13 +199,14 @@ const handleEmployeeSaved = () => {
 
     <!-- FAB -->
     <div class="absolute bottom-24 right-4 z-40">
-      <button
+      <BaseButton
         @click="openNewEmployee"
-        aria-label="Nuevo Empleado"
-        class="flex items-center justify-center size-14 rounded-2xl bg-primary text-white shadow-lg hover:bg-blue-600 transition-transform active:scale-95"
+        label="Nuevo Empleado"
+        variant="primary"
+        class="size-14 !rounded-2xl shadow-lg"
+        icon="add"
       >
-        <span class="material-symbols-outlined text-[28px]">add</span>
-      </button>
+      </BaseButton>
     </div>
 
     <BottomNav />
@@ -215,59 +219,54 @@ const handleEmployeeSaved = () => {
     />
 
     <!-- PIN Edit Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="showPinModal"
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          @click.self="showPinModal = false"
-        >
-          <div
-            class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-scale-in"
-          >
-            <div class="flex items-center gap-3 mb-4">
-              <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <span class="material-symbols-outlined text-primary">key</span>
-              </div>
-              <div>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Cambiar PIN</h3>
-                <p class="text-sm text-gray-500">{{ selectedEmployee?.name }}</p>
-              </div>
+    <BaseModal
+      v-model="showPinModal"
+      title="Cambiar PIN"
+    >
+        <div class="p-6">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-primary">key</span>
+                </div>
+                <div>
+                   <p class="text-sm text-gray-500">Para el empleado:</p>
+                   <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ selectedEmployee?.name }}</h3>
+                </div>
             </div>
-            <div class="mb-6">
-              <label class="text-xs font-medium uppercase tracking-wider text-gray-500 mb-2 block">
-                Nuevo PIN (4 dígitos)
-              </label>
-              <input
-                :value="newPin"
-                @input="handlePinInput"
-                class="w-full h-14 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-center text-2xl tracking-[0.5em] font-bold focus:border-primary focus:ring-0 text-gray-900 dark:text-white"
-                maxlength="4"
-                inputmode="numeric"
+
+            <BaseInput
+                :model-value="newPin"
+                @update:model-value="handlePinInput"
+                label="Nuevo PIN (4 dígitos)"
                 placeholder="••••"
                 type="tel"
-                autofocus
-              />
-            </div>
-            <div class="flex gap-3">
-              <button
-                @click="showPinModal = false"
-                class="flex-1 h-12 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                @click="savePin"
-                :disabled="newPin.length !== 4"
-                class="flex-1 h-12 rounded-xl bg-primary hover:bg-blue-600 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
+                inputmode="numeric"
+                icon="lock"
+                class="text-center text-2xl tracking-[0.5em] font-bold h-14"
+                maxlength="4"
+            />
         </div>
-      </Transition>
-    </Teleport>
+
+        <template #footer>
+            <div class="p-6 pt-0 flex gap-3">
+                 <BaseButton
+                    @click="showPinModal = false"
+                    variant="secondary"
+                    class="flex-1"
+                >
+                    Cancelar
+                </BaseButton>
+                <BaseButton
+                    @click="savePin"
+                    :disabled="newPin.length !== 4"
+                    variant="primary"
+                    class="flex-1"
+                >
+                    Guardar
+                </BaseButton>
+            </div>
+        </template>
+    </BaseModal>
   </div>
 </template>
 

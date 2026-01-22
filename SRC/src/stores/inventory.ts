@@ -23,9 +23,9 @@ export const useInventoryStore = defineStore(
     const lowStockProducts = computed(() => products.value.filter((p) => p.stock.lte(p.minStock)));
 
     // Helper to ensure Decimal types after loading from raw JSON/Repo
-    const ensureDecimals = (product: any): Product => {
+    const ensureDecimals = (product: Partial<Product> & Record<string, any>): Product => {
       return {
-        ...product,
+        ...product as Product,
         price: new Decimal(product.price || 0),
         stock: new Decimal(product.stock || 0),
         cost: product.cost ? new Decimal(product.cost) : undefined,

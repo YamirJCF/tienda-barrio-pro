@@ -47,21 +47,17 @@
         <h2 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">Datos del Proveedor</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-1">
-            <label class="text-xs text-gray-400">Proveedor</label>
-            <input 
+            <BaseInput
               v-model="supplierName"
-              type="text" 
+              label="Proveedor"
               placeholder="Ej: Distribuidora Central"
-              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             />
           </div>
           <div class="space-y-1">
-            <label class="text-xs text-gray-400">Ref. Factura</label>
-            <input 
+            <BaseInput
               v-model="invoiceRef"
-              type="text" 
+              label="Ref. Factura"
               placeholder="Ej: FAC-2024-001"
-              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             />
           </div>
         </div>
@@ -167,12 +163,10 @@
 
           <!-- Search Input -->
           <div class="relative">
-             <span class="material-icons absolute left-3 top-3 text-gray-500">search</span>
-             <input 
+             <BaseInput
                v-model="searchQuery"
-               type="text" 
                placeholder="Buscar producto..."
-               class="w-full bg-gray-800 border-none rounded-xl py-3 pl-10 pr-4 text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-600 outline-none shadow-lg"
+               icon="search"
                @input="handleSearch"
              />
              
@@ -199,15 +193,16 @@
           </div>
 
           <!-- Main Actions -->
-          <button 
+          <BaseButton
             @click="saveEntry"
             :disabled="entryItems.length === 0 || isSaving"
-            class="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+            :loading="isSaving"
+            variant="primary"
+            class="w-full h-12"
+            icon="save"
           >
-            <span v-if="isSaving" class="animate-spin material-icons text-sm">refresh</span>
-            <span v-else class="material-icons text-sm">save</span>
-            <span>GUARDAR ENTRADA</span>
-          </button>
+            GUARDAR ENTRADA
+          </BaseButton>
        </div>
     </div>
   </div>
@@ -219,6 +214,8 @@ import { useRouter } from 'vue-router';
 import { useInventoryStore } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
 import type { Product } from '../types';
+import BaseInput from '@/components/ui/BaseInput.vue';
+import BaseButton from '@/components/ui/BaseButton.vue';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();

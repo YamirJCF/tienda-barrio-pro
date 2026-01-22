@@ -2,6 +2,8 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { logger } from '../utils/logger';
+import BaseInput from '@/components/ui/BaseInput.vue';
+import BaseButton from '@/components/ui/BaseButton.vue';
 
 const router = useRouter();
 
@@ -67,52 +69,39 @@ const goToHome = () => {
 
         <!-- Form Section -->
         <form @submit.prevent="handleSubmit" class="w-full flex flex-col gap-5">
-          <!-- Email Input Field -->
-          <div class="text-left w-full">
-            <label
-              class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 ml-1"
-              for="email"
-            >
-              Correo Electrónico
-            </label>
-            <div class="relative flex items-center group">
-              <!-- Icon -->
-              <div class="absolute left-4 text-primary pointer-events-none flex items-center">
-                <span class="material-symbols-outlined">mail</span>
-              </div>
-              <!-- Input -->
-              <input
-                v-model="email"
-                type="email"
-                id="email"
-                name="email"
-                required
-                class="w-full h-14 pl-12 pr-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-base outline-none"
-                placeholder="ejemplo@tienda.com"
-              />
+            <!-- Email Input Field -->
+            <div class="text-left w-full">
+                <BaseInput
+                    v-model="email"
+                    type="email"
+                    id="email"
+                    label="Correo Electrónico"
+                    icon="mail"
+                    required
+                    placeholder="ejemplo@tienda.com"
+                />
             </div>
-          </div>
 
           <!-- Primary Button -->
-          <button
+          <BaseButton
             type="submit"
+            :loading="isLoading"
             :disabled="isLoading"
-            class="w-full h-12 mt-2 bg-primary hover:bg-primary-dark active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed text-white text-base font-bold rounded-xl shadow-md shadow-primary/20 transition-all duration-200 flex items-center justify-center gap-2"
+            variant="primary"
+            class="w-full h-12 mt-2"
           >
-            <span v-if="isLoading" class="material-symbols-outlined animate-spin text-[20px]"
-              >progress_activity</span
-            >
-            <span v-else>Enviar Enlace de Recuperación</span>
-          </button>
+            Enviar Enlace de Recuperación
+          </BaseButton>
 
           <!-- Secondary Button -->
-          <button
+          <BaseButton
             type="button"
             @click="goBackToLogin"
-            class="w-full py-2 text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-primary font-medium text-sm transition-colors rounded-lg"
+            variant="ghost"
+            class="w-full"
           >
             Volver al Login
-          </button>
+          </BaseButton>
         </form>
       </div>
     </main>
@@ -141,12 +130,13 @@ const goToHome = () => {
         </div>
 
         <!-- Back to Home Button -->
-        <button
+        <BaseButton
           @click="goToHome"
-          class="w-full h-12 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white text-base font-bold rounded-xl transition-all duration-200"
+          variant="secondary"
+          class="w-full h-12"
         >
           Volver al inicio
-        </button>
+        </BaseButton>
       </div>
     </section>
   </div>

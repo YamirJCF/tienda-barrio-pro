@@ -2,29 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import Decimal from 'decimal.js';
 
-export interface CashTransaction {
-    id: string;
-    type: 'income' | 'expense';
-    amount: Decimal;
-    description: string;
-    timestamp: string;
-    category?: string;
-    relatedSaleId?: string; // Optional link to a sale
-}
-
-export interface CashSession {
-    id: string;
-    employeeId: string; // ID of employee who opened the register
-    status: 'open' | 'closed';
-    openingTime: string;
-    closingTime?: string;
-    openingBalance: Decimal;
-    closingBalance?: Decimal; // Physical count at closing
-    calculatedBalance?: Decimal; // System calculated balance at closing
-    discrepancy?: Decimal; // Difference
-    transactions: CashTransaction[];
-    notes?: string;
-}
+import type { CashTransaction, CashSession } from '../types';
 
 export const useCashRegisterStore = defineStore('cashRegister', () => {
     // State
@@ -147,7 +125,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 }, {
     persist: {
         key: 'tienda-cash-register',
-        key: 'tienda-cash-register',
+
         // paths: ['currentSession', 'sessionHistory'], // Removed to fix lint, serializer handles state
         serializer: {
             serialize: (state) => {
@@ -162,18 +140,18 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     if (state.currentSession.calculatedBalance) state.currentSession.calculatedBalance = new Decimal(state.currentSession.calculatedBalance);
                     if (state.currentSession.discrepancy) state.currentSession.discrepancy = new Decimal(state.currentSession.discrepancy);
 
-                    state.currentSession.transactions = state.currentSession.transactions.map((t: any) => ({
+                    state.currentSession.transactions = state.currentSession.transactions.map((t: CashTransaction | any) => ({
                         ...t,
                         amount: new Decimal(t.amount)
                     }));
                 }
                 if (state.sessionHistory) {
-                    state.sessionHistory = state.sessionHistory.map((s: any) => {
+                    state.sessionHistory = state.sessionHistory.map((s: CashSession | any) => {
                         s.openingBalance = new Decimal(s.openingBalance);
                         if (s.closingBalance) s.closingBalance = new Decimal(s.closingBalance);
                         if (s.calculatedBalance) s.calculatedBalance = new Decimal(s.calculatedBalance);
                         if (s.discrepancy) s.discrepancy = new Decimal(s.discrepancy);
-                        s.transactions = s.transactions.map((t: any) => ({
+                        s.transactions = s.transactions.map((t: CashTransaction | any) => ({
                             ...t,
                             amount: new Decimal(t.amount)
                         }));
