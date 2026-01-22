@@ -32,5 +32,5 @@ Objetivo: Adelgazar vistas complejas ("Fat Views").
 - [x] **Strict Check**: Eliminar cualquier uso de `any` no justificado.
 
 ## Fase 5: Optimización
-- [ ] **Lazy Loading**: Verificar que todas las rutas se carguen con `import()`.
-- [ ] **Assets**: Optimizar imágenes y uso de iconos.
+- [x] **Lazy Loading**: Verificar que todas las rutas se carguen con `import()`.
+- [x] **Assets**: Optimizar imágenes y uso de iconos.
