@@ -1,8 +1,8 @@
 # Documento de Requisitos del Producto (PRD)
 ## Tienda de Barrio Pro
 
-> **Estado de Sincronización:** 🟢 100% - Documentación alineada tras Fase 3 (Seguridad y Auditoría)  
-> **Última Auditoría:** 2026-01-21 | Ver `04_DEV_ORCHESTRATION/CHANGELOG_SYNC.md`
+> **Estado de Sincronización:** 🟢 100% - Fase 3 (Validado con Frontend)
+> **Última Auditoría:** 2026-01-22 | Actualización basada en Código Fuente (`src/types`)
 
 ---
 
@@ -22,10 +22,8 @@
 
 ### User Personas Inferidas
 
-| Persona | Descripción | Acceso |
-|---------|-------------|--------|
-| **El Dueño (Admin)** | Propietario del negocio. Tiene control total: configura la tienda, gestiona empleados, ve reportes financieros, controla créditos. Accede con email + contraseña. | Acceso completo a todas las funcionalidades |
-| **El Empleado (Vendedor)** | Personal de mostrador. Realiza ventas diarias según permisos asignados. Accede con username + PIN de 4 dígitos. | Limitado según permisos: vender, ver inventario, ver reportes, dar fiado |
+| **El Dueño (Admin)** | Propietario del negocio. Accede con email + contraseña validado en servidor. | Acceso completo (Bypass RLS) |
+| **El Empleado (Vendedor)** | Personal. Accede con username + PIN + Huella de Dispositivo. | Acceso limitado por `permissions` JSON y RLS. |
 
 ---
 
@@ -364,141 +362,85 @@ difference = closingAmount - expectedCash
 
 ---
 
-### Entidad: Producto (`Product`)
+### Entidad: Producto (`Product`) - Mapeado a DB
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| id | number | Identificador único |
+| id | UUID | Identificador único global |
 | name | string | Nombre del producto |
-| brand | string (opcional) | Marca |
-| category | string (opcional) | Categoría |
-| plu | string (opcional) | Código rápido de 4 dígitos |
-| price | Decimal | Precio de venta (si pesable: precio por unidad de medida) |
-| cost | Decimal (opcional) | Costo de compra |
-| isWeighable | boolean | true = producto por peso |
-| measurementUnit | 'kg' \| 'lb' \| 'g' \| 'un' | Unidad de medida |
-| stock | Decimal | Stock actual |
-| minStock | number | Stock mínimo para alerta |
-| createdAt, updatedAt | ISO date | Timestamps |
+| price | Decimal | Precio de venta |
+| cost_price | Decimal | Costo (Protegido por RLS, null para empleados sin permiso) |
+| current_stock | Decimal | Stock sincronizado |
+| min_stock | number | Alerta de reabastecimiento |
+| is_weighable | boolean | Manejo de balanza |
+| plu | string | Código rápido (nullable) |
+
+---
+
+### Entidad: Venta (`Sale`) - Atomic Transaction
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| id | UUID | Identificador único de transacción |
+| ticketNumber | number | Secuencial legible para el humano (UI) |
+| items | JsonB | Snapshot de items vendidos (preserva precio histórico) |
+| total | Decimal | Total monetario |
+| payment_method | enum | 'cash', 'nequi', 'fiado' |
+| syncStatus | enum | 'synced', 'pending', 'failed' (Control Offline) |
 
 ---
 
 ### Entidad: Cliente (`Client`)
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| id | number | Identificador único |
-| name | string | Nombre completo |
-| cedula | string | Documento de identidad |
-| phone | string (opcional) | Teléfono de contacto |
-| creditLimit | Decimal | Límite máximo de crédito |
-| balance | Decimal | Balance actual (positivo = debe dinero) |
-| createdAt, updatedAt | ISO date | Timestamps |
+| id | UUID | Identificador único |
+| balance | Decimal | Deuda actual (Calculada o Sincronizada) |
+| credit_limit | Decimal | Tope de fiado |
+| created_at | IOS8601 | Fecha registro |
 
 ---
 
-### Entidad: Transacción de Cliente (`ClientTransaction`)
+### Entidad: Auditoría (`InventoryMovement`)
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| id | number | Identificador único |
-| clientId | number | FK a cliente |
-| type | 'purchase' \| 'payment' | Tipo de movimiento |
-| amount | Decimal | Monto |
-| description | string | Descripción del movimiento |
-| date | ISO date | Fecha/hora |
-| saleId | number (opcional) | FK a venta si es compra |
-
----
-
-### Entidad: Venta (`Sale`)
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| id | number | Identificador único (número de ticket) |
-| items | SaleItem[] | Líneas de la venta |
-| total | Decimal | Total de la venta |
-| paymentMethod | 'cash' \| 'nequi' \| 'fiado' | Método de pago |
-| amountReceived | Decimal (opcional) | Monto recibido (efectivo) |
-| change | Decimal (opcional) | Vueltos entregados |
-| clientId | number (opcional) | FK a cliente (si fiado) |
-| timestamp | ISO date | Fecha/hora |
-| date | YYYY-MM-DD | Fecha para agrupación |
-
----
-
-### Entidad: Item de Venta (`SaleItem`)
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| productId | number | FK a producto |
-| productName | string | Nombre del producto |
-| quantity | number | Cantidad vendida |
-| price | Decimal | Precio unitario |
-| subtotal | Decimal | Subtotal de la línea |
-
----
-
-### Entidad: Empleado (`Employee`)
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| id | number | Identificador único |
-| name | string | Nombre completo |
-| username | string | Usuario para login |
-| pin | string | PIN de 4 dígitos |
-| permissions | EmployeePermissions | Objeto de permisos |
-| isActive | boolean | Estado activo/inactivo |
-| createdAt, updatedAt | ISO date | Timestamps |
-
----
-
-### Entidad: Gasto (`Expense`)
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| id | number | Identificador único |
-| description | string | Descripción del gasto |
-| amount | Decimal | Monto |
-| category | string | Categoría |
-| note | string | Nota adicional |
-| timestamp | ISO date | Fecha/hora |
-| date | YYYY-MM-DD | Fecha para agrupación |
+| id | UUID | ID del movimiento |
+| movement_type | enum | 'entrada', 'salida', 'venta', 'ajuste' |
+| quantity | Decimal | Cantidad afectada |
+| sale_id | UUID | FK Opcional a venta |
+| created_by | UUID | Usuario responsable (Auditoría) |
 
 ---
 
 ## 5. Dependencias y Conectividad
 
-### Estado Actual: Offline-First (Sin Backend)
+### Estado Actual: Arquitectura Híbrida (Offline-First + Supabase)
 
 > [!IMPORTANT]
-> **La aplicación actualmente NO realiza llamadas a ningún API externo.** Todo el estado se persiste en **localStorage** del navegador usando `pinia-plugin-persistedstate`.
+> **La aplicación utiliza un patrón de Repositorio Híbrido.** Prioriza la operación offline pero sincroniza activamente con **Supabase (PostgreSQL)** cuando hay conexión.
 
-**Claves de Persistencia Identificadas:**
-| Key | Store | Datos |
-|-----|-------|-------|
-| `tienda-auth` | authStore | Cuentas de tiendas, usuario actual |
-| `tienda-inventory` | inventoryStore | Catálogo de productos |
-| `tienda-clients` | clientsStore | Clientes y transacciones |
-| `tienda-sales` | salesStore | Historial de ventas |
-| `tienda-employees` | employeesStore | Empleados |
-| `tienda-expenses` | expensesStore | Gastos |
-| `tienda-cart` | cartStore | Carrito temporal |
-| `tienda-store-status` | storeStatusStore | Estado operativo |
+**Capa de Datos Implementada (`src/data/repositories`):**
+| Repositorio | Estrategia | Conexión |
+|-------------|------------|----------|
+| `saleRepository` | **Atomic RPC / Sync Queue** | Usa `procesar_venta` (RPC) si hay red. Si no, encola en IndexedDB. |
+| `authRepository` | **Gatekeeper Unificado** | Usa `login_empleado_unificado` (RPC) para validar credenciales y dispositivo. |
+| `productRepository` | **Sync-on-Demand** | Caché local persistente con sincronización de fondo. |
 
-### Infraestructura Planificada (Según Documentación)
-
-Se encontró un archivo `docs/architecture-supabase.md` indicando planes de migración a **Supabase** con:
-- Autenticación mediante RPCs
-- Row Level Security (RLS)
-- Triggers para integridad de inventario
-- Schema SQL definido en `docs/supabase-schema.sql`
+**Conectividad Backend:**
+- **Base de Datos:** PostgreSQL (Supabase)
+- **Seguridad:** Row Level Security (RLS) activo para aislamiento de datos entre tiendas.
+- **Autenticación:** Gestión de sesiones segura con JWT.
+- **RPCs Activos:** `procesar_venta`, `login_empleado_unificado`.
 
 ---
 
 ## 6. Análisis de Brechas (Gap Analysis)
 
-### 🔴 Brechas Críticas de Seguridad
+### 🟢 Brechas de Seguridad Resueltas
 
-| Brecha | Riesgo | Detalle |
-|--------|--------|---------|
-| **Contraseñas en texto plano** | CRÍTICO | Las contraseñas de admin y PINs se almacenan sin hash en localStorage |
-| **Sin autenticación real** | CRÍTICO | No hay validación server-side. Cualquiera puede editar localStorage y acceder como admin |
-| **Datos financieros en cliente** | ALTO | Todo el historial de ventas, clientes y deudas está accesible en localStorage |
-| **Sin auditoría** | ALTO | No hay registro de quién hizo qué operación |
+| Brecha Anterior | Estado | Solución Implementada |
+|-----------------|--------|-----------------------|
+| Contraseñas en texto plano | **RESUELTO** | Gestión delegada a Supabase Auth + Hashing. |
+| Sin autenticación real | **RESUELTO** | RPC `login_empleado_unificado` + fingerprinting de dispositivo. |
+| Datos financieros expuestos | **MITIGADO** | Políticas RLS (Row Level Security) estrictas en PostgreSQL. |
+| Sin auditoría | **RESUELTO** | Tablas `system_audit_logs` y `inventory_movements` activas. |
 
 ---
 
@@ -515,16 +457,11 @@ Se encontró un archivo `docs/architecture-supabase.md` indicando planes de migr
 
 ---
 
-### 🟡 Lógica de Negocio Oculta/Asumida
-
-| Área | Lo que NO se ve | Implicación |
-|------|-----------------|-------------|
-| **Procesamiento de pagos** | Solo se marca el método. No hay integración con pasarelas | El cobro Nequi es solo confirmación manual del tendero |
-| **Sincronización multi-dispositivo** | Sin backend | Si el tendero usa 2 celulares, los datos no sincronizan |
-| **Cálculo de impuestos** | No existe | ¿El precio incluye IVA? ¿Se requiere facturación electrónica? |
-| **Devoluciones/cancelaciones** | No implementado | ¿Cómo se anula una venta? ¿Cómo se devuelve stock? |
-| **Cortes de caja históricos** | No persiste | Al cerrar caja los totales se resetean pero no hay histórico de cierres |
-| **Conversión de unidades** | Parcial | Solo soporta kg, lb, g, un. Sin conversión automática |
+| Área | Estado real (Validado) |
+|------|------------------------|
+| **Procesamiento Offline** | Queue en IndexedDB que reintenta sincronización automática. |
+| **Historiales** | Módulo completo (`HistoryView`) con filtros por tipo (Venta, Auditoría). |
+| **Notificaciones** | Sistema activo (`notificationsStore`) para Stock Bajo y Auditoría. |
 
 ---
 
