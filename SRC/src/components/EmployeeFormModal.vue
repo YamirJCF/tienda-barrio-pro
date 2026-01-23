@@ -25,22 +25,13 @@ const formData = ref({
   username: '',
   pin: '',
   canSell: true,
-  canViewInventory: true,
-  canManageInventory: false,
+  canViewInventory: false,
+  canFiar: false,
+  canViewReports: false,
   canOpenCloseCash: false,
 });
 
-// Computed
-const isEdit = computed(() => !!props.employeeId);
-const modalTitle = computed(() => (isEdit.value ? 'Editar Colaborador' : 'Nuevo Empleado'));
-
-const isValid = computed(() => {
-  return (
-    formData.value.name.trim() !== '' &&
-    formData.value.username.trim() !== '' &&
-    formData.value.pin.length === 4
-  );
-});
+// ...
 
 // Methods
 const resetForm = () => {
@@ -49,16 +40,14 @@ const resetForm = () => {
     username: '',
     pin: '',
     canSell: true,
-    canViewInventory: true,
-    canManageInventory: false,
+    canViewInventory: false,
+    canFiar: false,
+    canViewReports: false,
     canOpenCloseCash: false,
   };
 };
 
-const close = () => {
-  emit('update:modelValue', false);
-  setTimeout(resetForm, 300);
-};
+// ...
 
 const save = () => {
   if (!isValid.value) return;
@@ -68,43 +57,34 @@ const save = () => {
     username: formData.value.username.trim(),
     pin: formData.value.pin,
     permissions: {
-      canSell: formData.value.canSell,
-      canViewInventory: true, // Always allow viewing if they exist
-      canManageInventory: formData.value.canManageInventory,
-      canViewReports: false, // Explicitly removed
-      canFiar: false, // Explicitly removed
+      canSell: true, // Always true
+      canViewInventory: formData.value.canViewInventory,
+      canViewReports: formData.value.canViewReports,
+      canFiar: formData.value.canFiar,
       canOpenCloseCash: formData.value.canOpenCloseCash,
     },
-    isActive: true,
+    isActive: true, // New employees start active (unless limit reached, store will throw)
   };
+  
+  try {
+      let employee: Employee | null;
 
-  let employee: Employee | null;
+      if (isEdit.value && props.employeeId) {
+        employee = employeesStore.updateEmployee(props.employeeId, data);
+      } else {
+        employee = employeesStore.addEmployee(data);
+      }
 
-  if (isEdit.value && props.employeeId) {
-    employee = employeesStore.updateEmployee(props.employeeId, data);
-  } else {
-    employee = employeesStore.addEmployee(data);
+      if (employee) {
+        emit('saved', employee);
+        close();
+      }
+  } catch (e: any) {
+      alert(e.message);
   }
-
-  if (employee) {
-    emit('saved', employee);
-    close();
-  }
 };
 
-// Handle Username Input
-const handleUsernameInput = (e: Event) => {
-  const input = e.target as HTMLInputElement;
-  const val = input.value.replace(/\D/g, '');
-  formData.value.username = val;
-  input.value = val;
-};
-
-// Handle PIN input
-const handlePinInput = (e: Event) => {
-  const input = e.target as HTMLInputElement;
-  formData.value.pin = input.value.replace(/\D/g, '').slice(0, 4);
-};
+// ...
 
 // Load existing employee data for editing
 watch(
@@ -117,10 +97,11 @@ watch(
           name: employee.name,
           username: employee.username,
           pin: employee.pin,
-          canSell: true, // Siempre true por regla de negocio
-          canViewInventory: true,
-          canManageInventory: employee.permissions.canManageInventory || false,
-          canOpenCloseCash: employee.permissions.canOpenCloseCash || false,
+          canSell: true, 
+          canViewInventory: employee.permissions.canViewInventory,
+          canFiar: employee.permissions.canFiar,
+          canViewReports: employee.permissions.canViewReports,
+          canOpenCloseCash: employee.permissions.canOpenCloseCash,
         };
       }
     } else if (show && !employeeId) {
@@ -204,12 +185,38 @@ watch(
           class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-700/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
         >
           <input
-            v-model="formData.canManageInventory"
+            v-model="formData.canViewInventory"
             class="size-5 rounded border-gray-300 text-primary focus:ring-primary"
             type="checkbox"
           />
           <span class="text-sm font-medium text-gray-900 dark:text-white"
-            >Inventario (Acceso Completo)</span
+            >Ver Inventario</span
+          >
+        </label>
+
+        <label
+          class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-700/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        >
+          <input
+            v-model="formData.canFiar"
+            class="size-5 rounded border-gray-300 text-primary focus:ring-primary"
+            type="checkbox"
+          />
+          <span class="text-sm font-medium text-gray-900 dark:text-white"
+            >Puede Fiar (Crédito)</span
+          >
+        </label>
+
+        <label
+          class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-700/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        >
+          <input
+            v-model="formData.canViewReports"
+            class="size-5 rounded border-gray-300 text-primary focus:ring-primary"
+            type="checkbox"
+          />
+          <span class="text-sm font-medium text-gray-900 dark:text-white"
+            >Ver Reportes</span
           >
         </label>
 

@@ -7,8 +7,8 @@ export interface EmployeePermissions {
   canViewReports: boolean;
   canFiar: boolean;
   canOpenCloseCash: boolean; // SPEC-006
-  canManageInventory?: boolean; // New granular permission
-  canManageClients?: boolean; // New granular permission
+  // canManageInventory removed - was incorrect
+  canManageClients?: boolean; // Keep for now if needed, or remove if strictly following FRD
 }
 
 export interface Employee {
@@ -35,6 +35,17 @@ export const useEmployeesStore = defineStore(
 
     // Methods
     const addEmployee = (data: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => {
+      // 1. Business Rule: Max 5 active employees
+      if (activeEmployees.value.length >= 5 && data.isActive) {
+        throw new Error('Límite de empleados activos alcanzado (Máx 5). Desactiva uno existente primero.');
+      }
+
+      // 2. Business Rule: Unique Username
+      const exists = employees.value.find(e => e.username.toLowerCase() === data.username.toLowerCase());
+      if (exists) {
+        throw new Error('El nombre de usuario ya está registrado.');
+      }
+
       const now = new Date().toISOString();
       const employee: Employee = {
         id: nextId.value++,
@@ -49,6 +60,22 @@ export const useEmployeesStore = defineStore(
     const updateEmployee = (id: number, data: Partial<Omit<Employee, 'id' | 'createdAt'>>) => {
       const index = employees.value.findIndex((e) => e.id === id);
       if (index !== -1) {
+        // 2. Uniqueness check (exclude self)
+        if (data.username) {
+          const exists = employees.value.find(e =>
+            e.username.toLowerCase() === data.username!.toLowerCase() &&
+            e.id !== id
+          );
+          if (exists) throw new Error('El nombre de usuario ya está registrado.');
+        }
+
+        // 1. Max active check (only if activating)
+        if (data.isActive === true && !employees.value[index].isActive) {
+          if (activeEmployees.value.length >= 5) {
+            throw new Error('Límite de empleados activos alcanzado (Máx 5).');
+          }
+        }
+
         employees.value[index] = {
           ...employees.value[index],
           ...data,
@@ -69,9 +96,17 @@ export const useEmployeesStore = defineStore(
     const toggleActive = (id: number) => {
       const employee = employees.value.find((e) => e.id === id);
       if (employee) {
+        // 1. Max active check (only if activating)
+        if (!employee.isActive && activeEmployees.value.length >= 5) {
+          throw new Error('Límite de empleados activos alcanzado. No se puede activar.');
+          // En UI esto debe capturarse
+        }
+
         employee.isActive = !employee.isActive;
         employee.updatedAt = new Date().toISOString();
+        return true; // Success
       }
+      return false;
     };
 
     const updatePin = (id: number, newPin: string) => {
