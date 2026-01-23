@@ -45,6 +45,10 @@ const getAvatarColor = (name: string) => {
 };
 
 const openNewEmployee = () => {
+  if (employeesStore.activeEmployees.length >= 5) {
+      alert("Límite de empleados activos alcanzado. Desactiva uno existente para crear nuevo.");
+      return;
+  }
   editingEmployeeId.value = undefined;
   showEmployeeModal.value = true;
 };
@@ -55,7 +59,14 @@ const editEmployee = (employee: Employee) => {
 };
 
 const toggleActive = (employee: Employee) => {
-  employeesStore.toggleActive(employee.id);
+  try {
+      employeesStore.toggleActive(employee.id);
+  } catch (e: any) {
+      // Revert visual change if needed (though v-model binds to store state which didn't change)
+      alert(e.message); 
+      // Force UI update derived from store state to ensure sync
+      // (Vue reactivity should handle this if store state wasn't mutated)
+  }
 };
 
 const openPinModal = (employee: Employee) => {
@@ -126,8 +137,9 @@ const handleEmployeeSaved = () => {
           @click="openNewEmployee"
           class="mt-6"
           icon="person_add"
+          :disabled="employeesStore.activeEmployees.length >= 5"
         >
-          Agregar Empleado
+          {{ employeesStore.activeEmployees.length >= 5 ? 'Límite Alcanzado (5/5)' : 'Agregar Empleado' }}
         </BaseButton>
       </div>
 
@@ -204,7 +216,9 @@ const handleEmployeeSaved = () => {
         label="Nuevo Empleado"
         variant="primary"
         class="size-14 !rounded-2xl shadow-lg"
-        icon="add"
+        :icon="employeesStore.activeEmployees.length >= 5 ? 'block' : 'add'"
+        :disabled="employeesStore.activeEmployees.length >= 5"
+        :title="employeesStore.activeEmployees.length >= 5 ? 'Límite de 5 empleados alcanzado' : 'Crear nuevo empleado'"
       >
       </BaseButton>
     </div>
