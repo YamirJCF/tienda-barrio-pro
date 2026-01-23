@@ -8,6 +8,7 @@ import { checkDataIntegrity } from './composables/useDataIntegrity';
 import CriticalAlertModal from './components/CriticalAlertModal.vue';
 import { useCriticalAlerts } from './composables/useCriticalAlerts';
 import OfflineBanner from './components/common/OfflineBanner.vue';
+import AdminInterruptionModal from './components/security/AdminInterruptionModal.vue';
 
 // ============================================
 // DATA INTEGRITY CHECK (FIRST THING!)
@@ -88,6 +89,7 @@ const resetApp = () => {
     </RouterView>
 
     <OfflineBanner />
+    <AdminInterruptionModal />
     <ToastNotification />
   </div>
 </template>

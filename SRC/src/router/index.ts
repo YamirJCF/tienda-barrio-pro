@@ -29,6 +29,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/ForgotPasswordView.vue'),
     meta: { guest: true },
   },
+  {
+    path: '/check-email',
+    name: 'check-email',
+    component: () => import('../views/CheckEmailView.vue'),
+    meta: { requiresAuth: true }, // Acceso permitido solo a usuarios registrados (aunque no verificados)
+  },
   // Rutas Protegidas
   {
     path: '/admin',
@@ -174,15 +180,15 @@ router.beforeEach((to, from, next) => {
     const storeIsOpen = authStore.storeOpenStatus;
 
     // Admins siempre pueden acceder al POS
+    // SPEC-005 Update: La validación de 'tienda abierta' se delega al componente POS o lógica de caja
+    // ya que authStore no mantiene el estado global de apertura.
+
+    /* BLOQUE ELIMINADO POR REFACTORIZACION IAM
     if (!isAdmin && !storeIsOpen) {
-      console.warn('[Router] POS bloqueado: tienda cerrada');
-      // Importar notificaciones para mostrar mensaje
-      import('../composables/useNotifications').then(({ useNotifications }) => {
-        const { showWarning } = useNotifications();
-        showWarning('Inicie jornada para vender', 'storefront');
-      });
-      return next({ name: 'dashboard' });
+       console.warn('[Router] POS bloqueado: tienda cerrada');
+       return next({ name: 'dashboard' });
     }
+    */
   }
 
   next();

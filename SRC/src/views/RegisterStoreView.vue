@@ -104,8 +104,8 @@ const handleSubmit = async () => {
 
     if (result) {
       logger.log('✅ Tienda registrada exitosamente:', result.storeName);
-      // Redirección al Dashboard
-      router.push('/');
+      // Redirección a verificación de email (WO-005)
+      router.push('/check-email');
     } else {
       // Email duplicado (único error conocido del store)
       errorMessage.value = 'Este correo electrónico ya está registrado.';
