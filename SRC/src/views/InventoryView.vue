@@ -23,7 +23,7 @@ const { formatStock } = useQuantityFormat();
 
 // Permisos del usuario
 const canViewInventory = computed(() => authStore.canViewInventory);
-const canManageInventory = computed(() => authStore.currentUser?.permissions?.canManageInventory);
+const canManageInventory = computed(() => authStore.canManageInventory);
 
 // State
 // Composable: Inventory Filter

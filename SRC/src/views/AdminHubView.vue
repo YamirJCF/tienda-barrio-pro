@@ -5,6 +5,7 @@ import { useSalesStore } from '../stores/sales';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useCashControlStore } from '../stores/cashControl';
 import { useAuthStore } from '../stores/auth'; // Import auth store
+import { usePresenceStore } from '../stores/presence'; // New Presence Store import
 import BottomNav from '../components/BottomNav.vue';
 import ReportsContent from '../components/ReportsContent.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
@@ -22,9 +23,12 @@ const salesStore = useSalesStore();
 const cashRegisterStore = useCashRegisterStore();
 const cashControlStore = useCashControlStore();
 const authStore = useAuthStore(); // Use auth store
+const presenceStore = usePresenceStore(); // Initialize
 
-// State
-const activeTab = ref<'reportes' | 'gestion' | 'config'>('gestion');
+// Inicializar pestaña basada en la URL o permisos
+const initialTab = (route.query.tab as string) || 'gestion';
+const activeTab = ref<'reportes' | 'gestion' | 'config'>(initialTab as any);
+
 const showDeviceModal = ref(false);
 // WO-004: State para modal de PIN (consolidado)
 const showPinSetupModal = ref(false);
@@ -37,9 +41,40 @@ const goBack = () => {
     router.push('/');
 };
 
+
 const navigateTo = (route: string) => {
     router.push(route);
 };
+
+// Computed Properties & Refs (Fixing missing definitions)
+const isAdmin = computed(() => authStore.isAdmin);
+const canViewReports = computed(() => authStore.canViewReports);
+const hasPinConfigured = computed(() => cashControlStore.hasPinConfigured);
+const pinSetupMode = computed(() => hasPinConfigured.value ? 'change' : 'setup');
+const showProfileSidebar = ref(false);
+
+// Validar pestaña inicial y permisos al montar
+onMounted(() => {
+    const tabName = route.query.tab as string;
+    
+    // Si la URL pide reportes y tiene permiso, mostrarlo
+    if (tabName === 'reportes' && (authStore.isAdmin || authStore.canViewReports)) {
+        activeTab.value = 'reportes';
+    } 
+    // Si no es admin y solo puede ver reportes, forzar reportes
+    else if (!authStore.isAdmin && authStore.canViewReports) {
+        activeTab.value = 'reportes';
+    }
+    // Si pidió gestion/config pero no es admin, fallback a reportes si puede, o home
+    else if ((tabName === 'gestion' || tabName === 'config') && !authStore.isAdmin) {
+       if (authStore.canViewReports) activeTab.value = 'reportes';
+    }
+});
+
+// Sincronizar URL cuando cambia la pestaña
+watch(activeTab, (newTab) => {
+    router.replace({ query: { ...route.query, tab: newTab } });
+});
 </script>
 
 <template>
@@ -210,6 +245,98 @@ const navigateTo = (route: string) => {
         </div>
       </section>
 
+      <!-- Widget: Personal en Vivo (Presence Monitor) -->
+      <section v-if="activeTab === 'gestion'">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1 flex items-center gap-2">
+          <span>📡 Supervisión en Vivo</span>
+          <span 
+            class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider"
+          >
+            Beta
+          </span>
+        </h3>
+        
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden mb-6">
+          <div class="p-4 border-b border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
+            <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Estado de Conexión</h4>
+            <div class="flex gap-2">
+              <span class="flex items-center gap-1 text-[10px] text-slate-500">
+                <span class="w-2 h-2 rounded-full bg-green-500"></span> Online
+              </span>
+              <span class="flex items-center gap-1 text-[10px] text-slate-500">
+                <span class="w-2 h-2 rounded-full bg-slate-300"></span> Offline
+              </span>
+              <span class="flex items-center gap-1 text-[10px] text-slate-500">
+                 <span class="w-2 h-2 rounded-full bg-blue-400"></span> Pausa
+              </span>
+            </div>
+          </div>
+          
+          <div class="divide-y divide-slate-50 dark:divide-slate-700/50">
+            <!-- Empty State -->
+            <div v-if="presenceStore.activeSessions.size === 0" class="p-8 text-center">
+               <span class="material-symbols-outlined text-slate-300 text-4xl mb-2">wifi_off</span>
+               <p class="text-xs text-slate-400">No hay empleados reportando actividad reciente.</p>
+            </div>
+
+            <!-- Listado de Empleados Detectados -->
+            <div 
+              v-for="[id, session] in presenceStore.activeSessions" 
+              :key="id"
+              class="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
+            >
+               <div class="flex items-center gap-3">
+                 <div class="relative">
+                    <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-sm">
+                      {{ session.name.substring(0,2).toUpperCase() }}
+                    </div>
+                    <!-- Status Indicator -->
+                    <div 
+                      class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800 flex items-center justify-center"
+                      :class="{
+                        'bg-green-500': presenceStore.getEmployeeStatus(session.employeeId) === 'online',
+                        'bg-blue-400': presenceStore.getEmployeeStatus(session.employeeId) === 'paused',
+                        'bg-slate-300': presenceStore.getEmployeeStatus(session.employeeId) === 'offline',
+                        'bg-red-500 animate-pulse': presenceStore.getEmployeeStatus(session.employeeId) === 'ghost'
+                      }"
+                    >
+                      <!-- Ghost Icon -->
+                      <span 
+                        v-if="presenceStore.getEmployeeStatus(session.employeeId) === 'ghost'"
+                        class="material-symbols-outlined text-[10px] text-white"
+                      >
+                        warning
+                      </span>
+                    </div>
+                 </div>
+                 
+                 <div>
+                   <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ session.name }}</p>
+                   <p class="text-[10px] text-slate-500 flex items-center gap-1">
+                     <span class="material-symbols-outlined text-[10px]">schedule</span>
+                     {{ new Date(session.lastSeen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}
+                     
+                     <span v-if="presenceStore.getEmployeeStatus(session.employeeId) === 'ghost'" class="text-red-500 font-bold ml-1">
+                        ⚠️ CAJA ABIERTA SIN SEÑAL
+                     </span>
+                   </p>
+                 </div>
+               </div>
+
+               <!-- Actions -->
+               <div class="text-right">
+                 <span 
+                    class="text-xs font-mono font-medium"
+                    :class="session.isRegisterOpen ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'"
+                 >
+                    {{ session.isRegisterOpen ? 'CAJA ABIERTA' : 'Caja Cerrada' }}
+                 </span>
+               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Equipo -->
       <section v-if="activeTab === 'gestion'">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">👥 Equipo</h3>
@@ -280,6 +407,8 @@ const navigateTo = (route: string) => {
             >
           </button>
         </div>
+      </section>
+
       <!-- Reportes Tab Content -->
       <section v-if="activeTab === 'reportes'">
         <ReportsContent />

@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, nextTick } from 'vue';
+
+defineOptions({
+  inheritAttrs: false // Evita que atributos como maxlength se apliquen al div contenedor
+});
 
 interface Props {
     modelValue: string | number;
@@ -39,13 +43,19 @@ const inputClasses = computed(() => {
     return [base, state, props.icon ? 'pl-10' : 'pl-3'].join(' ');
 });
 
+const inputRef = ref<HTMLInputElement | null>(null);
+
 const handleInput = (event: Event) => {
     const target = event.target as HTMLInputElement;
     emit('update:modelValue', target.value);
-};
 
-import { ref } from 'vue';
-const inputRef = ref<HTMLInputElement | null>(null);
+    // FIX: Forzar actualización del DOM si el padre sanitiza el valor (y por tanto el prop no cambia)
+    nextTick(() => {
+        if (inputRef.value && inputRef.value.value !== String(props.modelValue)) {
+            inputRef.value.value = String(props.modelValue);
+        }
+    });
+};
 
 defineExpose({
     focus: () => inputRef.value?.focus(),
@@ -63,10 +73,24 @@ defineExpose({
                 <span class="material-symbols-outlined text-gray-400 text-lg">{{ icon }}</span>
             </div>
 
-            <input ref="inputRef" :id="id" :type="type" :value="modelValue" :disabled="disabled" :placeholder="placeholder" :list="list"
+            <input 
+                ref="inputRef" 
+                v-bind="$attrs"
+                :id="id" 
+                :type="type" 
+                :value="modelValue" 
+                :disabled="disabled" 
+                :placeholder="placeholder" 
+                :list="list"
                 :autocomplete="autocomplete"
-                :aria-invalid="!!error" :aria-describedby="error ? `${id}-error` : undefined" :class="inputClasses"
-                class="py-2 pr-3" @input="handleInput" @blur="emit('blur', $event)" @focus="emit('focus', $event)" />
+                :aria-invalid="!!error" 
+                :aria-describedby="error ? `${id}-error` : undefined" 
+                :class="inputClasses"
+                class="py-2 pr-3" 
+                @input="handleInput" 
+                @blur="emit('blur', $event)" 
+                @focus="emit('focus', $event)" 
+            />
         </div>
 
         <p v-if="error" :id="`${id}-error`" class="mt-1 text-sm text-red-600 dark:text-red-400">

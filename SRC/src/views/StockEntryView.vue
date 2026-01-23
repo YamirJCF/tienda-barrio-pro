@@ -1,10 +1,10 @@
 <template>
-  <div class="min-h-screen bg-gray-900 text-gray-100 pb-20">
+  <div class="h-screen flex flex-col overflow-hidden bg-gray-900 text-gray-100">
     <!-- Header -->
-    <header class="sticky top-0 z-30 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 py-4 flex items-center justify-between">
+    <header class="z-30 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 py-4 flex items-center justify-between shrink-0">
       <div class="flex items-center gap-3">
         <button @click="router.back()" class="p-2 hover:bg-gray-800 rounded-lg transition-colors">
-          <span class="material-icons text-gray-400">arrow_back</span>
+          <span class="material-symbols-outlined text-gray-400">arrow_back</span>
         </button>
         <h1 class="text-xl font-bold text-white">Nueva Entrada</h1>
       </div>
@@ -13,7 +13,8 @@
       </div>
     </header>
 
-    <main class="max-w-3xl mx-auto p-4 space-y-6">
+    <main class="flex-1 overflow-y-auto w-full p-4 space-y-6">
+      <div class="max-w-3xl mx-auto space-y-6">
       <!-- Movement Type & Reason -->
       <section class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50 flex flex-col md:flex-row gap-4">
         <div class="flex-1 space-y-1">
@@ -79,7 +80,7 @@
       <!-- Items List -->
       <section class="space-y-3">
          <div v-if="entryItems.length === 0" class="text-center py-10 opacity-50">
-           <span class="material-icons text-4xl mb-2">playlist_add</span>
+           <span class="material-symbols-outlined text-4xl mb-2">playlist_add</span>
            <p>Busca productos abajo para agregarlos</p>
          </div>
 
@@ -94,7 +95,7 @@
                 <p class="text-xs text-gray-400">{{ item.measurementUnit }}</p>
               </div>
               <button @click="removeItem(index)" class="text-gray-500 hover:text-red-400 p-1">
-                <span class="material-icons text-sm">close</span>
+                <span class="material-symbols-outlined text-sm">close</span>
               </button>
             </div>
 
@@ -143,10 +144,11 @@
             </div>
          </div>
       </section>
+      </div> <!-- End of max-w-3xl wrapper -->
     </main>
 
     <!-- Footer Search & Actions -->
-    <div class="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 p-3 pb-6 z-40">
+    <div class="bg-gray-900/95 backdrop-blur border-t border-gray-800 p-3 pb-6 z-40 shrink-0">
        <div class="max-w-3xl mx-auto space-y-3">
           <!-- Total -->
           <div class="flex justify-between items-end px-2">
@@ -167,7 +169,6 @@
                v-model="searchQuery"
                placeholder="Buscar producto..."
                icon="search"
-               @input="handleSearch"
              />
              
              <!-- Dropdown Results -->
@@ -209,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useInventoryStore } from '../stores/inventory';
 import { Decimal } from 'decimal.js';
@@ -263,11 +264,15 @@ const availableReasons = computed(() => {
 });
 
 // Watch for type change to reset reason
-import { watch } from 'vue';
 watch(movementType, (newVal) => {
   if (availableReasons.value.length > 0) {
     reason.value = availableReasons.value[0];
   }
+});
+
+// FIX: Búsqueda reactiva inmediata (001)
+watch(searchQuery, () => {
+  handleSearch();
 });
 
 // Methods
@@ -297,7 +302,8 @@ const addItem = (product: Product) => {
   }
 
   // Cost default: if entry, use cost. if exit, use average cost (logic to be refined, but for now cost)
-  entryItems.value.push({
+  // FIX: Agregar al principio (unshift) para mejor UX
+  entryItems.value.unshift({
     productId: product.id,
     productName: product.name,
     quantity: 1,
