@@ -12,6 +12,7 @@ import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNumpad } from '../composables/useNumpad';
 import { usePOS } from '../composables/usePOS';
+import { useHeartbeat } from '../composables/useHeartbeat'; // Presence & Pause logic
 import { logger } from '../utils/logger';
 import { Decimal } from 'decimal.js';
 import CheckoutModal from '../components/sales/CheckoutModal.vue';
@@ -31,6 +32,7 @@ const cashRegisterStore = useCashRegisterStore();
 const authStore = useAuthStore();
 const { showSaleSuccess, showSaleOffline, showSuccess, showError } = useNotifications();
 const { formatWithSign: formatCurrency } = useCurrencyFormat();
+const { isPaused, setPause } = useHeartbeat(); // Heartbeat control
 
 // OBS-02: Formatear cantidad a máximo 2 decimales
 const formatQuantity = (qty: number | Decimal): string => {
@@ -44,7 +46,7 @@ const formatQuantity = (qty: number | Decimal): string => {
 const isProcessing = ref(false); // Loading state for COBRAR button
 
 // Estado operativo de la tienda
-const isAdminLocked = computed(() => !authStore.storeOpenStatus);
+// (Legacy: isAdminLocked Removed - Now relies on Offline Accountability)
 // const isCashRegisterClosed = computed(() => !cashRegisterStore.isOpen); // Handled directly in blockingState
 const isInventoryEmpty = computed(() => inventoryStore.totalProducts === 0);
 
@@ -62,15 +64,7 @@ const blockingState = computed(() => {
       action: goToDashboard,
     };
   }
-  if (isAdminLocked.value) {
-    // Bloqueo por Switch Global (AdminHub/Auth)
-    return {
-      title: 'Tienda Cerrada',
-      message: 'La tienda está marcada como "Cerrada" en el panel de administración.',
-      buttonText: 'Volver',
-      action: goToDashboard,
-    };
-  }
+  // isAdminLocked check REMOVED
   if (!cashRegisterStore.isOpen) {
     // Bloqueo por Caja (CashControl)
     return {
@@ -301,11 +295,34 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
     <NoPermissionOverlay v-if="blockingState" :title="blockingState.title" :message="blockingState.message"
       :buttonText="blockingState.buttonText" @go-back="blockingState.action" />
 
+    <!-- Pause Overlay (Heartbeat) -->
+    <div 
+      v-if="isPaused" 
+      class="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white"
+    >
+      <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center">
+        <div class="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+          <span class="material-symbols-outlined text-5xl text-blue-600 dark:text-blue-400">timer_pause</span>
+        </div>
+        <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Sesión en Pausa</h2>
+        <p class="text-slate-600 dark:text-slate-300 mb-8">
+          Tu actividad está detenida. El administrador verá tu estado como "En Pausa".
+        </p>
+        <button 
+          @click="setPause(false)"
+          class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-600/30 transition-all active:scale-95"
+        >
+          REANUDAR TURNO
+        </button>
+      </div>
+    </div>
+
     <!-- ZONA SUPERIOR: TICKET (Flex Grow) -->
     <section class="flex flex-col flex-1 min-h-0 relative">
       <!-- Header -->
       <div
-        class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between shrink-0 border-b border-gray-200/50">
+        class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between shrink-0 border-b border-gray-200/50"
+      >
         <div class="flex items-center gap-2">
           <BaseButton 
             @click="goToDashboard" 
@@ -319,15 +336,29 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
             Ticket {{ ticketNumber }}
           </h2>
         </div>
-        <BaseButton 
-          aria-label="Clear Ticket"
-          variant="ghost"
-          size="icon"
-          class="text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-          @click="cartStore.clearCart"
-        >
-          <span class="material-symbols-outlined">delete</span>
-        </BaseButton>
+        
+        <div class="flex items-center gap-2">
+          <!-- Botón de Pausa (Heartbeat) -->
+          <BaseButton 
+            aria-label="Pause Session"
+            variant="ghost"
+            size="icon"
+            class="text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+            @click="setPause(true)"
+          >
+            <span class="material-symbols-outlined">pause_circle</span>
+          </BaseButton>
+
+          <BaseButton 
+            aria-label="Clear Ticket"
+            variant="ghost"
+            size="icon"
+            class="text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+            @click="cartStore.clearCart"
+          >
+            <span class="material-symbols-outlined">delete</span>
+          </BaseButton>
+        </div>
       </div>
 
       <!-- Ticket List (Scrollable) -->

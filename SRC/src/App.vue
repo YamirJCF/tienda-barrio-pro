@@ -24,11 +24,9 @@ useNetworkStatus();
 const { currentAlert, isVisible, handlePrimary, handleSecondary, dismissAlert } =
   useCriticalAlerts();
 
-// T-009: Estado de tienda para banner global
-// T-009: Estado de tienda para banner global
-import { useCashRegisterStore } from './stores/cashRegister'; // Use new store
-const cashRegisterStore = useCashRegisterStore();
-const isStoreClosed = computed(() => !cashRegisterStore.isOpen); // Invert isOpen
+// Presence Monitoring (Silent Witness)
+import { useHeartbeat } from './composables/useHeartbeat';
+useHeartbeat();
 
 const errorDetected = ref(false);
 
@@ -48,16 +46,8 @@ const resetApp = () => {
 <template>
   <div
     class="min-h-screen w-full mx-auto max-w-md bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden relative"
-    :class="{ 'pt-8': isStoreClosed }"
   >
-    <!-- T-009: Banner Global de Tienda Cerrada -->
-    <div
-      v-if="isStoreClosed"
-      class="fixed top-0 left-0 right-0 z-[200] bg-red-500 text-white text-center py-2 px-4 text-xs font-semibold flex items-center justify-center gap-2 shadow-lg"
-    >
-      <span class="material-symbols-outlined text-sm">lock</span>
-      <span>🔒 Tienda Cerrada - Solo Administración</span>
-    </div>
+    <!-- T-009: Banner Global de Tienda Cerrada - ELIMINADO -->
 
     <div
       v-if="errorDetected"

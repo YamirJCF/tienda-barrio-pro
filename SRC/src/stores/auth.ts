@@ -100,6 +100,19 @@ export const useAuthStore = defineStore(
       return deviceApproved.value === 'approved';
     });
 
+    // SPEC-006: Permisos granulares de gestión (Fix para botones CRUD)
+    const canManageInventory = computed(() => {
+      if (!currentUser.value) return false;
+      if (isAdmin.value) return true;
+      return currentUser.value.permissions?.canManageInventory ?? false;
+    });
+
+    const canManageClients = computed(() => {
+      if (!currentUser.value) return false;
+      if (isAdmin.value) return true;
+      return currentUser.value.permissions?.canManageClients ?? false;
+    });
+
     // Methods
     const generateId = () => {
       return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -201,6 +214,20 @@ export const useAuthStore = defineStore(
       deviceApproved.value = status;
     };
 
+    // WO-005: Daily Pass Logic (Stubs)
+    const checkDailyApproval = async () => {
+      // En producción: RPC check_daily_pass()
+      // Por ahora devuelve el estado actual de deviceApproved
+      // Simulando que 'approved' === pase diario activo
+      return deviceApproved.value;
+    };
+
+    const requestDailyPass = async () => {
+      // En producción: RPC request_daily_pass() con ping count
+      console.log("Ping enviado al admin");
+      return true;
+    };
+
     // storeOpenStatus setter removed
 
     // Reset function removed to prevent demo account restoration
@@ -245,6 +272,8 @@ export const useAuthStore = defineStore(
       canFiar,
       canOpenCloseCash, // SPEC-006
       canAccessPOS,
+      canManageInventory, // Fix
+      canManageClients,   // Fix
       // Methods
       registerStore,
       loginWithCredentials,
@@ -254,13 +283,14 @@ export const useAuthStore = defineStore(
       getStoreById,
       getFirstStore,
       generateId,
-      resetToDemo, // Nueva función
+      resetToDemo,
       // SPEC-005: IAM Methods
       setDeviceStatus,
+      checkDailyApproval,
+      requestDailyPass
     };
   },
   {
-
     persist: {
       key: getStorageKey('tienda-auth'),
     },

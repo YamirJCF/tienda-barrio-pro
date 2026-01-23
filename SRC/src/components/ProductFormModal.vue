@@ -115,8 +115,26 @@ const isValid = computed(() => {
   const name = String(formData.value.name || '').trim();
   const price = formData.value.price;
   const priceNum = parseFloat(String(price));
+  const plu = String(formData.value.plu || '').trim();
 
-  return name !== '' && price !== '' && price !== null && !isNaN(priceNum) && priceNum > 0;
+  // PLU requerido y ESTRICTAMENTE 3 dígitos numéricos
+  const isPluValid = plu !== '' && plu.length === 3 && /^\d+$/.test(plu);
+
+  // Validación de Unicidad
+  const isDuplicate = inventoryStore.products.some(p => 
+    p.plu === plu && p.id !== props.productId
+  );
+
+  return name !== '' && isPluValid && !isDuplicate && price !== '' && price !== null && !isNaN(priceNum) && priceNum > 0;
+});
+
+const isPluDuplicate = computed(() => {
+  const plu = String(formData.value.plu || '').trim();
+  if (!plu || plu.length !== 3) return false;
+  
+  return inventoryStore.products.some(p => 
+    p.plu === plu && p.id !== props.productId
+  );
 });
 
 // UX-FIX: Categorías dinámicas basadas en productos existentes
@@ -128,6 +146,31 @@ const existingCategories = computed(() => {
 });
 
 // Methods
+const blockNonNumeric = (e: KeyboardEvent) => {
+  // Permitir teclas de control: Backspace, Delete, Tab, Escape, Enter, Flechas
+  if (
+    [
+      'Backspace',
+      'Delete',
+      'Tab',
+      'Escape',
+      'Enter',
+      'ArrowLeft',
+      'ArrowRight',
+      'ArrowUp',
+      'ArrowDown',
+      'Home',
+      'End',
+    ].includes(e.key)
+  ) {
+    return;
+  }
+  // Bloquear si no es número
+  if (!/^\d$/.test(e.key)) {
+    e.preventDefault();
+  }
+};
+
 const close = () => {
   emit('update:modelValue', false);
   setTimeout(resetForm, 300); // Reset after animation
@@ -310,12 +353,15 @@ watch(
               <div class="col-span-4">
                 <BaseInput
                   :model-value="formData.plu"
-                  @update:model-value="val => formData.plu = String(val).replace(/[^0-9]/g, '')"
+                  @update:model-value="val => formData.plu = String(val).replace(/[^0-9]/g, '').slice(0, 3)"
+                  @keydown="blockNonNumeric"
+                  :error="isPluDuplicate ? 'Código en uso' : undefined"
                   label="Cód. Rápido"
                   placeholder="PLU"
                   class="text-center font-medium"
-                  maxlength="4"
+                  maxlength="3"
                   inputmode="numeric"
+                  required
                 />
               </div>
 
