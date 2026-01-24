@@ -4,17 +4,13 @@ import { useRouter } from 'vue-router';
 import { Store, Eye, EyeOff } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
-import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
 import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
-import { authRepository } from '../data/repositories/authRepository';
-import { logger } from '../utils/logger';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const employeesStore = useEmployeesStore();
-const { getFingerprint } = useDeviceFingerprint();
 
 // WO-004 T4.4: Rate Limiting
 const {
@@ -68,7 +64,6 @@ const handleLogin = async () => {
       if (authStore.loginWithCredentials(username.value, password.value)) {
         // Admin siempre tiene acceso completo
         authStore.setDeviceStatus('approved');
-        authStore.setStoreOpenStatus(true); // Admins controlan la tienda
         recordSuccess(); 
         router.push('/');
         return;
@@ -85,43 +80,30 @@ const handleLogin = async () => {
         return;
       }
 
-      // Obtener fingerprint del dispositivo
-      const fingerprint = await getFingerprint();
-      const userAgent = navigator.userAgent;
+      // OPCIÓN A: Primero intentar login LOCAL usando employeesStore
+      const localEmployee = employeesStore.validatePin(username.value, password.value);
+      
+      if (localEmployee) {
+        // Login local exitoso
+        authStore.loginAsEmployee(
+          {
+            id: localEmployee.id,
+            name: localEmployee.name,
+            username: localEmployee.username,
+            permissions: localEmployee.permissions,
+          },
+          firstStore.id,
+        );
 
-      // SPEC-005: Llamada al RPC real via Repository
-      const response = await authRepository.loginEmpleado(
-        username.value,
-        password.value,
-        fingerprint,
-        userAgent
-      );
-
-      if (!response.success) {
-        handleServerError(response.error_code || 'UNKNOWN', response.error || 'Error desconocido');
-        recordFailedAttempt();
+        authStore.setDeviceStatus('approved');
+        recordSuccess();
+        router.push('/');
         return;
       }
 
-      // Login exitoso
-      if (response.employee) {
-        authStore.loginAsEmployee(
-          {
-            id: Number(response.employee.employeeId) || 0,
-            name: response.employee.name,
-            username: response.employee.email,
-            permissions: response.employee.permissions as any,
-          },
-          response.employee.storeId,
-        );
-
-        // Establecer estados IAM desde la respuesta del servidor
-        authStore.setDeviceStatus('approved');
-        authStore.setStoreOpenStatus(response.store_state?.is_open ?? false);
-
-        recordSuccess();
-        router.push('/');
-      }
+      // Si no hay empleado local, mostrar error (sin llamar a Supabase)
+      recordFailedAttempt();
+      errorMessage.value = `Usuario o PIN incorrectos (${remainingAttempts.value} intentos restantes)`;
     }
   } catch (error) {
     console.error('[Login] Error:', error);
