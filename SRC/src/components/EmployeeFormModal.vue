@@ -31,7 +31,50 @@ const formData = ref({
   canOpenCloseCash: false,
 });
 
-// ...
+// Computed properties
+const isEdit = computed(() => !!props.employeeId);
+
+const modalTitle = computed(() => 
+  isEdit.value ? 'Editar Empleado' : 'Nuevo Empleado'
+);
+
+const isValid = computed(() => {
+  const { name, username, pin } = formData.value;
+  return (
+    name.trim().length >= 2 &&
+    username.trim().length >= 4 &&
+    pin.length === 4
+  );
+});
+
+const close = () => {
+  emit('update:modelValue', false);
+  resetForm();
+};
+
+const handleUsernameInput = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  // Ensure we only store valid characters if need be, but for now just let v-model handle it 
+  // or enforce numeric if inputmode is numeric. 
+  // Given inputmode="numeric", let's strip non-digits to be clean.
+  const val = input.value.replace(/\D/g, '');
+  formData.value.username = val;
+  
+  if (input.value !== val) {
+    input.value = val;
+  }
+};
+
+const handlePinInput = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  // Enforce 4 digits numeric
+  const val = input.value.replace(/\D/g, '').slice(0, 4);
+  formData.value.pin = val;
+  
+  if (input.value !== val) {
+    input.value = val;
+  }
+};
 
 // Methods
 const resetForm = () => {
@@ -47,7 +90,7 @@ const resetForm = () => {
   };
 };
 
-// ...
+
 
 const save = () => {
   if (!isValid.value) return;
@@ -84,7 +127,7 @@ const save = () => {
   }
 };
 
-// ...
+
 
 // Load existing employee data for editing
 watch(
