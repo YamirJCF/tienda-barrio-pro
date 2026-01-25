@@ -25,19 +25,31 @@ let pollingInterval: ReturnType<typeof setInterval> | null = null;
 let cooldownInterval: ReturnType<typeof setInterval> | null = null;
 
 // Messages
-const title = computed(() => isLocked.value ? 'Atención Requerida' : 'Esperando Autorización');
-const subtitle = computed(() => isLocked.value 
+const title = computed(() => {
+    if (authStore.dailyAccessStatus === 'rejected') return 'Acceso Denegado';
+    return isLocked.value ? 'Atención Requerida' : 'Esperando Autorización';
+});
+
+const subtitle = computed(() => {
+    if (authStore.dailyAccessStatus === 'rejected') return 'Tu solicitud ha sido rechazada por el administrador.';
+    return isLocked.value 
     ? 'No hemos recibido respuesta del administrador.' 
-    : 'Tu supervisor ha sido notificado. Por favor espera.');
+    : 'Tu supervisor ha sido notificado. Por favor espera.';
+});
 
 // Methods
 const startPolling = () => {
     pollingInterval = setInterval(async () => {
+        // Consultar estado real al store
         const status = await authStore.checkDailyApproval();
+        
         if (status === 'approved') {
             router.push('/');
+        } else if (status === 'rejected') {
+            isLocked.value = true;
+            if (pollingInterval) clearInterval(pollingInterval);
         }
-    }, 15000); // 15s polling
+    }, 5000); // 5s polling (más rápido para demo local)
 };
 
 const startCooldown = (seconds: number) => {
@@ -60,17 +72,15 @@ const handlePing = async () => {
     if (pingCount.value >= maxPings) return;
 
     pingCount.value++;
-    await authStore.requestDailyPass(); // Send ping
+    // START: Connection to Real Store Logic
+    await authStore.requestDailyPass(); 
+    // END
     
-    // Feedback visual (toast simulado)
-    // alert("Notificación reenviada"); 
-
     if (pingCount.value >= maxPings) {
         isLocked.value = true;
-        if (pollingInterval) clearInterval(pollingInterval); // Stop checking if locked? Validar regla.
-        // Regla: Abandono de sistema. Bloquea solicitud.
+        // No paramos polling, quizas el admin apruebe justo despues
     } else {
-        startCooldown(300); // 5 min cooldown
+        startCooldown(60); // 1 min cooldown para demo (antes 5 min)
     }
 };
 

@@ -4,49 +4,57 @@
  * WO-005: Modal intrusivo para aprobación de pases diarios.
  * Se muestra globalmente en App.vue si el usuario es Admin.
  */
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, watch, computed, onUnmounted } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import BaseButton from '@/components/ui/BaseButton.vue';
-import { User, Bell, PhoneCall, CheckCircle } from 'lucide-vue-next';
+import { User, Bell, PhoneCall, CheckCircle, XCircle } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
 const isVisible = ref(false);
 
-// Datos del solicitante (Mock)
-const requester = ref({
-    name: 'Juan Pérez',
-    photo: '',
-    time: 'Hace 30 seg',
-    pings: 1
+// Datos reactivos del store
+const pendingRequestTime = computed(() => authStore.pendingRequestTime);
+
+// Manual TimeAgo
+const now = ref(Date.now());
+let timeInterval: ReturnType<typeof setInterval>;
+
+const timeAgo = computed(() => {
+    if (!pendingRequestTime.value) return '';
+    const diff = now.value - new Date(pendingRequestTime.value).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'menos de un minuto';
+    return `${mins} minutos`;
 });
 
-// Polling para simular eventos entrantes (Stubs)
-let pollInterval: ReturnType<typeof setInterval> | null = null;
+// Watcher: Si hay una solicitud pendiente y soy admin, mostrar modal
+watch(
+    () => authStore.dailyAccessStatus,
+    (newStatus) => {
+        if (newStatus === 'pending' && authStore.isAdmin) {
+            isVisible.value = true;
+            // Play sound?
+        }
+    }
+);
 
-const checkForRequests = () => {
-    // En producción: Escuchar WebSocket o polling real
-    // Simulación: Random pop-up para demo
-    // if (Math.random() > 0.95) isVisible.value = true;
-};
-
-const handleApprove = () => {
-    // authStore.approveDailyPass(requester.id);
+const handleApprove = async () => {
+    await authStore.approveRequest();
     isVisible.value = false;
-    alert(`Acceso concedido a ${requester.value.name}`);
+    // alert(`Acceso concedido`);
 };
 
-const handleIgnore = () => {
+const handleReject = async () => {
+    await authStore.rejectRequest();
     isVisible.value = false;
 };
 
 onMounted(() => {
-    if (authStore.isAdmin) {
-        pollInterval = setInterval(checkForRequests, 10000);
-    }
+    timeInterval = setInterval(() => { now.value = Date.now() }, 60000);
 });
 
 onUnmounted(() => {
-    if (pollInterval) clearInterval(pollInterval);
+    clearInterval(timeInterval);
 });
 
 // Exponemos método para activar manualmente (demo)
@@ -79,25 +87,22 @@ defineExpose({ isVisible });
                   
                   <div>
                       <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-                          {{ requester.name }}
+                          Empleado Solicitando
                       </h2>
                       <p class="text-gray-500 dark:text-gray-400 text-sm">
-                          Solicitó acceso {{ requester.time }}
+                          Solicitó acceso hace {{ timeAgo }}
                       </p>
-                      <div v-if="requester.pings > 0" class="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold">
-                          <PhoneCall :size="12" />
-                          Insistencia: {{ requester.pings }}/3
-                      </div>
                   </div>
               </div>
 
               <!-- Actions -->
               <div class="grid grid-cols-2 gap-0 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                   <button 
-                      @click="handleIgnore"
-                      class="p-4 text-gray-600 dark:text-gray-400 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      @click="handleReject"
+                      class="p-4 text-red-600 dark:text-red-400 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
                   >
-                      IGNORAR
+                      <XCircle :size="20" />
+                      RECHAZAR
                   </button>
                   <button 
                       @click="handleApprove"
