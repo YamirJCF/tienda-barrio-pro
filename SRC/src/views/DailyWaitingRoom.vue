@@ -8,6 +8,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import BaseButton from '@/components/ui/BaseButton.vue';
+import { Hourglass, AlertCircle, BellRing } from 'lucide-vue-next';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -103,9 +104,7 @@ const formatTime = (seconds: number) => {
       <div class="relative">
         <div class="w-24 h-24 rounded-full flex items-center justify-center"
              :class="isLocked ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'">
-             <span class="material-symbols-outlined text-5xl">
-                 {{ isLocked ? 'fmd_bad' : 'hourglass_top' }}
-             </span>
+             <component :is="isLocked ? AlertCircle : Hourglass" :size="48" :stroke-width="1.5" />
         </div>
         <div v-if="!isLocked" class="absolute -top-1 -right-1 w-6 h-6 bg-blue-500 rounded-full animate-ping opacity-75"></div>
       </div>
@@ -133,7 +132,7 @@ const formatTime = (seconds: number) => {
                 <span v-if="isPingDisabled" class="absolute inset-0 bg-gray-200/50 dark:bg-gray-700/50 z-10 transition-all" 
                       :style="{ width: `${(pingCooldown / (pingCount === 0 ? 120 : 300)) * 100}%` }"></span>
                 <span class="relative z-20 flex items-center gap-2 justify-center">
-                    <span class="material-symbols-outlined">notifications_active</span>
+                    <BellRing :size="20" :stroke-width="1.5" />
                     {{ isPingDisabled ? `Espere ${formatTime(pingCooldown)}` : '¡Sigo aquí! (Reenviar)' }}
                 </span>
             </BaseButton>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BaseButton from '../ui/BaseButton.vue';
+import { Delete, Plus } from 'lucide-vue-next';
 
 defineProps<{
   isQuantityMode: boolean;
@@ -56,7 +57,7 @@ const emit = defineEmits<{
       class="h-14 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl flex items-center justify-center text-red-600 dark:text-red-400 active:bg-red-100 dark:active:bg-red-900/50 touch-manipulation transition-transform active:scale-95"
       @click="emit('backspace')"
     >
-      <span class="material-symbols-outlined">backspace</span>
+      <Delete :size="24" />
     </button>
 
     <!-- Row 3 & 4 (Special Layout) -->
@@ -100,7 +101,7 @@ const emit = defineEmits<{
       class="col-span-1 row-span-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/30 active:scale-95 active:shadow-inner transition-all flex flex-col items-center justify-center gap-1 border-b-4 border-blue-800 touch-manipulation"
       @click="emit('add')"
     >
-      <span class="material-symbols-outlined text-3xl font-bold">add</span>
+      <Plus :size="32" stroke-width="3" />
       <span class="text-[10px] font-bold uppercase tracking-wider">Agregar</span>
     </button>
   </div>

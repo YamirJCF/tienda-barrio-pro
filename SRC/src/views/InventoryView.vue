@@ -14,6 +14,17 @@ import KardexModal from '../components/inventory/KardexModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseModal from '../components/ui/BaseModal.vue';
+import { 
+  ArrowLeft, 
+  Search, 
+  Filter, 
+  AlertCircle, 
+  Package, 
+  Plus, 
+  History, 
+  Trash2,
+  Archive
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();
@@ -106,19 +117,22 @@ const cancelDelete = () => {
       class="sticky top-0 z-30 bg-white dark:bg-surface-dark border-b border-gray-200 dark:border-gray-800 shadow-sm">
       <div class="px-4 py-3 flex items-center gap-3">
         <button @click="goToDashboard" aria-label="Volver al Dashboard"
-          class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-          <span class="material-symbols-outlined">arrow_back</span>
+          class="flex items-center justify-center -ml-2 p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <ArrowLeft :size="24" :stroke-width="1.5" />
         </button>
         <div class="flex-1">
           <BaseInput
             v-model="searchQuery"
             placeholder="Buscar producto..."
-            icon="search"
             class="w-full"
-          />
+          >
+            <template #prefix>
+               <Search :size="18" :stroke-width="1.5" class="text-slate-400" />
+            </template>
+          </BaseInput>
         </div>
-        <button class="p-2 rounded-full bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-          <span class="material-symbols-outlined text-[20px]">filter_list</span>
+        <button class="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:ring-2 hover:ring-primary/20 transition-all">
+          <Filter :size="20" :stroke-width="1.5" />
         </button>
       </div>
 
@@ -140,18 +154,19 @@ const cancelDelete = () => {
     <!-- Products List -->
     <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       <div class="flex justify-between items-end px-1">
-        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">
           Productos ({{ filteredProducts.length }})
         </span>
-        <span v-if="inventoryStore.lowStockProducts.length > 0" class="text-xs font-medium text-red-500">
+        <span v-if="inventoryStore.lowStockProducts.length > 0" class="text-xs font-medium text-red-500 flex items-center gap-1">
+          <AlertCircle :size="12" />
           {{ inventoryStore.lowStockProducts.length }} con stock bajo
         </span>
       </div>
 
       <!-- Empty State -->
-      <div v-if="filteredProducts.length === 0" class="flex flex-col items-center justify-center h-64 text-gray-400">
-        <span class="material-symbols-outlined text-6xl mb-3 opacity-30">inventory_2</span>
-        <p class="text-sm">
+      <div v-if="filteredProducts.length === 0" class="flex flex-col items-center justify-center h-64 text-slate-400">
+        <Package :size="64" :stroke-width="1" class="mb-4 opacity-30" />
+        <p class="text-sm font-medium">
           {{ searchQuery ? 'No se encontraron productos' : 'No hay productos aún' }}
         </p>
         <BaseButton 
@@ -160,6 +175,7 @@ const cancelDelete = () => {
           class="mt-4"
           variant="primary"
         >
+          <Plus :size="18" class="mr-2" />
           Crear primer producto
         </BaseButton>
       </div>
@@ -168,7 +184,7 @@ const cancelDelete = () => {
       <RecycleScroller v-if="filteredProducts.length > 0" class="flex-1" :items="filteredProducts" :item-size="140"
         key-field="id" v-slot="{ item: product }">
         <article
-          class="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3 transition-transform mb-3 mx-4"
+          class="bg-white dark:bg-surface-dark rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3 transition-transform mb-3 mx-4"
           :class="{
             'active:scale-[0.99] cursor-pointer': canManageInventory,
             'cursor-default': !canManageInventory,
@@ -186,13 +202,13 @@ const cancelDelete = () => {
                 <span v-if="product.plu" class="text-slate-400 text-xs font-mono">PLU: {{ product.plu }}</span>
               </div>
               <span v-if="product.category"
-                class="inline-block mt-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] font-medium rounded">
+                class="inline-block mt-1 px-2 py-0.5 bg-gray-50 dark:bg-gray-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded-lg uppercase tracking-wide">
                 {{ product.category }}
               </span>
             </div>
             <div class="text-right">
               <span
-                class="text-slate-900 dark:text-white font-bold text-sm bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded block w-fit ml-auto">
+                class="text-slate-900 dark:text-white font-bold text-sm bg-gray-50 dark:bg-slate-700 px-2.5 py-1 rounded-lg block w-fit ml-auto">
                 ${{ formatCurrency(product.price) }}
               </span>
             </div>
@@ -205,23 +221,23 @@ const cancelDelete = () => {
               : product.stock <= product.minStock
                 ? 'text-red-500'
                 : 'text-primary'
-              " class="font-bold text-lg leading-none">
+              " class="font-bold text-lg leading-none tracking-tight">
               {{ formatStock(product.stock, product.measurementUnit) }}
-              <span class="text-xs font-medium opacity-70">{{
+              <span class="text-xs font-medium opacity-70 ml-0.5">{{
                 product.measurementUnit || 'un'
               }}</span>
             </span>
             <div class="flex gap-1">
               <button
-                class="text-slate-400 hover:text-primary p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                class="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
                 @click.stop="openKardex(product)"
                 title="Ver historial">
-                <span class="material-symbols-outlined text-[20px]">history</span>
+                <History :size="20" :stroke-width="1.5" />
               </button>
               <button v-if="canManageInventory"
-                class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 @click.stop="deleteProduct(product.id)">
-                <span class="material-symbols-outlined text-[20px]">delete</span>
+                <Trash2 :size="20" :stroke-width="1.5" />
               </button>
             </div>
           </div>
@@ -236,18 +252,20 @@ const cancelDelete = () => {
         v-if="canManageInventory"
         @click="router.push('/stock-entry')"
         variant="success"
-        class="size-12 !rounded-full shadow-lg shadow-emerald-500/40"
-        icon="inventory"
-      />
+        class="size-12 !rounded-2xl shadow-lg shadow-emerald-500/40 flex items-center justify-center p-0"
+      >
+        <Archive :size="24" :stroke-width="1.5" />
+      </BaseButton>
       
       <!-- Add Product FAB - Only if canManageInventory -->
       <BaseButton 
         v-if="canManageInventory"
         @click="openNewProduct"
         variant="primary"
-        class="size-14 !rounded-full shadow-lg shadow-blue-500/40"
-        icon="add"
-      />
+        class="size-14 !rounded-2xl shadow-lg shadow-blue-500/40 flex items-center justify-center p-0"
+      >
+        <Plus :size="28" :stroke-width="1.5" />
+      </BaseButton>
     </div>
 
     <!-- Bottom Navigation -->
@@ -270,7 +288,7 @@ const cancelDelete = () => {
     >
         <div class="p-6 text-center">
             <div class="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
-               <span class="material-symbols-outlined text-2xl text-red-500">delete</span>
+               <Trash2 :size="24" :stroke-width="1.5" class="text-red-500" />
             </div>
             <p class="text-sm text-slate-600 dark:text-slate-300">
                <span class="font-semibold">{{ productToDelete?.name }}</span> será eliminado

@@ -5,6 +5,7 @@ import { useCartStore } from '../stores/cart';
 import { useInventoryStore } from '../stores/inventory';
 import { checkDataIntegrity } from '../composables/useDataIntegrity';
 import { Decimal } from 'decimal.js';
+import { ArrowLeft, Play, Hourglass, Loader2, Check, X } from 'lucide-vue-next';
 
 const router = useRouter();
 
@@ -296,7 +297,7 @@ onMounted(() => {
       <div class="flex items-center justify-between max-w-2xl mx-auto">
         <div class="flex items-center gap-3">
           <button @click="goBack" class="p-2 hover:bg-gray-700 rounded-lg transition-colors">
-            <span class="material-symbols-outlined">arrow_back</span>
+            <ArrowLeft />
           </button>
           <div>
             <h1 class="text-lg font-bold text-emerald-400">🔧 System Audit</h1>
@@ -332,10 +333,8 @@ onMounted(() => {
             :disabled="isRunning"
             class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-xl font-bold transition-all flex items-center gap-2"
           >
-            <span v-if="isRunning" class="material-symbols-outlined animate-spin"
-              >progress_activity</span
-            >
-            <span v-else class="material-symbols-outlined">play_arrow</span>
+            <Loader2 v-if="isRunning" class="animate-spin" />
+            <Play v-else />
             {{ isRunning ? 'Ejecutando...' : 'Ejecutar Pruebas' }}
           </button>
         </div>
@@ -372,20 +371,10 @@ onMounted(() => {
                 'bg-red-600 text-white': test.status === 'failed',
               }"
             >
-              <span v-if="test.status === 'pending'" class="material-symbols-outlined"
-                >hourglass_empty</span
-              >
-              <span
-                v-else-if="test.status === 'running'"
-                class="material-symbols-outlined animate-spin"
-                >progress_activity</span
-              >
-              <span v-else-if="test.status === 'passed'" class="material-symbols-outlined"
-                >check</span
-              >
-              <span v-else-if="test.status === 'failed'" class="material-symbols-outlined"
-                >close</span
-              >
+              <Hourglass v-if="test.status === 'pending'" />
+              <Loader2 v-else-if="test.status === 'running'" class="animate-spin" />
+              <Check v-else-if="test.status === 'passed'" />
+              <X v-else-if="test.status === 'failed'" />
             </div>
 
             <!-- Test Info -->

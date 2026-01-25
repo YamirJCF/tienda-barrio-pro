@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { logger } from '../utils/logger';
 import { authRepository } from '../data/repositories/authRepository';
 import { useAuthStore } from '../stores/auth';
+import { Smartphone, X, Clock, Check, ShieldCheck, CheckCircle, BadgeCheck } from 'lucide-vue-next';
 
 // Props y Emits
 const props = defineProps<{
@@ -153,7 +154,7 @@ const formatDate = (isoDate: string): string => {
                 <div
                   class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                 >
-                  <span class="material-symbols-outlined">smartphone</span>
+                  <Smartphone :size="24" />
                 </div>
                 <div>
                   <h3 class="text-lg font-bold text-slate-900 dark:text-white">Dispositivos</h3>
@@ -166,7 +167,7 @@ const formatDate = (isoDate: string): string => {
                 @click="close"
                 class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
               >
-                <span class="material-symbols-outlined">close</span>
+                <X :size="24" />
               </button>
             </div>
           </div>
@@ -183,7 +184,7 @@ const formatDate = (isoDate: string): string => {
               <h4
                 class="text-sm font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2"
               >
-                <span class="material-symbols-outlined text-lg">pending</span>
+                <Clock :size="18" />
                 Pendientes de Aprobación
               </h4>
               <div class="space-y-2">
@@ -208,7 +209,7 @@ const formatDate = (isoDate: string): string => {
                       class="flex-1 py-2 px-3 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-bold flex items-center justify-center gap-1 transition-colors"
                       :disabled="isLoading"
                     >
-                      <span class="material-symbols-outlined text-lg">check</span>
+                      <Check :size="18" />
                       Aprobar
                     </button>
                     <button
@@ -216,7 +217,7 @@ const formatDate = (isoDate: string): string => {
                       class="flex-1 py-2 px-3 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-bold flex items-center justify-center gap-1 transition-colors"
                       :disabled="isLoading"
                     >
-                      <span class="material-symbols-outlined text-lg">close</span>
+                      <X :size="18" />
                       Rechazar
                     </button>
                   </div>
@@ -229,9 +230,7 @@ const formatDate = (isoDate: string): string => {
               <div
                 class="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mb-3"
               >
-                <span class="material-symbols-outlined text-3xl text-green-600 dark:text-green-400"
-                  >verified_user</span
-                >
+               <ShieldCheck class="text-green-600 dark:text-green-400" :size="32" />
               </div>
               <p class="text-sm font-medium text-slate-600 dark:text-slate-400">
                 No hay solicitudes pendientes
@@ -243,7 +242,7 @@ const formatDate = (isoDate: string): string => {
               <h4
                 class="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-2"
               >
-                <span class="material-symbols-outlined text-lg">check_circle</span>
+                <CheckCircle :size="18" />
                 Dispositivos Autorizados
               </h4>
               <div class="space-y-2">
@@ -261,7 +260,7 @@ const formatDate = (isoDate: string): string => {
                     </p>
                   </div>
                   <span class="text-green-600 dark:text-green-400">
-                    <span class="material-symbols-outlined">verified</span>
+                    <BadgeCheck :size="20" />
                   </span>
                 </div>
               </div>

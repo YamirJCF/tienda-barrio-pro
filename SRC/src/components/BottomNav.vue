@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router';
-import { Calculator, Package, Users, LayoutDashboard, BarChart3 } from 'lucide-vue-next';
+import { 
+  Calculator, 
+  Package, 
+  Users, 
+  LayoutDashboard, 
+  BarChart3 
+} from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { computed } from 'vue';
 
@@ -13,88 +19,71 @@ const isActive = (name: string) => route.name === name;
 const canViewReports = computed(() => authStore.canViewReports);
 const isAdmin = computed(() => authStore.isAdmin);
 
-// Allow employees to see clients/inventory by default or check permissions if needed
-const showInventory = true; // Usually all staff needs to check prices/stock
-const showClients = true; // Needed for sales
+// Tab visibility logic
+const showInventory = true;
+const showClients = true;
 </script>
 
 <template>
   <nav
     class="fixed bottom-0 left-0 w-full bg-white dark:bg-surface-dark border-t border-gray-200 dark:border-gray-800 z-40 pb-safe"
   >
-    <!-- WO-008: Reorganizado con tabs dinámicos -->
     <div
       class="grid h-16 max-w-lg mx-auto"
       :class="isAdmin ? 'grid-cols-5' : canViewReports ? 'grid-cols-4' : 'grid-cols-3'"
     >
+      <!-- Item: Vender -->
       <button
         @click="router.push('/pos')"
-        class="group flex flex-col items-center justify-center gap-1 transition-colors"
-        :class="
-          isActive('pos') ? 'text-primary' : 'text-slate-400 dark:text-slate-500 hover:text-primary'
-        "
+        class="flex flex-col items-center justify-center gap-1 transition-colors"
+        :class="isActive('pos') ? 'text-primary' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'"
       >
-        <Calculator :size="22" :stroke-width="isActive('pos') ? 2.5 : 2" />
-        <span class="text-[10px] font-medium">Vender</span>
+        <Calculator :size="24" :stroke-width="isActive('pos') ? 2 : 1.5" />
+        <span class="text-[10px] font-medium tracking-wide">Vender</span>
       </button>
 
+      <!-- Item: Productos -->
       <button
         v-if="showInventory"
         @click="router.push('/inventory')"
-        class="group flex flex-col items-center justify-center gap-1 transition-colors"
-        :class="
-          isActive('inventory')
-            ? 'text-primary'
-            : 'text-slate-400 dark:text-slate-500 hover:text-primary'
-        "
+        class="flex flex-col items-center justify-center gap-1 transition-colors"
+        :class="isActive('inventory') ? 'text-primary' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'"
       >
-        <Package :size="22" :stroke-width="isActive('inventory') ? 2.5 : 2" />
-        <span class="text-[10px] font-medium">Productos</span>
+        <Package :size="24" :stroke-width="isActive('inventory') ? 2 : 1.5" />
+        <span class="text-[10px] font-medium tracking-wide">Productos</span>
       </button>
 
-      <!-- REPORTES - Solo si tiene permiso -->
+      <!-- Item: Reportes -->
       <button
         v-if="canViewReports"
         @click="router.push({ path: '/admin', query: { tab: 'reportes' } })"
-        class="group flex flex-col items-center justify-center gap-1 transition-colors"
-        :class="
-          isActive('admin') && route.query.tab === 'reportes'
-            ? 'text-emerald-500'
-            : 'text-slate-400 dark:text-slate-500 hover:text-emerald-500'
-        "
+        class="flex flex-col items-center justify-center gap-1 transition-colors"
+        :class="isActive('admin') && route.query.tab === 'reportes' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'"
       >
-        <BarChart3 :size="22" :stroke-width="2" />
-        <span class="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 font-bold"
-          >Reportes</span
-        >
+        <BarChart3 :size="24" :stroke-width="isActive('admin') && route.query.tab === 'reportes' ? 2 : 1.5" />
+        <span class="text-[10px] font-medium tracking-wide">Reportes</span>
       </button>
 
+      <!-- Item: Clientes -->
       <button
         v-if="showClients"
         @click="router.push('/clients')"
-        class="group flex flex-col items-center justify-center gap-1 transition-colors"
-        :class="
-          isActive('clients')
-            ? 'text-primary'
-            : 'text-slate-400 dark:text-slate-500 hover:text-primary'
-        "
+        class="flex flex-col items-center justify-center gap-1 transition-colors"
+        :class="isActive('clients') ? 'text-primary' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'"
       >
-        <Users :size="22" :stroke-width="isActive('clients') ? 2.5 : 2" />
-        <span class="text-[10px] font-medium">Clientes</span>
+        <Users :size="24" :stroke-width="isActive('clients') ? 2 : 1.5" />
+        <span class="text-[10px] font-medium tracking-wide">Clientes</span>
       </button>
 
+      <!-- Item: Admin -->
       <button
         v-if="isAdmin"
         @click="router.push('/admin')"
-        class="group flex flex-col items-center justify-center gap-1 transition-colors"
-        :class="
-          isActive('admin')
-            ? 'text-primary'
-            : 'text-slate-400 dark:text-slate-500 hover:text-primary'
-        "
+        class="flex flex-col items-center justify-center gap-1 transition-colors"
+        :class="isActive('admin') && route.query.tab !== 'reportes' ? 'text-primary' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'"
       >
-        <LayoutDashboard :size="22" :stroke-width="isActive('admin') ? 2.5 : 2" />
-        <span class="text-[10px] font-medium">Admin</span>
+        <LayoutDashboard :size="24" :stroke-width="isActive('admin') ? 2 : 1.5" />
+        <span class="text-[10px] font-medium tracking-wide">Admin</span>
       </button>
     </div>
   </nav>

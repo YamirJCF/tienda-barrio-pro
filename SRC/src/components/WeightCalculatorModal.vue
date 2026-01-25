@@ -5,6 +5,7 @@ import { Decimal } from 'decimal.js';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import BaseModal from './ui/BaseModal.vue';
 import BaseButton from './ui/BaseButton.vue';
+import { Scale, Banknote, ShoppingCart, Delete } from 'lucide-vue-next';
 
 // WO: UNIT_LABELS definido localmente (antes importado de sampleData eliminado)
 const UNIT_LABELS: Record<string, string> = {
@@ -195,7 +196,7 @@ const clear = () => {
                 <h2 class="text-lg font-bold">{{ product?.name }}</h2>
                 <p class="text-sm opacity-90">{{ formattedPrice }} / {{ sellUnitLabel }}</p>
               </div>
-              <span class="material-symbols-outlined text-3xl opacity-70">scale</span>
+              <Scale :size="30" class="opacity-70" />
             </div>
         </div>
     </template>
@@ -239,7 +240,7 @@ const clear = () => {
                   clear();
                 "
               >
-                <span class="material-symbols-outlined text-[16px]">scale</span>
+                <Scale :size="16" />
                 Por Peso
               </button>
               <button
@@ -255,7 +256,7 @@ const clear = () => {
                   clear();
                 "
               >
-                <span class="material-symbols-outlined text-[16px]">payments</span>
+                <Banknote :size="16" />
                 Por Valor
               </button>
             </div>
@@ -293,7 +294,7 @@ const clear = () => {
                 variant="danger"
                 class="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-none col-span-3 h-12"
             >
-                <span class="material-symbols-outlined">backspace</span>
+                <Delete :size="20" />
             </BaseButton>
           </div>
 
@@ -309,7 +310,7 @@ const clear = () => {
               @click="confirm"
               :disabled="!isValid"
               variant="primary"
-              icon="add_shopping_cart"
+              :icon="ShoppingCart"
             >
               Agregar {{ formatCurrency(calculatedValue) }}
             </BaseButton>

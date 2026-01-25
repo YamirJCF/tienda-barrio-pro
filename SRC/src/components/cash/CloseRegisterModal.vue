@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { useCashRegisterStore } from '../../stores/cashRegister';
 import Decimal from 'decimal.js';
+import { Store, CheckCircle, AlertTriangle, Loader2 } from 'lucide-vue-next';
 
 // Props & Emits
 interface Props {
@@ -96,7 +97,7 @@ const handleClose = () => {
           <div class="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-slate-800/50 shrink-0">
             <div class="flex items-center gap-3">
               <div class="size-12 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                <span class="material-symbols-outlined text-2xl">point_of_sale</span>
+                <Store :size="28" />
               </div>
               <div>
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white">Cierre de Caja</h2>
@@ -151,9 +152,7 @@ const handleClose = () => {
                 :class="differenceColor"
               >
                 <div class="flex items-center gap-2 font-medium">
-                  <span class="material-symbols-outlined text-xl">
-                    {{ isBalanced ? 'check_circle' : 'warning' }}
-                  </span>
+                  <component :is="isBalanced ? CheckCircle : AlertTriangle" :size="20" />
                   <span>{{ differenceLabel }}</span>
                 </div>
                 <span class="font-bold text-lg">{{ formatCurrency(difference.abs()) }}</span>
@@ -186,7 +185,7 @@ const handleClose = () => {
               :disabled="!isValid || isLoading"
               class="flex-1 h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <span v-if="isLoading" class="material-symbols-outlined animate-spin text-xl">progress_activity</span>
+              <Loader2 v-if="isLoading" class="animate-spin" :size="24" />
               <span v-else>Cerrar Turno</span>
             </button>
           </div>

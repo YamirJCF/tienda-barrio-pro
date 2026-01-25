@@ -23,6 +23,17 @@ import WeightCalculatorModal from '../components/WeightCalculatorModal.vue';
 import NoPermissionOverlay from '../components/ui/NoPermissionOverlay.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import POSNumpad from '../components/pos/POSNumpad.vue';
+import { 
+  ArrowLeft, 
+  PauseCircle, 
+  Trash2, 
+  XCircle, 
+  ShoppingCart, 
+  Search, 
+  StickyNote, 
+  Banknote,
+  Timer
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const cartStore = useCartStore();
@@ -310,7 +321,7 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
     >
       <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center">
         <div class="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-          <span class="material-symbols-outlined text-5xl text-blue-600 dark:text-blue-400">timer_pause</span>
+          <Timer :size="48" :stroke-width="1.5" class="text-blue-600 dark:text-blue-400" />
         </div>
         <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Sesión en Pausa</h2>
         <p class="text-slate-600 dark:text-slate-300 mb-8">
@@ -338,7 +349,7 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
             size="icon"
             class="-ml-2"
           >
-            <span class="material-symbols-outlined">arrow_back</span>
+            <ArrowLeft :size="24" :stroke-width="1.5" />
           </BaseButton>
           <h2 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-tight">
             Ticket {{ ticketNumber }}
@@ -354,7 +365,7 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
             class="text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
             @click="setPause(true)"
           >
-            <span class="material-symbols-outlined">pause_circle</span>
+            <PauseCircle :size="24" :stroke-width="1.5" />
           </BaseButton>
 
           <BaseButton 
@@ -364,7 +375,7 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
             class="text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
             @click="cartStore.clearCart"
           >
-            <span class="material-symbols-outlined">delete</span>
+            <Trash2 :size="24" :stroke-width="1.5" />
           </BaseButton>
         </div>
       </div>
@@ -393,14 +404,14 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
             <button aria-label="Remove item"
               class="text-gray-400 hover:text-red-500 p-2 -mr-2 rounded-full active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
               @click="cartStore.removeItem(item.id)">
-              <span class="material-symbols-outlined text-xl">cancel</span>
+              <XCircle :size="20" :stroke-width="1.5" />
             </button>
           </div>
         </div>
 
         <!-- Empty State -->
         <div v-if="cartStore.items.length === 0" class="flex flex-col items-center justify-center h-40 text-gray-400">
-          <span class="material-symbols-outlined text-5xl mb-2 opacity-30">shopping_cart</span>
+          <ShoppingCart :size="48" :stroke-width="1" class="mb-2 opacity-30" />
           <p class="text-sm">Usa el teclado para agregar productos</p>
         </div>
       </div>
@@ -448,17 +459,21 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
             variant="secondary"
             class="h-10 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
             @click="showSearch = true"
-            icon="search"
           >
-            Buscar
+            <div class="flex items-center gap-2">
+              <Search :size="18" :stroke-width="1.5" />
+              Buscar
+            </div>
           </BaseButton>
           <BaseButton
             variant="secondary"
             class="h-10 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
             @click="showNote = true"
-            icon="edit_note"
           >
-            Nota
+             <div class="flex items-center gap-2">
+               <StickyNote :size="18" :stroke-width="1.5" />
+               Nota
+             </div>
           </BaseButton>
         </div>
 
@@ -481,7 +496,7 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
           @click="handleCheckout"
         >
              <div class="flex items-center justify-center gap-3">
-                 <span class="material-symbols-outlined text-2xl">payments</span>
+                 <Banknote :size="24" :stroke-width="1.5" />
                  COBRAR {{ formattedTotal }}
              </div>
         </BaseButton>

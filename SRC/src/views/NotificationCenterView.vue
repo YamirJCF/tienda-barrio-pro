@@ -8,6 +8,16 @@ import { useRouter } from 'vue-router';
 import { useNotificationsStore, type SystemNotification } from '../stores/notificationsStore';
 import { formatRelativeTime } from '../composables/useRelativeTime';
 import { logger } from '../utils/logger';
+import { 
+  ArrowLeft, 
+  ChevronLeft, 
+  BellOff, 
+  ShieldCheck, 
+  Package, 
+  Banknote, 
+  Store, 
+  X 
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const notificationsStore = useNotificationsStore();
@@ -37,30 +47,43 @@ const handleReject = (notificationId: string) => {
 };
 
 const getIconConfig = (notification: SystemNotification) => {
-  // Use icon from notification if available, otherwise default by type
-  const iconMap: Record<string, { icon: string; bgColor: string; textColor: string }> = {
-    security: {
-      icon: notification.icon || 'shield',
-      bgColor: 'bg-red-100 dark:bg-red-900/40',
-      textColor: 'text-red-600 dark:text-red-400',
-    },
-    inventory: {
-      icon: notification.icon || 'inventory_2',
-      bgColor: 'bg-orange-100 dark:bg-orange-900/40',
-      textColor: 'text-orange-600 dark:text-orange-400',
-    },
-    finance: {
-      icon: notification.icon || 'payments',
-      bgColor: 'bg-green-100 dark:bg-green-900/40',
-      textColor: 'text-green-600 dark:text-green-400',
-    },
-    general: {
-      icon: notification.icon || 'store',
-      bgColor: 'bg-blue-100 dark:bg-blue-900/40',
-      textColor: 'text-blue-600 dark:text-blue-400',
-    },
+  const bgColorMap: Record<string, string> = {
+    security: 'bg-red-100 dark:bg-red-900/40',
+    inventory: 'bg-orange-100 dark:bg-orange-900/40',
+    finance: 'bg-green-100 dark:bg-green-900/40',
+    general: 'bg-blue-100 dark:bg-blue-900/40',
   };
-  return iconMap[notification.type] || iconMap.general;
+  
+  const textColorMap: Record<string, string> = {
+    security: 'text-red-600 dark:text-red-400',
+    inventory: 'text-orange-600 dark:text-orange-400',
+    finance: 'text-green-600 dark:text-green-400',
+    general: 'text-blue-600 dark:text-blue-400',
+  };
+
+  const IconComponent = (() => {
+      switch(notification.type) {
+        case 'security': 
+          return ShieldCheck;
+        case 'inventory': 
+          return Package;
+        case 'finance':
+          return Banknote;
+        case 'general':
+        default:
+          return Store;
+      }
+  })();
+
+  // Use values based on type, defaulting to general if not found
+  const bgColor = bgColorMap[notification.type] || bgColorMap.general;
+  const textColor = textColorMap[notification.type] || textColorMap.general;
+  
+  return {
+    component: IconComponent,
+    bgColor,
+    textColor
+  };
 };
 
 const getRelativeTime = (createdAt: string) => {
@@ -79,9 +102,9 @@ const getRelativeTime = (createdAt: string) => {
       <button
         @click="goBack"
         aria-label="Volver"
-        class="flex items-center justify-center p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-800 dark:text-white"
+        class="flex items-center justify-center p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-800 dark:text-white"
       >
-        <span class="material-symbols-outlined">arrow_back_ios_new</span>
+        <ChevronLeft :size="24" :stroke-width="1.5" />
       </button>
       <h1 class="text-lg font-bold text-center text-slate-900 dark:text-white flex-1 truncate px-2">
         Notificaciones
@@ -103,9 +126,7 @@ const getRelativeTime = (createdAt: string) => {
         v-if="isEmpty"
         class="flex flex-col items-center justify-center h-full text-center py-10 opacity-60"
       >
-        <span class="material-symbols-outlined text-6xl text-slate-300 mb-4"
-          >notifications_off</span
-        >
+        <BellOff :size="64" :stroke-width="1" class="text-slate-300 mb-4" />
         <p class="text-lg font-bold text-slate-600 dark:text-slate-400">Estás al día</p>
         <p class="text-sm text-slate-400">No tienes nuevas notificaciones</p>
       </div>
@@ -132,9 +153,7 @@ const getRelativeTime = (createdAt: string) => {
                   getIconConfig(notification).textColor,
                 ]"
               >
-                <span class="material-symbols-outlined">{{
-                  getIconConfig(notification).icon
-                }}</span>
+                <component :is="getIconConfig(notification).component" :size="24" :stroke-width="1.5" />
               </div>
             </div>
 
@@ -162,7 +181,7 @@ const getRelativeTime = (createdAt: string) => {
                     class="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     title="Eliminar"
                   >
-                    <span class="material-symbols-outlined text-lg">close</span>
+                    <X :size="16" />
                   </button>
                 </div>
               </div>

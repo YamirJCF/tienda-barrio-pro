@@ -6,6 +6,18 @@ import { useInventoryStore } from '../stores/inventory';
 import { useAuthStore } from '../stores/auth';
 import { useNotificationsStore } from '../stores/notificationsStore';
 import { Decimal } from 'decimal.js';
+import { 
+  Bell, 
+  User as UserIcon, 
+  LockOpen, 
+  ArrowRight, 
+  LockKeyhole, 
+  Verified, 
+  MoveRight,
+  ChevronRight,
+  Settings,
+  Users
+} from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 import StatCard from '../components/ui/StatCard.vue';
@@ -75,7 +87,6 @@ const navigateToNotifications = () => {
 
 <template>
   <div class="pb-24 bg-gray-50 dark:bg-background-dark min-h-screen">
-    <!-- Header -->
     <header
       class="sticky top-0 z-30 bg-white dark:bg-surface-dark px-4 py-3 border-b border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between"
     >
@@ -87,7 +98,7 @@ const navigateToNotifications = () => {
           @click="navigateToNotifications"
           class="relative text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors"
         >
-          <span class="material-symbols-outlined text-[26px]">notifications</span>
+          <Bell :size="24" :stroke-width="1.5" />
           <span
             v-if="notificationsStore.hasUnread"
             class="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white ring-2 ring-white dark:ring-surface-dark"
@@ -97,9 +108,9 @@ const navigateToNotifications = () => {
         </button>
         <button
           @click="openProfileSidebar"
-          class="h-8 w-8 overflow-hidden rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 hover:ring-2 hover:ring-primary/50 transition-all"
+          class="h-9 w-9 overflow-hidden rounded-[10px] border border-gray-200 dark:border-gray-700 bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-primary/50 transition-all flex items-center justify-center"
         >
-          <div class="h-full w-full bg-gradient-to-br from-blue-400 to-purple-500"></div>
+          <span class="text-xs font-bold text-slate-600 dark:text-slate-300">{{ currentUser?.name?.substring(0,2).toUpperCase() || '??' }}</span>
         </button>
       </div>
     </header>
@@ -136,28 +147,26 @@ const navigateToNotifications = () => {
             class="h-12 w-12 rounded-full bg-white shadow-md z-20 flex items-center justify-center transition-all duration-300"
             :class="isStoreOpen ? 'translate-x-[calc(100%-3rem)] text-green-600' : 'text-slate-800'"
           >
-            <span class="material-symbols-outlined text-[24px]">
-              {{ isStoreOpen ? 'lock_open' : 'arrow_forward' }}
-            </span>
+             <component :is="isStoreOpen ? LockOpen : ArrowRight" :size="24" :stroke-width="2" />
           </div>
         </button>
       </div>
 
-      <!-- SPEC-005: Banner Tienda Cerrada (Para Empleados) -->
+      <!-- SPEC-005: Banner Jornada no Aprobada (Para Empleados) -->
       <div
-        v-if="isEmployee && !authStore.storeOpenStatus"
+        v-if="isEmployee && authStore.deviceApproved !== 'approved'"
         class="relative overflow-hidden rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 shadow-sm"
       >
         <div class="flex items-center gap-3">
           <div
             class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-800/50 text-amber-600 dark:text-amber-400"
           >
-            <span class="material-symbols-outlined">storefront</span>
+            <LockKeyhole :size="20" />
           </div>
           <div class="flex flex-col">
-            <h3 class="text-amber-900 dark:text-amber-100 font-bold text-sm">Tienda Cerrada</h3>
+            <h3 class="text-amber-900 dark:text-amber-100 font-bold text-sm">Acceso Pendiente</h3>
             <p class="text-amber-700 dark:text-amber-300 text-xs">
-              Inicie jornada para vender. Contacta al administrador.
+              Tu dispositivo requiere aprobación del administrador para iniciar ventas.
             </p>
           </div>
         </div>
@@ -171,9 +180,7 @@ const navigateToNotifications = () => {
         <div class="flex flex-col gap-3">
           <div class="flex flex-col gap-1">
             <h3 class="text-blue-900 dark:text-blue-100 font-bold text-sm flex items-center gap-2">
-              <span class="material-symbols-outlined text-blue-600 dark:text-blue-400 text-[20px]"
-                >verified</span
-              >
+              <Verified :size="20" class="text-blue-600 dark:text-blue-400" />
               ¡Bienvenido! Tu tienda está lista.
             </h3>
             <p class="text-blue-700 dark:text-blue-300 text-xs leading-relaxed">
@@ -185,7 +192,7 @@ const navigateToNotifications = () => {
             class="self-start rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs font-semibold text-white shadow-sm flex items-center gap-1 transition-colors"
           >
             Ir al Inventario
-            <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            <MoveRight :size="16" />
           </button>
         </div>
       </div>
@@ -237,13 +244,13 @@ const navigateToNotifications = () => {
               <div
                 class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
               >
-                <span class="material-symbols-outlined">group</span>
+                <Users :size="20" />
               </div>
               <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                 >Gestionar Empleados</span
               >
             </div>
-            <span class="material-symbols-outlined text-slate-400">chevron_right</span>
+            <ChevronRight :size="20" class="text-slate-400" />
           </button>
 
           <button
@@ -254,13 +261,13 @@ const navigateToNotifications = () => {
               <div
                 class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
               >
-                <span class="material-symbols-outlined">settings</span>
+                <Settings :size="20" />
               </div>
               <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                 >Configuración de Tienda</span
               >
             </div>
-            <span class="material-symbols-outlined text-slate-400">chevron_right</span>
+             <ChevronRight :size="20" class="text-slate-400" />
           </button>
         </div>
       </section>
@@ -269,9 +276,6 @@ const navigateToNotifications = () => {
     <!-- User Profile Sidebar -->
     <UserProfileSidebar
       :isOpen="profileSidebarOpen"
-      :userType="isEmployee ? 'employee' : 'admin'"
-      :userName="currentUser?.name || 'Usuario'"
-      :userEmail="currentUser?.email || ''"
       @close="closeProfileSidebar"
       @logout="handleLogout"
     />

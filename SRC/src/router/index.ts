@@ -177,9 +177,6 @@ router.beforeEach((to, from, next) => {
   // Empleados no pueden acceder al POS si la tienda está cerrada
   if (to.name === 'pos' && isAuthenticated) {
     const isAdmin = authStore.isAdmin;
-    const storeIsOpen = authStore.storeOpenStatus;
-
-    // Admins siempre pueden acceder al POS
     // SPEC-005 Update: La validación de 'tienda abierta' se delega al componente POS o lógica de caja
     // ya que authStore no mantiene el estado global de apertura.
 

@@ -5,6 +5,7 @@
  */
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { Mail } from 'lucide-vue-next';
 // import { useAuthStore } from '../stores/auth'; // Si necesitamos verificar estado
 // import BaseButton from '@/components/ui/BaseButton.vue';
 
@@ -63,7 +64,7 @@ onUnmounted(() => {
       
       <!-- Icon -->
       <div class="w-20 h-20 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center animate-[popIn_0.5s_ease-out]">
-          <span class="material-symbols-outlined text-4xl">mark_email_unread</span>
+          <Mail :size="40" />
       </div>
 
       <!-- Text -->

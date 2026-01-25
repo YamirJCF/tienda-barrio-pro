@@ -8,6 +8,15 @@ import BottomNav from '../components/BottomNav.vue';
 import BaseModal from '../components/ui/BaseModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import { 
+  ArrowLeft, 
+  Users, 
+  UserPlus, 
+  KeyRound, 
+  Lock, 
+  Ban, 
+  Plus 
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const employeesStore = useEmployeesStore();
@@ -113,11 +122,9 @@ const handleEmployeeSaved = () => {
       <button
         @click="goBack"
         aria-label="Volver"
-        class="flex size-10 items-center justify-center rounded-full active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
+        class="flex size-10 items-center justify-center rounded-xl active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
       >
-        <span class="material-symbols-outlined text-gray-900 dark:text-white text-2xl"
-          >arrow_back</span
-        >
+        <ArrowLeft :size="24" :stroke-width="1.5" class="text-gray-900 dark:text-white" />
       </button>
       <h1 class="flex-1 text-center text-lg font-bold tracking-tight text-gray-900 dark:text-white">
         Administrar Empleados
@@ -133,9 +140,9 @@ const handleEmployeeSaved = () => {
         class="flex flex-col items-center justify-center h-full text-center"
       >
         <div
-          class="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 mb-4"
+          class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-400 mb-4"
         >
-          <span class="material-symbols-outlined text-[32px]">group</span>
+          <Users :size="32" :stroke-width="1" />
         </div>
         <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Sin empleados</h3>
         <p class="text-sm text-gray-500 max-w-xs">
@@ -144,9 +151,9 @@ const handleEmployeeSaved = () => {
         <BaseButton
           @click="openNewEmployee"
           class="mt-6"
-          icon="person_add"
           :disabled="employeesStore.activeEmployees.length >= 5"
         >
+          <UserPlus :size="18" class="mr-2" />
           {{ employeesStore.activeEmployees.length >= 5 ? 'Límite Alcanzado (5/5)' : 'Agregar Empleado' }}
         </BaseButton>
       </div>
@@ -156,7 +163,7 @@ const handleEmployeeSaved = () => {
         <div
           v-for="employee in employeesStore.employees"
           :key="employee.id"
-          class="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-transparent hover:border-gray-100 dark:hover:border-gray-700 transition-all"
+          class="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-transparent hover:border-gray-100 dark:hover:border-gray-700 transition-all"
           :class="{ 'opacity-60': !employee.isActive }"
           @click="editEmployee(employee)"
         >
@@ -164,7 +171,7 @@ const handleEmployeeSaved = () => {
             <div class="relative shrink-0">
               <!-- Initials Avatar -->
               <div
-                class="flex size-12 items-center justify-center rounded-full font-bold text-lg"
+                class="flex size-12 items-center justify-center rounded-[18px] font-bold text-lg"
                 :class="[getAvatarColor(employee.name), { grayscale: !employee.isActive }]"
               >
                 {{ getInitials(employee.name) }}
@@ -194,9 +201,9 @@ const handleEmployeeSaved = () => {
             <button
               @click.stop="openPinModal(employee)"
               aria-label="Editar PIN"
-              class="flex size-10 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+              class="flex size-10 items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
             >
-              <span class="material-symbols-outlined text-[20px]">key</span>
+              <KeyRound :size="20" :stroke-width="1.5" />
             </button>
             <!-- Toggle Switch -->
             <label class="relative inline-flex items-center cursor-pointer" @click.stop>
@@ -219,16 +226,14 @@ const handleEmployeeSaved = () => {
 
     <!-- FAB -->
     <div class="absolute bottom-24 right-4 z-40">
-      <BaseButton
+      <button
         @click="openNewEmployee"
-        label="Nuevo Empleado"
-        variant="primary"
-        class="size-14 !rounded-2xl shadow-lg"
-        :icon="employeesStore.activeEmployees.length >= 5 ? 'block' : 'add'"
         :disabled="employeesStore.activeEmployees.length >= 5"
+        class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90 disabled:opacity-50 disabled:bg-gray-400 disabled:cursor-not-allowed"
         :title="employeesStore.activeEmployees.length >= 5 ? 'Límite de 5 empleados alcanzado' : 'Crear nuevo empleado'"
       >
-      </BaseButton>
+         <component :is="employeesStore.activeEmployees.length >= 5 ? Ban : Plus" :size="32" :stroke-width="1.5" />
+      </button>
     </div>
 
     <BottomNav />
@@ -248,7 +253,7 @@ const handleEmployeeSaved = () => {
         <div class="p-6">
             <div class="flex items-center gap-3 mb-6">
                 <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span class="material-symbols-outlined text-primary">key</span>
+                    <KeyRound :size="20" class="text-primary" />
                 </div>
                 <div>
                    <p class="text-sm text-gray-500">Para el empleado:</p>
@@ -263,10 +268,13 @@ const handleEmployeeSaved = () => {
                 placeholder="••••"
                 type="tel"
                 inputmode="numeric"
-                icon="lock"
                 class="text-center text-2xl tracking-[0.5em] font-bold h-14"
                 maxlength="4"
-            />
+            >
+                <template #prefix>
+                    <Lock :size="20" class="text-gray-400" />
+                </template>
+            </BaseInput>
         </div>
 
         <template #footer>

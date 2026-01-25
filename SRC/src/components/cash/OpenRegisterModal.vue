@@ -4,6 +4,7 @@ import { useCashRegisterStore } from '../../stores/cashRegister';
 import { useEmployeesStore } from '../../stores/employees';
 import { useAuthStore } from '../../stores/auth'; // Import auth store
 import Decimal from 'decimal.js';
+import { Store, Loader2 } from 'lucide-vue-next';
 
 // Props & Emits
 interface Props {
@@ -76,7 +77,7 @@ const handleOpen = () => {
           <div class="p-6 border-b border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-slate-800/50">
             <div class="flex items-center gap-3">
               <div class="size-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                <span class="material-symbols-outlined text-2xl">point_of_sale</span>
+                <Store :size="28" />
               </div>
               <div>
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white">Apertura de Caja</h2>
@@ -134,7 +135,7 @@ const handleOpen = () => {
               :disabled="!isValid || isLoading"
               class="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2 flex"
             >
-              <span v-if="isLoading" class="material-symbols-outlined animate-spin text-xl">progress_activity</span>
+              <Loader2 v-if="isLoading" class="animate-spin" :size="24" />
               <span v-else>Abrir Caja</span>
              </button>
           </div>

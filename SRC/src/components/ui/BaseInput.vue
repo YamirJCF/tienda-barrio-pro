@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, nextTick } from 'vue';
+import { computed, ref, nextTick, useSlots } from 'vue';
 
 defineOptions({
   inheritAttrs: false // Evita que atributos como maxlength se apliquen al div contenedor
@@ -13,7 +13,7 @@ interface Props {
     error?: string;
     disabled?: boolean;
     required?: boolean;
-    icon?: string;
+    icon?: any; // Changed from string to any
     id?: string;
     list?: string;
     autocomplete?: string;
@@ -34,13 +34,15 @@ const emit = defineEmits<{
     (e: 'focus', event: FocusEvent): void;
 }>();
 
+const slots = useSlots();
+
 const inputClasses = computed(() => {
-    const base = 'block w-full rounded-md shadow-sm sm:text-sm transition-colors focus:outline-none disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-800 dark:bg-gray-700 dark:text-white';
+    const base = 'block w-full rounded-xl shadow-sm sm:text-sm transition-colors focus:outline-none disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-800 dark:bg-gray-700 dark:text-white';
     const state = props.error
         ? 'border-red-300 text-red-900 placeholder-red-300 focus:border-red-500 focus:ring-red-500 dark:border-red-500'
         : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600';
 
-    return [base, state, props.icon ? 'pl-10' : 'pl-3'].join(' ');
+    return [base, state, (props.icon || slots.prefix) ? 'pl-10' : 'pl-3'].join(' ');
 });
 
 const inputRef = ref<HTMLInputElement | null>(null);
@@ -69,8 +71,10 @@ defineExpose({
         </label>
 
         <div class="relative rounded-md shadow-sm">
-            <div v-if="icon" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <span class="material-symbols-outlined text-gray-400 text-lg">{{ icon }}</span>
+            <div v-if="icon || $slots.prefix" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <slot name="prefix">
+                    <component :is="icon" v-if="icon" class="text-gray-400" :size="20" />
+                </slot>
             </div>
 
             <input 
@@ -86,7 +90,7 @@ defineExpose({
                 :aria-invalid="!!error" 
                 :aria-describedby="error ? `${id}-error` : undefined" 
                 :class="inputClasses"
-                class="py-2 pr-3" 
+                class="py-2.5 pr-3" 
                 @input="handleInput" 
                 @blur="emit('blur', $event)" 
                 @focus="emit('focus', $event)" 

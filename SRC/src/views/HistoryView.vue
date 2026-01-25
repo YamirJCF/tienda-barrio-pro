@@ -4,17 +4,27 @@ import { useRouter } from 'vue-router';
 import { useHistory, type HistoryType } from '../composables/useHistory';
 import HistoryItemCard from '../components/history/HistoryItemCard.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import { 
+  ArrowLeft, 
+  ShoppingCart, 
+  Landmark, 
+  ShieldCheck, 
+  Package, 
+  Banknote, 
+  Tags,
+  SearchX
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const { items, isLoading, error, currentType, fetchHistory } = useHistory();
 
-const filters: { label: string; value: HistoryType; icon: string }[] = [
-  { label: 'Ventas', value: 'sales', icon: 'shopping_cart' },
-  { label: 'Caja', value: 'cash', icon: 'point_of_sale' }, // Note: 'cash' fetch not fully implemented in composable yet, mapped to logic stub?
-  { label: 'Auditoría', value: 'audit', icon: 'shield' },
-  { label: 'Inventario', value: 'inventory', icon: 'inventory_2' },
-  { label: 'Gastos', value: 'expenses', icon: 'payments' },
-  { label: 'Precios', value: 'prices', icon: 'price_change' },
+const filters: { label: string; value: HistoryType; component: any }[] = [
+  { label: 'Ventas', value: 'sales', component: ShoppingCart },
+  { label: 'Caja', value: 'cash', component: Landmark }, // Note: 'cash' fetch not fully implemented in composable yet, mapped to logic stub?
+  { label: 'Auditoría', value: 'audit', component: ShieldCheck },
+  { label: 'Inventario', value: 'inventory', component: Package },
+  { label: 'Gastos', value: 'expenses', component: Banknote },
+  { label: 'Precios', value: 'prices', component: Tags },
 ];
 
 const goBack = () => {
@@ -43,7 +53,7 @@ onMounted(() => {
           size="icon"
           class="-ml-2"
         >
-          <span class="material-symbols-outlined">arrow_back</span>
+          <ArrowLeft :size="24" :stroke-width="1.5" />
         </BaseButton>
         <h1 class="text-lg font-bold text-slate-900 dark:text-white">
           Historial y Auditoría
@@ -61,7 +71,7 @@ onMounted(() => {
             size="sm"
             class="!rounded-full whitespace-nowrap"
           >
-            <span class="material-symbols-outlined text-lg">{{ filter.icon }}</span>
+            <component :is="filter.component" :size="20" :stroke-width="1.5" class="mr-2" />
             {{ filter.label }}
           </BaseButton>
         </div>
@@ -97,7 +107,7 @@ onMounted(() => {
         class="flex flex-col items-center justify-center py-20 text-center opacity-60"
       >
         <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-          <span class="material-symbols-outlined text-4xl text-slate-400">history_toggle_off</span>
+          <SearchX :size="40" :stroke-width="1.5" class="text-slate-400" />
         </div>
         <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">
           Sin registros

@@ -8,6 +8,22 @@ import { useQuantityFormat } from '../composables/useQuantityFormat';
 import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
 import InventoryValuationCard from './analytics/InventoryValuationCard.vue';
+import {
+  TrendingUp,
+  TrendingDown,
+  Info,
+  Banknote,
+  Smartphone,
+  BookOpen,
+  Flame,
+  AlertTriangle,
+  Snowflake,
+  ShoppingCart,
+  CheckCircle,
+  ArrowRight,
+  History,
+  ChevronRight
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -300,12 +316,8 @@ const goBack = () => {
               >Crecimiento</span
             >
             <div class="flex items-center gap-1">
-              <span 
-                class="material-symbols-outlined text-xl"
-                :class="salesGrowth >= 0 ? 'text-green-400' : 'text-red-400'"
-              >
-                {{ salesGrowth >= 0 ? 'trending_up' : 'trending_down' }}
-              </span>
+              <TrendingUp v-if="salesGrowth >= 0" class="text-green-400" :size="20" />
+              <TrendingDown v-else class="text-red-400" :size="20" />
               <p 
                 class="text-2xl font-bold tracking-tight"
                 :class="salesGrowth >= 0 ? 'text-green-400' : 'text-red-400'"
@@ -317,7 +329,7 @@ const goBack = () => {
         </div>
         <div class="mt-4 pt-4 border-t border-white/5 relative z-10">
           <p class="text-xs text-slate-400 flex items-center gap-2">
-            <span class="material-symbols-outlined text-sm">info</span>
+            <Info :size="14" />
             Comparado con el periodo anterior
           </p>
         </div>
@@ -343,7 +355,7 @@ const goBack = () => {
             <div
               class="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-green-600 dark:text-green-400"
             >
-              <span class="material-symbols-outlined">payments</span>
+              <Banknote :size="24" />
             </div>
           </div>
           <div>
@@ -365,7 +377,7 @@ const goBack = () => {
         >
           <div class="flex justify-between items-start">
             <div class="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-primary">
-              <span class="material-symbols-outlined">smartphone</span>
+              <Smartphone :size="24" />
             </div>
           </div>
           <div>
@@ -388,7 +400,7 @@ const goBack = () => {
           <div
             class="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-orange-600 dark:text-orange-400 h-12 w-12 flex items-center justify-center shrink-0"
           >
-            <span class="material-symbols-outlined">menu_book</span>
+            <BookOpen :size="24" />
           </div>
           <div class="flex-1">
             <div class="flex justify-between items-baseline">
@@ -428,7 +440,7 @@ const goBack = () => {
                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'
             "
           >
-            <span class="material-symbols-outlined text-[18px]">local_fire_department</span>
+            <Flame :size="18" />
             <span class="text-xs font-bold">Top Ventas</span>
           </button>
           <button
@@ -440,7 +452,7 @@ const goBack = () => {
                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'
             "
           >
-            <span class="material-symbols-outlined text-[18px]">warning</span>
+            <AlertTriangle :size="18" />
             <span class="text-xs font-medium">Stock Bajo</span>
             <span
               v-if="lowStockProducts.length > 0"
@@ -458,7 +470,7 @@ const goBack = () => {
                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'
             "
           >
-            <span class="material-symbols-outlined text-[18px]">ac_unit</span>
+            <Snowflake :size="18" />
             <span class="text-xs font-medium">Estancados</span>
           </button>
         </div>
@@ -466,7 +478,7 @@ const goBack = () => {
         <!-- Top Products List -->
         <div v-if="selectedTab === 'top'" class="flex flex-col">
           <div v-if="topProducts.length === 0" class="p-8 text-center text-gray-400">
-            <span class="material-symbols-outlined text-4xl mb-2">shopping_cart</span>
+            <ShoppingCart :size="36" class="mb-2 mx-auto" />
             <p class="text-sm">No hay ventas en este período</p>
           </div>
           <div
@@ -504,7 +516,7 @@ const goBack = () => {
         <!-- Low Stock List -->
         <div v-if="selectedTab === 'low'" class="flex flex-col">
           <div v-if="lowStockProducts.length === 0" class="p-8 text-center text-gray-400">
-            <span class="material-symbols-outlined text-4xl mb-2">check_circle</span>
+            <CheckCircle :size="36" class="mb-2 mx-auto" />
             <p class="text-sm">Todo el stock está bien</p>
           </div>
           <div
@@ -514,7 +526,7 @@ const goBack = () => {
           >
             <div class="flex items-center gap-3">
               <div class="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600">
-                <span class="material-symbols-outlined text-[18px]">warning</span>
+                <AlertTriangle :size="18" />
               </div>
               <div class="flex-1 min-w-0">
                 <h4 class="text-sm font-semibold text-slate-900 dark:text-white truncate">
@@ -534,7 +546,7 @@ const goBack = () => {
 
         <!-- Stale Products -->
         <div v-if="selectedTab === 'stale'" class="p-8 text-center text-gray-400">
-          <span class="material-symbols-outlined text-4xl mb-2">ac_unit</span>
+          <Snowflake :size="36" class="mb-2 mx-auto" />
           <p class="text-sm">Función próximamente</p>
           <p class="text-xs mt-1 opacity-60">Productos sin movimiento en 30+ días</p>
         </div>
@@ -547,7 +559,7 @@ const goBack = () => {
             class="text-xs font-medium text-primary flex items-center gap-1 hover:text-blue-700 transition-colors"
           >
             Ver todo el reporte
-            <span class="material-symbols-outlined text-sm">arrow_forward</span>
+            <ArrowRight :size="14" />
           </button>
         </div>
       </div>
@@ -561,17 +573,14 @@ const goBack = () => {
       >
         <div class="flex items-center gap-3">
           <div class="h-10 w-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-            <span class="material-symbols-outlined text-emerald-400">history</span>
+            <History class="text-emerald-400" :size="24" />
           </div>
           <div class="text-left">
             <p class="font-semibold">Auditoría y Registros</p>
             <p class="text-xs text-slate-400">Ver historial detallado de transacciones</p>
           </div>
         </div>
-        <span
-          class="material-symbols-outlined text-slate-400 group-hover:text-emerald-400 transition-colors"
-          >chevron_right</span
-        >
+        <ChevronRight :size="24" class="text-slate-400 group-hover:text-emerald-400 transition-colors" />
       </button>
     </div>
 

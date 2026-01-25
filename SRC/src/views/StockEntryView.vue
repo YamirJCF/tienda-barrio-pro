@@ -4,7 +4,7 @@
     <header class="z-30 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 py-4 flex items-center justify-between shrink-0">
       <div class="flex items-center gap-3">
         <button @click="router.back()" class="p-2 hover:bg-gray-800 rounded-lg transition-colors">
-          <span class="material-symbols-outlined text-gray-400">arrow_back</span>
+          <ArrowLeft class="text-gray-400" :size="24" />
         </button>
         <h1 class="text-xl font-bold text-white">Nueva Entrada</h1>
       </div>
@@ -80,7 +80,7 @@
       <!-- Items List -->
       <section class="space-y-3">
          <div v-if="entryItems.length === 0" class="text-center py-10 opacity-50">
-           <span class="material-symbols-outlined text-4xl mb-2">playlist_add</span>
+           <ListPlus class="mx-auto mb-2" :size="36" />
            <p>Busca productos abajo para agregarlos</p>
          </div>
 
@@ -95,7 +95,7 @@
                 <p class="text-xs text-gray-400">{{ item.measurementUnit }}</p>
               </div>
               <button @click="removeItem(index)" class="text-gray-500 hover:text-red-400 p-1">
-                <span class="material-symbols-outlined text-sm">close</span>
+                <X :size="16" />
               </button>
             </div>
 
@@ -168,8 +168,11 @@
              <BaseInput
                v-model="searchQuery"
                placeholder="Buscar producto..."
-               icon="search"
-             />
+             >
+                <template #prefix>
+                    <Search :size="18" class="text-gray-400" />
+                </template>
+             </BaseInput>
              
              <!-- Dropdown Results -->
              <div 
@@ -200,9 +203,11 @@
             :loading="isSaving"
             variant="primary"
             class="w-full h-12"
-            icon="save"
           >
-            GUARDAR ENTRADA
+            <div class="flex items-center justify-center gap-2">
+                <Save :size="20" />
+                GUARDAR ENTRADA
+            </div>
           </BaseButton>
        </div>
     </div>
@@ -217,6 +222,7 @@ import { Decimal } from 'decimal.js';
 import type { Product } from '../types';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
+import { ArrowLeft, Search, ListPlus, X, Save } from 'lucide-vue-next';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();

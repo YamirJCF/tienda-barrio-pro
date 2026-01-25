@@ -3,6 +3,8 @@
  * BaseModal - Reusable modal wrapper component.
  * Encapsulates: Teleport, Transition, overlay, drag handle, and animations.
  */
+import { X } from 'lucide-vue-next';
+
 interface Props {
   modelValue: boolean;
   title?: string;
@@ -59,7 +61,7 @@ const close = () => {
               class="p-2 -mr-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               @click="close"
             >
-              <span class="material-symbols-outlined text-[24px]">close</span>
+              <X :size="24" />
             </button>
           </header>
 

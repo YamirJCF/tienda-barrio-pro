@@ -9,6 +9,15 @@ import Decimal from 'decimal.js';
 
 import { useAuthStore } from '../stores/auth'; // Import auth store
 import BaseButton from '@/components/ui/BaseButton.vue';
+import { 
+  ArrowLeft, 
+  LockOpen, 
+  Lock, 
+  Store, 
+  CheckCircle, 
+  Info, 
+  AlertTriangle 
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const cashRegisterStore = useCashRegisterStore(); // Replaced storeStatusStore
@@ -50,9 +59,9 @@ const difference = computed(() => {
 
 const differenceStatus = computed(() => {
     const diff = difference.value;
-    if (Math.abs(diff) < 50) return { color: 'text-emerald-500', icon: 'check_circle', text: 'Caja Cuadrada' };
-    if (diff > 0) return { color: 'text-blue-500', icon: 'info', text: 'Sobrante (Excedente)' };
-    return { color: 'text-red-500', icon: 'warning', text: 'Faltante (Pérdida)' };
+    if (Math.abs(diff) < 50) return { color: 'text-emerald-500', icon: CheckCircle, text: 'Caja Cuadrada' };
+    if (diff > 0) return { color: 'text-blue-500', icon: Info, text: 'Sobrante (Excedente)' };
+    return { color: 'text-red-500', icon: AlertTriangle, text: 'Faltante (Pérdida)' };
 });
 
 const handleSubmit = async () => {
@@ -87,8 +96,8 @@ const goBack = () => router.back();
     <div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
         <!-- Header -->
         <div class="bg-white dark:bg-gray-800 p-4 shadow-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <button @click="goBack" class="p-2 -ml-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
-                <span class="material-symbols-outlined">arrow_back</span>
+            <button @click="goBack" class="p-2 -ml-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+                <ArrowLeft :size="24" :stroke-width="1.5" />
             </button>
             <h1 class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ title }}</h1>
             <div class="w-10"></div> <!-- Spacer -->
@@ -97,10 +106,10 @@ const goBack = () => router.back();
         <div class="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6">
             
             <!-- Opening State: Simple Form -->
-            <div v-if="isOpening" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700 animate-slide-up">
+            <div v-if="isOpening" class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700 animate-slide-up">
                 <div class="text-center mb-6">
-                    <div class="bg-emerald-100 dark:bg-emerald-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <span class="material-symbols-outlined text-3xl text-emerald-600 dark:text-emerald-400">lock_open</span>
+                    <div class="bg-emerald-100 dark:bg-emerald-900/30 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <LockOpen :size="32" class="text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <p class="text-gray-500 dark:text-gray-400 text-sm">Ingresa el dinero base en caja para iniciar operaciones.</p>
                 </div>
@@ -121,7 +130,7 @@ const goBack = () => router.back();
             <!-- Closing State: Detailed Summary -->
             <div v-else class="space-y-4 animate-slide-up">
                 <!-- Mathematical Summary -->
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-100 dark:border-gray-700 space-y-3">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 border border-gray-100 dark:border-gray-700 space-y-3">
                     <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider mb-2">Resumen del Turno</h3>
                     
                     <div class="flex justify-between items-center text-sm">
@@ -143,13 +152,13 @@ const goBack = () => router.back();
                 </div>
 
                 <!-- Counting Input -->
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
                      <label class="block text-xs font-bold uppercase text-gray-400 mb-2 text-center">¿Cuánto contaste?</label>
                      <FormInputCurrency v-model="amount" placeholder="0" class="text-3xl font-black text-center text-blue-900 dark:text-blue-100 mb-4" />
                      
                      <!-- Discrepancy Indicator -->
                      <div class="flex items-center justify-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600">
-                         <span class="material-symbols-outlined" :class="differenceStatus.color">{{ differenceStatus.icon }}</span>
+                         <component :is="differenceStatus.icon" :size="20" :class="differenceStatus.color" />
                          <span class="font-bold text-sm" :class="differenceStatus.color">{{ differenceStatus.text }}</span>
                          <span v-if="Math.abs(difference) >= 50" class="font-mono text-sm" :class="differenceStatus.color">
                              ({{ formatCurrency(Math.abs(difference)) }})
@@ -173,7 +182,7 @@ const goBack = () => router.back();
                 :class="isOpening ? 'shadow-emerald-500/30' : 'shadow-slate-500/30'"
             >
                 <div class="flex items-center gap-2">
-                    <span class="material-symbols-outlined">{{ isOpening ? 'store' : 'lock' }}</span>
+                    <component :is="isOpening ? Store : Lock" :size="20" />
                     {{ buttonText }}
                 </div>
             </BaseButton>

@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { PropType } from 'vue';
+import { PropType, computed } from 'vue';
 import type { HistoryItem } from '../../composables/useHistory';
 import { formatRelativeTime } from '../../composables/useRelativeTime';
+import { Tag, ShoppingCart, Banknote, LogIn, Lock, Shield, ChevronRight, User, HelpCircle } from 'lucide-vue-next';
 
-defineProps({
+const props = defineProps({
   item: {
     type: Object as PropType<HistoryItem>,
     required: true,
   },
+});
+
+const iconComponent = computed(() => {
+  const map: Record<string, any> = {
+    'price_change': Tag,
+    'shopping_cart': ShoppingCart,
+    'payments': Banknote,
+    'login': LogIn,
+    'lock': Lock,
+    'shield': Shield,
+  };
+  return map[props.item.icon] || HelpCircle;
 });
 </script>
 
@@ -20,7 +33,7 @@ defineProps({
       class="shrink-0 flex items-center justify-center w-12 h-12 rounded-full transition-transform group-hover:scale-110"
       :class="item.colorClass"
     >
-      <span class="material-symbols-outlined text-2xl">{{ item.icon }}</span>
+      <component :is="iconComponent" :size="24" />
     </div>
 
     <!-- Content -->
@@ -45,7 +58,7 @@ defineProps({
 
       <div class="flex items-center gap-2 mt-1.5 text-xs text-slate-400">
         <span class="flex items-center gap-1">
-          <span class="material-symbols-outlined text-[14px]">person</span>
+          <User :size="14" />
           {{ item.user }}
         </span>
         <span>•</span>
@@ -55,7 +68,7 @@ defineProps({
 
     <!-- Chevron -->
     <div class="hidden sm:block text-slate-300 dark:text-slate-600">
-      <span class="material-symbols-outlined">chevron_right</span>
+      <ChevronRight :size="24" />
     </div>
   </article>
 </template>

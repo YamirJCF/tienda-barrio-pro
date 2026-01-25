@@ -4,6 +4,7 @@ import { useInventoryStore } from '../stores/inventory';
 import type { Product } from '../types';
 import BaseModal from './ui/BaseModal.vue';
 import BaseInput from './ui/BaseInput.vue';
+import { Search, SearchX } from 'lucide-vue-next';
 
 // Props
 interface Props {
@@ -82,7 +83,7 @@ watch(
                   ref="searchInput"
                   v-model="searchQuery"
                   placeholder="Buscar por nombre, marca o PLU..."
-                  icon="search"
+                  :icon="Search"
                 />
          </div>
     </template>
@@ -94,7 +95,7 @@ watch(
               v-if="filteredProducts.length === 0"
               class="flex flex-col items-center justify-center h-40 text-gray-400"
             >
-              <span class="material-symbols-outlined text-4xl mb-2 opacity-50">search_off</span>
+              <SearchX :size="48" class="mb-2 opacity-50" />
               <p class="text-sm">No se encontraron productos</p>
             </div>
 
