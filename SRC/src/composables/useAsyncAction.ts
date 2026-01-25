@@ -6,6 +6,12 @@ interface AsyncActionOptions {
   errorMessage?: string;
   showSuccessToast?: boolean;
   timeoutMs?: number;
+  /**
+   * If true, blocks execution if device is offline.
+   * Set to false for Offline-First actions that handle their own sync.
+   * @default true
+   */
+  checkConnectivity?: boolean;
 }
 
 export function useAsyncAction() {
@@ -22,8 +28,16 @@ export function useAsyncAction() {
     action: () => Promise<T>,
     options: AsyncActionOptions = {}
   ): Promise<T | null> => {
+    const {
+      successMessage,
+      errorMessage = 'Ocurrió un error inesperado',
+      showSuccessToast = true,
+      timeoutMs = 15000,
+      checkConnectivity = true,
+    } = options;
+
     // 1. Resilience: Offline Check
-    if (!navigator.onLine) {
+    if (checkConnectivity && !navigator.onLine) {
       showWarning('Sin conexión a internet', 'wifi_off');
       return null;
     }
@@ -32,12 +46,6 @@ export function useAsyncAction() {
     if (isLoading.value) return null;
 
     isLoading.value = true;
-    const {
-      successMessage,
-      errorMessage = 'Ocurrió un error inesperado',
-      showSuccessToast = true,
-      timeoutMs = 15000,
-    } = options;
 
     try {
       // 3. Resilience: Timeout Race
@@ -66,6 +74,10 @@ export function useAsyncAction() {
         error.message?.includes('network') ||
         error.code === 'PGRST301'
       ) {
+        // Only show connectivity error if we were checking for it OR if it actually failed network-wise
+        // But if checkConnectivity=false, maybe we swallow this? 
+        // No, if the action *tried* to fetch and failed, we should still report it unless the action itself catches it.
+        // For Offline-first, the action should ideally NOT throw network errors but queue locally.
         showError('Error de conexión con el servidor', 'wifi_off');
       } else {
         // Business logic or validation error

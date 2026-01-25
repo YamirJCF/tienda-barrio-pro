@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useEmployeesStore, type Employee } from '../stores/employees';
+import { useAsyncAction } from '../composables/useAsyncAction'; // Request Management
 import EmployeeFormModal from '../components/EmployeeFormModal.vue';
 import BottomNav from '../components/BottomNav.vue';
 import BaseModal from '../components/ui/BaseModal.vue';
@@ -58,15 +59,17 @@ const editEmployee = (employee: Employee) => {
   showEmployeeModal.value = true;
 };
 
-const toggleActive = (employee: Employee) => {
-  try {
-      employeesStore.toggleActive(employee.id);
-  } catch (e: any) {
-      // Revert visual change if needed (though v-model binds to store state which didn't change)
-      alert(e.message); 
-      // Force UI update derived from store state to ensure sync
-      // (Vue reactivity should handle this if store state wasn't mutated)
-  }
+const { execute: executeToggle } = useAsyncAction();
+const { execute: executePin } = useAsyncAction();
+
+const toggleActive = async (employee: Employee) => {
+  await executeToggle(async () => {
+    employeesStore.toggleActive(employee.id);
+  }, {
+    errorMessage: 'No se pudo cambiar el estado del empleado',
+    // Optimistic toggle usually doesn't need success toast spam
+    showSuccessToast: false
+  });
 };
 
 const openPinModal = (employee: Employee) => {
@@ -80,12 +83,17 @@ const handlePinInput = (value: string | number) => {
   newPin.value = String(value).replace(/\D/g, '').slice(0, 4);
 };
 
-const savePin = () => {
+const savePin = async () => {
   if (selectedEmployee.value && newPin.value.length === 4) {
-    employeesStore.updatePin(selectedEmployee.value.id, newPin.value);
-    showPinModal.value = false;
-    selectedEmployee.value = null;
-    newPin.value = '';
+    await executePin(async () => {
+        employeesStore.updatePin(selectedEmployee.value!.id, newPin.value);
+        showPinModal.value = false;
+        selectedEmployee.value = null;
+        newPin.value = '';
+    }, {
+        successMessage: 'PIN actualizado correctamente',
+        errorMessage: 'Error al actualizar el PIN'
+    });
   }
 };
 

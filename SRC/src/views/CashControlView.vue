@@ -15,6 +15,9 @@ const cashRegisterStore = useCashRegisterStore(); // Replaced storeStatusStore
 const authStore = useAuthStore(); // Initialize auth store
 const { formatCurrency } = useCurrencyFormat();
 const { showSuccess, showError } = useNotifications();
+// Composable: Request Management
+import { useAsyncAction } from '../composables/useAsyncAction';
+const { execute: executeAction, isLoading: isSubmitting } = useAsyncAction();
 
 // Computed State
 const isOpening = computed(() => !cashRegisterStore.isOpen);
@@ -24,7 +27,7 @@ const buttonText = computed(() => isOpening.value ? 'ABRIR TURNO' : 'CERRAR TURN
 // Form State
 const amount = ref(0);
 const notes = ref('');
-const isSubmitting = ref(false);
+// isSubmitting handled by useAsyncAction
 
 // Closing Data (Summary)
 const summary = computed(() => {
@@ -53,11 +56,10 @@ const differenceStatus = computed(() => {
 });
 
 const handleSubmit = async () => {
-    isSubmitting.value = true;
-    try {
+    await executeAction(async () => {
         if (isOpening.value) {
             if (authStore.currentUser?.id) {
-                cashRegisterStore.openRegister(authStore.currentUser.id, new Decimal(amount.value), notes.value);
+                await cashRegisterStore.openRegister(authStore.currentUser.id, new Decimal(amount.value), notes.value);
             } else {
                  throw new Error('Usuario no autenticado');
             }
@@ -66,18 +68,16 @@ const handleSubmit = async () => {
         } else {
             // Closing
             if (!confirm('¿Estás seguro de cerrar el turno?')) {
-                isSubmitting.value = false;
-                return;
+                return; // Cancelled
             }
-            cashRegisterStore.closeRegister(new Decimal(amount.value), notes.value);
+            await cashRegisterStore.closeRegister(new Decimal(amount.value), notes.value);
             showSuccess('Turno cerrado. Reporte generado.');
             router.push('/'); // Go to Dashboard/Home
         }
-    } catch (e: any) {
-        showError(e.message || 'Error en la operación');
-    } finally {
-        isSubmitting.value = false;
-    }
+    }, {
+        checkConnectivity: false,
+        errorMessage: 'Error en la operación de caja'
+    });
 };
 
 const goBack = () => router.back();

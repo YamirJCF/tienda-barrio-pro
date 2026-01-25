@@ -25,7 +25,7 @@ const showConfirmPassword = ref(false);
 // UI STATE
 // ============================================
 const errorMessage = ref('');
-const isLoading = ref(false);
+// isLoading handled by useAsyncAction
 
 // ============================================
 // VALIDATION RULES
@@ -80,14 +80,20 @@ const toggleConfirmPassword = () => {
 // ============================================
 // FORM SUBMISSION (ASYNC + ERROR HANDLING)
 // ============================================
-const handleSubmit = async () => {
-  // Guard clause: previene doble-click y envíos inválidos
-  if (!canSubmit.value || isLoading.value) return;
+// Composable: Request Management
+import { useAsyncAction } from '../composables/useAsyncAction';
+const { execute: executeRegister, isLoading } = useAsyncAction();
 
-  isLoading.value = true;
+// ============================================
+// FORM SUBMISSION (ASYNC + ERROR HANDLING)
+// ============================================
+const handleSubmit = async () => {
+  // Guard clause: previene doble-click (isLoading manejado internamente, pero mantenemos check de canSubmit)
+  if (!canSubmit.value) return;
+
   errorMessage.value = '';
 
-  try {
+  await executeRegister(async () => {
     // Espera artificial para:
     // 1. Dar feedback visual (spinner/loading state)
     // 2. Asegurar que localStorage complete la escritura antes de navegar
@@ -102,21 +108,20 @@ const handleSubmit = async () => {
       // SPEC-006: PIN eliminado del registro
     });
 
-    if (result) {
-      logger.log('✅ Tienda registrada exitosamente:', result.storeName);
-      // Redirección a verificación de email (WO-005)
-      router.push('/check-email');
-    } else {
-      // Email duplicado (único error conocido del store)
-      errorMessage.value = 'Este correo electrónico ya está registrado.';
-      isLoading.value = false;
+    if (!result) {
+       // Email duplicado (único error conocido del store)
+       throw new Error('Este correo electrónico ya está registrado.');
     }
-  } catch (error) {
-    // Captura errores inesperados (quota de localStorage, etc.)
-    console.error('❌ Error crítico en registro:', error);
-    errorMessage.value = 'Error del sistema. Por favor, intenta nuevamente.';
-    isLoading.value = false;
-  }
+
+    logger.log('✅ Tienda registrada exitosamente:', result.storeName);
+    // Redirección a verificación de email (WO-005)
+    router.push('/check-email');
+
+  }, {
+    errorMessage: 'Error del sistema. Por favor, intenta nuevamente.',
+    successMessage: 'Tienda registrada correctamente',
+    checkConnectivity: true // Registration needs syncing ideally, or at least feedback
+  });
 };
 </script>
 
