@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { useNotifications, type Notification } from '../composables/useNotifications';
+import { 
+  CheckCircle, 
+  AlertCircle, 
+  Info, 
+  AlertTriangle, 
+  X 
+} from 'lucide-vue-next';
 
 const { notifications, dismiss } = useNotifications();
 
@@ -14,12 +21,12 @@ const getTypeClasses = (type: Notification['type']) => {
 };
 
 const getIcon = (notification: Notification) => {
-  if (notification.icon) return notification.icon;
+  if (notification.icon) return notification.icon; // Assuming icon can be a custom component or ignored if we standardized
   const icons = {
-    success: 'check_circle',
-    error: 'error',
-    info: 'info',
-    warning: 'warning',
+    success: CheckCircle,
+    error: AlertCircle,
+    info: Info,
+    warning: AlertTriangle,
   };
   return icons[notification.type];
 };
@@ -40,9 +47,7 @@ const getIcon = (notification: Notification) => {
           @click="dismiss(notification.id)"
         >
           <!-- Icon -->
-          <span class="material-symbols-outlined text-xl shrink-0">
-            {{ getIcon(notification) }}
-          </span>
+          <component :is="getIcon(notification)" class="text-xl shrink-0" :size="24" />
 
           <!-- Message -->
           <p class="flex-1 text-sm font-medium">
@@ -54,7 +59,7 @@ const getIcon = (notification: Notification) => {
             class="shrink-0 opacity-70 hover:opacity-100 transition-opacity"
             @click.stop="dismiss(notification.id)"
           >
-            <span class="material-symbols-outlined text-lg">close</span>
+            <X class="text-lg" :size="20" />
           </button>
         </div>
       </TransitionGroup>

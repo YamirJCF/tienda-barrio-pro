@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useConfigStore } from '../../stores/configStore';
 import BaseInput from '../ui/BaseInput.vue';
 import BaseButton from '../ui/BaseButton.vue';
+import { Stamp, ImagePlus, Trash2, Receipt, Settings, Eye, Store } from 'lucide-vue-next';
 
 const configStore = useConfigStore();
 
@@ -45,7 +46,7 @@ const currentDate = new Date().toLocaleString();
       <!-- Card: Identidad -->
       <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">branding_watermark</span>
+          <Stamp class="text-primary" :size="24" />
           Identidad Visual
         </h3>
         
@@ -55,8 +56,8 @@ const currentDate = new Date().toLocaleString();
             @click="triggerFileUpload"
           >
             <img v-if="configStore.logoUrl" :src="configStore.logoUrl" alt="Logo" class="h-full w-full object-contain" />
-            <div v-else class="text-center p-2">
-              <span class="material-symbols-outlined text-slate-400 group-hover:text-primary">add_photo_alternate</span>
+            <div v-else class="text-center p-2 flex flex-col items-center">
+              <ImagePlus class="text-slate-400 group-hover:text-primary transition-colors" :size="24" />
               <p class="text-[10px] text-slate-500 leading-tight mt-1">Click para subir</p>
             </div>
             <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="handleLogoUpload" />
@@ -70,7 +71,7 @@ const currentDate = new Date().toLocaleString();
               @click="removeLogo"
               class="text-xs text-red-500 hover:text-red-600 font-medium flex items-center gap-1 self-start"
             >
-              <span class="material-symbols-outlined text-[14px]">delete</span> Eliminar Logo
+              <Trash2 :size="14" /> Eliminar Logo
             </button>
           </div>
         </div>
@@ -87,7 +88,7 @@ const currentDate = new Date().toLocaleString();
       <!-- Card: Datos Fiscales -->
       <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-          <span class="material-symbols-outlined text-blue-500">receipt_long</span>
+          <Receipt class="text-blue-500" :size="24" />
           Datos Fiscales & Contacto
         </h3>
         
@@ -120,7 +121,7 @@ const currentDate = new Date().toLocaleString();
       <!-- Card: Ticket -->
       <div class="bg-white dark:bg-slate-800 rounded-xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-          <span class="material-symbols-outlined text-purple-500">settings_applications</span>
+          <Settings class="text-purple-500" :size="24" />
           Personalización del Ticket
         </h3>
         
@@ -152,7 +153,7 @@ const currentDate = new Date().toLocaleString();
     <div class="flex flex-col">
       <div class="sticky top-6">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-          <span class="material-symbols-outlined text-green-500">preview</span>
+          <Eye class="text-green-500" :size="24" />
           Vista Previa del Ticket
         </h3>
         
@@ -165,7 +166,7 @@ const currentDate = new Date().toLocaleString();
                 <img :src="configStore.logoUrl" class="h-16 w-auto grayscale opacity-90" alt="Logo Ticket" />
               </div>
               <div v-else class="flex justify-center mb-2">
-                 <span class="material-symbols-outlined text-4xl text-slate-400">storefront</span>
+                 <Store class="text-slate-400" :size="40" />
               </div>
               
               <h2 class="text-xl font-bold uppercase mb-1">{{ configStore.storeName || 'NOMBRE TIENDA' }}</h2>

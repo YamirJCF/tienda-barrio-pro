@@ -2,6 +2,14 @@
 import { ref, watch, computed } from 'vue';
 import { useClientsStore, type Client } from '../stores/clients';
 import { Decimal } from 'decimal.js';
+import { 
+  X, 
+  User, 
+  CreditCard, 
+  Phone, 
+  Banknote, 
+  Save 
+} from 'lucide-vue-next';
 
 // Props
 // WO-001: Changed clientId from number to string for UUID
@@ -126,7 +134,7 @@ watch(
                 @click="close"
                 class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-2 -mr-2 rounded-full"
               >
-                <span class="material-symbols-outlined text-2xl">close</span>
+                <X :size="24" />
               </button>
             </div>
             <div class="h-[1px] w-full bg-gray-100 dark:bg-gray-700 mt-4"></div>
@@ -141,7 +149,7 @@ watch(
               </label>
               <div class="relative">
                 <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                  <span class="material-symbols-outlined text-[20px]">person</span>
+                  <User :size="20" />
                 </span>
                 <input
                   v-model="formData.name"
@@ -167,7 +175,7 @@ watch(
                 <span
                   class="absolute left-4 top-1/2 -translate-y-1/2 text-primary group-focus-within:text-primary"
                 >
-                  <span class="material-symbols-outlined text-[20px]">badge</span>
+                  <CreditCard :size="20" />
                 </span>
                 <input
                   v-model="formData.cedula"
@@ -191,7 +199,7 @@ watch(
               </label>
               <div class="relative">
                 <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                  <span class="material-symbols-outlined text-[20px]">call</span>
+                  <Phone :size="20" />
                 </span>
                 <input
                   v-model="formData.phone"
@@ -222,7 +230,7 @@ watch(
                 <div
                   class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
                 >
-                  <span class="material-symbols-outlined text-[20px]">credit_score</span>
+                  <Banknote :size="20" />
                 </div>
               </div>
               <p class="text-xs text-gray-500 ml-1">Límite de crédito permitido para fiar.</p>
@@ -247,7 +255,7 @@ watch(
                 :disabled="!isValid"
                 class="flex-[2] h-12 rounded-xl bg-primary hover:bg-blue-700 text-white font-semibold text-base shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span class="material-symbols-outlined text-[20px]">save</span>
+                <Save :size="20" />
                 Guardar Cliente
               </button>
             </div>

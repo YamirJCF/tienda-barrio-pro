@@ -2,8 +2,10 @@
 /**
  * ListMenuItem - Reusable menu item component for sidebars and lists.
  */
+import { ChevronRight } from 'lucide-vue-next';
+
 defineProps<{
-  icon: string;
+  icon: any; // Changed from string to any to support Component
   iconBgColor?: string;
   iconTextColor?: string;
   label: string;
@@ -29,12 +31,11 @@ const emit = defineEmits<{
         class="flex h-10 w-10 items-center justify-center rounded-full"
         :class="iconBgColor || 'bg-slate-100 dark:bg-slate-700'"
       >
-        <span
-          class="material-symbols-outlined"
+        <component
+          :is="icon"
           :class="iconTextColor || 'text-slate-600 dark:text-slate-300'"
-        >
-          {{ icon }}
-        </span>
+          :size="24"
+        />
       </div>
 
       <!-- Label -->
@@ -44,8 +45,10 @@ const emit = defineEmits<{
     </div>
 
     <!-- Chevron -->
-    <span v-if="showChevron !== false" class="material-symbols-outlined text-slate-400">
-      chevron_right
-    </span>
+    <ChevronRight
+      v-if="showChevron !== false"
+      class="text-slate-400"
+      :size="24"
+    />
   </button>
 </template>

@@ -3,6 +3,8 @@
  * NoPermissionOverlay - Reusable overlay for permission-restricted views.
  * Displays a full-screen overlay when user lacks permission.
  */
+import { Ban } from 'lucide-vue-next';
+
 defineProps<{
   title?: string;
   message?: string;
@@ -21,7 +23,7 @@ const emit = defineEmits<{
     <div class="flex flex-col items-center text-center max-w-xs">
       <!-- Icon -->
       <div class="h-20 w-20 rounded-full bg-yellow-500/20 flex items-center justify-center mb-6">
-        <span class="material-symbols-outlined text-yellow-500 text-[48px]">block</span>
+        <Ban class="text-yellow-500" :size="48" />
       </div>
 
       <!-- Title -->

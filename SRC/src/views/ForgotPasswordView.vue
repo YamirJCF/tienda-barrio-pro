@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { logger } from '../utils/logger';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
+import { LockOpen, Mail, CheckCircle } from 'lucide-vue-next';
 
 const router = useRouter();
 
@@ -60,7 +61,7 @@ const goToHome = () => {
         <div
           class="mb-6 flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 text-primary"
         >
-          <span class="material-symbols-outlined text-[40px]">lock_open</span>
+          <LockOpen :size="40" />
         </div>
 
         <!-- Header Section -->
@@ -83,10 +84,13 @@ const goToHome = () => {
                     type="email"
                     id="email"
                     label="Correo Electrónico"
-                    icon="mail"
                     required
                     placeholder="ejemplo@tienda.com"
-                />
+                >
+                    <template #prefix>
+                        <Mail :size="20" class="text-gray-400" />
+                    </template>
+                </BaseInput>
             </div>
 
           <!-- Primary Button -->
@@ -125,7 +129,7 @@ const goToHome = () => {
         <div
           class="mb-6 flex items-center justify-center w-20 h-20 rounded-full bg-green-50 dark:bg-green-900/20 text-green-500"
         >
-          <span class="material-symbols-outlined text-[48px]">check_circle</span>
+          <CheckCircle :size="48" />
         </div>
 
         <!-- Success Message -->

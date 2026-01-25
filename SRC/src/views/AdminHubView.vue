@@ -6,6 +6,22 @@ import { useCashRegisterStore } from '../stores/cashRegister';
 import { useCashControlStore } from '../stores/cashControl';
 import { useAuthStore } from '../stores/auth'; // Import auth store
 import { usePresenceStore } from '../stores/presence'; // New Presence Store import
+import { 
+  ArrowLeft, 
+  BarChart3, 
+  Settings, 
+  Sliders, 
+  Store, 
+  Receipt, 
+  Wallet, 
+  Eye, 
+  WifiOff, 
+  Clock, 
+  Users, 
+  ChevronRight, 
+  KeyRound,
+  AlertTriangle 
+} from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 import ReportsContent from '../components/ReportsContent.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
@@ -89,9 +105,9 @@ watch(activeTab, (newTab) => {
         <button
           @click="goBack"
           aria-label="Volver atrás"
-          class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          class="flex items-center justify-center -ml-2 p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         >
-          <span class="material-symbols-outlined">arrow_back</span>
+          <ArrowLeft :size="24" :stroke-width="1.5" />
         </button>
         <h2 class="text-xl font-bold leading-tight tracking-tight flex-1 dark:text-white">
           Administración
@@ -100,9 +116,9 @@ watch(activeTab, (newTab) => {
           <button
             @click="showProfileSidebar = true"
             aria-label="Perfil de usuario"
-            class="relative flex items-center justify-center overflow-hidden rounded-full h-10 w-10 bg-slate-200 dark:bg-slate-700 ring-2 ring-white dark:ring-slate-800 shadow-sm cursor-pointer hover:ring-primary transition-all"
+            class="relative flex items-center justify-center overflow-hidden rounded-[10px] h-9 w-9 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
           >
-            <div class="h-full w-full bg-gradient-to-br from-blue-400 to-purple-500"></div>
+             <span class="text-xs font-bold text-slate-600 dark:text-slate-300">{{ authStore.currentUser?.name?.substring(0,2).toUpperCase() || '??' }}</span>
           </button>
         </div>
       </div>
@@ -113,11 +129,11 @@ watch(activeTab, (newTab) => {
       class="sticky top-[65px] z-30 w-full bg-background-light dark:bg-background-dark px-4 pb-4 pt-2 shadow-[0_4px_10px_-10px_rgba(0,0,0,0.1)]"
     >
       <div
-        class="flex h-12 w-full items-center justify-center rounded-xl bg-slate-200 dark:bg-slate-800 p-1"
+        class="flex h-12 w-full items-center justify-center rounded-2xl bg-slate-200 dark:bg-slate-800 p-1"
       >
         <label
           v-if="isAdmin || canViewReports"
-          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all"
+          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-xl px-2 transition-all"
           :class="
             activeTab === 'reportes'
               ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'
@@ -126,13 +142,13 @@ watch(activeTab, (newTab) => {
           @click="activeTab = 'reportes'"
         >
           <span class="flex items-center gap-2 truncate text-sm">
-            <span class="material-symbols-outlined text-[20px]">bar_chart</span>
+            <BarChart3 :size="18" :stroke-width="1.5" />
             Reportes
           </span>
         </label>
         <label
           v-if="isAdmin"
-          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all"
+          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-xl px-2 transition-all"
           :class="
             activeTab === 'gestion'
               ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'
@@ -141,13 +157,13 @@ watch(activeTab, (newTab) => {
           @click="activeTab = 'gestion'"
         >
           <span class="flex items-center gap-2 truncate text-sm">
-            <span class="material-symbols-outlined text-[20px]">settings</span>
+            <Settings :size="18" :stroke-width="1.5" />
             Gestión
           </span>
         </label>
         <label
           v-if="isAdmin"
-          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all"
+          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-xl px-2 transition-all"
           :class="
             activeTab === 'config'
               ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'
@@ -156,7 +172,7 @@ watch(activeTab, (newTab) => {
           @click="activeTab = 'config'"
         >
           <span class="flex items-center gap-2 truncate text-sm">
-            <span class="material-symbols-outlined text-[20px]">tune</span>
+            <Sliders :size="18" :stroke-width="1.5" />
             Config
           </span>
         </label>
@@ -173,16 +189,16 @@ watch(activeTab, (newTab) => {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Caja Abierta -->
           <div
-            class="relative flex flex-col justify-between rounded-xl bg-white dark:bg-slate-800 p-5 shadow-sm border border-slate-100 dark:border-slate-700"
+            class="relative flex flex-col justify-between rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-sm border border-slate-100 dark:border-slate-700"
           >
             <div class="flex items-start justify-between mb-4">
               <div
-                class="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                class="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
               >
-                <span class="material-symbols-outlined text-[28px]">point_of_sale</span>
+                <Store :size="24" />
               </div>
               <span
-                class="px-2 py-1 rounded-md text-xs font-bold"
+                class="px-2 py-1 rounded-lg text-xs font-bold uppercase tracking-wide"
                 :class="
                   cashRegisterStore.isOpen
                     ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
@@ -210,22 +226,22 @@ watch(activeTab, (newTab) => {
             </div>
             <button
               @click="navigateTo('/cash-control')"
-              class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 px-4 text-sm font-bold text-white shadow-md shadow-primary/20 transition-transform active:scale-[0.98] hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+              class="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 px-4 text-sm font-bold text-white shadow-md shadow-primary/20 transition-transform active:scale-[0.98] hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-slate-900"
             >
-              <span class="material-symbols-outlined text-[20px]">receipt_long</span>
+              <Receipt :size="18" :stroke-width="1.5" />
               Ver Control de Caja
             </button>
           </div>
 
           <!-- Gastos del Día -->
           <div
-            class="relative flex flex-col justify-between rounded-xl bg-white dark:bg-slate-800 p-5 shadow-sm border border-slate-100 dark:border-slate-700"
+            class="relative flex flex-col justify-between rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-sm border border-slate-100 dark:border-slate-700"
           >
             <div class="flex items-start justify-between mb-4">
               <div
-                class="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
+                class="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
               >
-                <span class="material-symbols-outlined text-[28px]">account_balance_wallet</span>
+                <Wallet :size="24" />
               </div>
             </div>
             <div class="mb-5">
@@ -236,9 +252,9 @@ watch(activeTab, (newTab) => {
             </div>
             <button
               @click="navigateTo('/expenses')"
-              class="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-700 py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-200 dark:hover:bg-slate-600 active:bg-slate-300"
+              class="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-200 dark:hover:bg-slate-600 active:bg-slate-300"
             >
-              <span class="material-symbols-outlined text-[20px]">visibility</span>
+              <Eye :size="18" :stroke-width="1.5" />
               Ver Gastos
             </button>
           </div>
@@ -256,7 +272,7 @@ watch(activeTab, (newTab) => {
           </span>
         </h3>
         
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden mb-6">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden mb-6">
           <div class="p-4 border-b border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
             <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Estado de Conexión</h4>
             <div class="flex gap-2">
@@ -274,8 +290,8 @@ watch(activeTab, (newTab) => {
           
           <div class="divide-y divide-slate-50 dark:divide-slate-700/50">
             <!-- Empty State -->
-            <div v-if="presenceStore.activeSessions.size === 0" class="p-8 text-center">
-               <span class="material-symbols-outlined text-slate-300 text-4xl mb-2">wifi_off</span>
+            <div v-if="presenceStore.activeSessions.size === 0" class="p-8 text-center flex flex-col items-center">
+               <WifiOff :size="32" class="text-slate-300 mb-2" />
                <p class="text-xs text-slate-400">No hay empleados reportando actividad reciente.</p>
             </div>
 
@@ -287,7 +303,7 @@ watch(activeTab, (newTab) => {
             >
                <div class="flex items-center gap-3">
                  <div class="relative">
-                    <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-sm">
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-sm">
                       {{ session.name.substring(0,2).toUpperCase() }}
                     </div>
                     <!-- Status Indicator -->
@@ -303,9 +319,8 @@ watch(activeTab, (newTab) => {
                       <!-- Ghost Icon -->
                       <span 
                         v-if="presenceStore.getEmployeeStatus(session.employeeId) === 'ghost'"
-                        class="material-symbols-outlined text-[10px] text-white"
                       >
-                        warning
+                         <AlertTriangle :size="10" class="text-white" />
                       </span>
                     </div>
                  </div>
@@ -313,7 +328,7 @@ watch(activeTab, (newTab) => {
                  <div>
                    <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ session.name }}</p>
                    <p class="text-[10px] text-slate-500 flex items-center gap-1">
-                     <span class="material-symbols-outlined text-[10px]">schedule</span>
+                     <Clock :size="10" />
                      {{ new Date(session.lastSeen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}
                      
                      <span v-if="presenceStore.getEmployeeStatus(session.employeeId) === 'ghost'" class="text-red-500 font-bold ml-1">
@@ -341,7 +356,7 @@ watch(activeTab, (newTab) => {
       <section v-if="activeTab === 'gestion'">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">👥 Equipo</h3>
         <div
-          class="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
+          class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
         >
           <!-- Empleados y Permisos -->
           <button
@@ -350,9 +365,9 @@ watch(activeTab, (newTab) => {
           >
             <div class="flex items-center gap-4">
               <div
-                class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary"
+                class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 text-primary"
               >
-                <span class="material-symbols-outlined">group</span>
+                <Users :size="20" />
               </div>
               <div>
                 <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -363,10 +378,7 @@ watch(activeTab, (newTab) => {
                 </p>
               </div>
             </div>
-            <span
-              class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors"
-              >chevron_right</span
-            >
+            <ChevronRight :size="20" class="text-slate-300 group-hover:text-primary transition-colors" />
           </button>
         </div>
       </section>
@@ -375,7 +387,7 @@ watch(activeTab, (newTab) => {
       <section v-if="activeTab === 'gestion'">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">🔐 Seguridad</h3>
         <div
-          class="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
+          class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
         >
           <!-- Configurar/Cambiar PIN de Caja (inteligente) -->
           <button
@@ -384,9 +396,9 @@ watch(activeTab, (newTab) => {
           >
             <div class="flex items-center gap-4">
               <div
-                class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
+                class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
               >
-                <span class="material-symbols-outlined">pin</span>
+                <KeyRound :size="20" />
               </div>
               <div>
                 <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -401,10 +413,7 @@ watch(activeTab, (newTab) => {
                 </p>
               </div>
             </div>
-            <span
-              class="material-symbols-outlined text-slate-400 group-hover:text-emerald-500 transition-colors"
-              >chevron_right</span
-            >
+            <ChevronRight :size="20" class="text-slate-300 group-hover:text-primary transition-colors" />
           </button>
         </div>
       </section>
@@ -446,11 +455,5 @@ watch(activeTab, (newTab) => {
 </template>
 
 <style scoped>
-.material-symbols-outlined {
-  font-variation-settings:
-    'FILL' 0,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24;
-}
+/* REMOVED: Deprecated material symbols style block */
 </style>

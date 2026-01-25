@@ -5,6 +5,7 @@
  * Casos de uso: PIN fallidos múltiples, stock crítico, errores de sincronización
  */
 import { computed } from 'vue';
+import { AlertCircle, AlertTriangle, Shield, Info } from 'lucide-vue-next';
 
 interface Props {
   isVisible: boolean;
@@ -32,25 +33,25 @@ const emit = defineEmits<{
 const iconConfig = computed(() => {
   const configs = {
     error: {
-      icon: 'error',
+      component: AlertCircle,
       bgColor: 'bg-red-100 dark:bg-red-900/30',
       textColor: 'text-red-500',
       borderColor: 'border-red-500',
     },
     warning: {
-      icon: 'warning',
+      component: AlertTriangle,
       bgColor: 'bg-amber-100 dark:bg-amber-900/30',
       textColor: 'text-amber-500',
       borderColor: 'border-amber-500',
     },
     security: {
-      icon: 'shield',
+      component: Shield,
       bgColor: 'bg-red-100 dark:bg-red-900/30',
       textColor: 'text-red-600',
       borderColor: 'border-red-600',
     },
     info: {
-      icon: 'info',
+      component: Info,
       bgColor: 'bg-blue-100 dark:bg-blue-900/30',
       textColor: 'text-blue-500',
       borderColor: 'border-blue-500',
@@ -89,9 +90,12 @@ const primaryButtonClass = computed(() => {
               class="flex h-16 w-16 items-center justify-center rounded-full"
               :class="iconConfig.bgColor"
             >
-              <span class="material-symbols-outlined text-4xl" :class="iconConfig.textColor">
-                {{ iconConfig.icon }}
-              </span>
+              <component
+                :is="iconConfig.component"
+                class="w-10 h-10"
+                :class="iconConfig.textColor"
+                :stroke-width="1.5"
+              />
             </div>
 
             <!-- Title -->

@@ -7,6 +7,23 @@ import Decimal from 'decimal.js';
 import BaseModal from '../ui/BaseModal.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import BaseButton from '../ui/BaseButton.vue';
+import {
+  Store,
+  TrendingDown,
+  Receipt,
+  ChevronUp,
+  ChevronDown,
+  Banknote,
+  Smartphone,
+  BookOpen,
+  Delete,
+  QrCode,
+  X,
+  AlertTriangle,
+  UserSearch,
+  CheckCircle,
+  Search
+} from 'lucide-vue-next';
 
 // Props
 interface Props {
@@ -201,7 +218,7 @@ onUnmounted(() => {
                 alt="Logo"
               />
               <div v-else class="h-8 w-8 mb-1 rounded-full bg-primary/10 flex items-center justify-center">
-                 <span class="material-symbols-outlined text-primary text-sm">storefront</span>
+                 <Store class="text-primary" :size="20" />
               </div>
               <h2 class="text-sm font-bold text-gray-800 dark:text-gray-100 uppercase tracking-wide">
                 {{ configStore.storeName }}
@@ -239,7 +256,7 @@ onUnmounted(() => {
               class="flex flex-col items-center mt-2 animate-slide-up"
             >
               <div class="flex items-center gap-2 mb-1">
-                <span class="material-symbols-outlined text-red-500 text-md">trending_down</span>
+                <TrendingDown class="text-red-500" :size="16" />
                 <span class="text-red-500 font-bold text-xs"
                   >Ajuste Legal: ${{ roundingDifference.abs() }}</span
                 >
@@ -272,7 +289,7 @@ onUnmounted(() => {
               <h4
                 class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5"
               >
-                <span class="material-symbols-outlined text-sm">receipt_long</span>
+                <Receipt class="text-gray-400" :size="16" />
                 Detalle de Compra
               </h4>
               <!-- OBS-01: Botón expandir lista -->
@@ -280,9 +297,7 @@ onUnmounted(() => {
                 @click="isListExpanded = !isListExpanded"
                 class="text-xs text-primary hover:text-primary-dark font-medium flex items-center gap-1"
               >
-                <span class="material-symbols-outlined text-sm">{{
-                  isListExpanded ? 'expand_less' : 'expand_more'
-                }}</span>
+                <component :is="isListExpanded ? ChevronUp : ChevronDown" :size="16" />
                 {{ isListExpanded ? 'Contraer' : 'Ver Todo' }} ({{ cartStore.items.length }})
               </button>
             </div>
@@ -339,16 +354,14 @@ onUnmounted(() => {
               "
               @click="selectMethod('cash')"
             >
-              <span
-                class="material-symbols-outlined text-[28px]"
+              <Banknote
+                :size="28"
                 :class="
                   activeMethod === 'cash'
                     ? 'text-emerald-600 dark:text-accent-green'
                     : 'text-gray-400 dark:text-gray-500'
                 "
-              >
-                payments
-              </span>
+              />
               <span
                 class="text-xs font-bold tracking-wide"
                 :class="
@@ -378,16 +391,14 @@ onUnmounted(() => {
               "
               @click="selectMethod('nequi')"
             >
-              <span
-                class="material-symbols-outlined text-[28px]"
+              <Smartphone
+                :size="28"
                 :class="
                   activeMethod === 'nequi'
                     ? 'text-pink-600 dark:text-pink-400'
                     : 'text-gray-400 dark:text-gray-500'
                 "
-              >
-                smartphone
-              </span>
+              />
               <span
                 class="text-xs font-bold tracking-wide"
                 :class="
@@ -416,16 +427,14 @@ onUnmounted(() => {
               "
               @click="selectMethod('fiado')"
             >
-              <span
-                class="material-symbols-outlined text-[28px]"
+              <BookOpen
+                :size="28"
                 :class="
                   activeMethod === 'fiado'
                     ? 'text-amber-600 dark:text-amber-400'
                     : 'text-gray-400 dark:text-gray-500'
                 "
-              >
-                menu_book
-              </span>
+              />
               <span
                 class="text-xs font-bold tracking-wide"
                 :class="
@@ -548,7 +557,7 @@ onUnmounted(() => {
                       variant="danger"
                       class="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-none"
                     >
-                      <span class="material-symbols-outlined">backspace</span>
+                      <Delete :size="24" />
                     </BaseButton>
                   </div>
                 </div>
@@ -563,9 +572,7 @@ onUnmounted(() => {
               <div
                 class="w-24 h-24 bg-pink-100 dark:bg-pink-900/20 rounded-full flex items-center justify-center mb-2"
               >
-                <span class="material-symbols-outlined text-pink-600 dark:text-pink-400 text-[48px]"
-                  >qr_code_2</span
-                >
+                <QrCode class="text-pink-600 dark:text-pink-400" :size="48" />
               </div>
               <div>
                 <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
@@ -625,7 +632,7 @@ onUnmounted(() => {
                     @click="clearSelectedClient"
                     class="p-2 text-gray-400 hover:text-red-500 transition-colors"
                   >
-                    <span class="material-symbols-outlined">close</span>
+                    <X :size="20" />
                   </button>
                 </div>
                 <!-- Credit Info -->
@@ -649,7 +656,7 @@ onUnmounted(() => {
                   v-if="!hasEnoughCredit"
                   class="mt-2 text-xs text-red-500 flex items-center gap-1"
                 >
-                  <span class="material-symbols-outlined text-sm">warning</span>
+                  <AlertTriangle :size="14" />
                   El cliente excederá su límite de crédito
                 </p>
               </div>
@@ -663,7 +670,7 @@ onUnmounted(() => {
                   <BaseInput
                     v-model="clientSearch"
                     placeholder="Buscar por nombre o cédula..."
-                    icon="search"
+                    :icon="Search"
                   />
                 </div>
               </div>
@@ -671,7 +678,7 @@ onUnmounted(() => {
               <!-- Client List -->
               <div v-if="!selectedClient" class="flex-1 overflow-y-auto -mx-4 px-4">
                 <div v-if="filteredClients.length === 0" class="text-center py-8 text-gray-400">
-                  <span class="material-symbols-outlined text-4xl mb-2">person_search</span>
+                  <UserSearch class="mx-auto mb-2 opacity-50" :size="36" />
                   <p class="text-sm">No se encontraron clientes</p>
                 </div>
                 <div v-else class="flex flex-col gap-2">
@@ -746,7 +753,7 @@ onUnmounted(() => {
                   Vueltos: {{ formattedChange }}
                 </span>
               </div>
-              <span class="material-symbols-outlined text-white">check_circle</span>
+              <CheckCircle class="text-white" :size="24" />
             </BaseButton>
             
             <!-- Ticket Footer Message -->

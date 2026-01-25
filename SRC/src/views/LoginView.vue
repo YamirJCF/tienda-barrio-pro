@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { Store, Eye, EyeOff } from 'lucide-vue-next';
+import { Store, Eye, EyeOff, User, Lock } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
 import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
@@ -175,12 +175,29 @@ const handleServerError = (errorCode: string, errorMsg: string) => {
       <div
         class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-800">
         <form @submit.prevent="handleLogin" class="flex flex-col gap-5">
-          <BaseInput v-model="username" label="Usuario" icon="person" placeholder="Tu usuario o correo"
-            :disabled="isLoading" />
+          <BaseInput 
+            v-model="username" 
+            label="Usuario" 
+            placeholder="Tu usuario o correo"
+            :disabled="isLoading"
+          >
+            <template #prefix>
+               <User :size="18" class="text-slate-400" />
+            </template>
+          </BaseInput>
 
           <div class="relative">
-            <BaseInput v-model="password" :type="showPassword ? 'text' : 'password'" :label="credentialLabel" icon="lock"
-              :placeholder="credentialPlaceholder" :disabled="isLoading" />
+            <BaseInput 
+              v-model="password" 
+              :type="showPassword ? 'text' : 'password'" 
+              :label="credentialLabel"
+              :placeholder="credentialPlaceholder" 
+              :disabled="isLoading" 
+            >
+              <template #prefix>
+                 <Lock :size="18" class="text-slate-400" />
+              </template>
+            </BaseInput>
             <button type="button" @click="showPassword = !showPassword"
               class="absolute top-[29px] right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
               tabindex="-1">

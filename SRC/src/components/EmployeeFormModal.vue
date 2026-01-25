@@ -4,6 +4,7 @@ import { useEmployeesStore, type Employee } from '../stores/employees';
 import BaseModal from './ui/BaseModal.vue';
 import BaseInput from './ui/BaseInput.vue';
 import BaseButton from './ui/BaseButton.vue';
+import { User, IdCard, Lock } from 'lucide-vue-next';
 
 // Props
 interface Props {
@@ -168,7 +169,7 @@ watch(
            v-model="formData.name"
            label="Nombre Completo"
            placeholder="Ej: Juan Pérez"
-           icon="person"
+           :icon="User"
         />
 
         <BaseInput
@@ -176,7 +177,7 @@ watch(
            @input="handleUsernameInput"
            label="Usuario de Acceso"
            placeholder="Número de teléfono o identificación"
-           icon="badge"
+           :icon="IdCard"
            type="tel"
            inputmode="numeric"
         />
@@ -187,7 +188,7 @@ watch(
         class="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 space-y-3"
       >
         <div class="flex items-center gap-2 text-primary font-medium">
-           <span class="material-symbols-outlined text-[20px]">lock</span>
+           <Lock :size="20" />
            <span class="text-sm">Seguridad</span>
         </div>
         

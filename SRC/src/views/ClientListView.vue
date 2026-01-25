@@ -8,6 +8,15 @@ import ClientFormModal from '../components/ClientFormModal.vue';
 import { Decimal } from 'decimal.js';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
+import { 
+  ArrowLeft, 
+  Search, 
+  AlertTriangle, 
+  Users, 
+  UserPlus, 
+  ChevronRight, 
+  Plus 
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const clientsStore = useClientsStore();
@@ -98,19 +107,17 @@ const handleClientSaved = () => {
           <button
             @click="goToDashboard"
             aria-label="Volver al Dashboard"
-            class="flex items-center justify-center -ml-2 p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            class="flex items-center justify-center -ml-2 p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            <span class="material-symbols-outlined">arrow_back</span>
+            <ArrowLeft :size="24" :stroke-width="1.5" />
           </button>
           <h2 class="text-slate-900 dark:text-white text-xl font-bold">Cartera de Clientes</h2>
         </div>
         <div
           v-if="totalDebt.gt(0)"
-          class="bg-red-100 dark:bg-red-900/30 px-3 py-1.5 rounded-full flex items-center gap-1.5"
+          class="bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 border border-red-100 dark:border-red-900/30"
         >
-          <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[16px]"
-            >warning</span
-          >
+          <AlertTriangle :size="16" :stroke-width="1.5" class="text-red-500" />
           <span class="text-red-700 dark:text-red-300 text-xs font-bold whitespace-nowrap">
             Total: {{ formatCurrency(totalDebt) }}
           </span>
@@ -120,8 +127,11 @@ const handleClientSaved = () => {
            <BaseInput
              v-model="searchQuery"
              placeholder="Buscar por nombre o cédula..."
-             icon="search"
-           />
+           >
+             <template #prefix>
+                <Search :size="18" :stroke-width="1.5" class="text-slate-400" />
+             </template>
+           </BaseInput>
       </div>
     </header>
 
@@ -130,11 +140,7 @@ const handleClientSaved = () => {
       v-if="filteredClients.length === 0"
       class="flex-1 flex flex-col items-center justify-center px-4 text-center"
     >
-      <div
-        class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4"
-      >
-        <span class="material-symbols-outlined text-[32px]">person_search</span>
-      </div>
+      <Users :size="64" :stroke-width="1" class="text-slate-300 mb-4" />
       <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
         {{ searchQuery ? 'No se encontraron clientes' : 'Sin clientes registrados' }}
       </h3>
@@ -149,8 +155,8 @@ const handleClientSaved = () => {
         v-if="!searchQuery && canManageClients"
         @click="openNewClient"
         class="mt-6"
-        icon="person_add"
       >
+        <UserPlus :size="18" class="mr-2" />
         Agregar Cliente
       </BaseButton>
     </div>
@@ -160,12 +166,12 @@ const handleClientSaved = () => {
       <div
         v-for="client in filteredClients"
         :key="client.id"
-        class="relative flex items-center gap-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm p-3 border-l-[6px] overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.99]"
+        class="relative flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-3 border-l-[6px] overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.99]"
         :class="client.balance.gt(0) ? 'border-red-500' : 'border-emerald-500'"
         @click="openClientDetail(client.id)"
       >
         <div
-          class="h-12 w-12 shrink-0 rounded-full flex items-center justify-center font-bold text-lg"
+          class="h-12 w-12 shrink-0 rounded-[18px] flex items-center justify-center font-bold text-lg"
           :class="getColor(client.name)"
         >
           {{ getInitials(client.name) }}
@@ -174,7 +180,7 @@ const handleClientSaved = () => {
           <p class="text-slate-900 dark:text-white text-base font-bold truncate">
             {{ client.name }}
           </p>
-          <p class="text-gray-500 text-xs font-medium truncate">
+          <p class="text-slate-500 text-xs font-medium truncate">
             CC: {{ formatCedula(client.cedula) }}
           </p>
         </div>
@@ -185,12 +191,12 @@ const handleClientSaved = () => {
           >
             {{ client.balance.gt(0) ? '-' : '' }}{{ formatCurrency(client.balance.abs()) }}
           </p>
-          <span v-if="client.balance.gt(0)" class="text-[10px] text-red-500 font-medium uppercase">
+          <span v-if="client.balance.gt(0)" class="text-[10px] text-red-500 font-bold uppercase tracking-wider">
             Debe
           </span>
-          <span v-else class="text-[10px] text-emerald-600 font-medium uppercase"> Al día </span>
+          <span v-else class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider"> Al día </span>
         </div>
-        <span class="material-symbols-outlined text-gray-400">chevron_right</span>
+        <ChevronRight :size="20" class="text-slate-300" />
       </div>
     </main>
 
@@ -199,9 +205,9 @@ const handleClientSaved = () => {
       <button
         v-if="canManageClients"
         @click="openNewClient"
-        class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90"
+        class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90"
       >
-        <span class="material-symbols-outlined text-[32px]">add</span>
+        <Plus :size="32" :stroke-width="1.5" />
       </button>
     </div>
 

@@ -3,10 +3,29 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 // T-011: Store para preferencias persistentes
 import { usePreferencesStore } from '../stores/preferences';
+import { useAuthStore } from '../stores/auth';
 import { logger } from '../utils/logger';
+import { 
+  X, 
+  Settings, 
+  ShieldCheck, 
+  Bell, 
+  HelpCircle, 
+  MessageSquare, 
+  FileText, 
+  Volume2, 
+  Moon, 
+  BookOpen, 
+  Flag, 
+  LogOut,
+  User as UserIcon,
+  ChevronRight,
+  Edit2
+} from 'lucide-vue-next';
 
 interface Props {
   isOpen: boolean;
+  // Fallbacks provided for backward compatibility, but store is primary
   userType?: 'admin' | 'employee';
   userName?: string;
   userEmail?: string;
@@ -26,8 +45,15 @@ const emit = defineEmits<{
 }>();
 
 const router = useRouter();
+const authStore = useAuthStore();
 // T-011: Usar store persistente en lugar de refs locales
 const preferencesStore = usePreferencesStore();
+
+// User info from store (Authority source)
+const currentUser = computed(() => authStore.currentUser);
+const displayUserName = computed(() => currentUser.value?.name || props.userName);
+const displayUserEmail = computed(() => currentUser.value?.email || props.userEmail);
+const isAdmin = computed(() => currentUser.value?.type === 'admin');
 
 // T-011: Computed que referencian el store
 const saleSoundsEnabled = computed(() => preferencesStore.saleSoundsEnabled);
@@ -36,15 +62,16 @@ const notificationsEnabled = computed(() => preferencesStore.notificationsEnable
 
 // Computed
 const userInitials = computed(() => {
-  return props.userName
+  const name = displayUserName.value;
+  if (!name) return '??';
+  return name
     .split(' ')
+    .filter(word => word.length > 0)
     .map((word) => word[0])
     .join('')
     .substring(0, 2)
     .toUpperCase();
 });
-
-const isAdmin = computed(() => props.userType === 'admin');
 
 // Methods
 const closeSidebar = () => {
@@ -53,6 +80,7 @@ const closeSidebar = () => {
 
 const handleLogout = () => {
   emit('logout');
+  authStore.logout();
   router.push('/login');
 };
 
@@ -88,61 +116,55 @@ const navigateToSecurity = () => {
         >
           <!-- Profile Header Section -->
           <div
-            class="relative flex flex-col items-center bg-slate-50 dark:bg-[#15202b] border-b border-slate-100 dark:border-slate-800 p-6 pt-12 shrink-0"
+            class="relative flex flex-col items-center bg-white dark:bg-[#15202b] border-b border-slate-100 dark:border-slate-800 p-6 pt-12 shrink-0"
           >
             <!-- Close Button -->
             <button
               @click="closeSidebar"
-              class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
+              class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
-              <span class="material-symbols-outlined text-[24px]">close</span>
+              <X :size="20" :stroke-width="1.5" />
             </button>
 
-            <!-- Avatar -->
+            <!-- Avatar (Squircle Nu-Style) -->
             <div class="relative group" :class="{ 'cursor-pointer': isAdmin }">
               <div
-                v-if="isAdmin"
-                class="w-24 h-24 rounded-full bg-cover bg-center shadow-md border-4 border-white dark:border-slate-800 bg-gradient-to-br from-blue-400 to-purple-500"
-              ></div>
-              <div
-                v-else
-                class="w-24 h-24 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center border-4 border-white dark:border-slate-800 shadow-md"
+                class="w-24 h-24 rounded-[2rem] flex items-center justify-center border-4 border-white dark:border-slate-800 shadow-sm transition-transform duration-300 group-hover:scale-105"
+                :class="isAdmin ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'"
               >
-                <span class="text-3xl font-bold text-slate-500 dark:text-slate-300">{{
-                  userInitials
-                }}</span>
+                <span class="text-3xl font-bold tracking-tight">{{ userInitials }}</span>
               </div>
 
               <!-- Edit badge (Admin only) -->
               <div
                 v-if="isAdmin"
-                class="absolute bottom-0 right-0 bg-primary rounded-full p-1 border-2 border-white dark:border-slate-800"
+                class="absolute -bottom-1 -right-1 bg-white dark:bg-slate-800 rounded-xl p-1.5 shadow-sm border border-slate-100 dark:border-slate-700 text-indigo-600 dark:text-indigo-400"
               >
-                <span class="material-symbols-outlined text-white text-[14px]">edit</span>
+                <Edit2 :size="14" :stroke-width="1.5" />
               </div>
             </div>
 
             <!-- User Info -->
-            <div class="flex flex-col items-center mt-4 text-center">
+            <div class="flex flex-col items-center mt-5 text-center">
               <h2 class="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
-                {{ userName }}
+                {{ displayUserName }}
               </h2>
-              <div class="mt-2">
+              <div class="mt-2.5">
                 <span
                   v-if="isAdmin"
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary text-white tracking-wide shadow-sm"
+                  class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 tracking-widest uppercase border border-indigo-100 dark:border-indigo-500/30"
                 >
                   ADMINISTRADOR
                 </span>
                 <span
                   v-else
-                  class="inline-flex items-center px-2.5 py-1 rounded border border-gray-200 dark:border-slate-600 text-xs font-bold bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 tracking-wide uppercase"
+                  class="inline-flex items-center px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700 text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 tracking-widest uppercase"
                 >
                   {{ userRole }}
                 </span>
               </div>
               <p v-if="isAdmin" class="mt-2 text-sm text-slate-500 dark:text-slate-400 font-medium">
-                {{ userEmail }}
+                {{ displayUserEmail }}
               </p>
             </div>
           </div>
@@ -156,7 +178,7 @@ const navigateToSecurity = () => {
               <!-- Group: Mi Cuenta -->
               <div>
                 <h3
-                  class="px-2 mb-2 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider"
+                  class="px-3 mb-3 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest"
                 >
                   Mi Cuenta
                 </h3>
@@ -164,33 +186,30 @@ const navigateToSecurity = () => {
                   <!-- Item: Seguridad -->
                   <button
                     @click="navigateToSecurity"
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-[#e7edf3] dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">lock</span>
+                        <ShieldCheck :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Seguridad y Contraseña</span
                       >
                     </div>
-                    <span
-                      class="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[20px]"
-                      >chevron_right</span
-                    >
+                    <ChevronRight :size="18" :stroke-width="1.5" class="text-slate-400" />
                   </button>
 
                   <!-- Item: Notificaciones (Toggle) -->
                   <div
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-[#e7edf3] dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">notifications</span>
+                        <Bell :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Notificaciones</span
@@ -200,7 +219,7 @@ const navigateToSecurity = () => {
                     <label class="relative inline-flex items-center cursor-pointer">
                       <input v-model="notificationsEnabled" type="checkbox" class="sr-only peer" />
                       <div
-                        class="w-11 h-6 bg-slate-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary"
+                        class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary"
                       ></div>
                     </label>
                   </div>
@@ -210,7 +229,7 @@ const navigateToSecurity = () => {
               <!-- Group: Soporte -->
               <div>
                 <h3
-                  class="px-2 mb-2 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider"
+                  class="px-3 mb-3 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest"
                 >
                   Soporte
                 </h3>
@@ -218,13 +237,13 @@ const navigateToSecurity = () => {
                   <!-- Item: Centro de Ayuda -->
                   <button
                     @click="navigateToHelp"
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-[#e7edf3] dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">help</span>
+                        <HelpCircle :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Centro de Ayuda</span
@@ -234,13 +253,13 @@ const navigateToSecurity = () => {
 
                   <!-- Item: Contactar Soporte -->
                   <button
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-[#e7edf3] dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">chat_bubble</span>
+                        <MessageSquare :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Contactar Soporte</span
@@ -250,13 +269,13 @@ const navigateToSecurity = () => {
 
                   <!-- Item: Términos y Condiciones -->
                   <button
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-[#e7edf3] dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">description</span>
+                        <FileText :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Términos y Condiciones</span
@@ -272,20 +291,20 @@ const navigateToSecurity = () => {
               <!-- Group: Preferencias -->
               <div>
                 <h3
-                  class="px-2 mb-2 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider"
+                  class="px-3 mb-3 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest"
                 >
                   Preferencias
                 </h3>
                 <div class="space-y-1">
                   <!-- Item: Sonidos de Venta -->
                   <div
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">volume_up</span>
+                        <Volume2 :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Sonidos de Venta</span
@@ -294,20 +313,20 @@ const navigateToSecurity = () => {
                     <label class="relative inline-flex items-center cursor-pointer">
                       <input v-model="saleSoundsEnabled" type="checkbox" class="sr-only peer" />
                       <div
-                        class="w-11 h-6 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary"
+                        class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary"
                       ></div>
                     </label>
                   </div>
 
                   <!-- Item: Modo Oscuro -->
                   <div
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">dark_mode</span>
+                        <Moon :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Modo Oscuro</span
@@ -321,7 +340,7 @@ const navigateToSecurity = () => {
                         class="sr-only peer"
                       />
                       <div
-                        class="w-11 h-6 bg-gray-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary"
+                        class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary"
                       ></div>
                     </label>
                   </div>
@@ -331,47 +350,41 @@ const navigateToSecurity = () => {
               <!-- Group: Ayuda y Soporte -->
               <div>
                 <h3
-                  class="px-2 mb-2 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider"
+                  class="px-3 mb-3 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest"
                 >
                   Ayuda y Soporte
                 </h3>
                 <div class="space-y-1">
                   <button
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-gray-50 dark:focus:bg-slate-800"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-gray-50 dark:focus:bg-slate-800"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                        <BookOpen :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Ver Tutoriales</span
                       >
                     </div>
-                    <span
-                      class="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[20px]"
-                      >chevron_right</span
-                    >
+                    <ChevronRight :size="18" :stroke-width="1.5" class="text-slate-400" />
                   </button>
 
                   <button
-                    class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-gray-50 dark:focus:bg-slate-800"
+                    class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all group focus:outline-none focus:bg-gray-50 dark:focus:bg-slate-800"
                   >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-4">
                       <div
-                        class="w-9 h-9 shrink-0 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 group-hover:bg-white dark:group-hover:bg-slate-600 group-hover:shadow-sm transition-all"
+                        class="w-10 h-10 shrink-0 rounded-xl bg-slate-50 dark:bg-slate-800/80 flex items-center justify-center text-slate-600 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-700 group-hover:shadow-sm transition-all border border-transparent group-hover:border-slate-100 dark:group-hover:border-slate-700"
                       >
-                        <span class="material-symbols-outlined text-[20px]">flag</span>
+                        <Flag :size="20" :stroke-width="1.5" />
                       </div>
                       <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
                         >Reportar un problema</span
                       >
                     </div>
-                    <span
-                      class="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[20px]"
-                      >chevron_right</span
-                    >
+                    <ChevronRight :size="18" :stroke-width="1.5" class="text-slate-400" />
                   </button>
                 </div>
               </div>
@@ -379,12 +392,10 @@ const navigateToSecurity = () => {
               <!-- Info Banner for Employee -->
               <div class="mt-4 mx-2">
                 <div
-                  class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg flex items-start gap-3 border border-blue-100 dark:border-blue-900/30"
+                  class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl flex items-start gap-3 border border-blue-100 dark:border-blue-900/30"
                 >
-                  <span class="material-symbols-outlined text-blue-500 text-[20px] shrink-0 mt-0.5"
-                    >lock</span
-                  >
-                  <p class="text-xs text-blue-800 dark:text-blue-200 leading-relaxed">
+                  <ShieldCheck :size="18" :stroke-width="1.5" class="text-blue-500 shrink-0 mt-0.5" />
+                  <p class="text-xs text-blue-800 dark:text-blue-200 leading-relaxed font-medium">
                     Tu cuenta es gestionada por el administrador. Para cambiar tu PIN o datos
                     personales, contacta a tu jefe.
                   </p>
@@ -399,13 +410,13 @@ const navigateToSecurity = () => {
           >
             <button
               @click="handleLogout"
-              class="w-full flex items-center justify-center gap-2 p-3.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 transition-colors font-semibold shadow-sm border border-transparent focus:outline-none focus:ring-2 focus:ring-red-500/50"
+              class="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 transition-colors font-semibold shadow-sm border border-transparent focus:outline-none focus:ring-2 focus:ring-red-500/50"
             >
-              <span class="material-symbols-outlined text-[20px]">logout</span>
+              <LogOut :size="18" :stroke-width="1.5" />
               Cerrar Sesión
             </button>
             <p
-              class="text-center text-[11px] text-slate-400 dark:text-slate-500 mt-4 font-medium tracking-wide"
+              class="text-center text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 mt-4 font-bold"
             >
               Versión 1.0.2 - Build 2025
             </p>

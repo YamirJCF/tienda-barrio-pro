@@ -6,6 +6,17 @@ import { Decimal } from 'decimal.js';
 import BaseModal from '../components/ui/BaseModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import { 
+  ArrowLeft, 
+  MoreVertical, 
+  Trash2, 
+  Receipt, 
+  Banknote, 
+  ShoppingCart, 
+  Plus,
+  AlertTriangle,
+  ChevronLeft
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const route = useRoute();
@@ -129,7 +140,7 @@ const registerPayment = () => {
             aria-label="Volver"
             class="flex items-center justify-center size-12 -ml-3 text-white rounded-full hover:bg-white/10 active:bg-white/20 transition-colors"
           >
-            <span class="material-symbols-outlined text-[28px]">arrow_back_ios_new</span>
+            <ChevronLeft :size="28" :stroke-width="1.5" />
           </button>
           <div class="flex gap-4 relative">
             <button
@@ -137,7 +148,7 @@ const registerPayment = () => {
               aria-label="Opciones"
               class="flex items-center justify-center size-10 text-slate-300 rounded-full hover:bg-white/10 active:bg-white/20 transition-colors"
             >
-              <span class="material-symbols-outlined">more_vert</span>
+              <MoreVertical :size="24" :stroke-width="1.5" />
             </button>
 
             <!-- Dropdown Menu -->
@@ -150,7 +161,7 @@ const registerPayment = () => {
                   @click="confirmDelete"
                   class="w-full px-4 py-3 flex items-center gap-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
                 >
-                  <span class="material-symbols-outlined text-[20px]">delete</span>
+                  <Trash2 :size="20" :stroke-width="1.5" />
                   <span class="font-medium">Eliminar cliente</span>
                 </button>
               </div>
@@ -213,9 +224,9 @@ const registerPayment = () => {
       <!-- Empty State -->
       <div v-if="transactions.length === 0" class="flex flex-col items-center py-12 text-center">
         <div
-          class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4"
+          class="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4"
         >
-          <span class="material-symbols-outlined text-[32px]">receipt_long</span>
+          <Receipt :size="32" :stroke-width="1.5" />
         </div>
         <p class="text-slate-500 text-sm">Sin movimientos registrados</p>
       </div>
@@ -228,16 +239,14 @@ const registerPayment = () => {
           class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 active:scale-[0.98] transition-transform duration-150"
         >
           <div
-            class="shrink-0 flex items-center justify-center size-12 rounded-full"
+            class="shrink-0 flex items-center justify-center size-12 rounded-2xl"
             :class="
               tx.type === 'payment'
                 ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
                 : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
             "
           >
-            <span class="material-symbols-outlined">
-              {{ tx.type === 'payment' ? 'payments' : 'shopping_cart' }}
-            </span>
+             <component :is="tx.type === 'payment' ? Banknote : ShoppingCart" :size="24" :stroke-width="1.5" />
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-slate-900 dark:text-white text-base font-bold truncate">
@@ -274,8 +283,8 @@ const registerPayment = () => {
          @click="showPaymentModal = true"
          variant="success"
          class="w-full h-14 text-lg font-bold shadow-lg shadow-emerald-200 dark:shadow-none"
-         icon="add_circle"
       >
+        <Plus :size="20" class="mr-2" />
         REGISTRAR ABONO
       </BaseButton>
     </div>
@@ -311,7 +320,6 @@ const registerPayment = () => {
                     :disabled="!paymentAmount"
                     variant="success"
                     class="flex-1"
-                    icon="check"
                 >
                     Confirmar
                 </BaseButton>
@@ -326,7 +334,7 @@ const registerPayment = () => {
     >
         <div class="p-6 text-center">
             <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
-              <span class="material-symbols-outlined text-red-600 text-[28px]">warning</span>
+              <AlertTriangle :size="28" class="text-red-600" />
             </div>
             <p class="text-slate-500 dark:text-slate-400 text-sm mb-2">
               Esta acción eliminará al cliente y todo su historial de transacciones.
@@ -347,8 +355,8 @@ const registerPayment = () => {
                     @click="deleteClient"
                     variant="danger"
                     class="flex-1"
-                    icon="delete"
                 >
+                    <Trash2 :size="20" class="mr-2" />
                     Eliminar
                 </BaseButton>
             </div>

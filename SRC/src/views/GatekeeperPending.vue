@@ -16,6 +16,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
+import { Hourglass, Ban, RefreshCw, Smartphone, Loader2 } from 'lucide-vue-next';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -41,14 +42,14 @@ const statusMessage = computed(() => {
   }
 });
 
-const statusIcon = computed(() => {
+const StatusIconComponent = computed(() => {
   switch (authStore.deviceApproved) {
     case 'pending':
-      return 'hourglass_top';
+      return Hourglass;
     case 'rejected':
-      return 'block';
+      return Ban;
     default:
-      return 'sync';
+      return RefreshCw;
   }
 });
 
@@ -148,12 +149,7 @@ onUnmounted(() => {
         class="w-24 h-24 rounded-full flex items-center justify-center bg-gray-100 dark:bg-gray-800"
         :class="[authStore.deviceApproved === 'rejected' ? 'bg-red-100 dark:bg-red-900/20' : 'bg-amber-100 dark:bg-amber-900/20']"
       >
-        <span
-          class="material-symbols-outlined text-[48px]"
-          :class="statusColor"
-        >
-          {{ statusIcon }}
-        </span>
+        <component :is="StatusIconComponent" :size="48" :stroke-width="1.5" :class="statusColor" />
       </div>
 
       <!-- Status Message -->
@@ -170,7 +166,7 @@ onUnmounted(() => {
       <div class="w-full bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined text-gray-400">smartphone</span>
+            <Smartphone :size="20" class="text-gray-400" />
             <div class="text-left">
               <p class="text-sm font-medium text-gray-900 dark:text-white">ID del Dispositivo</p>
               <p class="text-xs text-gray-500 font-mono">{{ deviceId || '...' }}</p>
@@ -197,7 +193,7 @@ onUnmounted(() => {
         <p>
           Verificando automáticamente cada 30 segundos...
           <span v-if="isPolling" class="inline-flex items-center gap-1 text-primary">
-            <span class="material-symbols-outlined text-sm animate-spin">sync</span>
+            <Loader2 :size="14" class="animate-spin" />
           </span>
         </p>
       </div>
@@ -210,7 +206,7 @@ onUnmounted(() => {
           :disabled="isPolling"
           class="w-full py-3 px-4 rounded-xl bg-primary text-white font-semibold flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors disabled:opacity-50"
         >
-          <span class="material-symbols-outlined" :class="{ 'animate-spin': isPolling }">refresh</span>
+          <RefreshCw :size="20" :class="{ 'animate-spin': isPolling }" />
           Verificar Ahora
         </button>
         

@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useInventoryStore } from '../../stores/inventory';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
+import { Package } from 'lucide-vue-next';
 
 const inventoryStore = useInventoryStore();
 const { formatCurrency } = useCurrencyFormat();
@@ -38,7 +39,7 @@ const valuation = computed(() => {
 
     <div class="flex items-center gap-2 mb-4 relative z-10">
       <div class="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
-         <span class="material-symbols-outlined text-purple-300">inventory_2</span>
+         <Package class="text-purple-300" :size="24" />
       </div>
       <h3 class="font-bold text-lg tracking-tight">Valoración de Inventario</h3>
     </div>

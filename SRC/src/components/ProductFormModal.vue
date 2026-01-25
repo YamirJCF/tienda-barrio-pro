@@ -9,6 +9,17 @@ import { getMarginLoss } from '../utils/currency';
 import BaseModal from './ui/BaseModal.vue';
 import BaseInput from './ui/BaseInput.vue';
 import BaseButton from './ui/BaseButton.vue';
+import {
+  Search,
+  LayoutGrid,
+  Package2,
+  Scale,
+  DollarSign,
+  Banknote,
+  AlertTriangle,
+  TrendingUp,
+  Save
+} from 'lucide-vue-next';
 
 // Props
 // WO-001: Changed productId from number to string for UUID
@@ -347,7 +358,7 @@ watch(
                   v-model="formData.brand"
                   label="Marca"
                   placeholder="Buscar..."
-                  icon="search"
+                  :icon="Search"
                 />
               </div>
               <div class="col-span-4">
@@ -372,7 +383,7 @@ watch(
                     label="Categoría"
                     placeholder="Ej. Bebidas, Despensa, Lácteos..."
                     list="categories"
-                    icon="category"
+                    :icon="LayoutGrid"
                   />
                   <datalist id="categories">
                     <option v-for="cat in existingCategories" :key="cat" :value="cat" />
@@ -392,11 +403,11 @@ watch(
                     "
                     @click="toggleSaleMode('unit')"
                   >
-                    <span
-                      class="material-symbols-outlined text-[16px]"
-                      :class="formData.saleMode === 'unit' ? 'fill-1' : ''"
-                      >package_2</span
-                    >
+                    <Package2
+                      class="text-[16px]"
+                      :class="formData.saleMode === 'unit' ? 'fill-current' : ''"
+                      :size="16"
+                    />
                     Unidad
                   </button>
                   <button
@@ -409,11 +420,11 @@ watch(
                     "
                     @click="toggleSaleMode('weight')"
                   >
-                    <span
-                      class="material-symbols-outlined text-[16px]"
-                      :class="formData.saleMode === 'weight' ? 'fill-1' : ''"
-                      >scale</span
-                    >
+                    <Scale
+                      class="text-[16px]"
+                      :class="formData.saleMode === 'weight' ? 'fill-current' : ''"
+                      :size="16"
+                    />
                     Valor/Peso
                   </button>
                 </div>
@@ -477,7 +488,7 @@ watch(
                   placeholder="0"
                   type="number"
                   step="0.01"
-                  icon="attach_money"
+                  :icon="DollarSign"
                 />
               </div>
               <div class="col-span-6">
@@ -488,7 +499,7 @@ watch(
                   type="number"
                   step="0.01"
                   required
-                  icon="attach_money"
+                  :icon="DollarSign"
                   class="font-bold text-emerald-600"
                 />
               </div>
@@ -498,10 +509,7 @@ watch(
                 <div
                   class="flex items-center gap-2 p-2.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-lg"
                 >
-                  <span
-                    class="material-symbols-outlined text-yellow-600 dark:text-yellow-400 text-lg"
-                    >paid</span
-                  >
+                  <Banknote class="text-yellow-600 dark:text-yellow-400" :size="18" />
                   <div class="flex flex-col">
                     <span class="text-xs font-bold text-yellow-700 dark:text-yellow-300">
                       ⚠️ Alerta de Eficiencia
@@ -521,9 +529,7 @@ watch(
                 <div
                   class="flex items-center gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-lg"
                 >
-                  <span class="material-symbols-outlined text-amber-600 dark:text-amber-400 text-lg"
-                    >warning</span
-                  >
+                  <AlertTriangle class="text-amber-600 dark:text-amber-400" :size="18" />
                   <span class="text-xs font-medium text-amber-700 dark:text-amber-300"
                     >El precio de venta es menor al costo</span
                   >
@@ -535,7 +541,7 @@ watch(
                   v-if="margin > 0"
                   class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1"
                 >
-                  <span class="material-symbols-outlined text-[12px]">trending_up</span>
+                  <TrendingUp class="text-[12px]" :size="12" />
                   Margen estimado: {{ margin.toFixed(1) }}%
                 </span>
               </div>
@@ -578,7 +584,7 @@ watch(
                     :disabled="!isValid"
                     variant="primary"
                     class="flex-1"
-                    icon="save"
+                    :icon="Save"
                 >
                     Guardar
                 </BaseButton>

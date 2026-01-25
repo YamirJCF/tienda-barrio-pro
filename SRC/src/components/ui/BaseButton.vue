@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { Loader2 } from 'lucide-vue-next';
 
 interface Props {
     variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline' | 'success' | 'dark';
@@ -7,7 +8,7 @@ interface Props {
     type?: 'button' | 'submit' | 'reset';
     disabled?: boolean;
     loading?: boolean;
-    icon?: string;
+    icon?: any; // Changed from string to any to support Component
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -57,8 +58,8 @@ const handleClick = (event: MouseEvent) => {
 <template>
     <button :type="type" :class="[baseClasses, variantClasses, sizeClasses]" :disabled="disabled || loading"
         @click="handleClick">
-        <span v-if="loading" class="material-symbols-outlined animate-spin text-lg">progress_activity</span>
-        <span v-if="icon && !loading" class="material-symbols-outlined text-lg">{{ icon }}</span>
+        <Loader2 v-if="loading" class="animate-spin text-lg" :size="size === 'lg' ? 24 : 20" />
+        <component :is="icon" v-if="icon && !loading" class="text-lg" :size="size === 'lg' ? 24 : 20" />
         <slot />
     </button>
 </template>

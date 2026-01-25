@@ -5,6 +5,17 @@ import { useAuthStore } from '../stores/auth';
 import { logger } from '../utils/logger';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
+import { 
+  ArrowLeft, 
+  CheckCircle2, 
+  CircleSlash, 
+  Mail, 
+  Lock, 
+  Store, 
+  User, 
+  Eye, 
+  EyeOff
+} from 'lucide-vue-next';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -139,7 +150,7 @@ const handleSubmit = async () => {
           aria-label="Volver"
           class="flex items-center justify-center w-10 h-10 -ml-2 rounded-full active:bg-gray-100 dark:active:bg-white/10 text-[#0d1c17] dark:text-white transition-colors"
         >
-          <span class="material-symbols-outlined text-2xl">arrow_back_ios_new</span>
+          <ArrowLeft :size="24" :stroke-width="1.5" />
         </button>
         <h1 class="flex-1 text-center text-lg font-bold tracking-tight pr-8">
           Registra tu Negocio
@@ -169,9 +180,12 @@ const handleSubmit = async () => {
                 v-model="storeName"
                 id="storeName"
                 placeholder="Ej. Abastos La Estrella"
-                :icon="isStoreNameValid ? 'check_circle' : undefined"
                 :class="{'text-emerald-500': isStoreNameValid}"
-              />
+              >
+                  <template #prefix>
+                      <Store :size="18" class="text-gray-400" :class="{'text-emerald-500': isStoreNameValid}" />
+                  </template>
+              </BaseInput>
   
             </div>
             <p class="text-xs text-[#489d82] dark:text-gray-400 ml-1">
@@ -189,7 +203,11 @@ const handleSubmit = async () => {
               v-model="ownerName"
               id="ownerName"
               placeholder="Ej. Juan Pérez"
-            />
+            >
+                <template #prefix>
+                    <User :size="18" class="text-gray-400" />
+                </template>
+            </BaseInput>
             <p class="text-xs text-[#489d82] dark:text-gray-400 ml-1">
               Para dirigirnos a ti personalmente.
             </p>
@@ -217,9 +235,12 @@ const handleSubmit = async () => {
                 v-model="email"
                 type="email"
                 id="email"
-                icon="mail"
                 placeholder="tucorreo@ejemplo.com"
-            />
+            >
+                <template #prefix>
+                    <Mail :size="18" class="text-gray-400" />
+                </template>
+            </BaseInput>
           </div>
 
           <div class="flex flex-col gap-1.5">
@@ -230,7 +251,7 @@ const handleSubmit = async () => {
             >
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                <span class="material-symbols-outlined text-xl">lock</span>
+                <Lock :size="20" />
               </span>
               <input
                 v-model="password"
@@ -245,9 +266,7 @@ const handleSubmit = async () => {
                 @click="togglePassword"
                 class="absolute right-0 top-0 bottom-0 px-4 flex items-center text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none"
               >
-                <span class="material-symbols-outlined text-xl">{{
-                  showPassword ? 'visibility_off' : 'visibility'
-                }}</span>
+                <component :is="showPassword ? Eye : EyeOff" :size="20" />
               </button>
             </div>
           </div>
@@ -261,7 +280,7 @@ const handleSubmit = async () => {
             >
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                <span class="material-symbols-outlined text-xl">lock</span>
+                <Lock :size="20" />
               </span>
               <input
                 v-model="confirmPassword"
@@ -283,18 +302,14 @@ const handleSubmit = async () => {
                 @click="toggleConfirmPassword"
                 class="absolute right-10 top-0 bottom-0 px-2 flex items-center text-gray-400 hover:text-emerald-500 transition-colors focus:outline-none"
               >
-                <span class="material-symbols-outlined text-xl">{{
-                  showConfirmPassword ? 'visibility_off' : 'visibility'
-                }}</span>
+                <component :is="showConfirmPassword ? Eye : EyeOff" :size="20" />
               </button>
               <span
                 v-if="confirmPassword.length > 0"
                 class="absolute right-4 top-1/2 -translate-y-1/2 transition-opacity"
                 :class="isConfirmPasswordValid ? 'text-emerald-500' : 'text-red-400'"
               >
-                <span class="material-symbols-outlined">{{
-                  isConfirmPasswordValid ? 'check_circle' : 'cancel'
-                }}</span>
+                <component :is="isConfirmPasswordValid ? CheckCircle2 : CircleSlash" :size="20" />
               </span>
             </div>
             <p
@@ -320,7 +335,7 @@ const handleSubmit = async () => {
           class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"
         >
           <span>Abrir mi Tienda</span>
-          <span class="material-symbols-outlined text-xl">storefront</span>
+          <Store :size="20" class="ml-2" />
         </BaseButton>
         <p class="text-xs text-center text-[#489d82] mt-3">
           Al crear la cuenta aceptas los

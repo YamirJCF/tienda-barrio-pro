@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { Save } from 'lucide-vue-next';
 
 interface Props {
   modelValue: boolean;
@@ -107,7 +108,7 @@ watch(
               @click="save"
               class="flex-1 h-12 rounded-xl bg-primary text-white font-semibold active:scale-[0.98] transition-all flex items-center justify-center gap-2"
             >
-              <span class="material-symbols-outlined text-xl">save</span>
+              <Save :size="20" />
               Guardar
             </button>
           </div>

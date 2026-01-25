@@ -7,6 +7,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import BaseButton from '@/components/ui/BaseButton.vue';
+import { User, Bell, PhoneCall, CheckCircle } from 'lucide-vue-next';
 
 const authStore = useAuthStore();
 const isVisible = ref(false);
@@ -68,11 +69,11 @@ defineExpose({ isVisible });
               <!-- Content -->
               <div class="p-6 flex flex-col items-center text-center gap-4">
                   <div class="relative">
-                      <div class="w-20 h-20 bg-gray-200 rounded-full overflow-hidden">
-                          <span class="material-symbols-outlined text-gray-400 text-5xl mt-4">person</span>
+                      <div class="w-20 h-20 bg-gray-200 rounded-full overflow-hidden flex items-center justify-center">
+                          <User class="text-gray-400" :size="48" />
                       </div>
                       <div class="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full p-1">
-                          <span class="material-symbols-outlined text-amber-500">notifications_active</span>
+                          <Bell class="text-amber-500" :size="24" />
                       </div>
                   </div>
                   
@@ -84,7 +85,7 @@ defineExpose({ isVisible });
                           Solicitó acceso {{ requester.time }}
                       </p>
                       <div v-if="requester.pings > 0" class="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold">
-                          <span class="material-symbols-outlined text-xs">ring_volume</span>
+                          <PhoneCall :size="12" />
                           Insistencia: {{ requester.pings }}/3
                       </div>
                   </div>
@@ -102,7 +103,7 @@ defineExpose({ isVisible });
                       @click="handleApprove"
                       class="p-4 text-white bg-emerald-600 font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
                   >
-                      <span class="material-symbols-outlined">check_circle</span>
+                      <CheckCircle :size="20" />
                       APROBAR
                   </button>
               </div>
