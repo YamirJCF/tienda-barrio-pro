@@ -1,7 +1,8 @@
 # Documento de Requisitos del Producto (PRD)
 ## Tienda de Barrio Pro
 
-> **Estado de Sincronización:** 🟢 100% - Fase 3 (Validado con Frontend)
+> **Estado de Sincronización:** ⚠️ LEGACY / OBSOLETO
+> **Nota del Arquitecto:** Este documento se mantiene solo como referencia histórica de la visión del producto. Para especificaciones técnicas y funcionales vigentes, consultar la carpeta `01_REQUIREMENTS/FRD/` (FRD-001 al FRD-005). Los detalles aquí descritos pueden no coincidir con la implementación actual.
 > **Última Auditoría:** 2026-01-22 | Actualización basada en Código Fuente (`src/types`)
 
 ---

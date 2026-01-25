@@ -72,7 +72,7 @@ Documentos transversales que rigen la calidad y arquitectura:
 
 | Métrica | Valor |
 |---------|-------|
-| Vistas en código (`03_SRC/src/views/`) | 15 |
+| Vistas en código (`SRC/src/views/`) | 15 |
 | Módulos documentados (`01_REQUIREMENTS/`) | 26 ⬆️ |
 | Módulos sincronizados (100%) | 20 ✅ |
 | Documentos de diseño UX/UI (`03_UI_UX_DESIGN/`) | 6 |
