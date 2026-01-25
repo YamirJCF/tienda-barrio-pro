@@ -48,7 +48,7 @@ export const useAuthStore = defineStore(
     const isAuthenticated = ref(false);
 
     // SPEC-005: Estados IAM
-    const deviceApproved = ref<'pending' | 'approved' | 'rejected' | null>(null);
+    // deviceApproved ref removed -> replaced by computed dailyAccessState
     // storeOpenStatus removed - replaced by Offline Accountability logic
 
     // Computed
@@ -206,41 +206,109 @@ export const useAuthStore = defineStore(
       currentUser.value = null;
       isAuthenticated.value = false;
       // Reset IAM states
-      deviceApproved.value = null;
+      dailyAccessState.value = {
+        status: 'expired',
+        lastApprovedAt: null,
+        fingerprint: null,
+        requestedAt: null
+      };
     };
 
-    // SPEC-005: Actions para estados IAM
-    const setDeviceStatus = (status: 'pending' | 'approved' | 'rejected') => {
-      deviceApproved.value = status;
+    // STUB: Daily Pass Logic (Local Simulation for FRD-001)
+    // -----------------------------------------------------
+
+    interface DailyPassState {
+      status: 'pending' | 'approved' | 'rejected' | 'expired';
+      lastApprovedAt: string | null; // ISO
+      fingerprint: string | null;
+      requestedAt: string | null;
+    }
+
+    // State principal de seguridad diaria
+    const dailyAccessState = ref<DailyPassState>({
+      status: 'expired', // Default to expired for Zero Trust
+      lastApprovedAt: null,
+      fingerprint: null,
+      requestedAt: null
+    });
+
+    // Mantenemos propiedad computada para compatibilidad
+    // 'deviceApproved' ahora deriva calculando la expiración
+    const deviceApproved = computed(() => {
+      // Regla 1: Expiración Diaria
+      if (dailyAccessState.value.status === 'approved' && dailyAccessState.value.lastApprovedAt) {
+        const lastDate = new Date(dailyAccessState.value.lastApprovedAt).toDateString();
+        const today = new Date().toDateString();
+        if (lastDate !== today) {
+          return 'expired';
+        }
+      }
+      return dailyAccessState.value.status;
+    });
+
+    // Utilidad: Fingerprinting simplificado (Local)
+    const getDeviceFingerprint = () => {
+      return btoa(`${navigator.userAgent}-${window.screen.width}x${window.screen.height}-${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
     };
 
-    // WO-005: Daily Pass Logic (Stubs)
+    // Action: Verificar estado al cargar app
     const checkDailyApproval = async () => {
-      // En producción: RPC check_daily_pass()
-      // Por ahora devuelve el estado actual de deviceApproved
-      // Simulando que 'approved' === pase diario activo
-      return deviceApproved.value;
+      // En producción: Supabase RPC check_daily_pass(fingerprint)
+
+      // Simulación Local: Auto-expirar si cambió el día
+      if (dailyAccessState.value.status === 'approved' && dailyAccessState.value.lastApprovedAt) {
+        const lastDate = new Date(dailyAccessState.value.lastApprovedAt).toDateString();
+        const today = new Date().toDateString();
+
+        if (lastDate !== today) {
+          console.log('[Auth] Daily Pass vencido (Nuevo día)');
+          dailyAccessState.value.status = 'expired';
+        }
+      }
+      return dailyAccessState.value.status;
     };
 
+    // Action: Solicitar acceso
     const requestDailyPass = async () => {
       // En producción: RPC request_daily_pass() con ping count
-      console.log("Ping enviado al admin");
+      console.log("[Auth] Solicitando Pase Diario...");
+      dailyAccessState.value.status = 'pending';
+      dailyAccessState.value.requestedAt = new Date().toISOString();
+      dailyAccessState.value.fingerprint = getDeviceFingerprint();
       return true;
     };
 
-    // storeOpenStatus setter removed
+    // Action: Aprobar (Solo Admin - Simulado)
+    const approveRequest = async () => {
+      if (!isAdmin.value) return false;
 
-    // Reset function removed to prevent demo account restoration
+      console.log("[Auth] Admin aprobando solicitud...");
+      dailyAccessState.value.status = 'approved';
+      dailyAccessState.value.lastApprovedAt = new Date().toISOString();
+      return true;
+    };
+
+    // Action: Rechazar (Solo Admin)
+    const rejectRequest = async () => {
+      if (!isAdmin.value) return false;
+
+      dailyAccessState.value = {
+        status: 'rejected',
+        lastApprovedAt: null,
+        fingerprint: null,
+        requestedAt: null
+      };
+      return true;
+    };
+
+    // Helper functions restored
     const resetToDemo = () => {
-      // Logic removed for audit integrity
       currentUser.value = null;
       isAuthenticated.value = false;
       stores.value = [];
       localStorage.clear();
       logger.log('✅ System cleared (No Demo restored)');
     };
-
-    // Auto-initialization removed
 
     const getStoreById = (id: string) => {
       return stores.value.find((s) => s.id === id);
@@ -252,14 +320,20 @@ export const useAuthStore = defineStore(
 
     const hasStores = computed(() => stores.value.length > 0);
 
+    // Accessors
+    const dailyAccessStatus = computed(() => deviceApproved.value);
+    const pendingRequestTime = computed(() => dailyAccessState.value.requestedAt);
+
     return {
       // State
       stores,
       currentUser,
       isAuthenticated,
+      dailyAccessState, // Exposed for Persistence
       // SPEC-005: IAM States
-      deviceApproved,
-      // storeOpenStatus removed
+      dailyAccessStatus, // Replaces direct exposure of deviceApproved
+      pendingRequestTime,
+
       // Computed
       isAdmin,
       isEmployee,
@@ -285,9 +359,10 @@ export const useAuthStore = defineStore(
       generateId,
       resetToDemo,
       // SPEC-005: IAM Methods
-      setDeviceStatus,
       checkDailyApproval,
-      requestDailyPass
+      requestDailyPass,
+      approveRequest,
+      rejectRequest
     };
   },
   {

@@ -2,9 +2,11 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCashRegisterStore } from '../stores/cashRegister';
+import { useCashControlStore } from '../stores/cashControl';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
 import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
+import PinChallengeModal from '../components/PinChallengeModal.vue';
 import Decimal from 'decimal.js';
 
 import { useAuthStore } from '../stores/auth'; // Import auth store
@@ -20,13 +22,18 @@ import {
 } from 'lucide-vue-next';
 
 const router = useRouter();
-const cashRegisterStore = useCashRegisterStore(); // Replaced storeStatusStore
-const authStore = useAuthStore(); // Initialize auth store
+const cashRegisterStore = useCashRegisterStore();
+const cashControlStore = useCashControlStore();
+const authStore = useAuthStore();
 const { formatCurrency } = useCurrencyFormat();
 const { showSuccess, showError } = useNotifications();
 // Composable: Request Management
 import { useAsyncAction } from '../composables/useAsyncAction';
 const { execute: executeAction, isLoading: isSubmitting } = useAsyncAction();
+
+// PIN Challenge State
+const showPinModal = ref(false);
+const pendingAction = ref<'open' | 'close'>('open');
 
 // Computed State
 const isOpening = computed(() => !cashRegisterStore.isOpen);
@@ -64,21 +71,36 @@ const differenceStatus = computed(() => {
     return { color: 'text-red-500', icon: AlertTriangle, text: 'Faltante (Pérdida)' };
 });
 
-const handleSubmit = async () => {
+// STEP 1: User clicks button -> Show PIN modal (do NOT execute yet)
+const handleSubmit = () => {
+    // Check if PIN is configured first
+    if (!cashControlStore.hasPinConfigured) {
+        showError('Debes configurar el PIN de caja primero. Ve a Configuración.');
+        return;
+    }
+    
+    // Set the pending action type
+    pendingAction.value = isOpening.value ? 'open' : 'close';
+    
+    // Show PIN challenge modal
+    showPinModal.value = true;
+};
+
+// STEP 2: PIN validated successfully -> Execute the actual operation
+const handlePinSuccess = async () => {
+    showPinModal.value = false;
+    
     await executeAction(async () => {
-        if (isOpening.value) {
+        if (pendingAction.value === 'open') {
             if (authStore.currentUser?.id) {
                 await cashRegisterStore.openRegister(authStore.currentUser.id, new Decimal(amount.value), notes.value);
             } else {
-                 throw new Error('Usuario no autenticado');
+                throw new Error('Usuario no autenticado');
             }
             showSuccess('Caja abierta correctamente');
             router.push('/'); // Go to POS
         } else {
             // Closing
-            if (!confirm('¿Estás seguro de cerrar el turno?')) {
-                return; // Cancelled
-            }
             await cashRegisterStore.closeRegister(new Decimal(amount.value), notes.value);
             showSuccess('Turno cerrado. Reporte generado.');
             router.push('/'); // Go to Dashboard/Home
@@ -188,6 +210,14 @@ const goBack = () => router.back();
             </BaseButton>
 
         </div>
+
+        <!-- PIN Challenge Modal -->
+        <PinChallengeModal
+            :isVisible="showPinModal"
+            :action="pendingAction"
+            @close="showPinModal = false"
+            @success="handlePinSuccess"
+        />
     </div>
 </template>
 

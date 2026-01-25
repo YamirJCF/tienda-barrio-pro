@@ -35,6 +35,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/CheckEmailView.vue'),
     meta: { requiresAuth: true }, // Acceso permitido solo a usuarios registrados (aunque no verificados)
   },
+  // WO-008: Sala de Espera Diaria
+  {
+    path: '/daily-waiting-room',
+    name: 'daily-waiting-room',
+    component: () => import('../views/DailyWaitingRoom.vue'),
+    meta: { requiresAuth: true }
+  },
   // Rutas Protegidas
   {
     path: '/admin',
@@ -144,6 +151,19 @@ router.beforeEach((to, from, next) => {
   // Evitamos bucle infinito permitiendo estar en 'register-store'
   if (isAuthenticated && !hasStore && to.name !== 'register-store') {
     return next({ name: 'register-store' });
+  }
+
+  // =============================================
+  // WO-008: Daily Access Check (Zero Trust)
+  // =============================================
+  if (isAuthenticated && to.meta.requiresAuth && to.name !== 'daily-waiting-room' && to.name !== 'check-email') {
+    const dailyStatus = authStore.dailyAccessStatus;
+
+    // Si el status no es 'approved', bloquear acceso
+    if (dailyStatus !== 'approved') {
+      console.log('[Router] Bloqueo de seguridad diaria. Status:', dailyStatus);
+      return next({ name: 'daily-waiting-room' });
+    }
   }
 
   // =============================================

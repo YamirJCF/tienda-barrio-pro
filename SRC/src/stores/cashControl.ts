@@ -185,89 +185,11 @@ export const useCashControlStore = defineStore('cashControl', () => {
     return { success: true };
   };
 
-  const openCash = async (
-    amount: number,
-    pin: string,
-    authorizedByName: string,
-  ): Promise<{ success: boolean; error?: string }> => {
-    // First validate PIN
-    const pinResult = await validatePin(pin);
-    if (!pinResult.success) {
-      return pinResult;
-    }
-
-    // Open cash
-    isOpen.value = true;
-    expectedCash.value = amount;
-    localStorage.setItem(STORAGE_KEYS.CASH_OPEN, 'true');
-    localStorage.setItem(STORAGE_KEYS.CASH_BASE, amount.toString());
-
-    // Create event record
-    const event: CashControlEvent = {
-      id: `evt_${Date.now()}`,
-      storeId: authStore.currentUser?.storeId || 'unknown',
-      eventType: 'open',
-      authorizedById: authStore.currentUser?.id || null,
-      authorizedByType: authStore.isAdmin ? 'admin' : 'employee',
-      authorizedByName,
-      amountDeclared: amount,
-      amountExpected: null,
-      difference: null,
-      pinVerified: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    currentEvent.value = event;
-    saveEvent(event);
-
-    logger.log('[CashControl] Caja abierta con monto:', amount);
-    return { success: true };
-  };
-
-  const closeCash = async (
-    amountDeclared: number,
-    pin: string,
-    authorizedByName: string,
-  ): Promise<{ success: boolean; error?: string; difference?: number }> => {
-    // ** CRITICAL: First validate PIN **
-    const pinResult = await validatePin(pin);
-    if (!pinResult.success) {
-      return pinResult;
-    }
-
-    // Calculate expected from sales
-    const currentExpected = await getExpectedCash();
-    const difference = amountDeclared - currentExpected;
-
-    // Close cash
-    isOpen.value = false;
-    localStorage.setItem(STORAGE_KEYS.CASH_OPEN, 'false');
-
-    // Create event record
-    const event: CashControlEvent = {
-      id: `evt_${Date.now()}`,
-      storeId: authStore.currentUser?.storeId || 'unknown',
-      eventType: 'close',
-      authorizedById: authStore.currentUser?.id || null,
-      authorizedByType: authStore.isAdmin ? 'admin' : 'employee',
-      authorizedByName,
-      amountDeclared,
-      amountExpected: currentExpected,
-      difference,
-      pinVerified: true,
-      createdAt: new Date().toISOString(),
-    };
-
-    currentEvent.value = event;
-    saveEvent(event);
-
-    // Reset base amount
-    expectedCash.value = 0;
-    localStorage.removeItem(STORAGE_KEYS.CASH_BASE);
-
-    logger.log('[CashControl] Caja cerrada. Diferencia:', difference);
-    return { success: true, difference };
-  };
+  // NOTE: openCash/closeCash methods were REMOVED per WO-007.
+  // Cash session operations are handled by cashRegister.ts.
+  // This store ONLY handles PIN validation and security.
+  // The UI (CashControlView) should call verifyPin() first, 
+  // then if successful, call cashRegisterStore.openRegister().
 
   const saveEvent = (event: CashControlEvent) => {
     const events = JSON.parse(localStorage.getItem(STORAGE_KEYS.CASH_EVENTS) || '[]');
@@ -315,8 +237,7 @@ export const useCashControlStore = defineStore('cashControl', () => {
     checkPinConfigured,
     validatePin,
     setupPin,
-    openCash,
-    closeCash,
+    // NOTE: openCash/closeCash REMOVED - use cashRegister.ts for operations
     checkCashStatus,
     getExpectedCash,
   };
