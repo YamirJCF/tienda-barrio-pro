@@ -51,12 +51,31 @@ const tests = ref<TestResult[]>([
   },
 ]);
 
-const isRunning = ref(false);
+// Composable: Request Management
+import { useAsyncAction } from '../composables/useAsyncAction';
+const { execute: executeTest, isLoading: isTestRunning } = useAsyncAction();
+
+const isRunning = isTestRunning; // Alias for compatibility with template
 const allTestsRan = ref(false);
 
 // ============================================
 // TEST IMPLEMENTATIONS
 // ============================================
+
+// We replace the manual 'isRunning' ref to use the one from useAsyncAction or keep it synced?
+// The view uses 'isRunning' for the whole suite.
+// Let's keep 'isRunning' manual for the *suite* level (runAllTests loop) but use useAsyncAction
+// for individual test execution OR wraps the whole suite?
+// The suite runs tests sequentially.
+// Best approach: Wrap individual test runs if we want safe execution,
+// OR wrap the entire `runAllTests` if we treat the suite run as the "Action".
+// Given `runTest` updates specific test object status, wrapping `runTest` internal logic is cleaner.
+
+// Actually, `runTest` manages its own error state (passed/failed).
+// `useAsyncAction` is great for "Loading" state and global error tossing.
+// Here we WANT to catch errors per test and mark them as failed, not show a global toast.
+// So `useAsyncAction` might be overkill for individual tests IF we want silent failure (just update UI).
+// HOWEVER, `runAllTests` is the user interaction.
 
 const runTest = async (testId: string): Promise<boolean> => {
   const test = tests.value.find((t) => t.id === testId);
@@ -67,6 +86,12 @@ const runTest = async (testId: string): Promise<boolean> => {
   const startTime = Date.now();
 
   try {
+     // useAsyncAction not used strictly here because we want granular control
+     // without global error toasts for "expected" failures in tests.
+     // But we can use it to ensure safe execution environment if needed.
+     // For this specific view (Audit), manual try/catch IS the business logic (catch the error to report it).
+     // SO: We will Refactor `runAllTests` to use useAsyncAction to block double execution.
+
     let passed = false;
 
     switch (testId) {
@@ -131,63 +156,63 @@ const testDataIntegrity = async (): Promise<boolean> => {
   }
 };
 
-// Test 2: Cart Shield
-const testCartShield = async (): Promise<boolean> => {
-  const test = tests.value.find((t) => t.id === 'cart-shield')!;
-  const cartStore = useCartStore();
-
-  const initialCount = cartStore.items.length;
-
-  // Try to add invalid item with NaN quantity
-  cartStore.addItem({
-    id: 999999,
-    name: 'INVALID_TEST_ITEM',
-    price: new Decimal(1000),
-    quantity: NaN, // This should be rejected
-  });
-
-  await new Promise((r) => setTimeout(r, 50));
-
-  const afterCount = cartStore.items.length;
-  const hasInvalidItem = cartStore.items.some((i) => i.id === 999999);
-
-  if (!hasInvalidItem && afterCount === initialCount) {
-    test.message = '✓ Cantidad NaN rechazada correctamente';
-    return true;
-  } else {
-    // Clean up if it somehow got added
-    if (hasInvalidItem) {
-      cartStore.removeItem(999999);
-    }
-    test.message = '✗ El carrito aceptó un valor inválido';
-    return false;
-  }
-};
-
-// Test 3: Inventory Fail-Safe
-const testInventoryFailSafe = async (): Promise<boolean> => {
-  const test = tests.value.find((t) => t.id === 'inventory-failsafe')!;
-  const inventoryStore = useInventoryStore();
-
-  try {
-    // Try to get a non-existent product
-    const nonExistent = inventoryStore.getProductById(-99999);
-    const byPLU = inventoryStore.getProductByPLU('INVALID_PLU_12345');
-
-    // Both should return undefined/null without throwing
-    if (nonExistent === undefined && byPLU === undefined) {
-      test.message = '✓ Búsquedas inexistentes manejadas correctamente';
+  // Test 2: Cart Shield
+  const testCartShield = async (): Promise<boolean> => {
+    const test = tests.value.find((t) => t.id === 'cart-shield')!;
+    const cartStore = useCartStore();
+  
+    const initialCount = cartStore.items.length;
+  
+    // Try to add invalid item with NaN quantity
+    cartStore.addItem({
+      id: "999999", // Changed to string
+      name: 'INVALID_TEST_ITEM',
+      price: new Decimal(1000),
+      quantity: NaN, // This should be rejected
+    });
+  
+    await new Promise((r) => setTimeout(r, 50));
+  
+    const afterCount = cartStore.items.length;
+    const hasInvalidItem = cartStore.items.some((i) => i.id === "999999");
+  
+    if (!hasInvalidItem && afterCount === initialCount) {
+      test.message = '✓ Cantidad NaN rechazada correctamente';
       return true;
     } else {
-      test.message = '✓ Retornó valores seguros para IDs inexistentes';
-      return true;
+      // Clean up if it somehow got added
+      if (hasInvalidItem) {
+        cartStore.removeItem("999999");
+      }
+      test.message = '✗ El carrito aceptó un valor inválido';
+      return false;
     }
-  } catch (error) {
-    test.message = `✗ La búsqueda explotó: ${error}`;
-    return false;
-  }
-};
-
+  };
+  
+  // Test 3: Inventory Fail-Safe
+  const testInventoryFailSafe = async (): Promise<boolean> => {
+    const test = tests.value.find((t) => t.id === 'inventory-failsafe')!;
+    const inventoryStore = useInventoryStore();
+  
+    try {
+      // Try to get a non-existent product
+      // Cast to any to simulate invalid input call if typed strictly, or just pass invalid string
+      const nonExistent = inventoryStore.getProductById('INVALID_ID_99999'); 
+      const byPLU = inventoryStore.getProductByPLU('INVALID_PLU_12345');
+  
+      // Both should return undefined/null without throwing
+      if (nonExistent === undefined && byPLU === undefined) {
+        test.message = '✓ Búsquedas inexistentes manejadas correctamente';
+        return true;
+      } else {
+        test.message = '✓ Retornó valores seguros para IDs inexistentes';
+        return true;
+      }
+    } catch (error) {
+      test.message = `✗ La búsqueda explotó: ${error}`;
+      return false;
+    }
+  };
 // Test 4: Persistence
 const testPersistence = async (): Promise<boolean> => {
   const test = tests.value.find((t) => t.id === 'persistence')!;

@@ -229,7 +229,7 @@ const movementType = ref('entrada');
 const reason = ref('Compra');
 const searchQuery = ref('');
 const searchResults = ref<Product[]>([]);
-const isSaving = ref(false);
+// isSaving handled by useAsyncAction
 
 interface EntryItem {
     productId: string;
@@ -329,40 +329,60 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+// Composable: Request Management
+import { useAsyncAction } from '../composables/useAsyncAction';
+// Notifications
+import { useNotifications } from '../composables/useNotifications';
+
+const { execute: executeSave, isLoading: isSaving } = useAsyncAction();
+const { showSuccess, showWarning, showError } = useNotifications();
+
 const saveEntry = async () => {
   if (entryItems.value.length === 0) return;
   
-  isSaving.value = true;
-  
-  // Procesar cada item
-  // En fase 2 real, haríamos un batch update o una transacción
-  // Por ahora iteramos updateStock
-  let successCount = 0;
-
-  for (const item of entryItems.value) {
-    const qty = new Decimal(item.quantity);
-    if (qty.gt(0)) {
-        // T1.2: Register logical movement
-        const result = await inventoryStore.registerStockMovement({
-          productId: item.productId,
-          type: movementType.value as any, // Cast to match store type
-          quantity: qty,
-          reason: reason.value,
-          expirationDate: item.expirationDate
-        });
-        
-        if (result.success) successCount++;
+  await executeSave(async () => {
+    // Procesar cada item
+    // En fase 2 real, haríamos un batch update o una transacción
+    // Por ahora iteramos updateStock
+    let successCount = 0;
+    
+    // Perform updates
+    for (const item of entryItems.value) {
+      const qty = new Decimal(item.quantity);
+      if (qty.gt(0)) {
+          // T1.2: Register logical movement
+          const result = await inventoryStore.registerStockMovement({
+            productId: item.productId,
+            type: movementType.value as any, 
+            quantity: qty,
+            reason: reason.value,
+            expirationDate: item.expirationDate
+          });
+          
+          if (result.success) successCount++;
+      }
     }
-  }
 
-  isSaving.value = false;
-  
-  if (successCount > 0) {
-    // Notificación simple (podría usar toastStore)
-    alert(`Entrada guardada exitosamente. ${successCount} productos actualizados.`);
-    router.push('/inventory');
-  } else {
-    alert('Hubo errores al guardar algunos productos.');
-  }
+    if (successCount === 0) {
+        throw new Error('No se pudo guardar ningún producto.');
+    }
+
+    // Return custom success object to be handled
+    return successCount;
+
+  }, {
+    // Custom handling for success message inside executed block or here?
+    // We can use successMessage, but since the message is dynamic "X products updated",
+    // we might want to handle it manually or use a generic one.
+    // Let's handle manually below or inside.
+    checkConnectivity: false, // Inventory often needs to work offline? Pending specific requirement.
+    // Assuming partial offline support or optimistic UI
+    showSuccessToast: false // We will show a custom toast/alert
+  }).then((count) => {
+      if (count) {
+          showSuccess(`Entrada guardada. ${count} productos actualizados.`);
+          router.push('/inventory');
+      }
+  });
 };
 </script>

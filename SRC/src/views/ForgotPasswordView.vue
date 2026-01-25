@@ -10,21 +10,28 @@ const router = useRouter();
 // State
 const email = ref('');
 const isSuccess = ref(false);
-const isLoading = ref(false);
+// isLoading handled by useAsyncAction
+
+// Composable: Request Management
+import { useAsyncAction } from '../composables/useAsyncAction';
+const { execute: executeRecovery, isLoading } = useAsyncAction();
 
 // Methods
 const handleSubmit = async () => {
   if (!email.value) return;
 
-  isLoading.value = true;
-
-  // Simulate API call
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-
-  isLoading.value = false;
-  isSuccess.value = true;
-
-  logger.log('Password recovery email sent to:', email.value);
+  await executeRecovery(async () => {
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      
+      // If success
+      isSuccess.value = true;
+      logger.log('Password recovery email sent to:', email.value);
+  }, {
+      successMessage: 'Enlace enviado verificada tu correo',
+      errorMessage: 'No se pudo enviar el correo. Intenta tarde',
+      checkConnectivity: true
+  });
 };
 
 const goBackToLogin = () => {

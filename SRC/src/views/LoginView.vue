@@ -26,32 +26,33 @@ const username = ref('');
 const password = ref('');
 const showPassword = ref(false);
 const errorMessage = ref('');
-const isLoading = ref(false);
+// isLoading handled by useAsyncAction
 
 // SPEC-005: Detectar tipo de usuario basado en presencia de @
 const isAdminLogin = computed(() => username.value.includes('@'));
 const credentialLabel = computed(() => (isAdminLogin.value ? 'Contraseña' : 'PIN'));
 const credentialPlaceholder = computed(() => (isAdminLogin.value ? '••••••••' : '••••'));
 
+// Composable: Request Management
+import { useAsyncAction } from '../composables/useAsyncAction';
+const { execute: executeLogin, isLoading } = useAsyncAction();
+
 const handleLogin = async () => {
   errorMessage.value = '';
-  isLoading.value = true;
 
   // WO-004 T4.4: Check rate limit before attempting
   if (!canAttempt()) {
     errorMessage.value = `🔒 Demasiados intentos. Espera ${remainingLockoutSeconds.value}s`;
-    isLoading.value = false;
     return;
   }
 
-  try {
+  await executeLogin(async () => {
     // UX Delay
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     // 1. VALIDACIÓN PREVENTIVA: ¿Existe tienda?
     if (!authStore.hasStores) {
-      errorMessage.value = 'No se detecta una tienda registrada en este dispositivo.';
-      return;
+      throw new Error('No se detecta una tienda registrada en este dispositivo.');
     }
 
     // SPEC-005: Flujo basado en detección automática
@@ -59,8 +60,6 @@ const handleLogin = async () => {
       // =============================================
       // FLUJO ADMIN (contiene @)
       // =============================================
-      // En un sistema real, esto iría a Supabase Auth. 
-      // Por ahora mantenemos el login local de admin o lo movemos a authRepository si se prefiere.
       if (authStore.loginWithCredentials(username.value, password.value)) {
         // Admin siempre tiene acceso completo
         authStore.setDeviceStatus('approved');
@@ -69,15 +68,15 @@ const handleLogin = async () => {
         return;
       }
       recordFailedAttempt();
-      errorMessage.value = `Correo o contraseña incorrectos (${remainingAttempts.value} intentos restantes)`;
+      // Throwing error for useAsyncAction to handle
+      throw new Error(`Correo o contraseña incorrectos (${remainingAttempts.value} intentos restantes)`);
     } else {
       // =============================================
       // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos
       // =============================================
       const firstStore = authStore.getFirstStore();
       if (!firstStore) {
-        errorMessage.value = 'No hay tienda configurada';
-        return;
+        throw new Error('No hay tienda configurada');
       }
 
       // OPCIÓN A: Primero intentar login LOCAL usando employeesStore
@@ -101,16 +100,16 @@ const handleLogin = async () => {
         return;
       }
 
-      // Si no hay empleado local, mostrar error (sin llamar a Supabase)
+      // Si no hay empleado local, mostrar error
       recordFailedAttempt();
-      errorMessage.value = `Usuario o PIN incorrectos (${remainingAttempts.value} intentos restantes)`;
+      throw new Error(`Usuario o PIN incorrectos (${remainingAttempts.value} intentos restantes)`);
     }
-  } catch (error) {
-    console.error('[Login] Error:', error);
-    errorMessage.value = 'Error al iniciar sesión. Intenta nuevamente.';
-  } finally {
-    isLoading.value = false;
-  }
+  }, {
+    // Options
+    checkConnectivity: true, // Login requires internet (mostly) or we want strict check
+    errorMessage: '', // We use dynamic error throwing above, so fallback is fine
+    showSuccessToast: false // Login typically doesn't need "Success" toast, just redirect
+  });
 };
 
 // SPEC-005: Simular respuesta del servidor (reemplazar con RPC real)

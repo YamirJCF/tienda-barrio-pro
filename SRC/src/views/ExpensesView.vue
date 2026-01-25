@@ -22,7 +22,7 @@ const newExpense = ref({
     category: 'General'
 });
 
-const isSubmitting = ref(false);
+// isSubmitting handled by useAsyncAction
 
 const categories = ['General', 'Proveedor', 'Servicios', 'Comida', 'Transporte', 'Mantenimiento'];
 
@@ -38,29 +38,32 @@ const currentExpenses = computed(() => {
 const totalExpenses = computed(() => cashRegisterStore.totalExpenses);
 const isSessionOpen = computed(() => cashRegisterStore.isOpen);
 
+// Composable: Request Management
+import { useAsyncAction } from '../composables/useAsyncAction';
+const { execute: executeExpense, isLoading: isSubmitting } = useAsyncAction();
+
 const handleSubmit = async () => {
     if (newExpense.value.amount <= 0 || !newExpense.value.description) {
         showError('Completa todos los campos');
         return;
     }
 
-    isSubmitting.value = true;
-    try {
+    await executeExpense(async () => {
         cashRegisterStore.registerExpense(
             new Decimal(newExpense.value.amount),
             newExpense.value.description,
             newExpense.value.category
         );
         
-        showSuccess('Gasto registrado');
+        // Success actions within the async flow to ensure they happen only on success
         showAddModal.value = false;
         // Reset form
         newExpense.value = { amount: 0, description: '', category: 'General' };
-    } catch (e: any) {
-        showError(e.message || 'Error al registrar');
-    } finally {
-        isSubmitting.value = false;
-    }
+    }, {
+        successMessage: 'Gasto registrado correcto',
+        errorMessage: 'Error al registrar el gasto',
+        checkConnectivity: false // Offline expenses allowed (sync later)
+    });
 };
 
 const goBack = () => router.push('/');

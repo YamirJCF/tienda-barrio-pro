@@ -12,6 +12,7 @@ import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNumpad } from '../composables/useNumpad';
 import { usePOS } from '../composables/usePOS';
+import { useAsyncAction } from '../composables/useAsyncAction'; // Request Management
 import { useHeartbeat } from '../composables/useHeartbeat'; // Presence & Pause logic
 import { logger } from '../utils/logger';
 import { Decimal } from 'decimal.js';
@@ -34,6 +35,9 @@ const { showSaleSuccess, showSaleOffline, showSuccess, showError } = useNotifica
 const { formatWithSign: formatCurrency } = useCurrencyFormat();
 const { isPaused, setPause } = useHeartbeat(); // Heartbeat control
 
+// Composable: Request Management
+const { execute: executeSale, isLoading: isProcessing } = useAsyncAction();
+
 // OBS-02: Formatear cantidad a máximo 2 decimales
 const formatQuantity = (qty: number | Decimal): string => {
   const num = qty instanceof Decimal ? qty.toNumber() : Number(qty);
@@ -43,7 +47,7 @@ const formatQuantity = (qty: number | Decimal): string => {
 // ============================================
 // UI STATE
 // ============================================
-const isProcessing = ref(false); // Loading state for COBRAR button
+// isProcessing handled by useAsyncAction
 
 // Estado operativo de la tienda
 // (Legacy: isAdminLocked Removed - Now relies on Offline Accountability)
@@ -204,14 +208,14 @@ onUnmounted(() => {
 });
 
 // WO-001: Changed clientId from number to string
-const completeSale = async (paymentMethod: string, amountReceived?: Decimal, clientId?: string) => {
-  // Prevent double-click
-  if (isProcessing.value) return;
 
-  isProcessing.value = true;
+// ... (other imports remain)
+
+// WO-001: Changed clientId from number to string
+const completeSale = async (paymentMethod: string, amountReceived?: Decimal, clientId?: string) => {
   const currentTicket = ticketNumber.value;
 
-  try {
+  const success = await executeSale(async () => {
     // ============================================
     // SIMULATED PROCESSING DELAY
     // Gives user visual feedback that transaction is being processed
@@ -270,6 +274,15 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
       );
     }
 
+    return true; // Indicate success
+  }, {
+    // Options
+    checkConnectivity: false, // POS works offline
+    errorMessage: 'Error al procesar la venta. Intenta nuevamente.',
+    showSuccessToast: false, // We handle success manually below
+  });
+
+  if (success) {
     // Clear cart
     cartStore.clearCart();
     showCheckout.value = false;
@@ -280,11 +293,6 @@ const completeSale = async (paymentMethod: string, amountReceived?: Decimal, cli
     } else {
       showSaleOffline(currentTicket);
     }
-  } catch (error) {
-    console.error('Error processing sale:', error);
-    showError('Error al procesar la venta. Intenta nuevamente.');
-  } finally {
-    isProcessing.value = false;
   }
 };
 </script>
