@@ -67,6 +67,19 @@ La vista verifica dos condiciones antes de permitir ventas:
 
 ---
 
+### Mejoras UX Pendientes (To-Do)
+> Importado de `pos-ux-improvements.md`
+
+1.  **Lista de Checkout Confinada:**
+    *   *Problema:* La lista de productos en el modal de checkout es muy pequeña.
+    *   *Solución:* Agregar botón para expandir o aumentar altura por defecto.
+2.  **Formato de Decimales (Balanza):**
+    *   *Problema:* Cantidades como `0.3193076923` lb rompen la UI.
+    *   *Solución:* Redondear visualmente a 3 decimales (`0.319 lb`).
+3.  **Validación Temprana de PLU:**
+    *   *Problema:* PLU inválido solo avisa al dar "Agregar".
+    *   *Solución:* Validar al instante en `handleQuantity()`.
+
 ## Datos de Salida (Hacia Stores)
 
 ### cartStore

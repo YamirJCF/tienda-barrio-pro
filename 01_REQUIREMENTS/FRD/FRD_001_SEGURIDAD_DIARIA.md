@@ -11,7 +11,14 @@ Implementación de un sistema de seguridad basado en **Autorización Diaria** pa
 **Mecanismo Único: Pase Diario (Operativa)**
 *   Valida: "¿Tiene permiso para trabajar HOY?"
 *   Frecuencia: Diaria (expira a las 24h o al cambio de turno).
+*   Valida: "¿Tiene permiso para trabajar HOY?"
+*   Frecuencia: Diaria (expira a las 24h o al cambio de turno).
 *   Método: Token de sesión vinculado al turno/día.
+*   **Contexto (Fingerprint):** Cada solicitud incluye una "Huella de Dispositivo" para que el Admin sepa desde dónde se pide el acceso.
+
+#### Algoritmo de Fingerprint (Referencia Técnica)
+Se utilizará una huella ligera basada en navegador (User Agent + Screen + Timezone) hasheada con SHA-256.
+*   *Objetivo:* No es bloquear dispositivos desconocidos automáticamente (eso sería muy rígido), sino **informar al Admin** ("Juan pide entrar desde Dispositivo Nuevo" vs "Juan pide entrar desde Caja Samsung").
 
 #### Reglas de Negocio
 1.  **Principio de Cero Confianza:** Todo intento de login comienza en estado `PENDING`.
@@ -72,6 +79,7 @@ Implementación de un sistema de seguridad basado en **Autorización Diaria** pa
 - [ ] El contador de "Re-pings" (intentos de llamada) se resetea solo al cambiar de día.
 - [ ] **Email Activo:** El sistema envía correos con Magic Link válido (token firmado) para aprobación sin login.
 - [ ] **Modal Intrusivo:** Si el Admin está online, la solicitud DEBE interrumpir su flujo de trabajo (Modal z-index máximo).
+- [ ] **Auditoría de Dispositivo:** El sistema registra el `device_fingerprint` en la tabla `daily_passes` y se muestra al Admin antes de aprobar.
 
 ---
 
