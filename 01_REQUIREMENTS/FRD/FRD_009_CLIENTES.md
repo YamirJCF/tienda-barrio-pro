@@ -86,16 +86,37 @@ Cuando el usuario intenta procesar una venta "Fiado" desde el POS:
 
 ---
 
-### Eliminación de Cliente
+### Eliminación de Cliente (Soft Delete)
 
 **Precondición:** Balance del cliente = $0
 
 | Estado del Balance | Acción |
 |--------------------|--------|
 | Balance > 0 (debe dinero) | ❌ Botón "Eliminar" deshabilitado. Tooltip: "El cliente tiene deuda pendiente." |
-| Balance = 0 | ✅ Modal de confirmación → Eliminar cliente y transacciones asociadas. |
+| Balance = 0 | ✅ Modal de confirmación → Marcar cliente como eliminado. |
+
+> [!IMPORTANT]
+> **Política de Borrado Lógico (Soft Delete):**
+> Al "eliminar" un cliente, el sistema NO borra físicamente los datos. Se aplica un borrado lógico para preservar la auditoría.
+
+#### Comportamiento del Soft Delete
+
+| Aspecto | Resultado |
+|---------|-----------|
+| **Campo `deleted`** | Se marca como `true` |
+| **Campo `deletedAt`** | Se registra timestamp de eliminación |
+| **Listas de UI** | El cliente **desaparece** de búsquedas y listas |
+| **Ventas históricas** | Mantienen referencia al `clientId` |
+| **Transacciones** | Se conservan para auditoría |
+| **Reportes/Historial** | Nombre aparece como: *"María García (eliminado)"* |
+
+#### Justificación
+*   **Auditoría fiscal:** Si existe una disputa sobre pagos, se puede reconstruir el historial completo.
+*   **Integridad referencial:** Las ventas pasadas no quedan con `clientId: null`.
+*   **Almacenamiento:** Impacto mínimo, una tienda de barrio no acumula miles de clientes eliminados.
 
 ---
+
 
 ## Transacciones
 
@@ -195,6 +216,8 @@ Cuando el usuario intenta procesar una venta "Fiado" desde el POS:
 - Cupo de crédito
 - Balance actual
 - Fecha de creación
+- **deleted** (boolean) - Indica si el cliente fue eliminado lógicamente
+- **deletedAt** (timestamp) - Fecha/hora del borrado lógico (null si activo)
 
 **Entidad Transacción de Cliente:**
 - Identificador único
@@ -226,3 +249,5 @@ Cuando el usuario intenta procesar una venta "Fiado" desde el POS:
 - [ ] Cada transacción registra cliente, tipo, monto, fecha.
 - [ ] Transacciones tipo compra incluyen referencia a venta para trazabilidad.
 - [ ] Búsqueda funciona por nombre, cédula y teléfono.
+- [ ] Eliminación usa Soft Delete (campos `deleted`, `deletedAt`).
+- [ ] Clientes eliminados no aparecen en listados pero conservan historial.
