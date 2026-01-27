@@ -6,71 +6,107 @@ Administración de Perfiles de Empleados
 #### Descripción
 Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar perfiles de empleados. Este módulo es la fuente de verdad para la autenticación (PIN) y la autorización (Permisos) dentro del sistema POS.
 
-#### Reglas de Negocio
-1.  **Identificador Único:** Cada empleado debe tener un `username` (email o alias) único dentro de la tienda.
-2.  **Autenticación Simple:** El acceso operativo se realiza mediante un **PIN numérico de 4 dígitos**.
-    *   Este PIN es local y gestionado por el Admin.
-    *   El Admin puede restablecer el PIN en cualquier momento sin intervención del empleado.
-3.  **Capacidad de Venta (Default):**
-    *   Todo empleado creado TIENE la capacidad de vender por defecto. No es un permiso opcional, es la función base del cargo.
-4.  **Permisos Adicionales (Toggles):**
-    *   `canViewInventory`: Puede ver stock (pero no editar).
-    *   `canFiar`: Puede asignar crédito a clientes.
-    *   `canOpenCloseCash`: Puede realizar arqueos de caja (Requiere PIN de Caja del Admin para validación final si así se configura, pero este permiso habilita la *función*).
-    *   `canViewReports`: Puede ver métricas básicas.
-4.  **Estado Activo/Inactivo:**
-    *   No se eliminan empleados para preservar el histórico de ventas.
-    *   Se marcan como `isActive: false` para bloquear el acceso inmediato.
-5.  **Límite de Equipo (Business Constraints):**
-    *   Cada cuenta de Admin tiene un **Límite Estricto de 5 Empleados Activos**.
-    *   Si se alcanza el límite (5/5), el botón "Nuevo Empleado" se bloquea.
-    *   Para agregar uno nuevo, el Admin DEBE desactivar previamente a uno existente.
+---
 
-#### Casos de Uso
+## Reglas de Negocio
+
+1. **Identificador Único Global:**
+    - Cada empleado DEBE tener un **alias numérico único** (número de identificación o teléfono).
+    - Este alias es único a nivel de TODAS las tiendas del sistema, no solo dentro de una tienda.
+    - **Justificación:** Garantiza que empleados de diferentes tiendas no se confundan durante la autenticación, permitiendo redireccionarlos correctamente a su tienda.
+
+2. **Datos Obligatorios del Empleado:**
+    - Nombre completo (para identificación humana).
+    - Alias numérico (cédula o teléfono).
+    - PIN de acceso de 4 dígitos.
+
+3. **Autenticación Simple:**
+    - El acceso operativo se realiza mediante un PIN numérico de 4 dígitos.
+    - Este PIN es local y gestionado por el Admin.
+    - El Admin puede restablecer el PIN en cualquier momento sin intervención del empleado.
+
+4. **Capacidad de Venta por Defecto:**
+    - Todo empleado creado TIENE la capacidad de vender por defecto.
+    - No es un permiso opcional, es la función base del cargo.
+
+5. **Permisos Adicionales:**
+    - `canViewInventory`: Puede ver stock (pero no editar).
+    - `canFiar`: Puede asignar crédito a clientes.
+    - `canOpenCloseCash`: Puede realizar apertura y cierre de caja (requiere además el PIN de caja).
+    - `canViewReports`: Puede ver métricas básicas.
+
+6. **Estado Activo/Inactivo:**
+    - Los empleados NO se eliminan para preservar el histórico de ventas.
+    - Se marcan como "inactivo" para bloquear el acceso inmediato.
+    - Al desactivar un empleado, cualquier sesión activa DEBE caducar inmediatamente.
+
+7. **Límite de Equipo:**
+    - Cada cuenta de Admin tiene un límite de **5 empleados activos**.
+    - Si se alcanza el límite (5/5), el sistema DEBE bloquear la creación de nuevos empleados.
+    - Para agregar uno nuevo, el Admin DEBE desactivar previamente a uno existente.
+    - Este límite se valida en el servidor, no solo en la interfaz.
+
+---
+
+## Casos de Uso
 
 **Caso A: Crear Nuevo Empleado**
 - **Actor:** Administrador
 - **Precondición:** Tener menos de 5 empleados activos.
-- **Flujo:**
-    1.  Sistema valida conteo actual de empleados activos.
-    2.  Si `count >= 5` -> Muestra error: *"Límite alcanzado. Desactiva un usuario para continuar"*.
-    3.  Si `count < 5` -> permite abrir formulario.
-    4.  Admin entra a "Equipo" -> "Nuevo Empleado".
-    5.  Ingresa Nombre (ej: "Juan Pérez") y Alias/Email (ej: "juan").
-    3.  Asigna un PIN inicial de 4 dígitos (ej: "1234").
-    4.  Configura los "Checkboxes" de permisos según las responsabilidades.
-    5.  Guarda.
-    6.  El empleado ya puede intentar login (Sujeto a FRD-001 Seguridad Diaria).
+- **Flujo Principal:**
+    1. Sistema valida conteo actual de empleados activos.
+    2. Si hay 5 o más activos → Muestra error: "Límite alcanzado. Desactiva un usuario para continuar".
+    3. Si hay menos de 5 → Permite abrir formulario.
+    4. Admin ingresa: Nombre completo, Alias numérico (cédula/teléfono).
+    5. Admin asigna PIN inicial de 4 dígitos.
+    6. Admin configura los permisos adicionales según responsabilidades.
+    7. Sistema valida unicidad global del alias numérico.
+    8. Si el alias ya existe en alguna tienda → Error: "Este identificador ya está registrado en el sistema".
+    9. Si el alias es único → Guarda empleado.
+- **Postcondición:** Empleado creado, puede intentar login sujeto a aprobación diaria (ver FRD-001).
 
-**Caso B: Olvido de PIN**
+**Caso B: Restablecimiento de PIN**
 - **Actor:** Administrador
-- **Flujo:**
-    1.  Empleado avisa: "Olvidé mi PIN".
-    2.  Admin busca al empleado en la lista.
-    3.  Pulsa icono de "Llave/Candado".
-    4.  Sobrescribe el PIN con uno nuevo.
-    5.  Empleado usa el nuevo PIN inmediatamente.
+- **Precondición:** Empleado existe en el sistema.
+- **Flujo Principal:**
+    1. Empleado notifica: "Olvidé mi PIN".
+    2. Admin busca al empleado en la lista.
+    3. Admin selecciona opción "Restablecer PIN".
+    4. Admin ingresa nuevo PIN de 4 dígitos.
+    5. Sistema actualiza el PIN inmediatamente.
+- **Postcondición:** Empleado puede usar el nuevo PIN de inmediato.
 
-#### Requisitos de Datos (Input para Equipo de Data)
-Entidad `employees`:
-*   `id` (BigInt/UUID): PK.
-*   `store_id` (FK): Relación multitenant.
-*   `full_name` (String).
-*   `username` (String): Único por tienda.
-*   `pin_hash` (String): Hash del PIN de 4 dígitos.
-*   `is_active` (Boolean).
-*   `permissions` (JSONB): Objeto flexible para toggles { canSell: true, ... }.
-
-#### Criterios de Aceptación
-- [ ] El PIN debe ser numérico estricto de 4 dígitos.
-- [ ] Al desactivar un empleado, su sesión activa (si existe) debe caducar inmediatamente (Check en backend).
-- [ ] El sistema impide duplicar `username` en la misma tienda.
-- [ ] **Límite Hardcoded:** El backend rechaza la creación (`INSERT`) o activación (`UPDATE`) si `active_employees >= 5`.
+**Caso C: Desactivar Empleado**
+- **Actor:** Administrador
+- **Precondición:** Empleado activo en el sistema.
+- **Flujo Principal:**
+    1. Admin selecciona empleado y elige "Desactivar".
+    2. Sistema muestra confirmación: "¿Desactivar a [Nombre]? Perderá acceso inmediatamente."
+    3. Admin confirma.
+    4. Sistema marca empleado como inactivo.
+    5. Sistema invalida cualquier sesión activa del empleado.
+- **Postcondición:** Empleado no puede acceder al sistema hasta ser reactivado.
 
 ---
 
-## Impacto en el Sistema
-| Componente | Modificación |
-|------------|--------------|
-| **EmployeeManagerView** | Ya implementado, requiere revisión de conexión con Supabase. |
-| **AuthStore** | Debe consumir los permisos del JSONB al hacer login. |
+## Requisitos de Datos (Para Equipo Data)
+
+**Entidad Empleado:**
+- Identificador único
+- Relación con Tienda (multitenant)
+- Nombre completo
+- Alias numérico (único global)
+- Hash del PIN de 4 dígitos
+- Estado activo/inactivo
+- Permisos (estructura flexible para toggles)
+
+---
+
+## Criterios de Aceptación
+
+- [ ] El alias numérico es único a nivel global del sistema (todas las tiendas).
+- [ ] El PIN DEBE ser numérico estricto de 4 dígitos.
+- [ ] Al desactivar un empleado, su sesión activa caduca inmediatamente.
+- [ ] El sistema rechaza la creación o activación si ya hay 5 empleados activos.
+- [ ] El rechazo por límite ocurre en el servidor, no solo en la interfaz.
+- [ ] Al buscar empleado por alias, el sistema lo redirige a la tienda correcta.
