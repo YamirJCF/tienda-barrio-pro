@@ -13,6 +13,18 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ---
 
+## [v0.5.1] - 2026-01-27 - "Documentación y Límites"
+
+### Documentación (Docs)
+- Nuevo documento `SYSTEM_BOUNDARIES.md` con límites y exclusiones del sistema.
+- Actualizado `FRD_009_CLIENTES.md` con política de Soft Delete para eliminación de clientes.
+- Campos `deleted` y `deletedAt` agregados a entidad Cliente para preservar auditoría.
+
+### Cambiado (Changed)
+- Refactor menor en `auth.ts` del store de autenticación.
+
+---
+
 ## [v0.5.0] - 2026-01-12 - "Blindaje Total"
 
 ### Seguridad (Security)

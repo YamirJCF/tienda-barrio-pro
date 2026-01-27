@@ -158,6 +158,10 @@ export const useAuthStore = defineStore(
         storeId: store.id,
       };
       isAuthenticated.value = true;
+
+      // FIX: Auto-aprobar Daily Pass para Admin (evita redirect a waiting room)
+      dailyAccessState.value.status = 'approved';
+      dailyAccessState.value.lastApprovedAt = new Date().toISOString();
     };
 
     const loginWithCredentials = (emailOrUsername: string, password: string): boolean => {
