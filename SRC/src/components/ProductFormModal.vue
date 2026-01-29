@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useInventoryStore } from '../stores/inventory';
+import { useAuthStore } from '../stores/auth';
 import type { Product } from '../types';
 import { Decimal } from 'decimal.js';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
@@ -35,6 +36,7 @@ const emit = defineEmits<{
 }>();
 
 const inventoryStore = useInventoryStore();
+const authStore = useAuthStore();
 // const { roundHybrid50 } = useCurrencyFormat(); // No longer needed for saving
 
 // WO-003: Preservar stock original para evitar pérdida de precisión
@@ -481,7 +483,7 @@ watch(
               </div>
 
               <!-- Costo y Precio -->
-              <div class="col-span-6">
+              <div v-if="authStore.isAdmin" class="col-span-6">
                 <BaseInput
                   v-model="formData.cost"
                   label="Costo ($)"

@@ -48,7 +48,9 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const isStoreNameValid = computed(() => storeName.value.trim().length >= 3);
 const isOwnerNameValid = computed(() => ownerName.value.trim().length > 0);
 const isEmailValid = computed(() => emailRegex.test(email.value.trim()));
-const isPasswordValid = computed(() => password.value.length >= 6);
+// WO-PHASE4-001 AU-07: Strong Password Policy (Min 8, 1 Letter, 1 Number)
+const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+const isPasswordValid = computed(() => passwordRegex.test(password.value));
 // T-004: Validación de confirmación de contraseña
 const isConfirmPasswordValid = computed(
   () => confirmPassword.value.length >= 6 && confirmPassword.value === password.value,
@@ -259,7 +261,7 @@ const handleSubmit = async () => {
                 id="password"
                 autocomplete="off"
                 class="w-full pl-11 pr-11 bg-white dark:bg-white/5 border border-[#cee9e0] dark:border-white/10 rounded-xl px-4 py-3.5 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mínimo 8 caracters, letras y números"
               />
               <button
                 type="button"

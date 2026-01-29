@@ -14,7 +14,8 @@ import {
   UserPlus, 
   KeyRound, 
   Lock, 
-  Ban, 
+  Ban,
+  AlertTriangle,
   Plus 
 } from 'lucide-vue-next';
 
@@ -71,12 +72,38 @@ const editEmployee = (employee: Employee) => {
 const { execute: executeToggle } = useAsyncAction();
 const { execute: executePin } = useAsyncAction();
 
+const showDeactivateModal = ref(false);
+const employeeToDeactivate = ref<Employee | null>(null);
+
+const confirmDeactivate = async () => {
+    if (!employeeToDeactivate.value) return;
+    
+    await executeToggle(async () => {
+        // Find current ID
+        const id = employeeToDeactivate.value!.id;
+        await employeesStore.toggleActive(id);
+        
+        showDeactivateModal.value = false;
+        employeeToDeactivate.value = null;
+    }, {
+         errorMessage: 'Error al desactivar empleado',
+         successMessage: 'Empleado desactivado correctamente'
+    });
+};
+
 const toggleActive = async (employee: Employee) => {
+  // PE-05: Confirmation on deactivate
+  if (employee.isActive) {
+      employeeToDeactivate.value = employee;
+      showDeactivateModal.value = true;
+      return;
+  }
+
+  // Activating is instant
   await executeToggle(async () => {
-    employeesStore.toggleActive(employee.id);
+    await employeesStore.toggleActive(employee.id);
   }, {
-    errorMessage: 'No se pudo cambiar el estado del empleado',
-    // Optimistic toggle usually doesn't need success toast spam
+    errorMessage: 'No se pudo activar el empleado',
     showSuccessToast: false
   });
 };
@@ -293,6 +320,42 @@ const handleEmployeeSaved = () => {
                     class="flex-1"
                 >
                     Guardar
+                </BaseButton>
+            </div>
+        </template>
+    </BaseModal>
+
+    <!-- Deactivate Confirmation Modal -->
+     <BaseModal
+      v-model="showDeactivateModal"
+      title="Confirmar Desactivación"
+    >
+        <div class="p-6">
+             <div class="flex items-center gap-3 mb-4 p-3 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-100 dark:border-red-900/50">
+                <AlertTriangle :size="24" class="text-red-600 dark:text-red-400" />
+                <p class="text-sm text-red-700 dark:text-red-300 font-medium">
+                    Esta acción quitará el acceso al sistema inmediatamente.
+                </p>
+             </div>
+             <p class="text-gray-600 dark:text-gray-300">
+                ¿Estás seguro de desactivar a <strong>{{ employeeToDeactivate?.name }}</strong>?
+             </p>
+        </div>
+        <template #footer>
+            <div class="p-6 pt-0 flex gap-3">
+                 <BaseButton
+                    @click="showDeactivateModal = false"
+                    variant="secondary"
+                    class="flex-1"
+                >
+                    Cancelar
+                </BaseButton>
+                <BaseButton
+                    @click="confirmDeactivate"
+                    variant="danger"
+                    class="flex-1"
+                >
+                    Desactivar Usuario
                 </BaseButton>
             </div>
         </template>

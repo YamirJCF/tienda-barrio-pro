@@ -1,4 +1,4 @@
-## Orden de Trabajo - Seguridad POS: PIN de Caja (PO-02)
+si.## Orden de Trabajo - Seguridad POS: PIN de Caja (PO-02)
 
 ### Contexto
 El reporte de auditoría indica que la apertura de caja "Solo pide monto". Actualmente, si no hay PIN configurado, el sistema bloquea la acción con un mensaje "Debes configurar PIN", lo cual puede interpretarse como una falla de flujo o simplemente una mala UX.
