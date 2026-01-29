@@ -289,7 +289,7 @@ watch(
             product.measurementUnit !== 'un'
               ? (product.measurementUnit as 'kg' | 'lb' | 'g')
               : 'lb',
-          cost: product.cost?.toString() || '',
+          cost: product.cost ? Number(product.cost).toFixed(2) : '',
           price: product.price.toString(),
           stock: formatQuantity(product.stock), // WO-004: Mostrar formateado
           minStock: product.minStock.toString(),

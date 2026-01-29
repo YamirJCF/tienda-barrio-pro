@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { Store, Eye, EyeOff, User, Lock } from 'lucide-vue-next';
+import { Store, Eye, EyeOff, User, Lock, ArrowLeft, ChevronRight } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
 import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
@@ -38,6 +38,24 @@ const credentialPlaceholder = computed(() => (isAdminLogin.value ? '••••
 // Composable: Request Management
 import { useAsyncAction } from '../composables/useAsyncAction';
 const { execute: executeLogin, isLoading } = useAsyncAction();
+
+// WO-003: Progressive Login State
+const currentStep = ref<'identity' | 'credential'>('identity');
+
+const handleContinue = () => {
+  if (!username.value.trim()) {
+      errorMessage.value = 'Por favor ingresa tu usuario o correo';
+      return;
+  }
+  errorMessage.value = '';
+  currentStep.value = 'credential';
+};
+
+const handleBack = () => {
+  errorMessage.value = '';
+  password.value = '';
+  currentStep.value = 'identity';
+};
 
 const handleLogin = async () => {
   errorMessage.value = '';
@@ -180,82 +198,167 @@ const handleServerError = (errorCode: string, errorMsg: string) => {
       </div>
 
       <div
-        class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-800">
-        <form @submit.prevent="handleLogin" class="flex flex-col gap-5">
-          <BaseInput 
-            v-model="username" 
-            label="Usuario" 
-            placeholder="Tu usuario o correo"
-            :disabled="isLoading"
-          >
-            <template #prefix>
-               <User :size="18" class="text-slate-400" />
-            </template>
-          </BaseInput>
+        class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-800 transition-all duration-300 ease-in-out"
+      >
+        <form @submit.prevent="handleLogin" class="flex flex-col gap-5 relative overflow-hidden min-h-[300px]">
+           
+           <!-- Transition Wrapper -->
+           <Transition mode="out-in" name="slide-fade">
+             
+             <!-- STEP 1: IDENTITY -->
+             <div v-if="currentStep === 'identity'" key="identity" class="flex flex-col gap-5 w-full">
+                <div class="space-y-1">
+                   <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Empecemos</h2>
+                   <p class="text-xs text-gray-500">Ingresa tu usuario o correo para continuar</p>
+                </div>
 
-          <div class="relative" v-if="isAdminLogin">
-            <BaseInput 
-              v-model="password" 
-              :type="showPassword ? 'text' : 'password'" 
-              :label="credentialLabel"
-              :placeholder="credentialPlaceholder" 
-              :disabled="isLoading" 
-            >
-              <template #prefix>
-                 <Lock :size="18" class="text-slate-400" />
-              </template>
-            </BaseInput>
-            <button type="button" @click="showPassword = !showPassword"
-              class="absolute top-[29px] right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
-              tabindex="-1">
-              <Eye v-if="!showPassword" :size="20" />
-              <EyeOff v-else :size="20" />
-            </button>
-          </div>
+                <BaseInput 
+                  v-model="username" 
+                  label="Usuario" 
+                  placeholder="ej. admin@mitienda.com"
+                  autofocus
+                  @keydown.enter.prevent="handleContinue"
+                >
+                  <template #prefix>
+                    <User :size="18" class="text-slate-400" />
+                  </template>
+                </BaseInput>
 
-          <!-- AU-03: Virtual Keypad for Employees -->
-          <div v-else class="flex flex-col items-center">
-             <span class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ingresa tu PIN</span>
-             <PinKeypad
-                :length="4"
-                :error="errorMessage"
-                :disabled="isLoading"
-                @change="(pin) => password = pin"
-                @complete="handleLogin"
-             />
-          </div>
+                <!-- WO-003: Link Create Store in Step 1 -->
+                <div class="text-center -mt-2">
+                    <router-link to="/register-store"
+                      class="text-xs font-semibold text-primary hover:text-primary-dark transition-colors">
+                      ¿No tienes cuenta? Crea tu tienda
+                    </router-link>
+                </div>
 
-          <div class="flex justify-end">
-            <router-link to="/forgot-password"
-              class="text-sm font-medium text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary transition-colors">
-              ¿Olvidaste tu contraseña?
-            </router-link>
-          </div>
+                 <BaseButton 
+                    type="button" 
+                    variant="primary" 
+                    size="lg" 
+                    class="w-full mt-2" 
+                    @click="handleContinue"
+                    :icon="ChevronRight"
+                    icon-pos="right"
+                  >
+                  Continuar
+                </BaseButton>
+             </div>
 
-          <!-- Error message -->
+             <!-- STEP 2: CREDENTIAL -->
+             <div v-else key="credential" class="flex flex-col w-full">
+                <!-- User Context Header -->
+                <div class="flex items-center gap-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700 mb-6">
+                    <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                        {{ username.slice(0, 1).toUpperCase() }}
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                        <p class="text-xs text-gray-500 font-medium">Accediendo como</p>
+                        <p class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{{ username }}</p>
+                    </div>
+                    <button 
+                      type="button" 
+                      @click="handleBack"
+                      class="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 transition-colors"
+                      title="Cambiar usuario"
+                    >
+                      <ArrowLeft :size="18" />
+                    </button>
+                </div>
+
+                <!-- Admin Password Input -->
+                <div v-if="isAdminLogin" class="flex flex-col gap-4">
+                     <div class="relative">
+                        <BaseInput 
+                          v-model="password" 
+                          :type="showPassword ? 'text' : 'password'" 
+                          label="Contraseña"
+                          placeholder="Ingresa tu contraseña" 
+                          :disabled="isLoading" 
+                          autofocus
+                        >
+                          <template #prefix>
+                            <Lock :size="18" class="text-slate-400" />
+                          </template>
+                        </BaseInput>
+                        <button type="button" @click="showPassword = !showPassword"
+                          class="absolute top-[29px] right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none"
+                          tabindex="-1">
+                          <Eye v-if="!showPassword" :size="20" />
+                          <EyeOff v-else :size="20" />
+                        </button>
+                      </div>
+
+                      <!-- Forgot Password Link (Admin Only) -->
+                      <div class="flex justify-end">
+                        <router-link to="/forgot-password"
+                          class="text-xs font-medium text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-primary transition-colors">
+                          ¿Olvidaste tu contraseña?
+                        </router-link>
+                      </div>
+                </div>
+
+                <!-- Employee PIN Pad -->
+                <div v-else class="flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Ingresa tu PIN de acceso</span>
+                    <PinKeypad
+                        :length="4"
+                        :error="errorMessage"
+                        :disabled="isLoading"
+                        @change="(pin) => password = pin"
+                        @complete="handleLogin"
+                    />
+                </div>
+
+                <!-- Login Button (Only visible for Admin, PIN auto-submits) -->
+                <BaseButton 
+                  v-if="isAdminLogin"
+                  type="submit" 
+                  variant="primary" 
+                  size="lg" 
+                  class="w-full mt-6" 
+                  :loading="isLoading"
+                  :disabled="isLoading"
+                >
+                  Ingresar
+                </BaseButton>
+
+             </div>
+           </Transition>
+
+          <!-- Global Error message -->
           <div v-if="errorMessage"
-            class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-pulse">
             <p class="text-sm text-red-600 dark:text-red-400 text-center font-medium">
               {{ errorMessage }}
             </p>
           </div>
 
-          <BaseButton type="submit" variant="primary" size="lg" class="w-full mt-2" :loading="isLoading"
-            :disabled="isLoading">
-            Ingresar
-          </BaseButton>
         </form>
       </div>
-
-      <div class="text-center">
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          ¿No tienes cuenta?
-          <router-link to="/register-store"
-            class="font-bold text-primary hover:text-primary-dark transition-colors ml-1">
-            Crea tu tienda aquí
-          </router-link>
-        </p>
-      </div>
+      
+      <!-- Footer links removed from here as they are integrated in steps -->
     </div>
+
   </div>
 </template>
+
+<style scoped>
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-fade-leave-active {
+  transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1);
+}
+
+.slide-fade-enter-from {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+.slide-fade-leave-to {
+  transform: translateX(-20px);
+  opacity: 0;
+}
+</style>

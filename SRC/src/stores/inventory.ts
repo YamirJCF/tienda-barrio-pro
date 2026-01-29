@@ -255,6 +255,7 @@ export const useInventoryStore = defineStore(
         quantity: number | Decimal;
         reason?: string;
         expirationDate?: string;
+        unitCost?: number; // New param
       }
     ): Promise<{ success: boolean; product?: Product; error?: string }> => {
       const product = products.value.find((p) => p.id === movement.productId);
@@ -325,11 +326,67 @@ export const useInventoryStore = defineStore(
 
         if (!success) {
           product.stock = oldStock;
-          return { success: false, error: 'Error al registrar movimiento' };
+          return { success: false, error: 'Error al registrar movimiento en repositorio' };
+        }
+
+        // T-002: FIFO Active Cost Update (Replacing WAC)
+        // Logic: We only update the product 'cost' if this new batch becomes the ACTIVE batch.
+        // This happens if the product was previously out of stock (or negative).
+        // If we already have stock (oldStock > 0), this new batch goes to the back of the queue,
+        // so the 'Reference Cost' (Next to Sell) remains the OLD cost.
+
+        // We already have 'oldStock' calculated above.
+        // Note: 'oldStock' here is the stock BEFORE this movement.
+
+        if (movement.type === 'entrada' && movement.unitCost !== undefined && movement.unitCost > 0) {
+          const incomingCost = new Decimal(movement.unitCost);
+
+          // If we had no stock before, this new batch is now the "Active" one.
+          // Update the display cost to match this batch.
+          if (oldStock.lte(0)) { // Less than or Equal to 0
+            product.cost = incomingCost.toDecimalPlaces(2);
+
+            // Persist cost update (if offline, this helps UI. If online, Trigger handles it too but no harm sending it)
+            // Actually, if online, the Trigger in DB will authoritative update it.
+            // Sending it here ensures Optimistic UI is correct immediately.
+            try {
+              // Only send update if we are purely local or want to force it. 
+              // Repository 'registerMovement' just records movement. 
+              // We might need to explicitly update product cost if repo doesn't do it automatically via trigger return?
+              // Realtime subscription will handle the Trigger update coming back from DB.
+              // So this local update is primarily for Optimistic UI and Offline mode.
+              logger.log(`[Inventory] FIFO: Zero stock detected. Updating Active Cost to: ${product.cost}`);
+              await productRepository.update(product.id, { cost: product.cost });
+            } catch (e) {
+              logger.warn('Failed to update product active cost', e);
+            }
+          } else {
+            logger.log(`[Inventory] FIFO: Stock exists (${oldStock}). New batch goes to queue. Cost remains: ${product.cost}`);
+            // Do NOT update cost. It remains the cost of the older active batch.
+          }
         }
       } catch (e) {
         product.stock = oldStock;
         return { success: false, error: 'Excepción al registrar movimiento' };
+      }
+
+      // 🛡️ Audit Mode / Offline Simulation: Create Local Batch
+      // SPEC-010: If we are offline, we simulate the batch creation so user sees "traceability"
+      if (!isSupabaseConfigured() && movement.type === 'entrada' && movement.unitCost !== undefined) {
+        try {
+          // Dynamic import to avoid circular dependency at top level if any
+          const { useBatchStore } = await import('./batches');
+          const batchStore = useBatchStore();
+
+          batchStore.addLocalBatch({
+            product_id: movement.productId,
+            quantity_initial: qty.toNumber(),
+            cost_unit: movement.unitCost
+          });
+          logger.log('[Inventory] Simulated Local Batch creation in Audit Mode');
+        } catch (err) {
+          logger.warn('[Inventory] Failed to simulate local batch', err);
+        }
       }
 
       // Check for low stock notification

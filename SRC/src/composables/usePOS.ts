@@ -41,6 +41,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
         }
 
         // CASE 1: Product already selected (Waiting for Quantity in input)
+        // User workflow: [PLU] -> [CANT] -> [QUANTITY] -> [CANT]
         if (isProductMode.value && pendingProduct.value) {
             const rawQty = parseInt(pluInput.value);
             const qty = isNaN(rawQty) || rawQty <= 0 ? 1 : rawQty;
@@ -60,8 +61,20 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
             return;
         }
 
+        // NEW CASE: Check if input is a PLU (Flow: PLU -> CANT -> QUANTITY)
+        // If user typed "122" (Aceite) and hit CANT, they likely want to set quantity for Aceite.
+        const potentialProduct = inventoryStore.getProductByPLU(pluInput.value);
+        if (potentialProduct) {
+            pendingProduct.value = potentialProduct;
+            isProductMode.value = true;
+            logger.log('[CANT.×] Entered Product Mode for:', potentialProduct.name);
+            clearPluInput();
+            return;
+        }
+
         // CASE 2: No product selected yet (Pre-setting quantity for NEXT product)
         // User typed "2" then pressed "CANT. x" -> They want next item to be added 2 times
+        // Flow: [QUANTITY] -> [CANT] -> [PLU]
         const rawQty = parseInt(pluInput.value);
         if (!isNaN(rawQty) && rawQty > 0) {
             pendingQuantity.value = rawQty;

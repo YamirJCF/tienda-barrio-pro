@@ -48,8 +48,8 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const isStoreNameValid = computed(() => storeName.value.trim().length >= 3);
 const isOwnerNameValid = computed(() => ownerName.value.trim().length > 0);
 const isEmailValid = computed(() => emailRegex.test(email.value.trim()));
-// WO-PHASE4-001 AU-07: Strong Password Policy (Min 8, 1 Letter, 1 Number)
-const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+// WO-PHASE4-001 AU-07: Strong Password Policy (Min 8, 1 Letter, 1 Number, Special chars allowed)
+const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const isPasswordValid = computed(() => passwordRegex.test(password.value));
 // T-004: Validación de confirmación de contraseña
 const isConfirmPasswordValid = computed(
@@ -260,8 +260,15 @@ const handleSubmit = async () => {
                 :type="showPassword ? 'text' : 'password'"
                 id="password"
                 autocomplete="off"
-                class="w-full pl-11 pr-11 bg-white dark:bg-white/5 border border-[#cee9e0] dark:border-white/10 rounded-xl px-4 py-3.5 text-base outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                placeholder="Mínimo 8 caracters, letras y números"
+                class="w-full pl-11 pr-11 bg-white dark:bg-white/5 border rounded-xl px-4 py-3.5 text-base outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                :class="
+                  password.length > 0 
+                  ? isPasswordValid 
+                    ? 'border-[#cee9e0] dark:border-white/10 focus:border-emerald-500 focus:ring-emerald-500' // Neutral/Valid
+                    : 'border-red-400 focus:ring-red-400' // Invalid
+                  : 'border-[#cee9e0] dark:border-white/10 focus:border-emerald-500 focus:ring-emerald-500' // Empty
+                "
+                placeholder="Mínimo 8 caracteres, letras y números"
               />
               <button
                 type="button"
@@ -270,7 +277,20 @@ const handleSubmit = async () => {
               >
                 <component :is="showPassword ? Eye : EyeOff" :size="20" />
               </button>
+               <span
+                v-if="password.length > 0 && isPasswordValid"
+                class="absolute right-10 top-1/2 -translate-y-1/2 text-emerald-500"
+              >
+                <CheckCircle2 :size="20" />
+              </span>
             </div>
+            <!-- Feedback msg -->
+             <p
+              v-if="password.length > 0 && !isPasswordValid"
+              class="text-xs text-red-500 ml-1"
+            >
+              Debe tener min. 8 caracteres, 1 número y 1 letra.
+            </p>
           </div>
 
           <!-- T-004: Campo Confirmar Contraseña -->
