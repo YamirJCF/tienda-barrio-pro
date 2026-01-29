@@ -32,6 +32,7 @@ export const useClientsStore = defineStore(
   () => {
     const clients = ref<Client[]>([]);
     const transactions = ref<ClientTransaction[]>([]);
+    const isLoading = ref(false);
 
     // Computed
     const totalDebt = computed(() => {
@@ -78,10 +79,17 @@ export const useClientsStore = defineStore(
     const deleteClient = (id: string) => {
       const index = clients.value.findIndex((c) => c.id === id);
       if (index !== -1) {
+        // CL-06: Safe Deletion - Prevent deleting clients with debt
+        if (clients.value[index].balance.gt(0)) {
+          return { success: false, error: 'DEBT_PENDING' };
+        }
+
         clients.value.splice(index, 1);
         // Also remove transactions
         transactions.value = transactions.value.filter((t) => t.clientId !== id);
+        return { success: true };
       }
+      return { success: false, error: 'NOT_FOUND' };
     };
 
     // WO-001: Changed parameter type from number to string
@@ -219,6 +227,7 @@ export const useClientsStore = defineStore(
     return {
       clients,
       transactions,
+      isLoading,
       totalDebt,
       clientsWithDebt,
       addClient,

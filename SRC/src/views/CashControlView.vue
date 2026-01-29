@@ -7,6 +7,7 @@ import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
 import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
 import PinChallengeModal from '../components/PinChallengeModal.vue';
+import PinSetupModal from '../components/PinSetupModal.vue';
 import Decimal from 'decimal.js';
 
 import { useAuthStore } from '../stores/auth'; // Import auth store
@@ -33,6 +34,7 @@ const { execute: executeAction, isLoading: isSubmitting } = useAsyncAction();
 
 // PIN Challenge State
 const showPinModal = ref(false);
+const showPinSetupModal = ref(false); // PO-02: Setup Modal State
 const pendingAction = ref<'open' | 'close'>('open');
 
 // Computed State
@@ -75,7 +77,8 @@ const differenceStatus = computed(() => {
 const handleSubmit = () => {
     // Check if PIN is configured first
     if (!cashControlStore.hasPinConfigured) {
-        showError('Debes configurar el PIN de caja primero. Ve a Configuración.');
+        // PO-02: Instead of error, prompt to setup PIN
+        showPinSetupModal.value = true;
         return;
     }
     
@@ -217,6 +220,20 @@ const goBack = () => router.back();
             :action="pendingAction"
             @close="showPinModal = false"
             @success="handlePinSuccess"
+        />
+
+        <!-- PO-02: Pin Setup Modal (Inline Creation) -->
+        <PinSetupModal
+            :isVisible="showPinSetupModal"
+            mode="setup"
+            @close="showPinSetupModal = false"
+            @success="
+                showPinSetupModal = false;
+                cashControlStore.checkPinConfigured().then(() => {
+                   showSuccess('PIN configurado. Ahora autoriza la operación.');
+                   handleSubmit(); // Auto-retrigger logic to show challenge
+                })
+            "
         />
     </div>
 </template>

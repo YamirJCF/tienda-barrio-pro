@@ -53,7 +53,8 @@ export interface Sale {
     timestamp: string; // ISO Full
     items: SaleItem[];
     total: Decimal;
-    paymentMethod: 'cash' | 'nequi' | 'fiado';
+    paymentMethod: 'cash' | 'nequi' | 'fiado' | 'mixed';
+    payments?: PaymentTransaction[]; // WO-PHASE3-001: For mixed payments
     roundingDifference?: Decimal;
     effectiveTotal: Decimal;
     amountReceived?: Decimal;
@@ -61,6 +62,13 @@ export interface Sale {
     clientId?: string; // UUID - references Client.id
     employeeId?: string; // UUID - references Employee.id
     syncStatus?: 'synced' | 'pending' | 'failed'; // SPEC-012: Sync Protocol
+}
+
+// WO-PHASE3-001: Mixed Payments Transaction
+export interface PaymentTransaction {
+    method: 'cash' | 'nequi' | 'fiado';
+    amount: Decimal;
+    reference?: string; // For Nequi/Transfer
 }
 
 // Maps to: Database['public']['Tables']['clients']['Row']

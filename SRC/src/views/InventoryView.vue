@@ -14,6 +14,7 @@ import KardexModal from '../components/inventory/KardexModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseModal from '../components/ui/BaseModal.vue';
+import Skeleton from '../components/ui/Skeleton.vue';
 import { 
   ArrowLeft, 
   Search, 
@@ -163,8 +164,36 @@ const cancelDelete = () => {
         </span>
       </div>
 
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="inventoryStore.isLoading" class="flex flex-col gap-3 px-1">
+        <article v-for="i in 6" :key="i" class="bg-white dark:bg-surface-dark rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3">
+           <div class="flex justify-between items-start gap-4">
+             <div class="flex-1 space-y-2">
+               <Skeleton width="70%" height="1.25rem" />
+               <div class="flex gap-2">
+                 <Skeleton width="40px" height="0.75rem" />
+                 <Skeleton width="60px" height="0.75rem" />
+               </div>
+               <Skeleton width="30%" height="1.25rem" class="mt-1" />
+             </div>
+             <div>
+                <Skeleton width="80px" height="1.75rem" />
+             </div>
+           </div>
+           <div class="flex justify-between items-center pt-2 border-t border-gray-50 dark:border-gray-800">
+              <Skeleton width="100px" height="1.5rem" />
+              <div class="flex gap-1">
+                 <Skeleton width="36px" height="36px" border-radius="0.75rem" />
+                 <Skeleton width="36px" height="36px" border-radius="0.75rem" />
+              </div>
+           </div>
+        </article>
+      </div>
+
       <!-- Empty State -->
-      <div v-if="filteredProducts.length === 0" class="flex flex-col items-center justify-center h-64 text-slate-400">
+      <div v-else-if="filteredProducts.length === 0" class="flex flex-col items-center justify-center h-64 text-slate-400">
         <Package :size="64" :stroke-width="1" class="mb-4 opacity-30" />
         <p class="text-sm font-medium">
           {{ searchQuery ? 'No se encontraron productos' : 'No hay productos aún' }}
@@ -181,7 +210,7 @@ const cancelDelete = () => {
       </div>
 
       <!-- Product Cards with Virtual Scrolling -->
-      <RecycleScroller v-if="filteredProducts.length > 0" class="flex-1" :items="filteredProducts" :item-size="140"
+      <RecycleScroller v-else class="flex-1" :items="filteredProducts" :item-size="140"
         key-field="id" v-slot="{ item: product }">
         <article
           class="bg-white dark:bg-surface-dark rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3 transition-transform mb-3 mx-4"

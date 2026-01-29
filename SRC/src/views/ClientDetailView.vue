@@ -27,6 +27,7 @@ const paymentAmount = ref('');
 const showPaymentModal = ref(false);
 const showOptionsMenu = ref(false);
 const showDeleteConfirm = ref(false);
+const showDebtAlert = ref(false);
 
 // Get client ID from route
 const clientId = computed(() => String(route.params.id));
@@ -93,6 +94,12 @@ const closeOptionsMenu = () => {
 
 const confirmDelete = () => {
   showOptionsMenu.value = false;
+  
+  if (client.value && client.value.balance.gt(0)) {
+    showDebtAlert.value = true;
+    return;
+  }
+
   showDeleteConfirm.value = true;
 };
 
@@ -358,6 +365,42 @@ const registerPayment = () => {
                 >
                     <Trash2 :size="20" class="mr-2" />
                     Eliminar
+                </BaseButton>
+            </div>
+        </template>
+    </BaseModal>
+
+    <!-- Debt Blocking Alert Modal -->
+    <BaseModal
+      v-model="showDebtAlert"
+      title="Acción Denegada"
+    >
+        <div class="p-6 text-center">
+            <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
+              <AlertTriangle :size="28" class="text-red-600" />
+            </div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
+               Saldo Pendiente
+            </h3>
+            <p class="text-slate-500 dark:text-slate-400 text-sm mb-1">
+              No se puede eliminar a <strong>{{ client?.name }}</strong> porque tiene una deuda de:
+            </p>
+            <p class="text-2xl font-bold text-red-600 my-3">
+               {{ client ? formatCurrency(client.balance) : '$0' }}
+            </p>
+            <p class="text-slate-400 text-xs">
+              Por favor registre el pago total antes de eliminar la cuenta.
+            </p>
+        </div>
+
+        <template #footer>
+            <div class="p-6 pt-0">
+                 <BaseButton
+                    @click="showDebtAlert = false"
+                    variant="primary"
+                    class="w-full"
+                >
+                    Entendido
                 </BaseButton>
             </div>
         </template>

@@ -30,7 +30,8 @@ interface SalePayload {
         subtotal: any; // Decimal or number
     }[];
     total: any; // Decimal or number
-    paymentMethod: 'cash' | 'nequi' | 'fiado';
+    paymentMethod: 'cash' | 'nequi' | 'fiado' | 'mixed';
+    payments?: { method: 'cash' | 'nequi' | 'fiado', amount: number, reference?: string }[];
     amountReceived?: any; // Decimal or number
     clientId?: string;
     employeeId?: string;

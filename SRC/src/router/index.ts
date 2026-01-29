@@ -103,6 +103,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/NotificationCenterView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/reports',
+    name: 'reports',
+    component: () => import('../views/ReportsView.vue'),
+    meta: { requiresAuth: true },
+  },
   // SPEC-009: Ruta de Historiales
   {
     path: '/history',

@@ -7,6 +7,7 @@ import { useEmployeesStore } from '../stores/employees';
 import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
 import BaseButton from '@/components/ui/BaseButton.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
+import PinKeypad from '../components/PinKeypad.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -186,7 +187,7 @@ const handleServerError = (errorCode: string, errorMsg: string) => {
             </template>
           </BaseInput>
 
-          <div class="relative">
+          <div class="relative" v-if="isAdminLogin">
             <BaseInput 
               v-model="password" 
               :type="showPassword ? 'text' : 'password'" 
@@ -204,6 +205,18 @@ const handleServerError = (errorCode: string, errorMsg: string) => {
               <Eye v-if="!showPassword" :size="20" />
               <EyeOff v-else :size="20" />
             </button>
+          </div>
+
+          <!-- AU-03: Virtual Keypad for Employees -->
+          <div v-else class="flex flex-col items-center">
+             <span class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ingresa tu PIN</span>
+             <PinKeypad
+                :length="4"
+                :error="errorMessage"
+                :disabled="isLoading"
+                @change="(pin) => password = pin"
+                @complete="handleLogin"
+             />
           </div>
 
           <div class="flex justify-end">
