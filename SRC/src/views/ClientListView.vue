@@ -199,6 +199,10 @@ const handleClientSaved = () => {
           <p class="text-slate-500 text-xs font-medium truncate">
             CC: {{ formatCedula(client.cedula) }}
           </p>
+          <!-- CL-01: Show Cupo -->
+           <p class="text-[10px] text-slate-400 font-medium mt-0.5" v-if="client.creditLimit">
+            Cupo: {{ formatCurrency(new Decimal(client.creditLimit)) }}
+          </p>
         </div>
         <div class="flex flex-col items-end gap-1">
           <p

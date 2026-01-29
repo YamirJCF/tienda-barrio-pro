@@ -418,7 +418,7 @@ FASE 1 ──→ FASE 2 ──→ FASE 3 ──┐
 | 1. Preparación Supabase | ✅ Completado | 2026-01-28 | Project ID: zolanvecewgdcmfwzqdb |
 | 2. Despliegue Backend | ✅ Completado | 2026-01-28 | Schema v2 desplegado y verificado |
 | 3. Pruebas Backend | ✅ Completado | 2026-01-28 | 5 tests aislados exitosos |
-| 4. Preparación Frontend | ⬜ Pendiente | | |
+| 4. Preparación Frontend | 🔄 En Progreso | 2026-01-28 | UX/UI Audit Remediation Completada (WO-001 a WO-006). Falta Type Gen. |
 | 5. Pruebas Frontend | ⬜ Pendiente | | |
 | 6. Integración | ⬜ Pendiente | | |
 | 7. Pruebas E2E | ⬜ Pendiente | | |

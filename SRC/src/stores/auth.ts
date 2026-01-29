@@ -344,6 +344,7 @@ export const useAuthStore = defineStore(
       dailyAccessState, // Exposed for Persistence
       // SPEC-005: IAM States
       dailyAccessStatus, // Replaces direct exposure of deviceApproved
+      deviceApproved, // Exposed for LoginView and GatekeeperPending
       pendingRequestTime,
 
       // Computed

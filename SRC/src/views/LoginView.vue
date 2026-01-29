@@ -8,6 +8,7 @@ import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
 import BaseButton from '@/components/ui/BaseButton.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import PinKeypad from '../components/PinKeypad.vue';
+import GatekeeperPending from './GatekeeperPending.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -159,7 +160,12 @@ const handleServerError = (errorCode: string, errorMsg: string) => {
 
 <template>
   <div class="flex flex-col items-center justify-center min-h-screen p-6">
-    <div class="w-full max-w-[400px] flex flex-col gap-8">
+    <!-- WO-PHASE4-001: Show Waiting Room if Pending/Rejected -->
+    <GatekeeperPending 
+      v-if="authStore.deviceApproved === 'pending' || authStore.deviceApproved === 'rejected'"
+    />
+
+    <div v-else class="w-full max-w-[400px] flex flex-col gap-8">
       <div class="flex flex-col items-center text-center gap-4">
         <div
           class="w-20 h-20 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center text-primary mb-2">
