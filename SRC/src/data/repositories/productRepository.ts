@@ -162,40 +162,47 @@ export const productRepository: ProductRepository = {
         }
 
         // 2. Offline / Fallback: Add to Sync Queue AND Update Local Product
-        // Import addToSyncQueue dynamically to avoid circular deps if any (though here it's fine)
-        const { addToSyncQueue } = await import('../syncQueue');
+        try {
+            // Import addToSyncQueue dynamically to avoid circular deps if any (though here it's fine)
+            const { addToSyncQueue } = await import('../syncQueue');
 
-        // Queue movement
-        await addToSyncQueue('CREATE_MOVEMENT', {
-            product_id: movement.productId,
-            movement_type: movement.type,
-            quantity: movement.quantity,
-            reason: movement.reason,
-            created_by: movement.employeeId
-        });
+            // Queue movement
+            await addToSyncQueue('CREATE_MOVEMENT', {
+                product_id: movement.productId,
+                movement_type: movement.type,
+                quantity: movement.quantity,
+                reason: movement.reason,
+                created_by: movement.employeeId
+            });
 
-        // Update local product stock manually since trigger won't run
-        const product = await baseRepository.getById(movement.productId);
-        if (product) {
-            let newStock = product.stock.toNumber(); // Decimal to number
-            // Logic must match DB trigger
-            if (['entrada', 'devolucion', 'ajuste'].includes(movement.type)) {
-                // For 'ajuste', DB trigger adds quantity (assuming quantity is delta or signed?)
-                // DB trigger says: ELSIF NEW.movement_type = 'ajuste' THEN UPDATE SET current_stock = current_stock + NEW.quantity
-                // So 'ajuste' quantity should be signed (negative for reduction).
-                // But my UI might pass absolute. I need to be careful.
-                // Re-reading trigger: 'ajuste' adds quantity. So if I want to reduce, I pass negative.
-                newStock += movement.quantity;
-            } else if (['salida', 'venta'].includes(movement.type)) {
-                newStock -= movement.quantity;
+            // Update local product stock manually since trigger won't run
+            const product = await baseRepository.getById(movement.productId);
+            if (product) {
+                // WARN: product.stock might be a number (raw JSON) or Decimal depending on hydration
+                const currentStock = new Decimal(product.stock);
+                let newStock = currentStock.toNumber();
+                // Logic must match DB trigger
+                if (['entrada', 'devolucion', 'ajuste'].includes(movement.type)) {
+                    // For 'ajuste', DB trigger adds quantity (assuming quantity is delta or signed?)
+                    // DB trigger says: ELSIF NEW.movement_type = 'ajuste' THEN UPDATE SET current_stock = current_stock + NEW.quantity
+                    // So 'ajuste' quantity should be signed (negative for reduction).
+                    // But my UI might pass absolute. I need to be careful.
+                    // Re-reading trigger: 'ajuste' adds quantity. So if I want to reduce, I pass negative.
+                    newStock += movement.quantity;
+                } else if (['salida', 'venta'].includes(movement.type)) {
+                    newStock -= movement.quantity;
+                }
+
+                await baseRepository.update(product.id, {
+                    stock: new Decimal(newStock)
+                } as Partial<Product>);
             }
 
-            await baseRepository.update(product.id, {
-                stock: new Decimal(newStock)
-            } as Partial<Product>);
+            return true;
+        } catch (e) {
+            logger.error('[ProductRepo] Exception in registerMovement fallback', e);
+            throw e; // Re-throw to let caller know
         }
-
-        return true;
     }
 };
 

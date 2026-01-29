@@ -11,6 +11,7 @@ import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useQuantityFormat } from '../composables/useQuantityFormat';
 import { Decimal } from 'decimal.js';
 import KardexModal from '../components/inventory/KardexModal.vue';
+import BatchHistoryModal from '../components/inventory/BatchHistoryModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseModal from '../components/ui/BaseModal.vue';
@@ -24,7 +25,8 @@ import {
   Plus, 
   History, 
   Trash2,
-  Archive
+  Archive,
+  Layers
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -58,6 +60,10 @@ const productToDelete = ref<{ id: string; name: string } | null>(null);
 const showKardexModal = ref(false);
 const kardexProduct = ref<{ id: string; name: string } | null>(null);
 
+// T1.5: Batch History State
+const showBatchModal = ref(false);
+const batchProduct = ref<{ id: string; name: string } | null>(null);
+
 // Lifecycle
 onMounted(() => {
   inventoryStore.initialize();
@@ -81,6 +87,11 @@ const openEditProduct = (id: string) => {
 const openKardex = (product: { id: string; name: string }) => {
   kardexProduct.value = product;
   showKardexModal.value = true;
+};
+
+const openBatchHistory = (product: { id: string; name: string }) => {
+  batchProduct.value = product;
+  showBatchModal.value = true;
 };
 
 const deleteProduct = (id: string) => {
@@ -164,7 +175,7 @@ const cancelDelete = () => {
         </span>
       </div>
 
-      </div>
+
 
       <!-- Loading State -->
       <div v-if="inventoryStore.isLoading" class="flex flex-col gap-3 px-1">
@@ -263,6 +274,12 @@ const cancelDelete = () => {
                 title="Ver historial">
                 <History :size="20" :stroke-width="1.5" />
               </button>
+              <button
+                class="text-slate-400 hover:text-emerald-600 p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                @click.stop="openBatchHistory(product)"
+                title="Ver Lotes (FIFO)">
+                <Layers :size="20" :stroke-width="1.5" />
+              </button>
               <button v-if="canManageInventory"
                 class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 @click.stop="deleteProduct(product.id)">
@@ -308,6 +325,13 @@ const cancelDelete = () => {
       v-model="showKardexModal"
       :product-id="kardexProduct?.id || null"
       :product-name="kardexProduct?.name || null"
+    />
+
+    <!-- T1.5: Batch History Modal -->
+    <BatchHistoryModal 
+      v-model="showBatchModal"
+      :product-id="batchProduct?.id || null"
+      :product-name="batchProduct?.name || null"
     />
 
     <!-- T-010: Modal de Confirmación de Eliminación -->

@@ -362,15 +362,20 @@ const saveEntry = async () => {
             type: movementType.value as any, 
             quantity: qty,
             reason: reason.value,
-            expirationDate: item.expirationDate
+            expirationDate: item.expirationDate,
+            unitCost: item.unitCost // Pass the cost
           });
           
-          if (result.success) successCount++;
+          if (result.success) {
+            successCount++;
+          } else {
+            console.error(`Error saving item ${item.productName}:`, result.error);
+          }
       }
     }
 
     if (successCount === 0) {
-        throw new Error('No se pudo guardar ningún producto.');
+        throw new Error('No se pudo guardar ningún producto. Revisa la consola para más detalles.');
     }
 
     // Return custom success object to be handled
@@ -386,7 +391,7 @@ const saveEntry = async () => {
     showSuccessToast: false // We will show a custom toast/alert
   }).then((count) => {
       if (count) {
-          showSuccess(`Entrada guardada. ${count} productos actualizados.`);
+          showSuccess(`Entrada registrada exitosamente. Lotes actualizados correctamente.`);
           router.push('/inventory');
       }
   });
