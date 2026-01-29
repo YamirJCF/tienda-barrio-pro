@@ -124,12 +124,17 @@ export const useSalesStore = defineStore(
         stats.totalSales = stats.totalSales.plus(sale.total);
         stats.salesCount++;
 
-        if (sale.paymentMethod === 'cash') {
-          stats.cashSales = stats.cashSales.plus(sale.effectiveTotal);
-        } else if (sale.paymentMethod === 'nequi') {
-          stats.nequiSales = stats.nequiSales.plus(sale.effectiveTotal);
-        } else if (sale.paymentMethod === 'fiado') {
-          stats.fiadoSales = stats.fiadoSales.plus(sale.effectiveTotal);
+        // Helper to add to stats
+        const addToStats = (method: string, amount: Decimal) => {
+          if (method === 'cash') stats.cashSales = stats.cashSales.plus(amount);
+          else if (method === 'nequi') stats.nequiSales = stats.nequiSales.plus(amount);
+          else if (method === 'fiado') stats.fiadoSales = stats.fiadoSales.plus(amount);
+        };
+
+        if (sale.paymentMethod === 'mixed' && sale.payments) {
+          sale.payments.forEach(p => addToStats(p.method, p.amount));
+        } else {
+          addToStats(sale.paymentMethod, sale.effectiveTotal);
         }
       });
 
@@ -172,6 +177,11 @@ export const useSalesStore = defineStore(
         })),
         total: saleData.total instanceof Decimal ? saleData.total.toNumber() : Number(saleData.total),
         paymentMethod: saleData.paymentMethod,
+        payments: saleData.payments?.map(p => ({
+          method: p.method,
+          amount: p.amount.toNumber(),
+          reference: p.reference
+        })),
         amountReceived: saleData.amountReceived ? (saleData.amountReceived instanceof Decimal ? saleData.amountReceived.toNumber() : Number(saleData.amountReceived)) : undefined,
         clientId: saleData.clientId,
         employeeId: saleData.employeeId

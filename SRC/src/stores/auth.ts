@@ -305,6 +305,14 @@ export const useAuthStore = defineStore(
       return true;
     };
 
+    // Helper to manually set status (used by Login flows)
+    const setDeviceStatus = (status: 'pending' | 'approved' | 'rejected' | 'expired') => {
+      dailyAccessState.value.status = status;
+      if (status === 'approved') {
+        dailyAccessState.value.lastApprovedAt = new Date().toISOString();
+      }
+    };
+
     // Helper functions restored
     const resetToDemo = () => {
       currentUser.value = null;
@@ -366,7 +374,8 @@ export const useAuthStore = defineStore(
       checkDailyApproval,
       requestDailyPass,
       approveRequest,
-      rejectRequest
+      rejectRequest,
+      setDeviceStatus,
     };
   },
   {

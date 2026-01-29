@@ -94,22 +94,27 @@ flowchart TD
     L -->|No| M[Click "COBRAR"]
     
     M --> N[CheckoutModal]
-    N --> O{Método de pago}
-    O -->|Efectivo| P[Ingresar monto recibido]
-    O -->|Nequi| Q[Confirmación simple]
-    O -->|Fiado| R[Seleccionar cliente]
+    M --> N[CheckoutModal]
+    N --> O{Saldo > 0?}
+    O -->|No| P[Habilitar Botón Confirmar]
+    O -->|Sí| Q[Formulario Agregar Pago]
     
-    P --> S[Ver vueltos]
-    Q --> S
-    R --> T{¿Crédito disponible?}
-    T -->|No| U[Advertencia pero permite]
-    T -->|Sí| S
-    U --> S
+    Q --> R{Método}
+    R -->|Efectivo| S[Monto (auto-restante)]
+    R -->|Nequi| T[Monto (máx restante) + Ref]
+    R -->|Fiado| U[Seleccionar Cliente + Monto]
     
-    S --> V[Click "Confirmar"]
-    V --> W[Venta registrada ✅]
-    W --> X[Carrito limpio]
-    X --> F
+    S --> V[Click Agregar (+)]
+    T --> V
+    U --> V
+    
+    V --> W[Lista de Pagos Actualizada]
+    W --> O
+    
+    P --> X[Click "Confirmar Pago"]
+    X --> Y[Venta registrada ✅]
+    Y --> Z[Carrito limpio]
+    Z --> F
 ```
 
 ### Estados de Notificación

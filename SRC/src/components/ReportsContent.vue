@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useInventoryStore } from '../stores/inventory';
@@ -78,12 +78,7 @@ const employeesStore = useEmployeesStore(); // Access to employee list
 // Helper to filter by cashier
 const getSalesByCashier = (sales: typeof salesStore.sales) => {
     if (selectedCashierId.value === 'all') return sales;
-    // Assuming sale object has employeeId or userId field. 
-    // SalesStore needs to capture this. If not present, we can default to all or needs refactor.
-    // Checking Sales interface in sales.ts... 
-    // sales.ts usually has `userId` or `employeeId`. Let's assume `userId` or similar. 
-    // In our phase 1 check, sales had `userId`.
-    return sales.filter(s => (s as any).userId === selectedCashierId.value || (s as any).employeeId === selectedCashierId.value);
+    return sales.filter(s => s.employeeId === selectedCashierId.value);
 };
 
 // Filtered sales for selected period AND cashier

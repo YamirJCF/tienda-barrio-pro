@@ -47,29 +47,28 @@ Este es el componente core de esta WO. Debe ser ágil y teclado-friendly.
 - Total General (Múltiplo de $50)
 
 #### Columna Derecha / Principal: Pago
-1.  **Gran Total**:
+4.  **Columna Derecha / Principal: Pago (Lista Acumulativa)**
+5.  **Gran Total**:
     -   Tipografía Gigante (4xl).
     -   Color: `text-slate-900` dark: `text-white`.
-2.  **Selector de Método de Pago** (Tabs o Grid de botones grandes):
-    -   💵 **Efectivo** (Default)
-    -   📱 **Transferencia** (Nequi/Daviplata)
-    -   🤝 **Crédito** (Fiado)
-3.  **Área Dinámica según Método**:
-    -   **Efectivo**:
-        -   Input "Recibido": Autofocus.
-        -   Botones Rápidos: "Exacto", "+$2.000", "+$5.000", "$20.000", "$50.000".
-        -   Display "Cambio/Vueltos": Verde si > 0, Rojo si falta.
-    -   **Transferencia**:
-        -   Input Referencia (Opcional).
-        -   Alert: "Verificar recepción en app bancaria".
-    -   **Crédito**:
-        -   Buscador de Cliente (Autocomplete).
-        -   Info del Cliente: "Cupo disponible: $XXX".
-4.  **Botonera Inferior**:
+6.  **Resumen de Pagos**:
+    -   Barra de progreso / Texto: "Faltan $XXX" o "Cambio $XXX".
+    -   Lista de pagos agregados:
+        -   `[💵 Efectivo] $20.000 (icon trash)`
+        -   `[📱 Nequi] $30.000 (Ref: 1234)`
+7.  **Agregar Pago**:
+    -   **Grid de Métodos**: Botones [Efectivo] [Transf/Nequi] [Crédito].
+    -   **Input Monto**:
+        -   Autocompleta con el *Saldo Restante*.
+        -   Si es Efectivo: Permite mayor valor (calcula cambio).
+        -   Si es Nequi/Crédito: Bloquea mayor valor al restante.
+    -   **Botón (+) Agregar**: Habilitado si `monto > 0`.
+8.  **Botonera Inferior**:
     -   Cancelar (Esc).
     -   **CONFIRMAR PAGO** (Enter):
-        -   Grande, ancho completo.
-        -   Deshabilitado si `Recibido < Total` (Efectivo) o sin Cliente (Fiado).
+        -   Grande, ancho completo, verde.
+        -   Solo habilitado si `Saldo Restante == 0`.
+        -   Muestra "CONFIRMAR PAGO (Cambio: $XXX)" si aplica.
 
 ---
 

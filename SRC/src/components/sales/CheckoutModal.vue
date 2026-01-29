@@ -1,771 +1,278 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useCartStore } from '../../stores/cart';
-import { useConfigStore } from '../../stores/configStore';
-import { useClientsStore, type Client } from '../../stores/clients';
+import { ref, computed, watch } from 'vue';
+import { useAuthStore } from '../../stores/auth';
+import type { Client } from '../../stores/clients';
 import Decimal from 'decimal.js';
 import BaseModal from '../ui/BaseModal.vue';
 import BaseInput from '../ui/BaseInput.vue';
 import BaseButton from '../ui/BaseButton.vue';
 import {
-  Store,
-  TrendingDown,
-  Receipt,
-  ChevronUp,
-  ChevronDown,
   Banknote,
-  Smartphone,
-  BookOpen,
-  Delete,
-  QrCode,
-  X,
+  CreditCard,
+  User,
+  Trash2,
+  Plus,
   AlertTriangle,
-  UserSearch,
-  CheckCircle,
-  Search
+  CheckCircle2
 } from 'lucide-vue-next';
+import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
+import { useNotifications } from '../../composables/useNotifications';
+import type { PaymentTransaction } from '../../types';
 
-// Props
 interface Props {
   modelValue: boolean;
+  total: Decimal;
+  allowFiado?: boolean;
+  selectedClient?: Client | null;
 }
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  // WO-001: Changed clientId from number to string for UUID
-  complete: [paymentMethod: string, amountReceived?: Decimal, clientId?: string];
+  'complete': [payments: PaymentTransaction[], totalPaid: Decimal];
 }>();
 
-// Store
-const cartStore = useCartStore();
-const clientsStore = useClientsStore();
-const configStore = useConfigStore();
+const { formatCurrency } = useCurrencyFormat();
+const { showWarning } = useNotifications();
 
 // State
-type PaymentMethod = 'cash' | 'nequi' | 'fiado';
-const activeMethod = ref<PaymentMethod>('cash');
-const amountReceived = ref('');
-const nequiReference = ref('');
-const selectedClient = ref<Client | null>(null);
-const clientSearch = ref('');
-const isListExpanded = ref(false); // OBS-01: Lista expandible
-
-// OBS-02: Formatear cantidad a máximo 2 decimales
-const formatQuantity = (qty: number | Decimal): string => {
-  const num = qty instanceof Decimal ? qty.toNumber() : Number(qty);
-  return Number.isInteger(num) ? num.toString() : num.toFixed(2);
-};
+const payments = ref<PaymentTransaction[]>([]);
+const tempAmount = ref<string>('');
+const tempMethod = ref<'cash' | 'nequi' | 'fiado'>('cash');
+const tempReference = ref<string>('');
 
 // Computed
-const total = computed(() => cartStore.total);
-const formattedTotal = computed(() => cartStore.formattedTotal);
-
-// BR-04: Cash Payable Logic
-const effectiveTotal = computed(() => {
-  if (activeMethod.value === 'cash') {
-    return cartStore.totalCashPayable;
-  }
-  return total.value;
+const totalPaid = computed(() => {
+  return payments.value.reduce((sum, p) => sum.plus(p.amount), new Decimal(0));
 });
 
-const roundingDifference = computed(() => cartStore.roundingDifference);
+const remainingBalance = computed(() => {
+  const diff = props.total.minus(totalPaid.value);
+  return diff.isNegative() ? new Decimal(0) : diff;
+});
 
 const change = computed(() => {
-  if (!amountReceived.value || activeMethod.value !== 'cash') {
-    return new Decimal(0);
-  }
-  const received = new Decimal(amountReceived.value);
-  return received.minus(effectiveTotal.value); // Use rounded total for change calc
+  const diff = totalPaid.value.minus(props.total);
+  return diff.isPositive() ? diff : new Decimal(0);
 });
 
-const formattedChange = computed(() => {
-  return `$ ${change.value
-    .toDecimalPlaces(0)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
-});
-
-const formattedAmountReceived = computed(() => {
-  if (!amountReceived.value) return '$ 0';
-  return `$ ${new Decimal(amountReceived.value)
-    .toDecimalPlaces(0)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
-});
-
-const canComplete = computed(() => {
-  if (activeMethod.value === 'cash') {
-    return amountReceived.value && change.value.greaterThanOrEqualTo(0);
-  }
-  if (activeMethod.value === 'fiado') {
-    return selectedClient.value !== null;
-  }
-  return true;
-});
-
-// Filtered clients for fiado
-const filteredClients = computed(() => {
-  return clientsStore.searchClients(clientSearch.value);
-});
-
-// Get available credit for selected client
-const selectedClientCredit = computed(() => {
-  if (!selectedClient.value) return new Decimal(0);
-  return clientsStore.getAvailableCredit(selectedClient.value.id);
-});
-
-const hasEnoughCredit = computed(() => {
-  return selectedClientCredit.value.gte(total.value);
+const isComplete = computed(() => {
+  // Complete if total covered OR (Cash overflow allowed for change)
+  return totalPaid.value.gte(props.total);
 });
 
 // Methods
+const autoFillAmount = () => {
+    // Fill with remaining amount if positive
+    if (remainingBalance.value.gt(0)) {
+        tempAmount.value = remainingBalance.value.toString();
+    }
+};
+
+const addPayment = () => {
+  if (!tempAmount.value) return;
+  const amount = new Decimal(tempAmount.value);
+
+  if (amount.lte(0)) {
+    showWarning('El monto debe ser mayor a 0');
+    return;
+  }
+
+  // Validation: Non-cash methods cannot exceed remaining balance
+  if (tempMethod.value !== 'cash' && amount.gt(remainingBalance.value)) {
+    showWarning(`El pago con ${tempMethod.value} no puede exceder el saldo restante (${formatCurrency(remainingBalance.value)})`);
+    return;
+  }
+
+  // Validation: Fiado requires client
+  if (tempMethod.value === 'fiado' && !props.selectedClient) {
+    showWarning('Debes seleccionar un cliente para fiar');
+    return;
+  }
+  
+  // Validation: Nequi requires reference (Logic decision: Make optional or warn? Let's make it optional for speed, but encouraged)
+  
+  payments.value.push({
+    method: tempMethod.value,
+    amount: amount,
+    reference: tempReference.value || undefined
+  });
+
+  // Reset temp form
+  tempAmount.value = '';
+  tempReference.value = '';
+  
+  // Auto-switch back to cash or stay? Stay for now.
+  // If complete, maybe focus button?
+};
+
+const removePayment = (index: number) => {
+  payments.value.splice(index, 1);
+};
+
+const handleComplete = () => {
+  if (!isComplete.value) return;
+  emit('complete', payments.value, totalPaid.value);
+};
+
 const close = () => {
   emit('update:modelValue', false);
 };
 
-const handleNumpad = (value: string) => {
-  if (value === 'backspace') {
-    amountReceived.value = amountReceived.value.slice(0, -1);
-  } else if (value === '000') {
-    amountReceived.value += '000';
-  } else {
-    amountReceived.value += value;
+// Watchers
+watch(() => props.modelValue, (val) => {
+  if (val) {
+    // Reset on open
+    payments.value = [];
+    tempMethod.value = 'cash';
+    tempReference.value = '';
+    // Auto-prefill full amount for quick cash sale
+    tempAmount.value = props.total.toString();
   }
-};
-
-const useExactAmount = () => {
-  amountReceived.value = effectiveTotal.value.toString();
-};
-
-const selectMethod = (method: PaymentMethod) => {
-  activeMethod.value = method;
-  if (method !== 'cash') {
-    amountReceived.value = '';
-  }
-  if (method !== 'fiado') {
-    selectedClient.value = null;
-    clientSearch.value = '';
-  }
-};
-
-const selectClient = (client: Client) => {
-  selectedClient.value = client;
-  clientSearch.value = '';
-};
-
-const clearSelectedClient = () => {
-  selectedClient.value = null;
-};
-
-const completeSale = () => {
-  if (!canComplete.value) return;
-
-  const receivedAmount =
-    activeMethod.value === 'cash' ? new Decimal(amountReceived.value) : undefined;
-
-  const clientId =
-    activeMethod.value === 'fiado' && selectedClient.value ? selectedClient.value.id : undefined;
-
-  emit('complete', activeMethod.value, receivedAmount, clientId);
-
-  // Reset
-  amountReceived.value = '';
-  nequiReference.value = '';
-  selectedClient.value = null;
-  clientSearch.value = '';
-  activeMethod.value = 'cash';
-  close();
-};
-
-const handleKeydown = (e: KeyboardEvent) => {
-  if (!props.modelValue) return;
-
-  if (e.key === 'Escape') {
-      close();
-  } else if (e.key === 'F12' || e.key === 'Enter') {
-      // Prevent F12 dev tools or Enter default
-      e.preventDefault(); 
-      completeSale();
-  }
-};
-
-onMounted(() => {
-    window.addEventListener('keydown', handleKeydown);
 });
-
-onUnmounted(() => {
-    window.removeEventListener('keydown', handleKeydown);
-});
-
 </script>
 
 <template>
   <BaseModal
-    :model-value="modelValue"
-    @update:model-value="close"
-    max-height="85vh"
-    content-class="flex flex-col overflow-hidden"
+    :modelValue="modelValue"
+    title="Finalizar Venta"
+    :max-width="'max-w-xl'"
+    @update:modelValue="close"
   >
-    <template #header>
-        <div class="flex flex-col items-center justify-center w-full pt-2">
-            <!-- Store Branding -->
-            <div class="flex flex-col items-center mb-4">
-              <img 
-                v-if="configStore.logoUrl" 
-                :src="configStore.logoUrl" 
-                class="h-12 w-auto mb-1 opacity-90 grayscale-[0.2]" 
-                alt="Logo"
-              />
-              <div v-else class="h-8 w-8 mb-1 rounded-full bg-primary/10 flex items-center justify-center">
-                 <Store class="text-primary" :size="20" />
-              </div>
-              <h2 class="text-sm font-bold text-gray-800 dark:text-gray-100 uppercase tracking-wide">
-                {{ configStore.storeName }}
-              </h2>
-              <p v-if="configStore.documentId" class="text-[10px] text-gray-400">
-                NIT: {{ configStore.documentId }}
-              </p>
-            </div>
-
-            <div class="w-full border-t border-dashed border-gray-200 dark:border-gray-700 my-2"></div>
-            
-            <h3
-              class="text-gray-400 dark:text-gray-500 text-xs font-semibold tracking-wide uppercase mb-1"
-            >
-              Total Factura
-            </h3>
-            <div
-              class="flex items-baseline gap-1"
-              :class="{ 'opacity-60 scale-90': activeMethod === 'cash' }"
-            >
-              <span class="text-2xl font-bold text-gray-700 dark:text-gray-300">$</span>
-              <span class="text-3xl font-black text-gray-800 dark:text-gray-200 tracking-tight">
-                {{
-                  total
-                    .toDecimalPlaces(0)
-                    .toString()
-                    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-                }}
-              </span>
-            </div>
-
-            <!-- BR-04: Show Cash Payable if Adjusting -->
-            <div
-              v-if="activeMethod === 'cash' && !total.equals(effectiveTotal)"
-              class="flex flex-col items-center mt-2 animate-slide-up"
-            >
-              <div class="flex items-center gap-2 mb-1">
-                <TrendingDown class="text-red-500" :size="16" />
-                <span class="text-red-500 font-bold text-xs"
-                  >Ajuste Legal: ${{ roundingDifference.abs() }}</span
-                >
-              </div>
-              <div
-                class="bg-emerald-100 dark:bg-emerald-900/30 px-4 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 transform scale-110"
-              >
-                <span
-                  class="text-emerald-800 dark:text-emerald-300 text-xs font-bold uppercase mr-2"
-                  >A Pagar:</span
-                >
-                <span class="text-emerald-900 dark:text-emerald-200 text-xl font-black">
-                  ${{
-                    effectiveTotal
-                      .toDecimalPlaces(0)
-                      .toString()
-                      .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-                  }}
-                </span>
-              </div>
-            </div>
-            <span class="text-xs text-gray-400 mt-2">{{ cartStore.items.length }} producto(s)</span>
+    <div class="p-6 space-y-6">
+      <!-- SUMMARY CARD -->
+      <div class="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 flex flex-col gap-2 border border-slate-200 dark:border-slate-700">
+        <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-500 font-bold uppercase tracking-wider">Total Venta</span>
+            <span class="text-slate-900 dark:text-white font-bold text-lg">{{ formatCurrency(total) }}</span>
         </div>
-    </template>
+        
+        <div class="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
+        
+        <div class="flex justify-between items-center">
+            <span class="text-slate-500 font-bold">Pagado</span>
+            <span class="text-emerald-600 font-bold">{{ formatCurrency(totalPaid) }}</span>
+        </div>
+        
+        <div class="flex justify-between items-center text-xl mt-1">
+             <span v-if="remainingBalance.gt(0)" class="text-blue-600 font-black">Falta</span>
+             <span v-else class="text-emerald-500 font-black">Cambio</span>
+             
+             <span v-if="remainingBalance.gt(0)" class="text-blue-600 font-black">{{ formatCurrency(remainingBalance) }}</span>
+             <span v-else class="text-emerald-500 font-black">{{ formatCurrency(change) }}</span>
+        </div>
+      </div>
 
-          <!-- Lista de Productos (Scrollable, No Editable) -->
-          <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-            <!-- Section Header -->
-            <div class="flex items-center justify-between mb-2">
-              <h4
-                class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5"
+      <!-- PAYMENTS LIST -->
+      <div class="space-y-3 min-h-[100px]">
+         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Pagos Agregados</h3>
+         
+         <div v-if="payments.length === 0" class="text-center py-4 text-slate-400 text-sm italic border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+            No hay pagos registrados
+         </div>
+         
+         <div v-for="(payment, index) in payments" :key="index" 
+            class="flex items-center justify-between bg-white dark:bg-slate-700 p-3 rounded-xl border border-slate-100 dark:border-slate-600 shadow-sm animate-fade-in"
+         >
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center"
+                     :class="{
+                        'bg-emerald-100 text-emerald-600': payment.method === 'cash',
+                        'bg-purple-100 text-purple-600': payment.method === 'nequi',
+                        'bg-amber-100 text-amber-600': payment.method === 'fiado'
+                     }">
+                     <Banknote v-if="payment.method === 'cash'" :size="20" />
+                     <CreditCard v-if="payment.method === 'nequi'" :size="20" />
+                     <User v-if="payment.method === 'fiado'" :size="20" />
+                </div>
+                <div>
+                    <p class="font-bold text-slate-800 dark:text-white capitalize">
+                        {{ payment.method === 'cash' ? 'Efectivo' : payment.method }}
+                    </p>
+                    <p v-if="payment.reference" class="text-xs text-slate-500">Ref: {{ payment.reference }}</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <span class="font-bold text-slate-700 dark:text-slate-200">{{ formatCurrency(payment.amount) }}</span>
+                <button @click="removePayment(index)" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <Trash2 :size="18" />
+                </button>
+            </div>
+         </div>
+      </div>
+
+      <!-- ADD PAYMENT FORM -->
+      <div v-if="remainingBalance.gt(0)" class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-blue-100 dark:border-slate-700 space-y-4">
+          <div class="grid grid-cols-3 gap-2">
+              <button 
+                v-for="method in ['cash', 'nequi', 'fiado']" 
+                :key="method"
+                @click="tempMethod = method as any; autoFillAmount()"
+                class="flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all"
+                :class="tempMethod === method 
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
+                    : 'border-transparent bg-white dark:bg-slate-700 text-slate-500 hover:bg-slate-100'"
               >
-                <Receipt class="text-gray-400" :size="16" />
-                Detalle de Compra
-              </h4>
-              <!-- OBS-01: Botón expandir lista -->
-              <button
-                @click="isListExpanded = !isListExpanded"
-                class="text-xs text-primary hover:text-primary-dark font-medium flex items-center gap-1"
-              >
-                <component :is="isListExpanded ? ChevronUp : ChevronDown" :size="16" />
-                {{ isListExpanded ? 'Contraer' : 'Ver Todo' }} ({{ cartStore.items.length }})
+                  <span class="capitalize text-sm font-bold">{{ method === 'cash' ? 'Efectivo' : method }}</span>
               </button>
-            </div>
-
-            <!-- Product List Container -->
-            <div
-              class="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            >
-              <!-- OBS-01: Lista con altura dinámica -->
-              <div
-                :class="isListExpanded ? 'max-h-[50vh]' : 'max-h-28'"
-                class="overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50 transition-all duration-300"
-              >
-                <div
-                  v-for="item in cartStore.items"
-                  :key="item.id"
-                  class="flex items-center justify-between px-3 py-2.5 bg-white dark:bg-gray-800/80"
-                >
-                  <!-- Left: Quantity + Name -->
-                  <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                    <!-- OBS-02: Cantidad formateada -->
-                    <span
-                      class="shrink-0 min-w-7 h-7 px-1.5 rounded-lg bg-primary text-white text-xs font-bold flex items-center justify-center shadow-sm"
-                    >
-                      {{ formatQuantity(item.quantity) }}
-                    </span>
-                    <span class="text-sm text-gray-800 dark:text-gray-200 font-medium truncate">{{
-                      item.name
-                    }}</span>
-                  </div>
-                  <!-- Right: Price -->
-                  <span class="shrink-0 text-sm text-gray-900 dark:text-white font-bold ml-3">
-                    ${{
-                      (item.subtotal || item.price.times(item.quantity))
-                        .toDecimalPlaces(0)
-                        .toString()
-                        .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-                    }}
-                  </span>
-                </div>
-              </div>
-            </div>
           </div>
 
-          <!-- Payment Method Tabs -->
-          <div
-            class="grid grid-cols-3 w-full border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-surface-dark"
-          >
-            <!-- Efectivo Tab -->
-            <button
-              class="relative flex flex-col items-center justify-center py-3 gap-1 group"
-              :class="
-                activeMethod === 'cash' ? '' : 'opacity-60 hover:opacity-100 transition-opacity'
-              "
-              @click="selectMethod('cash')"
-            >
-              <Banknote
-                :size="28"
-                :class="
-                  activeMethod === 'cash'
-                    ? 'text-emerald-600 dark:text-accent-green'
-                    : 'text-gray-400 dark:text-gray-500'
-                "
-              />
-              <span
-                class="text-xs font-bold tracking-wide"
-                :class="
-                  activeMethod === 'cash'
-                    ? 'text-emerald-800 dark:text-emerald-100'
-                    : 'text-gray-500 dark:text-gray-400'
-                "
+          <div class="flex gap-3">
+              <div class="flex-1">
+                   <BaseInput 
+                        v-model="tempAmount"
+                        type="number" 
+                        placeholder="0.00"
+                        class="text-right font-mono font-bold text-lg"
+                        :autofocus="true"
+                        @keyup.enter="addPayment"
+                    />
+              </div>
+              <div v-if="tempMethod === 'nequi'" class="flex-1">
+                   <BaseInput 
+                        v-model="tempReference"
+                        placeholder="Ref # (Op)"
+                        @keyup.enter="addPayment"
+                    />
+              </div>
+              <button 
+                 @click="addPayment"
+                 class="bg-blue-600 hover:bg-blue-700 text-white w-12 rounded-xl flex items-center justify-center shadow-md active:scale-95 transition-transform"
               >
-                Efectivo
-              </span>
-              <!-- Active Indicator -->
-              <div
-                v-if="activeMethod === 'cash'"
-                class="absolute bottom-0 w-full h-[4px] bg-emerald-500 dark:bg-accent-green rounded-t-full"
-              ></div>
-              <div
-                v-if="activeMethod === 'cash'"
-                class="absolute inset-0 bg-emerald-50/50 dark:bg-accent-green/5 opacity-100"
-              ></div>
-            </button>
-
-            <!-- Nequi Tab -->
-            <button
-              class="relative flex flex-col items-center justify-center py-3 gap-1 group"
-              :class="
-                activeMethod === 'nequi' ? '' : 'opacity-60 hover:opacity-100 transition-opacity'
-              "
-              @click="selectMethod('nequi')"
-            >
-              <Smartphone
-                :size="28"
-                :class="
-                  activeMethod === 'nequi'
-                    ? 'text-pink-600 dark:text-pink-400'
-                    : 'text-gray-400 dark:text-gray-500'
-                "
-              />
-              <span
-                class="text-xs font-bold tracking-wide"
-                :class="
-                  activeMethod === 'nequi'
-                    ? 'text-pink-800 dark:text-pink-100'
-                    : 'text-gray-500 dark:text-gray-400'
-                "
-              >
-                Nequi
-              </span>
-              <div
-                v-if="activeMethod === 'nequi'"
-                class="absolute bottom-0 w-full h-[4px] bg-pink-500 rounded-t-full"
-              ></div>
-              <div
-                v-if="activeMethod === 'nequi'"
-                class="absolute inset-0 bg-pink-50/50 dark:bg-pink-900/5 opacity-100"
-              ></div>
-            </button>
-
-            <!-- Fiado Tab -->
-            <button
-              class="relative flex flex-col items-center justify-center py-3 gap-1 group"
-              :class="
-                activeMethod === 'fiado' ? '' : 'opacity-60 hover:opacity-100 transition-opacity'
-              "
-              @click="selectMethod('fiado')"
-            >
-              <BookOpen
-                :size="28"
-                :class="
-                  activeMethod === 'fiado'
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-gray-400 dark:text-gray-500'
-                "
-              />
-              <span
-                class="text-xs font-bold tracking-wide"
-                :class="
-                  activeMethod === 'fiado'
-                    ? 'text-amber-800 dark:text-amber-100'
-                    : 'text-gray-500 dark:text-gray-400'
-                "
-              >
-                Fiado
-              </span>
-              <div
-                v-if="activeMethod === 'fiado'"
-                class="absolute bottom-0 w-full h-[4px] bg-amber-500 rounded-t-full"
-              ></div>
-              <div
-                v-if="activeMethod === 'fiado'"
-                class="absolute inset-0 bg-amber-50/50 dark:bg-amber-900/5 opacity-100"
-              ></div>
-            </button>
+                 <Plus :size="24" />
+              </button>
           </div>
-
-          <!-- Dynamic Body Content -->
-          <main class="flex-1 overflow-y-auto p-4 flex flex-col">
-            <!-- Cash Payment View -->
-            <div v-if="activeMethod === 'cash'" class="flex flex-1 flex-col gap-4 h-full">
-              <div class="grid grid-cols-12 gap-4 flex-1">
-                <!-- Left Column: Input & Feedback -->
-                <div class="col-span-5 flex flex-col gap-3 justify-center">
-                  <label class="block">
-                    <span
-                      class="text-gray-600 dark:text-gray-300 text-sm font-medium mb-1.5 block ml-1"
-                    >
-                      Dinero Recibido
-                    </span>
-                    <!-- Input Display Box -->
-                    <div
-                      class="relative flex items-center w-full h-16 px-3 bg-white dark:bg-background-dark border-[3px] border-sky-500 rounded-xl shadow-sm ring-4 ring-sky-100 dark:ring-sky-900/20"
-                    >
-                      <span class="text-gray-400 text-xl font-bold mr-1">$</span>
-                      <span class="text-2xl font-bold text-gray-900 dark:text-white truncate">
-                        {{ amountReceived || '0' }}
-                      </span>
-                      <span class="absolute right-3 w-2 h-6 bg-sky-500 animate-pulse"></span>
-                    </div>
-                  </label>
-
-                  <!-- Feedback Box (Calculated Change) -->
-                  <div
-                    v-if="amountReceived"
-                    class="w-full border rounded-lg p-3 flex flex-col items-start justify-center"
-                    :class="
-                      change.greaterThanOrEqualTo(0)
-                        ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800'
-                        : 'bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800'
-                    "
-                  >
-                    <span
-                      class="text-xs font-bold uppercase tracking-wider"
-                      :class="
-                        change.greaterThanOrEqualTo(0)
-                          ? 'text-emerald-700 dark:text-emerald-400'
-                          : 'text-red-700 dark:text-red-400'
-                      "
-                    >
-                      {{ change.greaterThanOrEqualTo(0) ? 'Vueltos a dar' : 'Falta' }}
-                    </span>
-                    <div
-                      class="text-xl font-black mt-0.5"
-                      :class="
-                        change.greaterThanOrEqualTo(0)
-                          ? 'text-emerald-800 dark:text-emerald-300'
-                          : 'text-red-800 dark:text-red-300'
-                      "
-                    >
-                      {{ formattedChange }}
-                    </div>
-                  </div>
-
-                  <!-- Quick Action for exact cash -->
-                  <BaseButton
-                    variant="outline"
-                    class="mt-auto border-dashed w-full text-xs"
-                    @click="useExactAmount"
-                  >
-                    Usar monto exacto
-                  </BaseButton>
-                </div>
-
-                <!-- Right Column: Numpad -->
-                <div class="col-span-7 pl-2">
-                  <div class="grid grid-cols-3 gap-2.5 h-full max-h-[320px]">
-                    <!-- Numbers 1-9 -->
-                    <BaseButton
-                      v-for="num in [1, 2, 3, 4, 5, 6, 7, 8, 9]"
-                      :key="num"
-                      @click="handleNumpad(num.toString())"
-                      variant="secondary"
-                      class="text-xl font-bold bg-gray-100 dark:bg-gray-800"
-                    >
-                      {{ num }}
-                    </BaseButton>
-
-                    <!-- Bottom row: 000, 0, Backspace -->
-                    <BaseButton
-                      @click="handleNumpad('000')"
-                      variant="secondary"
-                      class="text-lg font-bold bg-gray-200 dark:bg-gray-700 tracking-tighter"
-                    >
-                      000
-                    </BaseButton>
-                    <BaseButton
-                      @click="handleNumpad('0')"
-                      variant="secondary"
-                      class="text-xl font-bold bg-gray-100 dark:bg-gray-800"
-                    >
-                      0
-                    </BaseButton>
-                    <BaseButton
-                      @click="handleNumpad('backspace')"
-                      variant="danger"
-                      class="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-none"
-                    >
-                      <Delete :size="24" />
-                    </BaseButton>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Nequi Payment View -->
-            <div
-              v-else-if="activeMethod === 'nequi'"
-              class="flex flex-col items-center justify-center gap-6 h-full py-8 text-center"
-            >
-              <div
-                class="w-24 h-24 bg-pink-100 dark:bg-pink-900/20 rounded-full flex items-center justify-center mb-2"
-              >
-                <QrCode class="text-pink-600 dark:text-pink-400" :size="48" />
-              </div>
-              <div>
-                <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                  Pago con Nequi / Daviplata
-                </h4>
-                <p
-                  class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed"
-                >
-                  Solicita al cliente el pago exacto de
-                  <strong class="text-gray-900 dark:text-white">{{ formattedTotal }}</strong>
-                  .
-                </p>
-              </div>
-              <div class="w-full max-w-xs mt-4">
-                <label class="block text-left mb-1 text-xs font-semibold text-gray-500 uppercase">
-                  Referencia (Opcional)
-                </label>
-                <BaseInput
-                  v-model="nequiReference"
-                  class="w-full text-center text-lg font-medium"
-                  placeholder="Últimos 4 dígitos"
-                  type="number"
-                  maxlength="4"
-                  inputmode="numeric"
-                />
-              </div>
-            </div>
-
-            <!-- Fiado Payment View -->
-            <div v-else-if="activeMethod === 'fiado'" class="flex flex-col gap-4 h-full">
-              <!-- Selected Client Card -->
-              <div
-                v-if="selectedClient"
-                class="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800"
-              >
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-3">
-                    <div
-                      class="w-12 h-12 rounded-full bg-amber-200 dark:bg-amber-800 flex items-center justify-center text-amber-800 dark:text-amber-200 font-bold text-lg"
-                    >
-                      {{
-                        selectedClient.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .substring(0, 2)
-                      }}
-                    </div>
-                    <div>
-                      <p class="font-bold text-gray-900 dark:text-white">
-                        {{ selectedClient.name }}
-                      </p>
-                      <p class="text-xs text-gray-500">C.C. {{ selectedClient.cedula }}</p>
-                    </div>
-                  </div>
-                  <button
-                    @click="clearSelectedClient"
-                    class="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <X :size="20" />
-                  </button>
-                </div>
-                <!-- Credit Info -->
-                <div
-                  class="mt-3 pt-3 border-t border-amber-200 dark:border-amber-700 flex justify-between text-sm"
-                >
-                  <span class="text-gray-600 dark:text-gray-400">Crédito disponible:</span>
-                  <span
-                    class="font-bold"
-                    :class="hasEnoughCredit ? 'text-emerald-600' : 'text-red-500'"
-                  >
-                    ${{
-                      selectedClientCredit
-                        .toDecimalPlaces(0)
-                        .toString()
-                        .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-                    }}
-                  </span>
-                </div>
-                <p
-                  v-if="!hasEnoughCredit"
-                  class="mt-2 text-xs text-red-500 flex items-center gap-1"
-                >
-                  <AlertTriangle :size="14" />
-                  El cliente excederá su límite de crédito
-                </p>
-              </div>
-
-              <!-- Client Search -->
-              <div v-if="!selectedClient">
-                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Seleccionar Cliente
-                </label>
-                <div class="relative">
-                  <BaseInput
-                    v-model="clientSearch"
-                    placeholder="Buscar por nombre o cédula..."
-                    :icon="Search"
-                  />
-                </div>
-              </div>
-
-              <!-- Client List -->
-              <div v-if="!selectedClient" class="flex-1 overflow-y-auto -mx-4 px-4">
-                <div v-if="filteredClients.length === 0" class="text-center py-8 text-gray-400">
-                  <UserSearch class="mx-auto mb-2 opacity-50" :size="36" />
-                  <p class="text-sm">No se encontraron clientes</p>
-                </div>
-                <div v-else class="flex flex-col gap-2">
-                  <button
-                    v-for="client in filteredClients"
-                    :key="client.id"
-                    class="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-colors text-left"
-                    @click="selectClient(client)"
-                  >
-                    <div
-                      class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 font-bold text-sm"
-                    >
-                      {{
-                        client.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .substring(0, 2)
-                      }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <p class="font-semibold text-gray-900 dark:text-white truncate">
-                        {{ client.name }}
-                      </p>
-                      <p class="text-xs text-gray-500 truncate">C.C. {{ client.cedula }}</p>
-                    </div>
-                    <div class="text-right">
-                      <p
-                        class="text-sm font-bold"
-                        :class="client.balance.gt(0) ? 'text-red-500' : 'text-emerald-600'"
-                      >
-                        ${{
-                          client.balance
-                            .toDecimalPlaces(0)
-                            .toString()
-                            .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-                        }}
-                      </p>
-                      <p class="text-[10px] text-gray-400 uppercase">
-                        {{ client.balance.gt(0) ? 'Debe' : 'Al día' }}
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </main>
+      </div>
+    </div>
 
     <template #footer>
-          <div class="p-4 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800">
-             <BaseButton
-              class="w-full h-14 rounded-xl shadow-lg flex items-center justify-between px-6 transition-all duration-200"
-              :class="
-                activeMethod === 'cash'
-                  ? '!bg-emerald-600 !hover:bg-emerald-700 !active:bg-emerald-800 shadow-emerald-200 dark:shadow-none'
-                  : activeMethod === 'nequi'
-                    ? '!bg-pink-600 !hover:bg-pink-700 !active:bg-pink-800'
-                    : '!bg-amber-600 !hover:bg-amber-700 !active:bg-amber-800'
-              "
-              :disabled="!canComplete"
-              @click="completeSale"
-              variant="success" 
-            >
-              <!-- Variant custom trick: pass classes manually or use 'success' etc but overriding colors with class works often -->
-              <span class="text-white/80 text-sm font-medium">Completar Venta</span>
-              <div class="flex flex-col items-end leading-none">
-                <span class="text-white text-lg font-bold tracking-wide">CONFIRMAR (F12)</span>
-                <span
-                  v-if="activeMethod === 'cash' && amountReceived"
-                  class="text-white/80 text-xs font-medium"
-                >
-                  Vueltos: {{ formattedChange }}
-                </span>
-              </div>
-              <CheckCircle class="text-white" :size="24" />
-            </BaseButton>
-            
-            <!-- Ticket Footer Message -->
-            <p 
-               v-if="configStore.ticketFooter"
-               class="text-center text-[10px] text-gray-400 mt-3 whitespace-pre-line leading-tight"
-            >
-              {{ configStore.ticketFooter }}
-            </p>
-          </div>
+      <div class="p-6 pt-0 flex gap-3">
+         <BaseButton @click="close" variant="secondary" class="flex-1 h-12">
+            Cancelar
+         </BaseButton>
+         <BaseButton 
+            @click="handleComplete" 
+            :disabled="!isComplete"
+            variant="success" 
+            class="flex-[2] h-12 text-lg font-bold shadow-lg shadow-emerald-500/20"
+         >
+            <div class="flex items-center gap-2">
+                <CheckCircle2 :size="24" />
+                CONFIRMAR PAGO
+            </div>
+         </BaseButton>
+      </div>
     </template>
   </BaseModal>
 </template>
 
-
+<style scoped>
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
