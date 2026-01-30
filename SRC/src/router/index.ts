@@ -42,6 +42,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/DailyWaitingRoom.vue'),
     meta: { requiresAuth: true }
   },
+  // WO-008: Waiting Room (Email Verification)
+  {
+    path: '/auth/waiting-verification',
+    name: 'waiting-verification',
+    component: () => import('../views/auth/WaitingRoomView.vue'),
+    meta: { requiresAuth: false } // Public but logic driven
+  },
   // Rutas Protegidas
   {
     path: '/admin',
@@ -115,6 +122,13 @@ const routes: RouteRecordRaw[] = [
     name: 'history',
     component: () => import('../views/HistoryView.vue'),
     meta: { requiresAuth: true }
+  },
+  // Catch-all for Supabase Auth fragments (access_token=...) and 404s
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'auth-callback',
+    component: () => import('../views/auth/AuthCallbackView.vue'),
+    meta: { requiresAuth: false }
   },
 ];
 

@@ -4,78 +4,73 @@
 Alta de Nuevas Tiendas y Cuentas de Administrador
 
 #### Descripción
-Proceso mediante el cual un nuevo dueño de negocio (Admin) crea su cuenta en el sistema. Este proceso genera simultáneamente la identidad digital del usuario (Autenticación) y la entidad del negocio, estableciendo la relación de propiedad raíz.
+Proceso mediante el cual un nuevo dueño de negocio (Admin) crea su cuenta en el sistema utilizando el proveedor de identidad nativo de la plataforma. Este proceso crea simultáneamente la identidad digital del usuario y la entidad de negocio inicial, asegurando la propiedad mediante verificación estricta de correo electrónico.
 
 ---
 
 ## Reglas de Negocio
 
-1. **Unicidad de Cuenta:** El correo electrónico del Admin es el identificador único global. No pueden existir dos cuentas con el mismo email, incluso para tiendas diferentes.
+1.  **Identidad Única:** El correo electrónico es el identificador único del usuario en el sistema de gestión de identidades.
 
-2. **Relación 1:1 Inicial:** Al registrarse, el Admin se vincula automáticamente como "Dueño Propietario" de la tienda creada.
+2.  **Política de Acceso Cero Antes de Verificar:**
+    *   El usuario **NO PUEDE** acceder a las funcionalidades del sistema (Dashboard) hasta que haya confirmado su dirección de correo electrónico.
+    *   El sistema de identidades gestiona el ciclo de vida de confirmación.
+    *   La base de datos **DEBE** bloquear cualquier intento de escritura de usuarios no confirmados.
 
-3. **Validación de Identidad Obligatoria:**
-    - El sistema NO permite el acceso al Dashboard hasta que el email sea verificado.
-    - El flujo DEBE interrumpirse tras el registro y redirigir a una pantalla de verificación.
+3.  **Vinculación de Tienda:**
+    *   Al registrarse, el usuario crea su primera tienda automáticamente.
+    *   El sistema **DEBE** asignar al usuario registrado el rol de "Dueño Propietario" de dicha tienda.
 
-4. **Credenciales Maestras:**
-    - El Admin maneja Email + Contraseña robusta (Mínimo 8 caracteres, alfanumérica).
-    - El Admin DEBE configurar un PIN de Caja (ver FRD-004_1).
-    - **Uso Exclusivo del PIN:** Este PIN se usa ÚNICAMENTE para la ceremonia de Apertura y Cierre de Caja. No tiene ninguna otra función en el sistema.
+4.  **Gestión de Credenciales:**
+    *   Las contraseñas **NO PUEDEN** ser accesibles ni almacenadas en texto plano por la lógica de negocio.
+    *   La responsabilidad de la custodia y validación de credenciales recae exclusivamente en el proveedor de identidad.
 
 ---
 
 ## Casos de Uso
 
-**Caso A: Registro con Verificación Estricta**
+**Caso A: Registro Exitoso (Flujo Principal)**
 - **Actor:** Emprendedor (Nuevo Usuario)
-- **Precondición:** No tiene cuenta previa en el sistema.
+- **Precondición:** El usuario no tiene cuenta registrada.
 - **Flujo Principal:**
-    1. Usuario completa formulario de registro (email, contraseña, nombre de tienda).
-    2. Sistema crea cuenta en estado `no verificado` y envía correo con enlace de verificación.
-    3. Sistema redirige inmediatamente a pantalla de "Verifica tu correo".
-    4. Pantalla muestra: "Te hemos enviado un correo a [email]".
-    5. Botón "Reenviar correo" se habilita tras 60 segundos de espera.
-    6. Límite de reenvíos: Máximo 3 por hora.
-    7. Usuario abre su inbox y hace clic en "Verificar Cuenta".
-    8. Sistema valida token, cambia estado a `verificado` y redirige al Dashboard.
-- **Postcondición:** Cuenta verificada con tienda asociada.
+    1.  Usuario ingresa Email, Contraseña y Nombre de Tienda en el formulario de registro.
+    2.  Usuario solicita la creación de la cuenta.
+    3.  El sistema de identidad registra al usuario y le envía automáticamente un correo de confirmación.
+    4.  El sistema presenta una pantalla informativa de "Verificación Pendiente".
+    5.  Usuario abre su correo electrónico y confirma su identidad mediante el enlace provisto.
+    6.  El sistema redirige al usuario a la aplicación.
+    7.  El sistema valida la confirmación y otorga acceso a la sesión.
+    8.  Usuario accede al Dashboard principal.
+- **Postcondición:** Usuario autenticado, verificado y vinculado a su nueva tienda.
 
-**Caso B: Recuperación de Acceso**
-- **Actor:** Admin existente
-- **Precondición:** Admin tiene cuenta verificada pero olvidó contraseña.
+**Caso B: Reenvío de Instrucciones de Verificación**
+- **Actor:** Usuario con registro pendiente
+- **Precondición:** Usuario se registró pero no completó la verificación.
 - **Flujo Principal:**
-    1. Admin solicita recuperación de contraseña vía email.
-    2. Sistema envía enlace de un solo uso.
-    3. Admin define nueva contraseña.
-    4. Sistema cierra TODAS las sesiones activas del Admin por seguridad.
-- **Postcondición:** Nueva contraseña activa, sesiones anteriores invalidadas.
+    1.  Usuario solicita "Reenviar correo" desde la pantalla de espera.
+    2.  El sistema instruye al proveedor de identidad para reenviar la notificación.
+    3.  El sistema confirma visualmente que la instrucción fue enviada.
+- **Postcondición:** Nuevo correo de verificación enviado.
 
 ---
 
-## Requisitos de Datos (Para Equipo Data)
+## Requisitos de Datos (Funcionales)
+
+**Entidad Usuario (Identidad):**
+- Identificador único (UUID)
+- Correo electrónico
+- Estado de verificación (Confirmado / Pendiente)
 
 **Entidad Tienda:**
 - Identificador único
 - Nombre comercial
-- Identificador amigable único (slug)
-- Plan de suscripción
-- Fecha de creación
-
-**Entidad Perfil de Admin:**
-- Identificador vinculado al proveedor de autenticación
-- Relación con Tienda
-- Rol: 'owner' o 'manager'
-- Hash del PIN de caja (para operaciones de caja)
-- Estado de verificación
+- Propietario (Vinculado al Usuario)
 
 ---
 
 ## Criterios de Aceptación
 
-- [ ] El registro crea atómicamente la tienda y el usuario en una única transacción.
-- [ ] No se permite la creación de tiendas "huérfanas" (sin dueño asignado).
-- [ ] La contraseña nunca se almacena en texto plano.
-- [ ] El email de verificación se envía en menos de 30 segundos tras el registro.
-- [ ] El botón "Reenviar correo" respeta el límite de 60 segundos y 3 intentos por hora.
-- [ ] La recuperación de contraseña invalida todas las sesiones activas.
+- [ ] El sistema impide el acceso (Login) a usuarios que no han completado el flujo de verificación.
+- [ ] El registro de un usuario desencadena ineludiblemente el envío del correo de verificación.
+- [ ] La pantalla de verificación bloquea la navegación hacia áreas protegidas hasta que la sesión sea válida.
+- [ ] El enlace de verificación redirige correctamente a la aplicación, restaurando el contexto de sesión.

@@ -10,11 +10,12 @@ const AUDIT_MODE_KEY = 'app_audit_mode_enabled';
 export const initAuditMode = () => {
     let isEnabled = localStorage.getItem(AUDIT_MODE_KEY) === 'true';
 
-    // 🔒 FORCE AUDIT MODE (Simulation Requirement)
-    if (!isEnabled) {
-        console.log('🛡️ Enforcing Audit Mode for Simulation...');
-        localStorage.setItem(AUDIT_MODE_KEY, 'true');
-        isEnabled = true;
+    // 🔓 FORCE DISABLE AUDIT MODE (User Request: Connect to DB)
+    // We override any persisted state to ensure we connect to production DB
+    if (isEnabled) {
+        console.log('🔓 Switching to Production Mode...');
+        localStorage.setItem(AUDIT_MODE_KEY, 'false');
+        isEnabled = false;
     }
 
     if (isEnabled) {

@@ -12,7 +12,172 @@ export interface LoginResponse {
 
 import { isAuditMode } from '../../data/supabaseClient';
 
+export interface RegisterResponse {
+    success: boolean;
+    user?: any;
+    session?: any;
+    error_code?: string;
+    error?: string;
+}
+
 export const authRepository = {
+    /**
+     * Registra una nueva tienda (Admin) usando Supabase Auth Nativo
+     */
+    async registerStore(data: {
+        storeName: string;
+        ownerName: string;
+        email: string;
+        password: string;
+    }): Promise<RegisterResponse> {
+        try {
+            const { data: authData, error } = await supabase.auth.signUp({
+                email: data.email,
+                password: data.password,
+                options: {
+                    data: {
+                        store_name: data.storeName,
+                        owner_name: data.ownerName,
+                    },
+                    emailRedirectTo: `${window.location.origin}/` // Redirect to root so Hash Router picks up #access_token
+                }
+            });
+
+            if (error) {
+                logger.error('[AuthRepository] Signup Error:', error);
+                return {
+                    success: false,
+                    error_code: error.code, // e.g. 'user_already_exists'
+                    error: error.message
+                };
+            }
+
+            // Supabase returns user even if email confirmation is required (session is null)
+            if (authData.user && !authData.session) {
+                return {
+                    success: true,
+                    user: authData.user,
+                    session: null // Indicates email verification needed
+                };
+            }
+
+            return {
+                success: true,
+                user: authData.user,
+                session: authData.session
+            };
+
+        } catch (err) {
+            logger.error('[AuthRepository] Unexpected signup error:', err);
+            return {
+                success: false,
+                error: 'Error inesperado durante el registro'
+            };
+        }
+    },
+
+    /**
+     * Inicia sesión como Admin (Dueño) usando Supabase Auth
+     */
+    async loginStore(email: string, password: string): Promise<LoginResponse> {
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+
+            if (error) {
+                logger.error('[AuthRepository] Login Error:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+
+            if (!data.user) {
+                return {
+                    success: false,
+                    error: 'Usuario no encontrado'
+                };
+            }
+
+            // Fetch additional store info if valid session
+            // For now, we construct the user object from metadata
+            const metadata = data.user.user_metadata;
+
+            // We need the Store ID. It's not in metadata by default unless we put it there.
+            // But we can fetch it via the linked employee record or stores table.
+
+            // Let's fetch the store linked to this user (Owner)
+            const { data: storeData, error: storeError } = await supabase
+                .from('stores')
+                .select('id, name, slug')
+                .eq('owner_id', data.user.id)
+                .single();
+
+            if (storeError || !storeData) {
+                logger.error('[AuthRepository] Store Check Error:', storeError);
+                return {
+                    success: false,
+                    error: 'No se encontró la tienda asociada a este usuario.'
+                };
+            }
+
+            return {
+                success: true,
+                employee: {
+                    id: data.user.id,
+                    name: metadata.owner_name || 'Admin',
+                    email: data.user.email!,
+                    type: 'admin',
+                    storeId: storeData.id,
+                    permissions: {
+                        canSell: true,
+                        canViewInventory: true,
+                        canViewReports: true,
+                        canFiar: true,
+                        canOpenCloseCash: true,
+                        canManageInventory: true,
+                        canManageClients: true
+                    }
+                },
+                store_state: { is_open: true }
+            };
+
+        } catch (err) {
+            logger.error('[AuthRepository] Unexpected login error:', err);
+            return {
+                success: false,
+                error: 'Error inesperado al iniciar sesión'
+            };
+        }
+    },
+
+    /**
+     * Envia correo de recuperación de contraseña
+     */
+    async recoverPassword(email: string): Promise<{ success: boolean; error?: string }> {
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/#/reset-password` // Specific route for reset
+            });
+
+            if (error) {
+                logger.error('[AuthRepository] Recovery Error:', error);
+                return { success: false, error: error.message };
+            }
+
+            return { success: true };
+        } catch (err) {
+            logger.error('[AuthRepository] Unexpected recovery error:', err);
+            return { success: false, error: 'Error inesperado.' };
+        }
+    },
+
+    async logout() {
+        await supabase.auth.signOut();
+    },
+
     /**
      * SPEC-005: Login unificado de empleado (Gatekeeper de 3 capas)
      * Updated for Schema v2: Uses 'validar_pin_empleado' RPC
@@ -34,7 +199,7 @@ export const authRepository = {
                     email: username || 'demo@audit.com',
                     type: 'employee',
                     storeId: 'audit-store-001',
-                    employeeId: 'mock-emp-001',
+                    employeeId: 101,
                     permissions: {
                         canSell: true,
                         canViewInventory: true,

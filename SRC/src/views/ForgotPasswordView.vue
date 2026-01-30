@@ -14,6 +14,9 @@ const isSuccess = ref(false);
 // isLoading handled by useAsyncAction
 
 // Composable: Request Management
+import { useAuthStore } from '../stores/auth';
+const authStore = useAuthStore();
+
 import { useAsyncAction } from '../composables/useAsyncAction';
 const { execute: executeRecovery, isLoading } = useAsyncAction();
 
@@ -22,15 +25,18 @@ const handleSubmit = async () => {
   if (!email.value) return;
 
   await executeRecovery(async () => {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Real API call via Store -> Repo -> Supabase
+      const result = await authStore.recoverPassword(email.value);
+      
+      if (!result.success) {
+          throw new Error(result.error || 'No se pudo enviar el correo.');
+      }
       
       // If success
       isSuccess.value = true;
       logger.log('Password recovery email sent to:', email.value);
   }, {
-      successMessage: 'Enlace enviado verificada tu correo',
-      errorMessage: 'No se pudo enviar el correo. Intenta tarde',
+      errorMessage: 'Error al enviar correo. Verifica que sea correcto.',
       checkConnectivity: true
   });
 };

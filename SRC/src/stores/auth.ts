@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { logger } from '../utils/logger';
 import { getStorageKey } from '../utils/storage';
+import { authRepository, type RegisterResponse } from '../data/repositories/authRepository';
 
 export type UserType = 'admin' | 'employee';
 
@@ -118,35 +119,44 @@ export const useAuthStore = defineStore(
       return Date.now().toString(36) + Math.random().toString(36).substr(2);
     };
 
-    const registerStore = (data: {
+
+
+    const registerStore = async (data: {
       storeName: string;
       ownerName: string;
       email: string;
       password: string;
-      // SPEC-006: PIN eliminado del registro
-    }): StoreAccount | null => {
-      // Check if email already exists
-      const exists = stores.value.find((s) => s.email.toLowerCase() === data.email.toLowerCase());
-      if (exists) {
-        console.warn('Email already registered');
-        return null;
-      }
+    }): Promise<RegisterResponse> => {
 
-      const newStore: StoreAccount = {
-        id: generateId(),
+      const response = await authRepository.registerStore({
         storeName: data.storeName,
         ownerName: data.ownerName,
         email: data.email,
-        password: data.password,
-        createdAt: new Date().toISOString(),
-      };
+        password: data.password
+      });
 
-      stores.value.push(newStore);
+      if (response.success && response.user) {
+        // If we have a user, even without session (unverified), we might want to store something?
+        // Actually, without session/confirmation, we can't do much.
+        // We rely on the View handling the redirect to Waiting Room.
+        // We DO NOT auto-login as admin here blindly anymore because we need verification.
 
-      // Auto-login as admin after registration
-      loginAsAdmin(newStore);
+        // However, for compatibility with legacy components, we might push to stores array?
+        // NO. Stores array was for local mock. We are moving to Supabase Native.
+        // We should stop filling 'stores' array locally.
 
-      return newStore;
+        // But if we stop, 'hasStores' might be false, and Router might redirect to register-store?
+        // Router check: if (isAuthenticated && !hasStore && to.name !== 'register-store')
+        // isAuthenticated is false (we didn't set currentUser).
+        // So we will be guests.
+        // Next Step: User verifies email.
+        // User logs in.
+        // Login should fetch store info and populate currentUser.
+
+        // So just return response.
+      }
+
+      return response;
     };
 
     const loginAsAdmin = (store: StoreAccount) => {
@@ -164,18 +174,24 @@ export const useAuthStore = defineStore(
       dailyAccessState.value.lastApprovedAt = new Date().toISOString();
     };
 
-    const loginWithCredentials = (emailOrUsername: string, password: string): boolean => {
-      // First, try to find an admin account
-      const store = stores.value.find(
-        (s) => s.email.toLowerCase() === emailOrUsername.toLowerCase() && s.password === password,
-      );
+    const login = async (email: string, password: string): Promise<boolean> => {
+      try {
+        const response = await authRepository.loginStore(email, password);
 
-      if (store) {
-        loginAsAdmin(store);
-        return true;
+        if (response.success && response.employee) {
+          currentUser.value = response.employee;
+          isAuthenticated.value = true;
+
+          // Admin auto-approval for daily pass
+          dailyAccessState.value.status = 'approved';
+          dailyAccessState.value.lastApprovedAt = new Date().toISOString();
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error('Login Store Error', error);
+        return false;
       }
-
-      return false;
     };
 
     const loginAsEmployee = (
@@ -206,9 +222,13 @@ export const useAuthStore = defineStore(
       return true;
     };
 
-    const logout = () => {
+    const logout = async () => {
+      await authRepository.logout();
       currentUser.value = null;
       isAuthenticated.value = false;
+      localStorage.removeItem('pin_auth_token');
+      // Reset daily access? Maybe not, device is still same.
+      // But user session is gone.
       // Reset IAM states
       dailyAccessState.value = {
         status: 'expired',
@@ -216,6 +236,10 @@ export const useAuthStore = defineStore(
         fingerprint: null,
         requestedAt: null
       };
+    };
+
+    const recoverPassword = async (email: string) => {
+      return await authRepository.recoverPassword(email);
     };
 
     // STUB: Daily Pass Logic (Local Simulation for FRD-001)
@@ -363,9 +387,10 @@ export const useAuthStore = defineStore(
       canManageClients,   // Fix
       // Methods
       registerStore,
-      loginWithCredentials,
+      login,
       loginAsAdmin,
       loginAsEmployee,
+      recoverPassword,
       logout,
       getStoreById,
       getFirstStore,
