@@ -108,20 +108,22 @@ export const authRepository = {
             // We need the Store ID. It's not in metadata by default unless we put it there.
             // But we can fetch it via the linked employee record or stores table.
 
-            // Let's fetch the store linked to this user (Owner)
-            const { data: storeData, error: storeError } = await supabase
-                .from('stores')
-                .select('id, name, slug')
-                .eq('owner_id', data.user.id)
+            // Let's fetch the store linked to this user (Owner) via admin_profiles
+            const { data: profileData, error: profileError } = await supabase
+                .from('admin_profiles')
+                .select('store_id, role, stores(id, name, slug)')
+                .eq('id', data.user.id)
                 .single();
 
-            if (storeError || !storeData) {
-                logger.error('[AuthRepository] Store Check Error:', storeError);
+            if (profileError || !profileData || !profileData.stores) {
+                logger.error('[AuthRepository] Store Check Error:', profileError);
                 return {
                     success: false,
                     error: 'No se encontró la tienda asociada a este usuario.'
                 };
             }
+
+            const storeData = profileData.stores as any;
 
             return {
                 success: true,
