@@ -113,22 +113,27 @@ const handleSubmit = async () => {
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     // Intentar registro en el store
-    const result = authStore.registerStore({
+    // Intentar registro en el store
+    const result = await authStore.registerStore({
       storeName: storeName.value.trim(),
       ownerName: ownerName.value.trim(),
       email: email.value.trim().toLowerCase(),
       password: password.value,
-      // SPEC-006: PIN eliminado del registro
     });
 
-    if (!result) {
-       // Email duplicado (único error conocido del store)
-       throw new Error('Este correo electrónico ya está registrado.');
+    if (!result.success) {
+       // Check for specific "User already exists" error
+       if (result.error?.includes('already registered') || result.error_code === 'user_already_exists') {
+         // Show a more helpful message
+         throw new Error('Este correo ya está registrado. Por favor, inicia sesión.');
+       }
+       // Error devuelto por Supabase/Repo
+       throw new Error(result.error || 'Autenticación fallida.');
     }
 
-    logger.log('✅ Tienda registrada exitosamente:', result.storeName);
-    // Redirección a verificación de email (WO-005)
-    router.push('/check-email');
+    logger.log('✅ Tienda registrada exitosamente (Esperando confirmación)');
+    // Redirección a sala de espera WO-008
+    router.push('/auth/waiting-verification');
 
   }, {
     errorMessage: 'Error del sistema. Por favor, intenta nuevamente.',

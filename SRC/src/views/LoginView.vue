@@ -70,17 +70,17 @@ const handleLogin = async () => {
     // UX Delay
     await new Promise((resolve) => setTimeout(resolve, 300));
 
-    // 1. VALIDACIÓN PREVENTIVA: ¿Existe tienda?
-    if (!authStore.hasStores) {
-      throw new Error('No se detecta una tienda registrada en este dispositivo.');
-    }
-
+    // 1. VALIDACIÓN PREVENTIVA: Eliminada.
+    // El login valida contra Supabase directamente.
+    
     // SPEC-005: Flujo basado en detección automática
     if (isAdminLogin.value) {
       // =============================================
       // FLUJO ADMIN (contiene @)
       // =============================================
-      if (authStore.loginWithCredentials(username.value, password.value)) {
+      const success = await authStore.login(username.value, password.value);
+      
+      if (success) {
         // Admin siempre tiene acceso completo
         authStore.setDeviceStatus('approved');
         recordSuccess(); 
