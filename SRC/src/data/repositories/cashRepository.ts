@@ -1,9 +1,10 @@
 /**
  * Cash Repository
  * WO-003 T3.1: Cash Control Repository
+ * WO-FE-008: Refactored for Schema v2 (cash_sessions, RPCs)
  * 
- * Handles interaction with 'cash_control_events' and 'cash_register'
- * Primarily uses RPC `registrar_evento_caja` for atomic operations
+ * Handles interaction with 'cash_sessions'
+ * Uses RPC `abrir_caja` and `cerrar_caja` for atomic operations
  *
  * @module data/repositories/cashRepository
  */
@@ -12,63 +13,64 @@ import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
 import { addToSyncQueue } from '../syncQueue';
 
+// Interface adapted to what the UI Store expects, but mapped to DB
 export interface CashControlEvent {
-    id?: string;
+    id?: string; // Session ID (for close) or Generated ID
     store_id: string;
     type: 'open' | 'close';
     amount_declared: number;
     amount_expected?: number;
     difference?: number;
-    authorized_by_id?: string;
+    authorized_by_id?: string; // Employee ID
     authorized_by_name: string;
     authorized_by_type: 'admin' | 'employee';
     created_at?: string;
 }
 
 export interface CashRepository {
-    getStoreStatus(storeId: string): Promise<{ isOpen: boolean; openingAmount: number; lastEvent?: CashControlEvent }>;
+    getStoreStatus(storeId: string): Promise<{ isOpen: boolean; openingAmount: number; lastEvent?: CashControlEvent; sessionId?: string }>;
     registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string }>;
 }
 
 export const cashRepository: CashRepository = {
 
     /**
-     * Check if store is currently open by querying today's events
+     * Check if store is currently open by querying active cash_sessions
      */
-    async getStoreStatus(storeId: string): Promise<{ isOpen: boolean; openingAmount: number; lastEvent?: CashControlEvent }> {
+    async getStoreStatus(storeId: string): Promise<{ isOpen: boolean; openingAmount: number; lastEvent?: CashControlEvent; sessionId?: string }> {
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
         // Default closed state
-        let status = { isOpen: false, openingAmount: 0, lastEvent: undefined as CashControlEvent | undefined };
+        let status = { isOpen: false, openingAmount: 0, lastEvent: undefined as CashControlEvent | undefined, sessionId: undefined as string | undefined };
 
         // 1. Try Online
         if (isOnline) {
             const supabase = getSupabaseClient()!;
             try {
-                const today = new Date().toISOString().split('T')[0];
-
-                // Fetch today's register status
+                // Fetch active session
+                // Schema v2: cash_sessions has status 'open' or 'closed'
                 const { data, error } = await supabase
-                    .from('cash_register')
+                    .from('cash_sessions')
                     .select('*')
                     .eq('store_id', storeId)
-                    .eq('date', today);
+                    .eq('status', 'open')
+                    .order('opened_at', { ascending: false }) // Get most recent open
+                    .limit(1);
 
-                if (!error && data) {
-                    const opening = data.find(r => r.type === 'opening');
-                    const closing = data.find(r => r.type === 'closing');
-
-                    if (opening && !closing) {
-                        status.isOpen = true;
-                        status.openingAmount = Number(opening.amount);
-                        status.lastEvent = {
-                            store_id: storeId,
-                            type: 'open',
-                            amount_declared: Number(opening.amount),
-                            authorized_by_name: 'Unknown', // Not stored in summary table
-                            authorized_by_type: 'employee'
-                        };
-                    }
+                if (!error && data && data.length > 0) {
+                    const session = data[0];
+                    status.isOpen = true;
+                    status.openingAmount = Number(session.opening_balance);
+                    status.sessionId = session.id;
+                    status.lastEvent = {
+                        id: session.id,
+                        store_id: session.store_id,
+                        type: 'open',
+                        amount_declared: Number(session.opening_balance),
+                        authorized_by_name: 'Unknown', // Not fetched here
+                        authorized_by_type: 'employee',
+                        authorized_by_id: session.opened_by
+                    };
                 }
                 return status;
 
@@ -78,20 +80,18 @@ export const cashRepository: CashRepository = {
         }
 
         // 2. Fallback to LocalStorage (Optimistic)
-        // We look for the most recent event in local cache or queue
         try {
             const storedStatus = localStorage.getItem('tienda-store-status');
             if (storedStatus) {
                 const parsed = JSON.parse(storedStatus);
-                // Validate if it's from today
-                const today = new Date().toISOString().split('T')[0];
-                if (parsed.date === today) {
-                    return {
-                        isOpen: parsed.isOpen,
-                        openingAmount: parsed.openingAmount || 0,
-                        lastEvent: parsed.lastEvent
-                    };
-                }
+                // Basic validation: check date? Or just trust local state for offline flow?
+                // Ideally, we trust local state if recent.
+                return {
+                    isOpen: parsed.isOpen,
+                    openingAmount: parsed.openingAmount || 0,
+                    lastEvent: parsed.lastEvent,
+                    sessionId: parsed.sessionId
+                };
             }
         } catch (e) {
             logger.error('[CashRepo] Local status check failed', e);
@@ -110,29 +110,58 @@ export const cashRepository: CashRepository = {
         if (isOnline) {
             const supabase = getSupabaseClient()!;
             try {
-                // RPC: registrar_evento_caja
-                const { data, error } = await supabase.rpc('registrar_evento_caja', {
-                    p_store_id: event.store_id,
-                    p_event_type: event.type,
-                    p_amount_declared: event.amount_declared,
-                    p_authorized_by_name: event.authorized_by_name,
-                    p_authorized_by_type: event.authorized_by_type,
-                    p_authorized_by_id: event.authorized_by_id
-                });
+                let rpcName = '';
+                let rpcArgs = {};
+
+                if (event.type === 'open') {
+                    rpcName = 'abrir_caja';
+                    rpcArgs = {
+                        p_store_id: event.store_id,
+                        p_employee_id: event.authorized_by_id, // Opened by
+                        p_opening_balance: event.amount_declared
+                    };
+                } else if (event.type === 'close') {
+                    rpcName = 'cerrar_caja';
+                    // We need session ID for closing. Inherited from event.id or passed context?
+                    // Assuming event.id is the sessionId when type is close (caller must ensure this)
+                    if (!event.id) {
+                        return { success: false, error: "Session ID required for closing" };
+                    }
+                    rpcArgs = {
+                        p_session_id: event.id,
+                        p_employee_id: event.authorized_by_id,
+                        p_actual_balance: event.amount_declared
+                    };
+                } else {
+                    return { success: false, error: "Invalid event type" };
+                }
+
+                const { data, error } = await supabase.rpc(rpcName as any, rpcArgs);
 
                 if (error) {
                     logger.error('[CashRepo] RPC error', error);
-                    // If network issue, fallthrough to offline
                     if (!error.message.includes('FetchError')) {
                         return { success: false, error: error.message };
                     }
                 } else {
-                    if (data.success) {
-                        // Update Local Cache immediately for UI
-                        cacheStatusLocally(event.store_id, event);
-                        return { success: true, data };
+                    // Success
+                    const response = data as any;
+                    if (response.success) {
+                        // Cache locally
+                        const sessionId = response.session_id || event.id; // Get ID from response if open
+
+                        const statusCache = {
+                            date: new Date().toISOString().split('T')[0],
+                            isOpen: event.type === 'open',
+                            openingAmount: event.type === 'open' ? event.amount_declared : 0,
+                            lastEvent: event,
+                            sessionId: sessionId
+                        };
+                        localStorage.setItem('tienda-store-status', JSON.stringify(statusCache));
+
+                        return { success: true, data: response };
                     } else {
-                        return { success: false, error: data.error };
+                        return { success: false, error: response.error || 'Operation failed' };
                     }
                 }
 
@@ -143,25 +172,25 @@ export const cashRepository: CashRepository = {
 
         // 2. Offline: Queue it
         try {
+            // Note: complex offline logic for session IDs might be needed. 
+            // For now, we queue generic 'CASH_EVENT' and let Sync Queue handle re-mapping if possible.
             await addToSyncQueue('CASH_EVENT', event);
-            cacheStatusLocally(event.store_id, event);
+
+            // Optimistic Update
+            const statusCache = {
+                date: new Date().toISOString().split('T')[0],
+                isOpen: event.type === 'open',
+                openingAmount: event.type === 'open' ? event.amount_declared : 0,
+                lastEvent: event,
+                sessionId: event.id || 'offline-pending' // Provisional ID
+            };
+            localStorage.setItem('tienda-store-status', JSON.stringify(statusCache));
+
             return { success: true, data: { offline: true } };
         } catch (e: any) {
             return { success: false, error: e.message };
         }
     }
 };
-
-// Helper: Cache status for offline persistence
-function cacheStatusLocally(storeId: string, event: CashControlEvent) {
-    const today = new Date().toISOString().split('T')[0];
-    const status = {
-        date: today,
-        isOpen: event.type === 'open',
-        openingAmount: event.type === 'open' ? event.amount_declared : 0,
-        lastEvent: event
-    };
-    localStorage.setItem('tienda-store-status', JSON.stringify(status));
-}
 
 export default cashRepository;
