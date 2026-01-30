@@ -30,6 +30,9 @@ const salesStore = useSalesStore();
 const inventoryStore = useInventoryStore();
 const { formatStock } = useQuantityFormat();
 
+// Initialize sales store to ensure pending/audit sales are loaded
+salesStore.initialize();
+
 // State
 const selectedPeriod = ref<'today' | 'yesterday' | 'week' | 'month'>('today');
 const selectedTab = ref<'top' | 'low' | 'stale'>('top');

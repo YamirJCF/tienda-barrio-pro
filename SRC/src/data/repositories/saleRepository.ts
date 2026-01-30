@@ -65,8 +65,13 @@ export const saleRepository: SaleRepository = {
                 try {
                     const { data, error } = await supabase.rpc('procesar_venta', {
                         p_store_id: storeId,
-                        p_items: saleData.items,
-                        p_payment_method: saleData.paymentMethod,
+                        p_items: saleData.items.map(item => ({
+                            product_id: item.productId,
+                            quantity: item.quantity,
+                            unit_price: item.price,
+                            subtotal: item.subtotal
+                        })),
+                        p_payment_method: saleData.paymentMethod === 'mixed' ? 'efectivo' : saleData.paymentMethod, // Fallback for mixed (temporarily map to cash or fix backend)
                         p_amount_received: saleData.amountReceived,
                         p_client_id: saleData.clientId,
                         p_employee_id: saleData.employeeId

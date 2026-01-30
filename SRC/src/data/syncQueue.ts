@@ -38,6 +38,7 @@ export interface QueueItem {
     payload: any;
     timestamp: number;
     retryCount: number;
+    isAudit?: boolean; // 🛡️ Safety Flag
 }
 
 /**
@@ -88,11 +89,12 @@ import { isAuditMode } from './supabaseClient';
  * Add item to sync queue
  */
 export const addToSyncQueue = async (type: TransactionType, payload: any): Promise<boolean> => {
-    // 🛡️ SECURITY WALL: Audit Mode
-    if (isAuditMode()) {
-        logger.log(`[SyncQueue] 🛡️ Audit Mode: Intercepted ${type} (Not saved to DB)`);
-        return true; // Pretend success
+    // 🛡️ MODIFIED FLOW: Store locally but flag as Audit
+    const auditMode = isAuditMode();
+    if (auditMode) {
+        logger.log(`[SyncQueue] 🛡️ Audit Mode: Storing ${type} locally with isAudit flag`);
     }
+
 
     const db = await getDB();
 
@@ -109,13 +111,14 @@ export const addToSyncQueue = async (type: TransactionType, payload: any): Promi
         payload,
         timestamp: Date.now(),
         retryCount: 0,
+        isAudit: auditMode
     };
 
     await db.put(QUEUE_STORE, item);
     logger.log(`[SyncQueue] Added ${type} to queue`);
 
-    // Try to process immediately if online
-    if (navigator.onLine) {
+    // Try to process immediately if online AND not in audit mode
+    if (navigator.onLine && !isAuditMode()) {
         processSyncQueue(); // Fire and forget
     }
 
@@ -126,7 +129,7 @@ export const addToSyncQueue = async (type: TransactionType, payload: any): Promi
  * Process the queue
  */
 export const processSyncQueue = async (): Promise<void> => {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || isAuditMode()) return; // 🛡️ Prevent syncing in Audit Mode
 
     const db = await getDB();
     const tx = db.transaction(QUEUE_STORE, 'readwrite');
@@ -138,6 +141,14 @@ export const processSyncQueue = async (): Promise<void> => {
     while (cursor) {
         const item = cursor.value;
 
+        // 🛡️ SECURITY CHECK: Discard Audit Items encountered in Production
+        if (item.isAudit) {
+            logger.warn(`[SyncQueue] 🛡️ Discarding Audit Item found in Production Queue: ${item.id}`);
+            await cursor.delete();
+            cursor = await cursor.continue();
+            continue;
+        }
+
         try {
             const success = await processItem(item);
 
@@ -145,9 +156,6 @@ export const processSyncQueue = async (): Promise<void> => {
                 await cursor.delete();
                 logger.log(`[SyncQueue] Processed ${item.type} (${item.id})`);
             } else {
-                // Should not happen if processItem throws on failure, 
-                // but if it returns false, maybe we keep it?
-                // Let's assume processItem throws if it's a permanent or retryable error logic handled there
                 throw new Error('Processing failed');
             }
         } catch (error: any) {
@@ -182,8 +190,15 @@ async function processItem(item: QueueItem): Promise<boolean> {
             // Call RPC
             const { data, error } = await supabase.rpc('procesar_venta', {
                 p_store_id: item.payload.storeId,
-                p_items: item.payload.items,
-                p_payment_method: item.payload.paymentMethod,
+                // Offline Mapper: CamelCase -> SnakeCase
+                // This is needed because addToSyncQueue saves raw payload (Camel)
+                p_items: item.payload.items.map((i: any) => ({
+                    product_id: i.productId,
+                    quantity: i.quantity,
+                    unit_price: i.price,
+                    subtotal: i.subtotal
+                })),
+                p_payment_method: item.payload.paymentMethod === 'mixed' ? 'efectivo' : item.payload.paymentMethod,
                 p_amount_received: item.payload.amountReceived,
                 p_client_id: item.payload.clientId,
                 p_employee_id: item.payload.employeeId
@@ -203,8 +218,6 @@ async function processItem(item: QueueItem): Promise<boolean> {
             const { error: moveError } = await supabase.from('inventory_movements').insert(item.payload);
             if (moveError) throw moveError;
             return true;
-
-        // Add other cases as needed
 
         default:
             return true; // Skip unknown
@@ -232,8 +245,66 @@ export const getQueueSize = async (): Promise<number> => {
     return db.count(QUEUE_STORE);
 };
 
+
+/**
+ * Get pending movements for a product
+ */
+export const getPendingMovements = async (productId?: string): Promise<any[]> => {
+    const db = await getDB();
+    const all = await db.getAll(QUEUE_STORE);
+
+    // Filter for MOVEMENT type
+    let movements: any[] = [];
+
+    all.forEach(item => {
+        if (item.type === 'CREATE_MOVEMENT' && (!productId || item.payload.product_id === productId)) {
+            movements.push({
+                id: item.id,
+                movement_type: item.payload.movement_type,
+                quantity: item.payload.quantity,
+                reason: item.payload.reason,
+                created_at: new Date(item.timestamp).toISOString(),
+                employees: { name: 'Pendiente (Offline)' }
+            });
+        }
+        else if (item.type === 'CREATE_SALE') {
+            const saleItems = item.payload.items || [];
+            saleItems.forEach((si: any) => {
+                if (!productId || si.productId === productId) {
+                    movements.push({
+                        id: item.id + '_' + si.productId,
+                        movement_type: 'venta',
+                        quantity: si.quantity,
+                        reason: `Venta (Pendiente)`,
+                        created_at: new Date(item.timestamp).toISOString(),
+                        employees: { name: 'Sistema (Offline)' }
+                    });
+                }
+            });
+        }
+    });
+
+    return movements.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+};
+
+export const getPendingSales = async (): Promise<any[]> => {
+    const db = await getDB();
+    const all = await db.getAll(QUEUE_STORE);
+
+    // Filter for SALE type and return payload
+    return all
+        .filter(item => item.type === 'CREATE_SALE')
+        .map(item => ({
+            ...item.payload,
+            timestamp: item.timestamp
+        }))
+        .sort((a, b) => b.timestamp - a.timestamp);
+};
+
 export default {
     addToSyncQueue,
     processSyncQueue,
-    getQueueSize
+    getQueueSize,
+    getPendingMovements,
+    getPendingSales
 };

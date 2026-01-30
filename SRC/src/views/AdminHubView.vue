@@ -10,7 +10,6 @@ import {
   ArrowLeft, 
   BarChart3, 
   Settings, 
-  Sliders, 
   Store, 
   Receipt, 
   Wallet, 
@@ -30,8 +29,6 @@ import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
 import PinSetupModal from '../components/PinSetupModal.vue';
 // A-02: UserProfileSidebar para icono de perfil
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
-// WO-PHASE4-001: Store Configuration Form
-import StoreConfigForm from '../components/admin/StoreConfigForm.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -43,7 +40,7 @@ const presenceStore = usePresenceStore(); // Initialize
 
 // Inicializar pestaña basada en la URL o permisos
 const initialTab = (route.query.tab as string) || 'gestion';
-const activeTab = ref<'reportes' | 'gestion' | 'config'>(initialTab as any);
+const activeTab = ref<'reportes' | 'gestion'>(initialTab as any);
 
 const showDeviceModal = ref(false);
 // WO-004: State para modal de PIN (consolidado)
@@ -82,7 +79,7 @@ onMounted(() => {
         activeTab.value = 'reportes';
     }
     // Si pidió gestion/config pero no es admin, fallback a reportes si puede, o home
-    else if ((tabName === 'gestion' || tabName === 'config') && !authStore.isAdmin) {
+    else if ((tabName === 'gestion') && !authStore.isAdmin) {
        if (authStore.canViewReports) activeTab.value = 'reportes';
     }
 });
@@ -161,21 +158,7 @@ watch(activeTab, (newTab) => {
             Gestión
           </span>
         </label>
-        <label
-          v-if="isAdmin"
-          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-xl px-2 transition-all"
-          :class="
-            activeTab === 'config'
-              ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'
-              : 'text-slate-500 dark:text-slate-400 font-semibold hover:bg-white/50 dark:hover:bg-slate-700/50'
-          "
-          @click="activeTab = 'config'"
-        >
-          <span class="flex items-center gap-2 truncate text-sm">
-            <Sliders :size="18" :stroke-width="1.5" />
-            Config
-          </span>
-        </label>
+
       </div>
     </div>
 
@@ -421,11 +404,6 @@ watch(activeTab, (newTab) => {
       <!-- Reportes Tab Content -->
       <section v-if="activeTab === 'reportes'">
         <ReportsContent />
-      </section>
-
-      <!-- Store Configuration Tab Content -->
-      <section v-if="activeTab === 'config'">
-        <StoreConfigForm />
       </section>
 
       <div class="h-10"></div>

@@ -212,6 +212,8 @@ const handlePOSKeydown = (e: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handlePOSKeydown);
+  // Ensure inventory is loaded
+  inventoryStore.initialize();
 });
 
 onUnmounted(() => {
@@ -223,7 +225,7 @@ onUnmounted(() => {
 // ... (other imports remain)
 
 // WO-001: Changed clientId from number to string
-const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal) => {
+const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, clientId?: string) => {
   const currentTicket = ticketNumber.value;
   // Determine dominant method for the sale record (simplification)
   const isMixed = payments.length > 1;
@@ -264,14 +266,8 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal) 
       payments: payments, // Pass full details
       amountReceived,
       change: undefined, // Change is visual, logic is in balances
-      clientId: undefined, // Passed below if fiado involved? Check types.
-      // Note: ClientsStore tracks debt per client. SalesStore tracks the sale. 
-      // If mixed involves fiado, we need to know WHICH client.
-      // CheckoutModal passes `selectedClient`? POSView needs to know client.
-      // We need to capture Client ID if fiado is used.
+      clientId: clientId // Passed from CheckoutModal
     });
-    // Wait, POSView doesn't have selectedClient in state! 
-    // It seems `salesStore.addSale` logic handles inventory.
 
     const saleId = salesStore.sales[salesStore.sales.length - 1]?.id;
 
@@ -279,39 +275,10 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal) 
     for (const payment of payments) {
         if (payment.method === 'cash') {
             // Register ONLY the cash portion in the drawer
-            // If there is change, we only record the NET cash income?
-            // Actually, drawer should record +Income (Payment) and -Expense (Change)? 
-            // Or just Net? Usually Net Income.
-            // If Bill is $50, Pay $100 Cash. Income is $50. Change $50 given back.
-            // If Bill is $50, Pay $20 Cash + $30 Nequi.
-            // Cash Income = $20.
             cashRegisterStore.addIncome(payment.amount, `Venta ${currentTicket} (Efectivo)`, saleId);
         } 
-        else if (payment.method === 'nequi') {
-             // Optional: Register Nequi income if we track networked money? 
-             // For now, only Cash Register tracks physical money.
-        }
-        else if (payment.method === 'fiado') {
-             // For Fiado, we need ClientID.
-             // CheckoutModal has logic to require client.
-             // But POSView needs to pass it or get it. 
-             // Currently completeSale signature doesn't accept client logic well for mixed.
-             // We need to fix this.
-        }
+        // Other methods handled by backend/RPC usually, or separate stores if needed
     }
-    
-    // REVISIT: Client ID handling for Fiado. 
-    // The previous implementation had `clientId` arg.
-    // CheckoutModal emits (payments, totalPaid). 
-    // If fiado is present, we need the client ID.
-    // The modal handles checking if client is selected, BUT we need to pass that ID up.
-    // Strategy: We will add `clientId` to the emit of CheckoutModal? 
-    // Or just `products`?
-    // Let's assume for now we use the `clientsStore` logic if needed or refactor separate task.
-    // Actually, `addPurchaseDebt` needs ID.
-    // FIX: We need to update CheckoutModal to emit client ID if used.
-    
-    // For now, let's implement the basic flow. The prompt was "Adapt completeSale".
 
     return true; 
   }, {

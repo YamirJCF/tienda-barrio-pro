@@ -97,8 +97,9 @@ export const productRepository: ProductRepository = {
      * Get movement history (Kardex)
      */
     async getMovementHistory(productId: string, limit: number = 50): Promise<any[]> {
-        // Online first strategy for history (it's not critical for offline sales)
+        // Online first strategy for history
         const isOnline = isSupabaseConfigured() && navigator.onLine;
+        let remoteHistory: any[] = [];
 
         if (isOnline) {
             const supabase = getSupabaseClient();
@@ -111,7 +112,7 @@ export const productRepository: ProductRepository = {
                     .limit(limit);
 
                 if (!error && data) {
-                    return data.map((m: any): InventoryMovementHistory => ({
+                    remoteHistory = data.map((m: any): InventoryMovementHistory => ({
                         id: m.id,
                         type: m.movement_type,
                         quantity: m.quantity,
@@ -119,13 +120,37 @@ export const productRepository: ProductRepository = {
                         date: m.created_at,
                         user: m.employees?.name || 'Sistema'
                     }));
+                } else {
+                    logger.error('[ProductRepo] Failed to fetch history', error);
                 }
-                logger.error('[ProductRepo] Failed to fetch history', error);
             }
         }
 
-        // TODO: Could implement offline history from local cache if needed
-        return [];
+        // Fetch Local Pending Movements (Offline / Audit Mode)
+        // Import dynamically to avoid circular dependencies if any
+        try {
+            const { getPendingMovements } = await import('../syncQueue');
+            const pending = await getPendingMovements(productId);
+
+            // Transform pending to match InventoryMovementHistory if not already
+            const formattedPending = pending.map(p => ({
+                id: p.id,
+                type: p.movement_type,
+                quantity: p.quantity,
+                reason: p.reason,
+                date: p.created_at,
+                user: p.employees?.name || 'Pendiente'
+            }));
+
+            // Merge: Pending first (newest), then Remote
+            // Note: Pending are already sorted desc by timestamp
+            // Also deduplicate if needed (though IDs should differ)
+            return [...formattedPending, ...remoteHistory];
+
+        } catch (e) {
+            logger.warn('[ProductRepo] Failed to load local history', e);
+            return remoteHistory;
+        }
     },
 
     /**

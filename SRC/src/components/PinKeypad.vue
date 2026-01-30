@@ -26,14 +26,16 @@
       <button
         v-for="num in numbers"
         :key="num"
+        type="button"
         class="keypad-btn"
         :disabled="disabled || pin.length >= length"
         @click="addDigit(num)"
       >
         {{ num }}
       </button>
-      <button class="keypad-btn empty"></button>
+      <button type="button" class="keypad-btn empty"></button>
       <button
+        type="button"
         class="keypad-btn"
         :disabled="disabled || pin.length >= length"
         @click="addDigit('0')"
@@ -41,6 +43,7 @@
         0
       </button>
       <button
+        type="button"
         class="keypad-btn backspace"
         :disabled="disabled || pin.length === 0"
         @click="deleteDigit"
