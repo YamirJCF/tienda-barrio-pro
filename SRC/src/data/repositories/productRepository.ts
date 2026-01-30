@@ -1,6 +1,7 @@
 /**
  * Product Repository
  * WO-002 T2.2: Implementing repository pattern for Products
+ * WO-FE-006: Implementing Mapper Layer for Schema v2 Compatibility
  * 
  * Uses SupabaseAdapter to provide data access for Products
  * Handles fallback to localStorage automatically via adapter
@@ -9,14 +10,76 @@
  */
 
 import { Product } from '../../types';
+import { Database } from '../../types/database.types';
 import { Decimal } from 'decimal.js';
-import { createSupabaseRepository, EntityRepository } from './supabaseAdapter';
+import { createSupabaseRepository, EntityRepository, RepositoryMappers } from './supabaseAdapter';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
 
 // Constants
 const TABLE_NAME = 'products';
 const STORAGE_KEY = 'tienda-inventory'; // Legacy key for compatibility
+
+// Type Alias for DB Row
+type ProductDB = Database['public']['Tables']['products']['Row'];
+
+/**
+ * Mapper Implementation for Product
+ * Enforces:
+ * 1. Decimal (Domain) <-> number (DB)
+ * 2. stock (Domain) <-> current_stock (DB)
+ * 3. category (string) <-> category_id (UUID/null)
+ */
+export const productMapper: RepositoryMappers<ProductDB, Product> = {
+    toDomain: (row: ProductDB): Product => {
+        return {
+            id: row.id,
+            name: row.name,
+            price: new Decimal(row.price),
+            // Map current_stock (DB) to stock (Domain)
+            stock: new Decimal(row.current_stock),
+            measurementUnit: row.measurement_unit as any, // Cast specific enum if needed
+            // Handle Category: DB has UUID or null. Domain expects string.
+            // If DB has ID, we can't easily turn it into a name here without a join or cache.
+            // For now, we leave it undefined or empty string if it acts as a label.
+            // As per ADR: "Ignorar/nulear category_id para evitar crash".
+            category: undefined,
+            brand: undefined, // Not in DB schema v2 currently?
+            minStock: row.min_stock,
+            cost: row.cost_price ? new Decimal(row.cost_price) : undefined,
+            // Extra fields
+            isWeighable: row.measurement_unit !== 'un', // Simple heuristic or add DB field?
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            storeId: row.store_id,
+            notifiedLowStock: row.low_stock_alerted || false
+        };
+    },
+    toPersistence: (entity: Product): ProductDB => {
+        return {
+            id: entity.id,
+            name: entity.name,
+            price: entity.price.toNumber(),
+            // Map stock (Domain) to current_stock (DB)
+            current_stock: entity.stock.toNumber(),
+            measurement_unit: entity.measurementUnit,
+            // ADR: Force null for category_id to avoid "invalid input syntax for type uuid"
+            category_id: null,
+            min_stock: entity.minStock,
+            cost_price: entity.cost ? entity.cost.toNumber() : null,
+            created_at: entity.createdAt || new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            store_id: entity.storeId || '', // Should ensure this is set
+            // Fields with defaults or potential mappings
+            barcode: entity.plu || null,
+            description: null,
+            image_url: null,
+            is_active: true,
+            low_stock_alerted: entity.notifiedLowStock || false,
+            tax_rate: 0 // Default for now
+        };
+    }
+};
 
 /**
  * Interface extending base repository with product-specific methods
@@ -48,8 +111,13 @@ export interface ProductRepository extends EntityRepository<Product> {
     getMovementHistory(productId: string, limit?: number): Promise<InventoryMovementHistory[]>;
 }
 
-// Create base repository
-const baseRepository = createSupabaseRepository<Product>(TABLE_NAME, STORAGE_KEY);
+// Create base repository with Mappers
+// Generics: <TDomain, TPersistence>
+const baseRepository = createSupabaseRepository<Product, ProductDB>(
+    TABLE_NAME,
+    STORAGE_KEY,
+    productMapper
+);
 
 /**
  * Extended Product Repository implementation
@@ -61,6 +129,7 @@ export const productRepository: ProductRepository = {
      * Get product by PLU
      */
     async getByPlu(plu: string, storeId?: string): Promise<Product | null> {
+        // Since we are using mappers, getAll returns Product[] (Domain objects)
         const all = await baseRepository.getAll(storeId);
         return all.find(p => p.plu === plu) || null;
     },
@@ -83,16 +152,14 @@ export const productRepository: ProductRepository = {
         const product = await baseRepository.getById(id);
         if (!product) return false;
 
+        // Repository 'update' takes Partial<Product>. Adapter handles mapping to persistence.
         const updated = await baseRepository.update(id, {
-            stock: new Decimal(quantity) // Ensure Decimal if entity uses it, or number if mapped
+            stock: new Decimal(quantity)
         } as Partial<Product>);
 
         return updated !== null;
     },
 
-    /**
-     * Get movement history (Kardex)
-     */
     /**
      * Get movement history (Kardex)
      */
@@ -127,7 +194,6 @@ export const productRepository: ProductRepository = {
         }
 
         // Fetch Local Pending Movements (Offline / Audit Mode)
-        // Import dynamically to avoid circular dependencies if any
         try {
             const { getPendingMovements } = await import('../syncQueue');
             const pending = await getPendingMovements(productId);
@@ -143,8 +209,6 @@ export const productRepository: ProductRepository = {
             }));
 
             // Merge: Pending first (newest), then Remote
-            // Note: Pending are already sorted desc by timestamp
-            // Also deduplicate if needed (though IDs should differ)
             return [...formattedPending, ...remoteHistory];
 
         } catch (e) {
@@ -203,21 +267,19 @@ export const productRepository: ProductRepository = {
             // Update local product stock manually since trigger won't run
             const product = await baseRepository.getById(movement.productId);
             if (product) {
-                // WARN: product.stock might be a number (raw JSON) or Decimal depending on hydration
+                // Ensure Decimal using Domain type
                 const currentStock = new Decimal(product.stock);
                 let newStock = currentStock.toNumber();
+
                 // Logic must match DB trigger
                 if (['entrada', 'devolucion', 'ajuste'].includes(movement.type)) {
                     // For 'ajuste', DB trigger adds quantity (assuming quantity is delta or signed?)
-                    // DB trigger says: ELSIF NEW.movement_type = 'ajuste' THEN UPDATE SET current_stock = current_stock + NEW.quantity
-                    // So 'ajuste' quantity should be signed (negative for reduction).
-                    // But my UI might pass absolute. I need to be careful.
-                    // Re-reading trigger: 'ajuste' adds quantity. So if I want to reduce, I pass negative.
                     newStock += movement.quantity;
                 } else if (['salida', 'venta'].includes(movement.type)) {
                     newStock -= movement.quantity;
                 }
 
+                // Update using Domain Object Partial (Adapter maps to Persistence)
                 await baseRepository.update(product.id, {
                     stock: new Decimal(newStock)
                 } as Partial<Product>);
