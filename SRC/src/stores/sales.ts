@@ -142,6 +142,84 @@ export const useSalesStore = defineStore(
     };
 
     // Methods
+    const initialize = async () => {
+      // Optimistic Merge: Load local pending sales from SyncQueue (Audit Mode / Offline)
+      try {
+        // Dynamic import to avoid circular dependency
+        const { getPendingSales } = await import('../data/syncQueue');
+        const pendingPayloads = await getPendingSales();
+
+        if (pendingPayloads.length > 0) {
+          // Map payloads back to Sale objects
+          // We have to synthesize some fields that are missing in the payload (id, ticketNumber)
+          // We use the timestamp to sort/dedup
+          const mappedPending = pendingPayloads.map((p, index) => {
+            // Try to match existing sale in state to avoid dupes
+            // Using timestamp if available or some other key?
+            // Payload doesn't have ID.
+            // But we can generate a temporary view-only ID.
+            const tempId = `audit-pending-${p.timestamp}`;
+
+            // Check if already exists in store (persistence might have saved it)
+            const exists = sales.value.find(s => s.date === new Date(p.timestamp).toISOString().split('T')[0] && s.total.equals(new Decimal(p.total)));
+            // The above check is weak. 
+            // Ideally we check if we have this "Sale" in memory.
+            // But let's assume if it's in Queue, it MIGHT be in Store.
+            // For now, let's just add if not found by strict ID comparison? No ID.
+            // Let's filter `sales.value` to see if we have these.
+
+            return {
+              id: tempId,
+              ticketNumber: 0, // Placeholder
+              timestamp: new Date(p.timestamp).toISOString(),
+              date: new Date(p.timestamp).toISOString().split('T')[0],
+              items: p.items.map((i: any) => ({
+                ...i,
+                price: new Decimal(i.price),
+                subtotal: new Decimal(i.subtotal)
+              })),
+              total: new Decimal(p.total),
+              effectiveTotal: new Decimal(p.total), // Simplified
+              paymentMethod: p.paymentMethod,
+              payments: p.payments ? p.payments.map((pay: any) => ({ ...pay, amount: new Decimal(pay.amount) })) : [],
+              syncStatus: 'pending',
+              client: undefined // or fetch if needed
+            } as Sale;
+          });
+
+          // Merge strategy: Add only those that don't look like duplicates?
+          // Or simply append with a clear flag?
+          // Problem: If "sales" array is empty (cleared LS), we append all.
+          // If "sales" array has them (persisted LS), we get doubles.
+          // WE SHOULD TRUST LS "sales" array first. 
+          // BUT if LS was cleared (Audit Guide says clear LS), then "sales" is empty.
+          // So we populate from Queue.
+          // We should only add if `sales.value` is empty?
+          // Or filter `mappedPending` to exclude those present in `sales.value`.
+
+          const currentIds = new Set(sales.value.map(s => s.timestamp)); // timestamp matches?
+
+          mappedPending.forEach(pendingSale => {
+            // Fuzzy match: if we have a sale with same timestamp (+- 10ms?)
+            // The queue timestamp is creation time.
+            // Store sale has timestamp too.
+            // Let's rely on that.
+            const isDupe = sales.value.some(s => Math.abs(new Date(s.timestamp).getTime() - new Date(pendingSale.timestamp).getTime()) < 100);
+
+            if (!isDupe) {
+              sales.value.push(pendingSale);
+            }
+          });
+
+          // Sort by date desc
+          sales.value.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        }
+
+      } catch (e) {
+        console.warn('Failed to load pending sales', e);
+      }
+    };
+
     // openStore and closeStore REMOVED - Managed by StoreStatus / CashControlView
 
 
@@ -216,6 +294,20 @@ export const useSalesStore = defineStore(
         inventoryStore.adjustStockLocal(item.productId, new Decimal(item.quantity).neg());
       });
 
+      // 4. Update Client Debt (Fiado)
+      if (newSale.paymentMethod === 'fiado' && newSale.clientId) {
+        const { useClientsStore } = await import('./clients');
+        const clientsStore = useClientsStore();
+
+        // Add debt to client
+        clientsStore.addPurchaseDebt(
+          newSale.clientId,
+          newSale.total instanceof Decimal ? newSale.total : new Decimal(newSale.total),
+          `Compra Ticket #${newSale.ticketNumber}`,
+          newSale.id
+        );
+      }
+
       return newSale;
     };
 
@@ -246,6 +338,7 @@ export const useSalesStore = defineStore(
       totalFiado,
       getSalesByDateRange,
       getDailyStats,
+      initialize,
       // openStore, // REMOVED
       // closeStore, // REMOVED
       addSale,

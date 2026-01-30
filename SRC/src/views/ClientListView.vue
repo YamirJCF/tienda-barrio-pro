@@ -136,31 +136,7 @@ const handleClientSaved = () => {
       </div>
     </header>
 
-    <!-- Empty State -->
-    <div
-      v-else-if="filteredClients.length === 0"
-      class="flex-1 flex flex-col items-center justify-center px-4 text-center"
-    >
-      <Users :size="64" :stroke-width="1" class="text-slate-300 mb-4" />
-      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
-        {{ searchQuery ? 'No se encontraron clientes' : 'Sin clientes registrados' }}
-      </h3>
-      <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-        {{
-          searchQuery
-            ? 'Intenta con otro término de búsqueda'
-            : 'Agrega tu primer cliente para comenzar'
-        }}
-      </p>
-      <BaseButton
-        v-if="!searchQuery && canManageClients"
-        @click="openNewClient"
-        class="mt-6"
-      >
-        <UserPlus :size="18" class="mr-2" />
-        Agregar Cliente
-      </BaseButton>
-    </div>
+
 
     <!-- Loading State -->
     <div v-if="clientsStore.isLoading" class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
@@ -219,6 +195,32 @@ const handleClientSaved = () => {
         <ChevronRight :size="20" class="text-slate-300" />
       </div>
     </main>
+
+    <!-- Empty State -->
+    <div
+      v-else
+      class="flex-1 flex flex-col items-center justify-center px-4 text-center"
+    >
+      <Users :size="64" :stroke-width="1" class="text-slate-300 mb-4" />
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
+        {{ searchQuery ? 'No se encontraron clientes' : 'Sin clientes registrados' }}
+      </h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
+        {{
+          searchQuery
+            ? 'Intenta con otro término de búsqueda'
+            : 'Agrega tu primer cliente para comenzar'
+        }}
+      </p>
+      <BaseButton
+        v-if="!searchQuery && canManageClients"
+        @click="openNewClient"
+        class="mt-6"
+      >
+        <UserPlus :size="18" class="mr-2" />
+        Agregar Cliente
+      </BaseButton>
+    </div>
 
     <!-- FAB -->
     <div class="absolute bottom-24 right-4 z-40">

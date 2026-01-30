@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue';
 import { useCartStore } from '../stores/cart';
-import { useInventoryStore, type Product } from '../stores/inventory';
+import { useInventoryStore } from '../stores/inventory';
+import type { Product } from '../types';
 import { useNotifications } from './useNotifications';
 import { logger } from '../utils/logger';
 import { Decimal } from 'decimal.js';
