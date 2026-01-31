@@ -133,8 +133,22 @@ export const expenseRepository: ExpenseRepository = {
      * Create a new expense
      */
     async createExpense(expense: Omit<Expense, 'id' | 'created_at'>): Promise<Expense | null> {
+        // ===== VALIDATION CHECKPOINT (Fase 2 Blindaje) =====
+        if (!expense.store_id || expense.store_id.trim() === '') {
+            const error = new Error('Cannot create Expense without valid store_id. This would fail RLS policies.');
+            console.error('🚫 [ExpenseRepo] RLSViolationError:', error.message);
+            throw error;
+        }
+
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(expense.store_id)) {
+            const error = new Error(`Invalid UUID format for store_id: "${expense.store_id}"`);
+            console.error('🚫 [ExpenseRepo] ValidationError:', error.message);
+            throw error;
+        }
+
         // We need an open session ID to insert into cash_movements
-        // Fetch open session from cashRepository or local status
         let sessionId = '';
 
         try {
@@ -144,7 +158,7 @@ export const expenseRepository: ExpenseRepository = {
                 sessionId = status.sessionId;
             } else {
                 logger.warn('Cannot create expense: No open session found');
-                return null; // Constraint: Expense must be strictly linked to a session
+                return null;
             }
         } catch (e) {
             logger.error('Error fetching session for expense', e);

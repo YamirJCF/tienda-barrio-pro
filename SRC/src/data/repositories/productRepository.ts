@@ -24,11 +24,46 @@ const STORAGE_KEY = 'tienda-inventory'; // Legacy key for compatibility
 type ProductDB = Database['public']['Tables']['products']['Row'];
 
 /**
- * Mapper Implementation for Product
- * Enforces:
- * 1. Decimal (Domain) <-> number (DB)
+ * Measurement Unit Translation
+ * Frontend uses short codes, DB uses full names
+ */
+const MEASUREMENT_UNIT_TO_DB: Record<string, string> = {
+    'un': 'unidad',
+    'kg': 'kilogramo',
+    'lb': 'libra',
+    'g': 'gramo'
+};
+
+const MEASUREMENT_UNIT_FROM_DB: Record<string, string> = {
+    'unidad': 'un',
+    'kilogramo': 'kg',
+    'libra': 'lb',
+    'gramo': 'g'
+};
+
+/**
+ * Translate measurementUnit from Frontend to DB format
+ */
+function translateMeasurementUnitToDB(unit: string): string {
+    return MEASUREMENT_UNIT_TO_DB[unit] || unit;
+}
+
+/**
+ * Translate measurementUnit from DB to Frontend format
+ */
+function translateMeasurementUnitFromDB(unit: string): string {
+    return MEASUREMENT_UNIT_FROM_DB[unit] || unit;
+}
+
+/**
+ * ProductMapper: Bidirectional transformer
+ * CRITICAL: Does NOT allow empty/invalid storeId
+ * 
+ * Field Mapping:
+ * 1. price (Decimal) <-> price (numeric)
  * 2. stock (Domain) <-> current_stock (DB)
- * 3. category (string) <-> category_id (UUID/null)
+ * 3. cost (Domain) <-> cost_price (DB)
+ * 4. measurementUnit ('un') <-> measurement_unit ('unidad')
  */
 export const productMapper: RepositoryMappers<ProductDB, Product> = {
     toDomain: (row: ProductDB): Product => {
@@ -38,45 +73,65 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             price: new Decimal(row.price),
             // Map current_stock (DB) to stock (Domain)
             stock: new Decimal(row.current_stock),
-            measurementUnit: row.measurement_unit as any, // Cast specific enum if needed
-            // Handle Category: DB has UUID or null. Domain expects string.
-            // If DB has ID, we can't easily turn it into a name here without a join or cache.
-            // For now, we leave it undefined or empty string if it acts as a label.
-            // As per ADR: "Ignorar/nulear category_id para evitar crash".
-            category: undefined,
-            brand: undefined, // Not in DB schema v2 currently?
+            // Translate DB unit to Frontend unit
+            measurementUnit: translateMeasurementUnitFromDB(row.measurement_unit) as any, // Cast specific enum if needed
+            // Handle Category: Now properly mapped to text column
+            category: row.category || undefined,
+            brand: row.brand || undefined,
             minStock: row.min_stock,
+            // Map cost_price (DB) to cost (Domain)
             cost: row.cost_price ? new Decimal(row.cost_price) : undefined,
             // Extra fields
-            isWeighable: row.measurement_unit !== 'un', // Simple heuristic or add DB field?
+            isWeighable: row.is_weighable ?? (row.measurement_unit !== 'unidad'),
             createdAt: row.created_at,
             updatedAt: row.updated_at,
             storeId: row.store_id,
+            // Map low_stock_alerted (DB) to notifiedLowStock (Domain)
             notifiedLowStock: row.low_stock_alerted || false
         };
     },
     toPersistence: (entity: Product): ProductDB => {
+        // ===== VALIDATION CHECKPOINT =====
+        // This is the "aduana" - block dirty data before it reaches persistence
+
+        if (!entity.storeId || entity.storeId.trim() === '') {
+            // Assuming RLSViolationError and ValidationError are defined elsewhere
+            const error = new Error('Cannot persist Product without valid storeId. This would fail RLS policies.');
+            logger.error('[ProductRepo] RLSViolationError:', error.message);
+            throw error;
+        }
+
+        // Validate UUID format (basic check)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(entity.storeId)) {
+            const error = new Error(`Invalid UUID format for storeId: "${entity.storeId}"`);
+            logger.error('[ProductRepo] ValidationError:', error.message);
+            throw error;
+        }
+
         return {
             id: entity.id,
             name: entity.name,
             price: entity.price.toNumber(),
             // Map stock (Domain) to current_stock (DB)
             current_stock: entity.stock.toNumber(),
-            measurement_unit: entity.measurementUnit,
-            // ADR: Force null for category_id to avoid "invalid input syntax for type uuid"
-            category_id: null,
+            // Translate Frontend unit to DB unit
+            measurement_unit: translateMeasurementUnitToDB(entity.measurementUnit),
+            // Correct mapping for Schema V2 (Text category)
+            category: entity.category || null,
+            brand: entity.brand || null,
             min_stock: entity.minStock,
+            // Map cost (Domain) to cost_price (DB)
             cost_price: entity.cost ? entity.cost.toNumber() : null,
             created_at: entity.createdAt || new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            store_id: entity.storeId || '', // Should ensure this is set
+            // NO FALLBACK - storeId is validated above
+            store_id: entity.storeId,
             // Fields with defaults or potential mappings
-            barcode: entity.plu || null,
-            description: null,
-            image_url: null,
-            is_active: true,
-            low_stock_alerted: entity.notifiedLowStock || false,
-            tax_rate: 0 // Default for now
+            plu: entity.plu || null,
+            is_weighable: entity.isWeighable || false,
+            // Map notifiedLowStock (Domain) to low_stock_alerted (DB)
+            low_stock_alerted: entity.notifiedLowStock || false
         };
     }
 };

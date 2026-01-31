@@ -12,6 +12,7 @@
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { localStorageAdapter } from './localStorageAdapter';
 import { logger } from '../../utils/logger';
+import { enrichPayloadWithContext, validatePayloadSchema, SyncEvents, emitSyncEvent } from '../../services/syncInterceptor';
 
 /**
  * Generic repository interface for entity operations
@@ -150,6 +151,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
 
     /**
      * Create new record
+     * FRD-006: Uses Sync Interceptor for validation and auto-healing
      */
     const create = async (data: Omit<TDomain, 'id'>): Promise<TDomain | null> => {
         // Generate ID locally for consistency (or depend on DB?)
@@ -165,9 +167,30 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
             payload = newEntityDomain as unknown as TPersistence;
         }
 
+        // FRD-006: Auto-heal store_id from session context
+        const enrichedPayload = await enrichPayloadWithContext(
+            payload as unknown as Record<string, any>,
+            tableName
+        ) as unknown as TPersistence;
+
+        // FRD-006: Validate schema before network request
+        const schemaValidation = validatePayloadSchema(
+            enrichedPayload as unknown as Record<string, any>,
+            tableName
+        );
+
+        if (!schemaValidation.valid) {
+            const errorMsg = `Schema validation failed for ${tableName}: ` +
+                schemaValidation.missingFields.join(', ');
+            logger.error(`[SupabaseRepo:${tableName}] ${errorMsg}`);
+            emitSyncEvent(SyncEvents.SCHEMA_ERROR, { table: tableName, ...schemaValidation });
+            // Don't proceed - this would fail RLS anyway
+            return null;
+        }
+
         // 1. Optimistic / Offline Save (Always save to LS)
         const existing = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
-        existing.push(payload);
+        existing.push(enrichedPayload);
         localStorageAdapter.set(localStorageKey, existing);
 
         // 2. Try Online
@@ -176,12 +199,18 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
             try {
                 const { data: created, error } = await supabase
                     .from(tableName)
-                    .insert(payload)
+                    .insert(enrichedPayload)
                     .select()
                     .single();
 
                 if (error) {
-                    logger.log(`[SupabaseRepo:${tableName}] create error (saved locally):`, error.message);
+                    // FRD-006: Check for RLS error specifically
+                    if (error.code === '42501' || error.message?.includes('row-level security')) {
+                        logger.error(`[SupabaseRepo:${tableName}] RLS rejection:`, error.message);
+                        emitSyncEvent(SyncEvents.RLS_ERROR, { table: tableName, error: error.message });
+                    } else {
+                        logger.log(`[SupabaseRepo:${tableName}] create error (saved locally):`, error.message);
+                    }
                     // Return local entity since we saved it
                     return newEntityDomain;
                 }

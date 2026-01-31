@@ -43,11 +43,19 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
     });
 
     // Methods
-    const openRegister = (employeeId: string, amount: Decimal | number, notes?: string) => {
+    const openRegister = async (employeeId: string, storeId: string, amount: Decimal | number, notes?: string) => {
         if (isOpen.value) throw new Error("La caja ya está abierta");
+
+        // ===== VALIDATION CHECKPOINT (Puente Store-Repositorio) =====
+        if (!storeId || storeId.trim() === '') {
+            const error = new Error('Cannot open register without valid storeId. This would fail RLS policies.');
+            console.error('🚫 [CashRegisterStore] RLSViolationError:', error.message);
+            throw error;
+        }
 
         const newSession: CashSession = {
             id: crypto.randomUUID(),
+            storeId, // Required for RLS
             employeeId,
             status: 'open',
             openingTime: new Date().toISOString(),
@@ -56,10 +64,34 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             notes
         };
 
+        // ===== REPOSITORY INTEGRATION (Aduana Obligatoria) =====
+        try {
+            const { cashRepository } = await import('../data/repositories/cashRepository');
+            const result = await cashRepository.registerEvent({
+                id: newSession.id,
+                store_id: storeId,
+                type: 'open',
+                amount_declared: Number(new Decimal(amount)),
+                authorized_by_id: employeeId,
+                authorized_by_name: 'Employee', // TODO: Get name from employee store
+                authorized_by_type: 'employee'
+            });
+
+            if (!result.success) {
+                console.error('🚫 [CashRegisterStore] Repository registration failed:', result.error);
+                throw new Error(result.error || 'Failed to register opening event');
+            }
+            console.log('✅ [CashRegisterStore] Opening event registered via repository');
+        } catch (e: any) {
+            console.error('🚫 [CashRegisterStore] Repository call failed:', e.message);
+            // Continue with local state but log warning
+            console.warn('⚠️ [CashRegisterStore] Continuing with local state only');
+        }
+
         currentSession.value = newSession;
     };
 
-    const closeRegister = (physicalCount: Decimal | number, notes?: string) => {
+    const closeRegister = async (physicalCount: Decimal | number, notes?: string) => {
         if (!currentSession.value) throw new Error("No hay una sesión de caja activa");
 
         const session = currentSession.value;
@@ -73,11 +105,37 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         session.discrepancy = physical.minus(calculated);
         if (notes) session.notes = session.notes ? `${session.notes}\n${notes}` : notes;
 
+        // ===== REPOSITORY INTEGRATION (Aduana Obligatoria) =====
+        try {
+            const { cashRepository } = await import('../data/repositories/cashRepository');
+            const result = await cashRepository.registerEvent({
+                id: session.id, // Use existing session ID for closing
+                store_id: session.storeId,
+                type: 'close',
+                amount_declared: Number(physical),
+                amount_expected: Number(calculated),
+                difference: Number(session.discrepancy),
+                authorized_by_id: session.employeeId,
+                authorized_by_name: 'Employee',
+                authorized_by_type: 'employee'
+            });
+
+            if (!result.success) {
+                console.error('🚫 [CashRegisterStore] Repository close failed:', result.error);
+                // Don't throw - still archive locally
+            } else {
+                console.log('✅ [CashRegisterStore] Closing event registered via repository');
+            }
+        } catch (e: any) {
+            console.error('🚫 [CashRegisterStore] Repository close call failed:', e.message);
+            console.warn('⚠️ [CashRegisterStore] Session closed locally only');
+        }
+
         // Archive session
         sessionHistory.value.push({ ...session });
         currentSession.value = null;
 
-        return session; // Return the closed session summary
+        return session;
     };
 
     const registerExpense = (amount: Decimal | number, description: string, category: string = 'General') => {

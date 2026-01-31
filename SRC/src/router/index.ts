@@ -169,7 +169,9 @@ router.beforeEach((to, from, next) => {
 
   // 3. Caso Crítico: Autenticado pero SIN TIENDA registrada
   // Evitamos bucle infinito permitiendo estar en 'register-store'
-  if (isAuthenticated && !hasStore && to.name !== 'register-store') {
+  // FIX: Usar currentUser.storeId en lugar de hasStores (array local legacy)
+  const hasStoreId = !!authStore.currentUser?.storeId;
+  if (isAuthenticated && !hasStoreId && to.name !== 'register-store') {
     return next({ name: 'register-store' });
   }
 

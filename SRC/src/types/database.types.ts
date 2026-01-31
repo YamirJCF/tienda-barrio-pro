@@ -596,60 +596,54 @@ export type Database = {
             }
             products: {
                 Row: {
-                    barcode: string | null
-                    category_id: string | null
+                    plu: string | null
+                    brand: string | null
+                    category: string | null
                     cost_price: number | null
                     created_at: string
                     current_stock: number
-                    description: string | null
                     id: string
-                    image_url: string | null
-                    is_active: boolean | null
+                    is_weighable: boolean | null
                     low_stock_alerted: boolean | null
                     measurement_unit: string
                     min_stock: number
                     name: string
                     price: number
                     store_id: string
-                    tax_rate: number | null
                     updated_at: string
                 }
                 Insert: {
-                    barcode?: string | null
-                    category_id?: string | null
+                    plu?: string | null
+                    brand?: string | null
+                    category?: string | null
                     cost_price?: number | null
                     created_at?: string
                     current_stock?: number
-                    description?: string | null
                     id?: string
-                    image_url?: string | null
-                    is_active?: boolean | null
+                    is_weighable?: boolean | null
                     low_stock_alerted?: boolean | null
                     measurement_unit?: string
                     min_stock?: number
                     name: string
                     price: number
                     store_id: string
-                    tax_rate?: number | null
                     updated_at?: string
                 }
                 Update: {
-                    barcode?: string | null
-                    category_id?: string | null
+                    plu?: string | null
+                    brand?: string | null
+                    category?: string | null
                     cost_price?: number | null
                     created_at?: string
                     current_stock?: number
-                    description?: string | null
                     id?: string
-                    image_url?: string | null
-                    is_active?: boolean | null
+                    is_weighable?: boolean | null
                     low_stock_alerted?: boolean | null
                     measurement_unit?: string
                     min_stock?: number
                     name?: string
                     price?: number
                     store_id?: string
-                    tax_rate?: number | null
                     updated_at?: string
                 }
                 Relationships: [
