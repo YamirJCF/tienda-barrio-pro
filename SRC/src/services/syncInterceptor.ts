@@ -90,7 +90,7 @@ export async function validateSession(): Promise<{ valid: boolean; userId: strin
 
   try {
     const { data: { session }, error } = await supabase.auth.getSession();
-    
+
     if (error || !session) {
       logger.warn('[SyncInterceptor] Session validation failed:', error?.message || 'No session');
       return { valid: false, userId: null, storeId: null };
@@ -107,17 +107,35 @@ export async function validateSession(): Promise<{ valid: boolean; userId: strin
       }
     }
 
-    // Fetch store_id from admin_profiles for complete context
-    const { data: profile } = await supabase
+    // Fetch store_id from admin_profiles OR employees for complete context
+    let storeId: string | null = null;
+
+    // 1. Try Admin Profile
+    const { data: adminProfile } = await supabase
       .from('admin_profiles')
       .select('store_id')
       .eq('id', session.user.id)
       .single();
 
-    return { 
-      valid: true, 
-      userId: session.user.id, 
-      storeId: profile?.store_id || null 
+    if (adminProfile) {
+      storeId = adminProfile.store_id;
+    } else {
+      // 2. Try Employee Profile (Unified Arch)
+      const { data: employeeProfile } = await supabase
+        .from('employees')
+        .select('store_id')
+        .eq('id', session.user.id)
+        .single();
+
+      if (employeeProfile) {
+        storeId = employeeProfile.store_id;
+      }
+    }
+
+    return {
+      valid: true,
+      userId: session.user.id,
+      storeId: storeId
     };
   } catch (err) {
     logger.error('[SyncInterceptor] Session check exception:', err);
@@ -142,7 +160,7 @@ export function validatePayloadSchema(payload: Record<string, any>, tableName: s
 
   // Check for camelCase fields that should be snake_case
   const camelCaseFields = Object.keys(SCHEMA_MAPPINGS);
-  
+
   for (const camelField of camelCaseFields) {
     if (camelField in payload) {
       result.valid = false;
@@ -175,7 +193,7 @@ export function validatePayloadSchema(payload: Record<string, any>, tableName: s
  * to satisfy RLS policies before sending to DB.
  */
 export function validateRLSRequirements(
-  payload: Record<string, any>, 
+  payload: Record<string, any>,
   tableName: string,
   sessionContext: { userId: string | null; storeId: string | null }
 ): { valid: boolean; message?: string } {
@@ -194,9 +212,9 @@ export function validateRLSRequirements(
     if (sessionStoreId && payloadStoreId !== sessionStoreId) {
       logger.warn(`[SyncInterceptor] RLS Warning: Payload store_id (${payloadStoreId}) differs from session store_id (${sessionStoreId})`);
       // This will likely fail RLS. Return false to prevent the request.
-      return { 
-        valid: false, 
-        message: `RLS Mismatch: Payload store_id does not match authenticated user's store` 
+      return {
+        valid: false,
+        message: `RLS Mismatch: Payload store_id does not match authenticated user's store`
       };
     }
   }
@@ -224,12 +242,12 @@ export async function executeSync<T>(
   operation: () => Promise<{ data: T | null; error: any }>,
   queueType?: TransactionType
 ): Promise<SyncResult<T>> {
-  
+
   // ===== STEP 1: Session Validation =====
   const sessionResult = await validateSession();
   if (!sessionResult.valid) {
     logger.error('[SyncInterceptor] AUTH_EXPIRED: Session invalid');
-    
+
     // Queue for later if offline queue type provided
     if (queueType) {
       const queued = await addToSyncQueue(queueType, payload);
@@ -241,7 +259,7 @@ export async function executeSync<T>(
         queued,
       };
     }
-    
+
     return {
       success: false,
       errorType: 'auth',
@@ -257,9 +275,9 @@ export async function executeSync<T>(
       m => `${m.field} should be ${m.expected}`
     ).join(', ');
     const missingErrors = schemaResult.missingFields.join(', ');
-    
+
     logger.error('[SyncInterceptor] SCHEMA_ERROR:', { mappingErrors, missingErrors });
-    
+
     return {
       success: false,
       errorType: 'schema',
@@ -272,7 +290,7 @@ export async function executeSync<T>(
   const rlsResult = validateRLSRequirements(payload, tableName, sessionResult);
   if (!rlsResult.valid) {
     logger.error('[SyncInterceptor] RLS_ERROR:', rlsResult.message);
-    
+
     return {
       success: false,
       errorType: 'rls',
@@ -284,10 +302,10 @@ export async function executeSync<T>(
   // ===== STEP 4: Execute Operation =====
   try {
     const { data, error } = await operation();
-    
+
     if (error) {
       logger.error(`[SyncInterceptor] NETWORK_ERROR on ${tableName}:`, error);
-      
+
       // Check if it's actually an RLS error from the server
       if (error.code === '42501' || error.message?.includes('row-level security')) {
         return {
@@ -297,7 +315,7 @@ export async function executeSync<T>(
           data: null,
         };
       }
-      
+
       // Queue if offline and queueType provided
       if (!navigator.onLine && queueType) {
         const queued = await addToSyncQueue(queueType, payload);
@@ -309,7 +327,7 @@ export async function executeSync<T>(
           queued,
         };
       }
-      
+
       return {
         success: false,
         errorType: 'network',
@@ -326,7 +344,7 @@ export async function executeSync<T>(
 
   } catch (err: any) {
     logger.error('[SyncInterceptor] Exception during operation:', err);
-    
+
     return {
       success: false,
       errorType: 'network',
@@ -349,21 +367,21 @@ export async function enrichPayloadWithContext(
   tableName: string
 ): Promise<Record<string, any>> {
   const requiredFields = RLS_REQUIRED_FIELDS[tableName] || [];
-  
+
   if (requiredFields.includes('store_id')) {
     const sessionResult = await validateSession();
     if (sessionResult.valid && sessionResult.storeId) {
       // Override or set store_id from session
       const enriched = { ...payload, store_id: sessionResult.storeId };
-      
+
       if (payload.store_id && payload.store_id !== sessionResult.storeId) {
         logger.warn('[SyncInterceptor] AUTO-HEAL: Corrected stale store_id in payload');
       }
-      
+
       return enriched;
     }
   }
-  
+
   return payload;
 }
 

@@ -141,7 +141,8 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
 
         // Fallback or if not available
         const localData = localStorageAdapter.get<TPersistence[]>(localStorageKey);
-        const item = localData?.find(item => item.id === id);
+        // Fix: Ensure localData is an array before using .find
+        const item = Array.isArray(localData) ? localData.find(item => item.id === id) : null;
 
         if (item) {
             return mappers ? mappers.toDomain(item) : (item as unknown as TDomain);

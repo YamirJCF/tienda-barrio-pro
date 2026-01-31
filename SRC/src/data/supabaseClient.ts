@@ -69,7 +69,7 @@ export const getSupabaseClient = (): SupabaseClient | null => {
         try {
             supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
                 auth: {
-                    persistSession: false, // WO-004 T4.5: Sessions are volatile
+                    persistSession: true, // Fix: Enable persistence to survive reloads & sync with Pinia
                     autoRefreshToken: true,
                     detectSessionInUrl: false,
                 },
