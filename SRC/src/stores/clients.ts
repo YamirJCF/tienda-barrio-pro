@@ -1,31 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
-import { clientsSerializer } from '../data/serializers';
+import { type Client, type ClientTransaction } from '../types';
+import { clientRepository } from '../data/repositories/clientRepository';
 import { generateUUID } from '../utils/uuid';
-
-// WO-001: Changed all IDs from number to string (UUID)
-export interface ClientTransaction {
-  id: string; // UUID
-  clientId: string; // UUID - references Client.id
-  type: 'purchase' | 'payment';
-  amount: Decimal;
-  description: string;
-  date: string;
-  saleId?: string; // UUID - references Sale.id
-}
-
-// WO-001: Changed id from number to string (UUID)
-export interface Client {
-  id: string; // UUID
-  name: string;
-  cedula: string;
-  phone?: string;
-  creditLimit: Decimal;
-  balance: Decimal; // Positive = owes money, Negative = credit
-  createdAt: string;
-  updatedAt: string;
-}
+import { logger } from '../utils/logger';
+import { clientsSerializer } from '../data/serializers/clientsSerializer';
 
 export const useClientsStore = defineStore(
   'clients',
@@ -33,203 +13,209 @@ export const useClientsStore = defineStore(
     const clients = ref<Client[]>([]);
     const transactions = ref<ClientTransaction[]>([]);
     const isLoading = ref(false);
+    const error = ref<string | null>(null);
 
     // Computed
     const totalDebt = computed(() => {
       return clients.value.reduce(
-        (sum, c) => sum.plus(c.balance.gt(0) ? c.balance : new Decimal(0)),
+        (sum, c) => sum.plus(c.totalDebt && c.totalDebt.gt(0) ? c.totalDebt : new Decimal(0)),
         new Decimal(0),
       );
     });
 
     const clientsWithDebt = computed(() => {
-      return clients.value.filter((c) => c.balance.gt(0));
+      return clients.value.filter((c) => c.totalDebt && c.totalDebt.gt(0));
     });
 
-    // Methods
-    // WO-001: Changed to use UUID instead of numeric ID
-    const addClient = (data: Omit<Client, 'id' | 'balance' | 'createdAt' | 'updatedAt'>) => {
-      const now = new Date().toISOString();
-      const client: Client = {
-        id: generateUUID(), // WO-001: Use UUID
-        ...data,
-        balance: new Decimal(0),
-        createdAt: now,
-        updatedAt: now,
-      };
-      clients.value.push(client);
-      return client;
+    // Actions
+    const initialize = async (storeId: string) => {
+      if (!storeId) return;
+      isLoading.value = true;
+      try {
+        const data = await clientRepository.getAll(storeId);
+        clients.value = data;
+        // Transactions are loaded on demand usually, but we keep the array valid
+      } catch (e: any) {
+        logger.error('[ClientsStore] Init failed', e);
+        error.value = 'Error al cargar clientes';
+      } finally {
+        isLoading.value = false;
+      }
     };
 
-    // WO-001: Changed parameter type from number to string
-    const updateClient = (id: string, data: Partial<Omit<Client, 'id' | 'createdAt'>>) => {
-      const index = clients.value.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        clients.value[index] = {
-          ...clients.value[index],
-          ...data,
-          updatedAt: new Date().toISOString(),
-        };
-        return clients.value[index];
+    const addClient = async (data: { name: string; cc: string; phone?: string; creditLimit?: Decimal; storeId: string }) => {
+      const now = new Date().toISOString();
+
+      const newClient: Client = {
+        id: generateUUID(),
+        name: data.name,
+        cc: data.cc,
+        phone: data.phone,
+        totalDebt: new Decimal(0),
+        creditLimit: data.creditLimit || new Decimal(0),
+        storeId: data.storeId,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      try {
+        const created = await clientRepository.create(newClient);
+        if (created) {
+          clients.value.push(created);
+          return created;
+        }
+      } catch (e) {
+        logger.error('Failed to create client', e);
+        throw e;
       }
       return null;
     };
 
-    // WO-001: Changed parameter type from number to string
-    const deleteClient = (id: string) => {
-      const index = clients.value.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        // CL-06: Safe Deletion - Prevent deleting clients with debt
-        if (clients.value[index].balance.gt(0)) {
-          return { success: false, error: 'DEBT_PENDING' };
+    const updateClient = async (id: string, data: Partial<Client>) => {
+      try {
+        const updated = await clientRepository.update(id, data);
+        if (updated) {
+          const index = clients.value.findIndex(c => c.id === id);
+          if (index !== -1) {
+            clients.value[index] = updated;
+          }
+          return updated;
         }
-
-        clients.value.splice(index, 1);
-        // Also remove transactions
-        transactions.value = transactions.value.filter((t) => t.clientId !== id);
-        return { success: true };
+      } catch (e) {
+        logger.error('Update client failed', e);
+        throw e;
       }
-      return { success: false, error: 'NOT_FOUND' };
+      return null;
     };
 
-    // WO-001: Changed parameter type from number to string
+    const deleteClient = async (id: string) => {
+      const client = getClientById(id);
+      if (client && client.totalDebt.gt(0)) {
+        return { success: false, error: 'DEBT_PENDING' };
+      }
+      try {
+        await clientRepository.delete(id);
+        const index = clients.value.findIndex((c) => c.id === id);
+        if (index !== -1) {
+          clients.value.splice(index, 1);
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: 'DELETE_FAILED' };
+      }
+    };
+
     const getClientById = (id: string) => {
       return clients.value.find((c) => c.id === id);
     };
 
     const getClientByCedula = (cedula: string) => {
-      return clients.value.find((c) => c.cedula === cedula);
+      // Map cedula (UI/Input) to cc (Domain)
+      return clients.value.find((c) => c.cc === cedula);
     };
 
     const searchClients = (query: string) => {
       const q = query.toLowerCase().trim();
       if (!q) return clients.value;
       return clients.value.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.cedula.includes(q) || c.phone?.includes(q),
+        (c) => c.name.toLowerCase().includes(q) || c.cc.includes(q) || (c.phone && c.phone.includes(q)),
       );
     };
 
-    // WO-001: Changed parameter type from number to string
-    const addPurchaseDebt = (
+    const addPurchaseDebt = async (
       clientId: string,
       amount: Decimal,
       description: string,
       saleId?: string,
     ) => {
-      const client = getClientById(clientId);
-      if (!client) return null;
+      // 1. Update Debt
+      const success = await clientRepository.updateDebt(clientId, amount.toNumber());
+      if (!success) throw new Error('Failed to update debt');
 
-      const tx: ClientTransaction = {
-        id: generateUUID(), // WO-001: Use UUID
+      // 2. Add Transaction
+      const txStub: ClientTransaction = {
+        id: generateUUID(),
         clientId,
         type: 'purchase',
-        amount,
+        amount: amount,
         description,
         date: new Date().toISOString(),
-        saleId,
+        saleId
       };
-      transactions.value.push(tx);
 
-      // Increase balance (debt)
-      client.balance = client.balance.plus(amount);
-      client.updatedAt = new Date().toISOString();
-
-      return tx;
-    };
-
-    // WO-001: Changed parameter type from number to string
-    const registerPayment = (clientId: string, amount: Decimal, description = 'Abono') => {
-      const client = getClientById(clientId);
-      if (!client) return null;
-
-      const tx: ClientTransaction = {
-        id: generateUUID(), // WO-001: Use UUID
-        clientId,
-        type: 'payment',
-        amount,
-        description,
-        date: new Date().toISOString(),
-      };
-      transactions.value.push(tx);
-
-      // Decrease balance
-      client.balance = client.balance.minus(amount);
-      client.updatedAt = new Date().toISOString();
-
-      return tx;
-    };
-
-    // WO-001: Changed parameter type from number to string
-    const getClientTransactions = (clientId: string) => {
-      return transactions.value
-        .filter((t) => t.clientId === clientId)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    };
-
-    // WO-001: Changed parameter type from number to string
-    const getAvailableCredit = (clientId: string) => {
-      const client = getClientById(clientId);
-      if (!client) return new Decimal(0);
-      return client.creditLimit.minus(client.balance);
-    };
-
-    // WO-001: Initialize with sample data using UUID
-    const initializeSampleData = () => {
-      if (clients.value.length > 0) return;
-
-      const sampleClients = [
-        {
-          name: 'María Pérez',
-          cedula: '1020304050',
-          phone: '3001234567',
-          creditLimit: new Decimal(200000),
-        },
-        {
-          name: 'Jorge Villamizar',
-          cedula: '98765432',
-          phone: '3109876543',
-          creditLimit: new Decimal(150000),
-        },
-        { name: 'Luisa Mendoza', cedula: '52190876', creditLimit: new Decimal(100000) },
-        {
-          name: 'Carlos Rodriguez',
-          cedula: '79444111',
-          phone: '3205551234',
-          creditLimit: new Decimal(300000),
-        },
-      ];
-
-      // WO-001: Store generated client IDs for sample transactions
-      const generatedClients: Client[] = [];
-
-      sampleClients.forEach((c) => {
-        const now = new Date().toISOString();
-        const newClient: Client = {
-          id: generateUUID(), // WO-001: Use UUID
-          ...c,
-          balance: new Decimal(0),
-          createdAt: now,
-          updatedAt: now,
-        };
-        clients.value.push(newClient);
-        generatedClients.push(newClient);
+      // Persist transaction
+      await clientRepository.addTransaction({
+        ...txStub,
+        amount: amount.toNumber()
       });
 
-      // Add some sample transactions using the generated client IDs
-      if (generatedClients.length >= 4) {
-        addPurchaseDebt(generatedClients[0].id, new Decimal(120000), 'Compra inicial');
-        addPurchaseDebt(generatedClients[1].id, new Decimal(45000), 'Mercado semanal');
-        addPurchaseDebt(generatedClients[3].id, new Decimal(35500), 'Productos varios');
-        registerPayment(generatedClients[3].id, new Decimal(20000), 'Abono efectivo');
+      // 3. Update Local State
+      const client = getClientById(clientId);
+      if (client) {
+        client.totalDebt = client.totalDebt.plus(amount);
+        client.updatedAt = new Date().toISOString();
       }
+      transactions.value.push(txStub);
+      return txStub;
+    };
+
+    const registerPayment = async (clientId: string, amount: Decimal, description = 'Abono') => {
+      // 1. Update Debt (Negative amount to reduce)
+      const success = await clientRepository.updateDebt(clientId, -amount.toNumber());
+      if (!success) throw new Error('Failed to register payment');
+
+      // 2. Add Transaction
+      const txStub: ClientTransaction = {
+        id: generateUUID(),
+        clientId,
+        type: 'payment',
+        amount: amount,
+        description,
+        date: new Date().toISOString()
+      };
+
+      await clientRepository.addTransaction({
+        ...txStub,
+        amount: amount.toNumber()
+      });
+
+      // 3. Local Update
+      const client = getClientById(clientId);
+      if (client) {
+        client.totalDebt = client.totalDebt.minus(amount);
+        client.updatedAt = new Date().toISOString();
+      }
+      transactions.value.push(txStub);
+      return txStub;
+    };
+
+    const getClientTransactions = async (clientId: string) => {
+      // Fetch from Repo for source of truth
+      try {
+        const remoteTxs = await clientRepository.getTransactions(clientId);
+        return remoteTxs as ClientTransaction[];
+      } catch (e) {
+        // Fallback to local
+        return transactions.value
+          .filter(t => t.clientId === clientId)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      }
+    };
+
+    const getAvailableCredit = (clientId: string) => {
+      const client = getClientById(clientId);
+      if (!client || !client.creditLimit) return new Decimal(0);
+      return client.creditLimit.minus(client.totalDebt);
     };
 
     return {
       clients,
       transactions,
       isLoading,
+      error,
       totalDebt,
       clientsWithDebt,
+      initialize,
       addClient,
       updateClient,
       deleteClient,
@@ -240,7 +226,6 @@ export const useClientsStore = defineStore(
       registerPayment,
       getClientTransactions,
       getAvailableCredit,
-      initializeSampleData,
     };
   },
   {

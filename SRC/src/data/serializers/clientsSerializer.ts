@@ -1,62 +1,72 @@
-import type { Client, ClientTransaction } from '../../stores/clients';
+import type { Client, ClientTransaction } from '../../types'; // Corrected import
 import { toDecimal } from './decimalSerializer';
 import { Decimal } from 'decimal.js';
 
 interface SerializedClient {
-  id: number;
+  id: string; // Updated to string (UUID)
   name: string;
-  cedula: string;
+  cc: string; // Renamed from cedula
   phone?: string;
   creditLimit: string;
-  balance: string;
+  totalDebt: string; // Renamed from balance
   createdAt: string;
   updatedAt: string;
+  // Legacy fields for migration
+  cedula?: string;
+  balance?: string;
 }
 
 interface SerializedTransaction {
-  id: number;
-  clientId: number;
+  id: string; // Updated to string (UUID)
+  clientId: string; // Updated to string
   type: 'purchase' | 'payment';
   amount: string;
   description: string;
   date: string;
-  saleId?: number;
+  saleId?: string; // Updated to string
 }
 
 export interface ClientsState {
   clients: Client[];
   transactions: ClientTransaction[];
-  nextClientId: number;
-  nextTransactionId: number;
+  // nextClientId: number; // Deprecated, we use UUIDs
+  // nextTransactionId: number; // Deprecated
+  // We keep them for type safety if serializer references them, 
+  // but better to make them optional or ignore?
+  // Existing code in lines 88/98 used 'nextClientId'.
+  // I will keep them optional to avoid breaking existing state shape if validation is strict.
+  nextClientId?: number;
+  nextTransactionId?: number;
 }
 
 interface SerializedClientsState {
   clients: SerializedClient[];
   transactions: SerializedTransaction[];
-  nextClientId: number;
-  nextTransactionId: number;
+  nextClientId?: number;
+  nextTransactionId?: number;
 }
 
 export const serializeClient = (client: Client): SerializedClient => ({
   id: client.id,
   name: client.name,
-  cedula: client.cedula,
+  cc: client.cc,
   phone: client.phone,
   creditLimit: client.creditLimit.toString(),
-  balance: client.balance.toString(),
-  createdAt: client.createdAt,
-  updatedAt: client.updatedAt,
+  totalDebt: client.totalDebt.toString(),
+  createdAt: client.createdAt || new Date().toISOString(),
+  updatedAt: client.updatedAt || new Date().toISOString(),
 });
 
 export const deserializeClient = (data: SerializedClient): Client => ({
-  id: data.id,
+  id: data.id.toString(), // Ensure string
   name: data.name,
-  cedula: data.cedula,
+  cc: data.cc || data.cedula || '', // Migration
   phone: data.phone,
   creditLimit: toDecimal(data.creditLimit),
-  balance: toDecimal(data.balance),
+  totalDebt: toDecimal(data.totalDebt || data.balance || 0), // Migration
   createdAt: data.createdAt,
   updatedAt: data.updatedAt,
+  storeId: (data as any).storeId || '', // Handle missing storeId? (should be there for persistence validation)
 });
 
 export const serializeTransaction = (tx: ClientTransaction): SerializedTransaction => ({

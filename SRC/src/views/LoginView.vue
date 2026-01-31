@@ -100,7 +100,8 @@ const handleLogin = async () => {
       }
 
       // OPCIÓN A: Primero intentar login LOCAL usando employeesStore
-      const localEmployee = employeesStore.validatePin(username.value, password.value);
+      // WO-REM-002: RPC Check (Async)
+      const localEmployee = await employeesStore.validatePin(username.value, password.value);
       
       if (localEmployee) {
         // Login local exitoso

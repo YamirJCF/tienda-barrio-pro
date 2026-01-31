@@ -86,12 +86,24 @@ export interface Client {
     storeId: string; // REQUIRED - RLS compliance (Fase 1 Blindaje)
 }
 
+// Maps to: Database['public']['Tables']['client_transactions']['Row']
+export interface ClientTransaction {
+    id: string; // UUID
+    clientId: string; // UUID - references Client.id
+    type: 'purchase' | 'payment';
+    amount: Decimal | number;
+    description: string;
+    date: string;
+    saleId?: string; // UUID - references Sale.id
+}
+
 // WO-001: New interface for employees (consolidating from auth.ts)
 // Maps to: Database['public']['Tables']['employees']['Row']
 export interface Employee {
     id: string; // UUID
     name: string;
     username: string;
+    pin: string; // Added for persistence/creation
     storeId: string; // UUID - references Store.id
     permissions: EmployeePermissions;
     isActive: boolean;

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { useClientsStore, type ClientTransaction } from '../stores/clients';
+import { useClientsStore } from '../stores/clients';
+import { type Client } from '../types';
 import { Decimal } from 'decimal.js';
 import BaseModal from '../components/ui/BaseModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
@@ -34,13 +35,19 @@ const clientId = computed(() => String(route.params.id));
 
 const client = computed(() => clientsStore.getClientById(clientId.value));
 
-const transactions = computed(() => clientsStore.getClientTransactions(clientId.value));
+const transactions = ref<ClientTransaction[]>([]);
+
+watch(clientId, async (newId) => {
+    if (newId) {
+        transactions.value = await clientsStore.getClientTransactions(newId);
+    }
+}, { immediate: true });
 
 const availableCredit = computed(() => clientsStore.getAvailableCredit(clientId.value));
 
 const creditUsagePercent = computed(() => {
   if (!client.value || client.value.creditLimit.isZero()) return 0;
-  return client.value.balance.div(client.value.creditLimit).times(100).toNumber();
+  return client.value.totalDebt.div(client.value.creditLimit).times(100).toNumber();
 });
 
 // Methods
@@ -95,7 +102,7 @@ const closeOptionsMenu = () => {
 const confirmDelete = () => {
   showOptionsMenu.value = false;
   
-  if (client.value && client.value.balance.gt(0)) {
+  if (client.value && client.value.totalDebt.gt(0)) {
     showDebtAlert.value = true;
     return;
   }
@@ -183,7 +190,7 @@ const registerPayment = () => {
         <div class="flex flex-col items-center text-center">
           <h2 class="text-white text-xl font-semibold tracking-wide mb-1">{{ client.name }}</h2>
           <p class="text-slate-400 text-sm font-medium tracking-wide">
-            C.C. {{ formatCedula(client.cedula) }}
+            C.C. {{ formatCedula(client.cc) }}
           </p>
         </div>
 
@@ -193,7 +200,7 @@ const registerPayment = () => {
             >Saldo Pendiente</span
           >
           <h1 class="text-white text-[56px] leading-none font-bold tracking-tight drop-shadow-sm">
-            {{ formatCurrency(client.balance) }}
+            {{ formatCurrency(client.totalDebt) }}
           </h1>
         </div>
 
@@ -214,7 +221,7 @@ const registerPayment = () => {
             ></div>
           </div>
           <div class="flex justify-between mt-2">
-            <p class="text-slate-400 text-xs">Uso: {{ formatCurrency(client.balance) }}</p>
+            <p class="text-slate-400 text-xs">Uso: {{ formatCurrency(client.totalDebt) }}</p>
             <p class="text-slate-400 text-xs">Total: {{ formatCurrency(client.creditLimit) }}</p>
           </div>
         </div>
@@ -386,7 +393,7 @@ const registerPayment = () => {
               No se puede eliminar a <strong>{{ client?.name }}</strong> porque tiene una deuda de:
             </p>
             <p class="text-2xl font-bold text-red-600 my-3">
-               {{ client ? formatCurrency(client.balance) : '$0' }}
+               {{ client ? formatCurrency(client.totalDebt) : '$0' }}
             </p>
             <p class="text-slate-400 text-xs">
               Por favor registre el pago total antes de eliminar la cuenta.

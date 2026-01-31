@@ -159,7 +159,7 @@ const handleClientSaved = () => {
         v-for="client in filteredClients"
         :key="client.id"
         class="relative flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-3 border-l-[6px] overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.99]"
-        :class="client.balance.gt(0) ? 'border-red-500' : 'border-emerald-500'"
+        :class="client.totalDebt.gt(0) ? 'border-red-500' : 'border-emerald-500'"
         @click="openClientDetail(client.id)"
       >
         <div
@@ -173,7 +173,7 @@ const handleClientSaved = () => {
             {{ client.name }}
           </p>
           <p class="text-slate-500 text-xs font-medium truncate">
-            CC: {{ formatCedula(client.cedula) }}
+            CC: {{ formatCedula(client.cc) }}
           </p>
           <!-- CL-01: Show Cupo -->
            <p class="text-[10px] text-slate-400 font-medium mt-0.5" v-if="client.creditLimit">
@@ -183,11 +183,11 @@ const handleClientSaved = () => {
         <div class="flex flex-col items-end gap-1">
           <p
             class="text-base font-bold leading-tight"
-            :class="client.balance.gt(0) ? 'text-red-600' : 'text-emerald-600'"
+            :class="client.totalDebt.gt(0) ? 'text-red-600' : 'text-emerald-600'"
           >
-            {{ client.balance.gt(0) ? '-' : '' }}{{ formatCurrency(client.balance.abs()) }}
+            {{ client.totalDebt.gt(0) ? '-' : '' }}{{ formatCurrency(client.totalDebt.abs()) }}
           </p>
-          <span v-if="client.balance.gt(0)" class="text-[10px] text-red-500 font-bold uppercase tracking-wider">
+          <span v-if="client.totalDebt.gt(0)" class="text-[10px] text-red-500 font-bold uppercase tracking-wider">
             Debe
           </span>
           <span v-else class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider"> Al día </span>
