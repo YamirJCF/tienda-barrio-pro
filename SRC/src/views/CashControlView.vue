@@ -95,8 +95,20 @@ const handlePinSuccess = async () => {
     
     await executeAction(async () => {
         if (pendingAction.value === 'open') {
+            // ===== VALIDACIÓN STOREID (Fase 2 Estabilización) =====
+            const storeId = authStore.currentStore?.id;
+            if (!storeId) {
+                showError('No hay tienda asociada. Cierra sesión e ingresa de nuevo.');
+                return;
+            }
+            
             if (authStore.currentUser?.id) {
-                await cashRegisterStore.openRegister(authStore.currentUser.id, new Decimal(amount.value), notes.value);
+                await cashRegisterStore.openRegister(
+                    authStore.currentUser.id,
+                    storeId,  // storeId requerido para RLS
+                    new Decimal(amount.value),
+                    notes.value
+                );
             } else {
                 throw new Error('Usuario no autenticado');
             }
