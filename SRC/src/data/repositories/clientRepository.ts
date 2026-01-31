@@ -39,10 +39,26 @@ export const clientMapper: RepositoryMappers<ClientDB, Client> = {
             notes: undefined, // Not in DB Row shown
             creditLimit: new Decimal(row.credit_limit || 0),
             createdAt: row.created_at,
-            updatedAt: row.updated_at
+            updatedAt: row.updated_at,
+            storeId: row.store_id // Map from DB (Fase 1 Blindaje)
         };
     },
     toPersistence: (entity: Client): ClientDB => {
+        // ===== VALIDATION CHECKPOINT (Fase 1 Blindaje) =====
+        if (!entity.storeId || entity.storeId.trim() === '') {
+            const error = new Error('Cannot persist Client without valid storeId. This would fail RLS policies.');
+            console.error('🚫 [ClientRepo] RLSViolationError:', error.message);
+            throw error;
+        }
+
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(entity.storeId)) {
+            const error = new Error(`Invalid UUID format for storeId: "${entity.storeId}"`);
+            console.error('🚫 [ClientRepo] ValidationError:', error.message);
+            throw error;
+        }
+
         return {
             id: entity.id,
             name: entity.name,
@@ -52,7 +68,7 @@ export const clientMapper: RepositoryMappers<ClientDB, Client> = {
             credit_limit: entity.creditLimit ? entity.creditLimit.toNumber() : 0,
             created_at: entity.createdAt || new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            store_id: '', // Context should fill this or existing logic
+            store_id: entity.storeId, // NO FALLBACK - validated above
             deleted_at: null,
             is_deleted: false
         };

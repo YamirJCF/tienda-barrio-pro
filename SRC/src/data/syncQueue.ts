@@ -15,17 +15,19 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { logger } from '../utils/logger';
 import { getSupabaseClient } from './supabaseClient';
+import { detectSchemaDrift, sanitizeCamelToSnake, getTableFromTransactionType } from '../services/schemaValidator';
 
 const DB_NAME = 'tienda-sync-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incremented for corrupted_items store
 const QUEUE_STORE = 'sync_queue';
 const DLQ_STORE = 'dead_letter_queue';
+const CORRUPTED_STORE = 'corrupted_items';
 const MAX_QUEUE_SIZE = 50;
 
 /**
  * Transaction Types
  */
-export type TransactionType = 'CREATE_SALE' | 'UPDATE_STOCK' | 'CREATE_CLIENT' | 'UPDATE_DEBT' | 'CREATE_MOVEMENT';
+export type TransactionType = 'CREATE_SALE' | 'UPDATE_STOCK' | 'CREATE_CLIENT' | 'UPDATE_DEBT' | 'CREATE_MOVEMENT' | 'CREATE_EXPENSE' | 'CASH_EVENT';
 
 
 
@@ -54,6 +56,15 @@ interface SyncDB extends DBSchema {
         key: string;
         value: QueueItem & { error: string; failedAt: number };
     };
+    corrupted_items: {
+        key: string;
+        value: QueueItem & {
+            corruptedAt: number;
+            reason: string;
+            obsoleteFields: string[];
+            missingRequired: string[];
+        };
+    };
 }
 
 let dbPromise: Promise<IDBPDatabase<SyncDB>> | null = null;
@@ -64,7 +75,7 @@ let dbPromise: Promise<IDBPDatabase<SyncDB>> | null = null;
 const getDB = async () => {
     if (!dbPromise) {
         dbPromise = openDB<SyncDB>(DB_NAME, DB_VERSION, {
-            upgrade(db) {
+            upgrade(db, oldVersion) {
                 // Queue Store
                 if (!db.objectStoreNames.contains(QUEUE_STORE)) {
                     const store = db.createObjectStore(QUEUE_STORE, { keyPath: 'id' });
@@ -73,6 +84,10 @@ const getDB = async () => {
                 // DLQ Store
                 if (!db.objectStoreNames.contains(DLQ_STORE)) {
                     db.createObjectStore(DLQ_STORE, { keyPath: 'id' });
+                }
+                // Corrupted Items Store (v2)
+                if (oldVersion < 2 && !db.objectStoreNames.contains(CORRUPTED_STORE)) {
+                    db.createObjectStore(CORRUPTED_STORE, { keyPath: 'id' });
                 }
             },
         });
@@ -87,6 +102,7 @@ import { isAuditMode } from './supabaseClient';
 
 /**
  * Add item to sync queue
+ * BLINDAJE: Only accepts validated, snake_case payloads
  */
 export const addToSyncQueue = async (type: TransactionType, payload: any): Promise<boolean> => {
     // 🛡️ MODIFIED FLOW: Store locally but flag as Audit
@@ -95,6 +111,23 @@ export const addToSyncQueue = async (type: TransactionType, payload: any): Promi
         logger.log(`[SyncQueue] 🛡️ Audit Mode: Storing ${type} locally with isAudit flag`);
     }
 
+    // ===== GATEWAY CHECKPOINT: Sanitize & Validate BEFORE IndexedDB =====
+    const tableName = getTableFromTransactionType(type);
+    const sanitizedPayload = sanitizeCamelToSnake(payload);
+
+    // Validate against schema
+    const driftResult = detectSchemaDrift(sanitizedPayload, tableName);
+    if (driftResult.drifted) {
+        logger.error(`[SyncQueue] 🚫 Schema validation failed for ${type}:`, {
+            obsoleteFields: driftResult.obsoleteFields,
+            missingRequired: driftResult.missingRequired
+        });
+        // Emit event for UI notification
+        window.dispatchEvent(new CustomEvent('sync:validation_failed', {
+            detail: { type, tableName, ...driftResult }
+        }));
+        return false; // Reject - don't pollute IndexedDB with dirty data
+    }
 
     const db = await getDB();
 
@@ -108,14 +141,14 @@ export const addToSyncQueue = async (type: TransactionType, payload: any): Promi
     const item: QueueItem = {
         id: crypto.randomUUID(),
         type,
-        payload,
+        payload: sanitizedPayload, // Store SANITIZED payload (snake_case)
         timestamp: Date.now(),
         retryCount: 0,
         isAudit: auditMode
     };
 
     await db.put(QUEUE_STORE, item);
-    logger.log(`[SyncQueue] Added ${type} to queue`);
+    logger.log(`[SyncQueue] Added ${type} to queue (sanitized)`);
 
     // Try to process immediately if online AND not in audit mode
     if (navigator.onLine && !isAuditMode()) {
@@ -127,13 +160,68 @@ export const addToSyncQueue = async (type: TransactionType, payload: any): Promi
 
 /**
  * Process the queue
+ * Contract Validation Middleware: Anti-401 Protocol & Schema Drift Detection
  */
 export const processSyncQueue = async (): Promise<void> => {
     if (!navigator.onLine || isAuditMode()) return; // 🛡️ Prevent syncing in Audit Mode
 
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+        logger.warn('[SyncQueue] Supabase client not available');
+        return;
+    }
+
+    // ===== ANTI-401 PROTOCOL: Session Auto-Recovery (Fase Final Blindaje) =====
+    // Step 1: Check current session
+    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    // Step 2: If no session or error, attempt refresh
+    if (sessionError || !session) {
+        logger.warn('[SyncQueue] 🔄 Session missing - attempting auto-refresh...');
+
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshData.session) {
+            // Step 3: Refresh failed - HARD STOP + AUTH_REQUIRED
+            logger.error('[SyncQueue] 🔒 AUTH_REQUIRED: Session refresh failed - cannot proceed');
+            console.error('🚫 [SyncQueue] Auto-recovery failed. User must re-authenticate.');
+
+            window.dispatchEvent(new CustomEvent('sync:auth_required', {
+                detail: {
+                    reason: 'Session expired and auto-refresh failed',
+                    originalError: refreshError?.message || 'No session available',
+                    timestamp: new Date().toISOString()
+                }
+            }));
+
+            // Emit legacy event for backward compatibility
+            window.dispatchEvent(new CustomEvent('sync:reauth_required', {
+                detail: { reason: 'Session expired or missing' }
+            }));
+
+            return; // PAUSE QUEUE - Don't burn through items with 401s
+        }
+
+        // Refresh succeeded!
+        session = refreshData.session;
+        logger.log('[SyncQueue] ✅ Session auto-refreshed successfully');
+    }
+
+    // Step 4: Validate session has a valid access token
+    if (!session?.access_token) {
+        logger.error('[SyncQueue] 🔒 Invalid session - missing access_token');
+        window.dispatchEvent(new CustomEvent('sync:auth_required', {
+            detail: { reason: 'Session lacks access token' }
+        }));
+        return;
+    }
+
+    logger.log('[SyncQueue] ✅ Session validated - proceeding with queue processing');
+
     const db = await getDB();
-    const tx = db.transaction(QUEUE_STORE, 'readwrite');
+    const tx = db.transaction([QUEUE_STORE, CORRUPTED_STORE], 'readwrite');
     const store = tx.objectStore(QUEUE_STORE);
+    const corruptedStore = tx.objectStore(CORRUPTED_STORE);
     const index = store.index('by-timestamp');
 
     let cursor = await index.openCursor();
@@ -149,8 +237,37 @@ export const processSyncQueue = async (): Promise<void> => {
             continue;
         }
 
+        // ===== SCHEMA DRIFT DETECTION =====
+        const tableName = getTableFromTransactionType(item.type);
+        const sanitizedPayload = sanitizeCamelToSnake(item.payload);
+        const driftResult = detectSchemaDrift(sanitizedPayload, tableName);
+
+        if (driftResult.drifted) {
+            logger.error(`[SyncQueue] 🚨 SCHEMA_DRIFT detected for ${item.id}:`, {
+                obsoleteFields: driftResult.obsoleteFields,
+                missingRequired: driftResult.missingRequired
+            });
+
+            // Move to corrupted_items instead of retrying infinitely
+            await corruptedStore.put({
+                ...item,
+                corruptedAt: Date.now(),
+                reason: 'Schema Drift - payload structure incompatible with current database schema',
+                obsoleteFields: driftResult.obsoleteFields,
+                missingRequired: driftResult.missingRequired
+            });
+            await cursor.delete();
+
+            window.dispatchEvent(new CustomEvent('sync:schema_drift', {
+                detail: { itemId: item.id, type: item.type, ...driftResult }
+            }));
+
+            cursor = await cursor.continue();
+            continue;
+        }
+
         try {
-            const success = await processItem(item);
+            const success = await processItem({ ...item, payload: sanitizedPayload });
 
             if (success) {
                 await cursor.delete();

@@ -104,6 +104,21 @@ export const cashRepository: CashRepository = {
      * Register an Open or Close event
      */
     async registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string }> {
+        // ===== VALIDATION CHECKPOINT (Fase 2 Blindaje) =====
+        if (!event.store_id || event.store_id.trim() === '') {
+            const errorMsg = 'Cannot register CashEvent without valid store_id. This would fail RLS policies.';
+            console.error('🚫 [CashRepo] RLSViolationError:', errorMsg);
+            return { success: false, error: errorMsg };
+        }
+
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(event.store_id)) {
+            const errorMsg = `Invalid UUID format for store_id: "${event.store_id}"`;
+            console.error('🚫 [CashRepo] ValidationError:', errorMsg);
+            return { success: false, error: errorMsg };
+        }
+
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
         // 1. Try Online RPC

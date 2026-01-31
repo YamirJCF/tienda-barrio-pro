@@ -153,13 +153,21 @@ export const useInventoryStore = defineStore(
       const priceRounded = roundHybrid50(productData.price);
 
       const authStore = useAuthStore();
+      const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+
+      if (!storeId) {
+        logger.error('[InventoryStore] Cannot create product: No store ID found in auth context');
+        error.value = 'Error de sesión: No se identificó la tienda. Recargue la página.';
+        return null;
+      }
+
       const newProductData = {
         ...productData,
         price: priceRounded,
         createdAt: now,
         updatedAt: now,
-        store_id: authStore.currentUser?.storeId,
-        storeId: authStore.currentUser?.storeId
+        store_id: storeId, // For DB Compat
+        storeId: storeId   // For Domain Compat
       };
 
       try {

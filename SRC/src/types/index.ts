@@ -20,7 +20,7 @@ export interface Product {
     createdAt?: string;
     updatedAt?: string;
     notifiedLowStock?: boolean;
-    storeId?: string; // Reference to Store
+    storeId: string; // REQUIRED - RLS compliance (was optional, caused 401 errors)
 }
 
 export interface CartItem {
@@ -83,6 +83,7 @@ export interface Client {
     creditLimit?: Decimal;
     createdAt?: string;
     updatedAt?: string;
+    storeId: string; // REQUIRED - RLS compliance (Fase 1 Blindaje)
 }
 
 // WO-001: New interface for employees (consolidating from auth.ts)
@@ -125,6 +126,7 @@ export interface CashTransaction {
 // Maps to: Database['public']['Tables']['cash_register']['Row'] (partially)
 export interface CashSession {
     id: string;
+    storeId: string; // Required for RLS - Tienda asociada
     employeeId: string; // ID of employee who opened the register
     status: 'open' | 'closed';
     openingTime: string;
