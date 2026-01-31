@@ -6,6 +6,12 @@ export interface LoginResponse {
     success: boolean;
     employee?: CurrentUser;
     store_state?: { is_open: boolean };
+    store_details?: {
+        id: string;
+        name: string;
+        owner: string;
+        email: string;
+    };
     error_code?: string;
     error?: string;
 }
@@ -143,7 +149,13 @@ export const authRepository = {
                         canManageClients: true
                     }
                 },
-                store_state: { is_open: true }
+                store_state: { is_open: true },
+                store_details: {
+                    id: storeData.id,
+                    name: storeData.name,
+                    owner: metadata.owner_name || 'Admin',
+                    email: data.user.email!
+                }
             };
 
         } catch (err) {
@@ -201,7 +213,7 @@ export const authRepository = {
                     email: username || 'demo@audit.com',
                     type: 'employee',
                     storeId: 'audit-store-001',
-                    employeeId: 101,
+                    employeeId: '101', // Converted to string
                     permissions: {
                         canSell: true,
                         canViewInventory: true,
@@ -276,7 +288,7 @@ export const authRepository = {
     async getPendingAccessRequests(storeId: string) {
         const { data, error } = await supabase
             .from('daily_passes')
-            .select('*, employees!inner(name, store_id)')
+            .select('*, employees!daily_passes_employee_id_fkey!inner(name, store_id)')
             .eq('status', 'pending')
             .eq('employees.store_id', storeId)
             .order('requested_at', { ascending: false });
@@ -291,7 +303,7 @@ export const authRepository = {
             employeeId: r.employee_id,
             employeeName: r.employees.name,
             deviceFingerprint: r.device_fingerprint,
-            userAgent: 'N/A', // Not stored in daily_passes? Table def says 'device_fingerprint'. Row 306 'requested_at'. User agent might be missing.
+            userAgent: 'N/A',
             status: r.status,
             requestedAt: r.requested_at
         }));
@@ -304,7 +316,7 @@ export const authRepository = {
     async getAuthorizedDevices(storeId: string) {
         const { data, error } = await supabase
             .from('daily_passes')
-            .select('*, employees!inner(name, store_id)')
+            .select('*, employees!daily_passes_employee_id_fkey!inner(name, store_id)')
             .eq('status', 'approved')
             .eq('employees.store_id', storeId)
             .order('resolved_at', { ascending: false });

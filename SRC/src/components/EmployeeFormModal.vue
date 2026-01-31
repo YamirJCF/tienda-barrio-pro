@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
-import { useEmployeesStore, type Employee } from '../stores/employees';
+import { useEmployeesStore } from '../stores/employees';
+import type { Employee } from '../types'; // Correct import
+import { useAuthStore } from '../stores/auth'; 
 import BaseModal from './ui/BaseModal.vue';
 import BaseInput from './ui/BaseInput.vue';
 import BaseButton from './ui/BaseButton.vue';
@@ -9,7 +11,7 @@ import { User, IdCard, Lock } from 'lucide-vue-next';
 // Props
 interface Props {
   modelValue: boolean;
-  employeeId?: number;
+  employeeId?: string; // UUID
 }
 
 const props = defineProps<Props>();
@@ -19,6 +21,7 @@ const emit = defineEmits<{
 }>();
 
 const employeesStore = useEmployeesStore();
+const authStore = useAuthStore(); // Initialize AuthStore
 
 // Form state
 const formData = ref({
@@ -93,7 +96,7 @@ const resetForm = () => {
 
 
 
-const save = () => {
+const save = async () => {
   if (!isValid.value) return;
 
   const data = {
@@ -107,16 +110,17 @@ const save = () => {
       canFiar: formData.value.canFiar,
       canOpenCloseCash: formData.value.canOpenCloseCash,
     },
-    isActive: true, // New employees start active (unless limit reached, store will throw)
+    isActive: true, 
+    storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '', // Inject storeId from AuthStore (Robust)
   };
   
   try {
       let employee: Employee | null;
 
       if (isEdit.value && props.employeeId) {
-        employee = employeesStore.updateEmployee(props.employeeId, data);
+        employee = await employeesStore.updateEmployee(props.employeeId, data);
       } else {
-        employee = employeesStore.addEmployee(data);
+        employee = await employeesStore.addEmployee(data);
       }
 
       if (employee) {
@@ -135,7 +139,7 @@ watch(
   () => [props.modelValue, props.employeeId],
   ([show, employeeId]) => {
     if (show && employeeId) {
-      const employee = employeesStore.getEmployeeById(employeeId as number);
+      const employee = employeesStore.getEmployeeById(employeeId as string);
       if (employee) {
         formData.value = {
           name: employee.name,

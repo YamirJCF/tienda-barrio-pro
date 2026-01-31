@@ -231,7 +231,7 @@ const save = async () => {
     plu: formData.value.plu.trim() || undefined,
     isWeighable: formData.value.saleMode === 'weight',
     measurementUnit:
-      formData.value.saleMode === 'weight' ? formData.value.measurementUnit : ('un' as const),
+      formData.value.saleMode === 'weight' ? formData.value.measurementUnit : ('unidad' as const),
     price: new Decimal(formData.value.price), // Exact price
     cost: formData.value.cost ? new Decimal(formData.value.cost) : undefined,
     stock: stockToSave,
@@ -286,7 +286,7 @@ watch(
           plu: product.plu || '',
           saleMode: product.isWeighable ? 'weight' : 'unit',
           measurementUnit:
-            product.measurementUnit !== 'un'
+            product.measurementUnit !== 'unidad'
               ? (product.measurementUnit as 'kg' | 'lb' | 'g')
               : 'lb',
           cost: product.cost ? Number(product.cost).toFixed(2) : '',

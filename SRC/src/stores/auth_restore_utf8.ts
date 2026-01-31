@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+﻿import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { logger } from '../utils/logger';
 import { getStorageKey } from '../utils/storage';
@@ -23,7 +23,7 @@ export interface CurrentUser {
   type: UserType;
   storeId: string;
   // For employees
-  employeeId?: string; // UUID (migrated from number)
+  employeeId?: number;
   permissions?: {
     canSell: boolean;
     canViewInventory: boolean;
@@ -43,7 +43,7 @@ export interface CurrentUser {
 export const useAuthStore = defineStore(
   'auth',
   () => {
-    // State - inicializado vacía (sin cuenta demo)
+    // State - inicializado vac├¡o (sin cuenta demo)
     const stores = ref<StoreAccount[]>([]);
     const currentUser = ref<CurrentUser | null>(null);
     const isAuthenticated = ref(false);
@@ -101,7 +101,7 @@ export const useAuthStore = defineStore(
       return deviceApproved.value === 'approved';
     });
 
-    // SPEC-006: Permisos granulares de gestión (Fix para botones CRUD)
+    // SPEC-006: Permisos granulares de gesti├│n (Fix para botones CRUD)
     const canManageInventory = computed(() => {
       if (!currentUser.value) return false;
       if (isAdmin.value) return true;
@@ -119,6 +119,8 @@ export const useAuthStore = defineStore(
       return Date.now().toString(36) + Math.random().toString(36).substr(2);
     };
 
+
+
     const registerStore = async (data: {
       storeName: string;
       ownerName: string;
@@ -134,7 +136,24 @@ export const useAuthStore = defineStore(
       });
 
       if (response.success && response.user) {
-        // Logic as in restored file
+        // If we have a user, even without session (unverified), we might want to store something?
+        // Actually, without session/confirmation, we can't do much.
+        // We rely on the View handling the redirect to Waiting Room.
+        // We DO NOT auto-login as admin here blindly anymore because we need verification.
+
+        // However, for compatibility with legacy components, we might push to stores array?
+        // NO. Stores array was for local mock. We are moving to Supabase Native.
+        // We should stop filling 'stores' array locally.
+
+        // But if we stop, 'hasStores' might be false, and Router might redirect to register-store?
+        // Router check: if (isAuthenticated && !hasStore && to.name !== 'register-store')
+        // isAuthenticated is false (we didn't set currentUser).
+        // So we will be guests.
+        // Next Step: User verifies email.
+        // User logs in.
+        // Login should fetch store info and populate currentUser.
+
+        // So just return response.
       }
 
       return response;
@@ -166,26 +185,6 @@ export const useAuthStore = defineStore(
           // Admin auto-approval for daily pass
           dailyAccessState.value.status = 'approved';
           dailyAccessState.value.lastApprovedAt = new Date().toISOString();
-
-          // FIX: Populate cached store to valid 'currentStore' computed property
-          if (response.store_details) {
-            const existingIndex = stores.value.findIndex(s => s.id === response.store_details!.id);
-            const storeData: StoreAccount = {
-              id: response.store_details.id,
-              storeName: response.store_details.name,
-              ownerName: response.store_details.owner,
-              email: response.store_details.email,
-              password: '', // Not stored/needed for session
-              createdAt: new Date().toISOString()
-            };
-
-            if (existingIndex >= 0) {
-              stores.value[existingIndex] = storeData;
-            } else {
-              stores.value.push(storeData);
-            }
-          }
-
           return true;
         }
         return false;
@@ -197,7 +196,7 @@ export const useAuthStore = defineStore(
 
     const loginAsEmployee = (
       employee: {
-        id: string; // UUID
+        id: number;
         name: string;
         username: string;
         permissions: {
@@ -262,9 +261,9 @@ export const useAuthStore = defineStore(
     });
 
     // Mantenemos propiedad computada para compatibilidad
-    // 'deviceApproved' ahora deriva calculando la expiración
+    // 'deviceApproved' ahora deriva calculando la expiraci├│n
     const deviceApproved = computed(() => {
-      // Regla 1: Expiración Diaria
+      // Regla 1: Expiraci├│n Diaria
       if (dailyAccessState.value.status === 'approved' && dailyAccessState.value.lastApprovedAt) {
         const lastDate = new Date(dailyAccessState.value.lastApprovedAt).toDateString();
         const today = new Date().toDateString();
@@ -282,15 +281,15 @@ export const useAuthStore = defineStore(
 
     // Action: Verificar estado al cargar app
     const checkDailyApproval = async () => {
-      // En producción: Supabase RPC check_daily_pass(fingerprint)
+      // En producci├│n: Supabase RPC check_daily_pass(fingerprint)
 
-      // Simulación Local: Auto-expirar si cambió el día
+      // Simulaci├│n Local: Auto-expirar si cambi├│ el d├¡a
       if (dailyAccessState.value.status === 'approved' && dailyAccessState.value.lastApprovedAt) {
         const lastDate = new Date(dailyAccessState.value.lastApprovedAt).toDateString();
         const today = new Date().toDateString();
 
         if (lastDate !== today) {
-          console.log('[Auth] Daily Pass vencido (Nuevo día)');
+          console.log('[Auth] Daily Pass vencido (Nuevo d├¡a)');
           dailyAccessState.value.status = 'expired';
         }
       }
@@ -299,7 +298,7 @@ export const useAuthStore = defineStore(
 
     // Action: Solicitar acceso
     const requestDailyPass = async () => {
-      // En producción: RPC request_daily_pass() con ping count
+      // En producci├│n: RPC request_daily_pass() con ping count
       console.log("[Auth] Solicitando Pase Diario...");
       dailyAccessState.value.status = 'pending';
       dailyAccessState.value.requestedAt = new Date().toISOString();
@@ -344,7 +343,7 @@ export const useAuthStore = defineStore(
       isAuthenticated.value = false;
       stores.value = [];
       localStorage.clear();
-      logger.log('✅ System cleared (No Demo restored)');
+      logger.log('Ô£à System cleared (No Demo restored)');
     };
 
     const getStoreById = (id: string) => {

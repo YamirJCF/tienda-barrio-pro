@@ -65,7 +65,7 @@ const save = async () => {
 
   const data = {
     name: formData.value.name.trim(),
-    cedula: formData.value.cc.trim(),
+    cc: formData.value.cc.trim(),
     phone: formData.value.phone.trim() || undefined,
     creditLimit: new Decimal(formData.value.creditLimit || 0),
   };
@@ -73,38 +73,29 @@ const save = async () => {
   let client: Client | null;
 
   if (isEdit.value && props.clientId) {
-    // Correct mapping for update (Partial<Client>)
     const updateData = {
         name: data.name,
-        cc: data.cc,
+        cedula: data.cc,
         phone: data.phone,
         creditLimit: data.creditLimit
     };
     client = await clientsStore.updateClient(props.clientId, updateData);
   } else {
-    // Add Client expects 'cedula' in current store impl? 
-    // I will pass 'cc' and perform mapping update in store NEXT.
-    // For now, I construct payload matching store expectation?
-    // Stop. I will update store to expect 'cc'.
-    // So passing { cc: ... } is correct.
+    // FIX: Inject storeId from AuthStore
+    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+    if (!storeId) {
+        alert('Error: No se ha identificado la tienda activa. Recarga la página.');
+        return;
+    }
+
     const createData = {
         name: data.name,
-        cedula: data.cc, // Start by passing to 'cedula' param IF store expects it?
-        // Wait, I planned to update Store to expect 'cc'. 
-        // So I will pass 'cc' here and fix Store immediately after.
-        cc: data.cc,
+        cc: data.cc, 
         phone: data.phone,
         creditLimit: data.creditLimit,
-        storeId: '...' // Wait, store wants storeId!
-        // ClientFormModal doesn't know storeId??
-        // It relies on AuthStore or usage context?
-        // In 'addClient' action (Step 994), storeId is REQUIRED in payload: `addClient(data: { ... storeId: string })`.
-        // ClientFormModal `save` method does NOT collect storeId.
-        // It must get it from AuthStore or Props.
-        // `clients.ts` `addClient` internally generates ID, but expects `storeId` in data.
-        // I need to import AuthStore here.
+        storeId: storeId
     };
-    // ...
+    client = await clientsStore.addClient(createData);
   }
 
   if (client) {
@@ -210,7 +201,7 @@ watch(
                   <CreditCard :size="20" />
                 </span>
                 <input
-                  v-model="formData.cedula"
+                  v-model="formData.cc"
                   class="form-input flex w-full rounded-xl text-gray-900 dark:text-white border-2 border-primary/30 dark:border-primary/40 bg-white dark:bg-gray-800 focus:border-primary focus:ring-0 h-14 pl-11 pr-4 text-lg font-medium placeholder:text-gray-400 shadow-sm transition-all"
                   inputmode="numeric"
                   pattern="[0-9]*"
