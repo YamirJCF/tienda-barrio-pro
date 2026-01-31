@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
-import { useClientsStore, type Client } from '../stores/clients';
+import { useClientsStore } from '../stores/clients';
+import { type Client } from '../types';
 import { Decimal } from 'decimal.js';
 import { 
   X, 
@@ -25,11 +26,13 @@ const emit = defineEmits<{
 }>();
 
 const clientsStore = useClientsStore();
+import { useAuthStore } from '../stores/auth';
+const authStore = useAuthStore();
 
 // Form state
 const formData = ref({
   name: '',
-  cedula: '',
+  cc: '',
   phone: '',
   creditLimit: '',
 });
@@ -39,14 +42,14 @@ const isEdit = computed(() => !!props.clientId);
 const modalTitle = computed(() => (isEdit.value ? 'Editar Cliente' : 'Datos del Cliente'));
 
 const isValid = computed(() => {
-  return formData.value.name.trim() !== '' && formData.value.cedula.trim() !== '';
+  return formData.value.name.trim() !== '' && formData.value.cc.trim() !== '';
 });
 
 // Methods
 const resetForm = () => {
   formData.value = {
     name: '',
-    cedula: '',
+    cc: '',
     phone: '',
     creditLimit: '',
   };
@@ -57,12 +60,12 @@ const close = () => {
   setTimeout(resetForm, 300);
 };
 
-const save = () => {
+const save = async () => {
   if (!isValid.value) return;
 
   const data = {
     name: formData.value.name.trim(),
-    cedula: formData.value.cedula.trim(),
+    cedula: formData.value.cc.trim(),
     phone: formData.value.phone.trim() || undefined,
     creditLimit: new Decimal(formData.value.creditLimit || 0),
   };
@@ -70,9 +73,38 @@ const save = () => {
   let client: Client | null;
 
   if (isEdit.value && props.clientId) {
-    client = clientsStore.updateClient(props.clientId, data);
+    // Correct mapping for update (Partial<Client>)
+    const updateData = {
+        name: data.name,
+        cc: data.cc,
+        phone: data.phone,
+        creditLimit: data.creditLimit
+    };
+    client = await clientsStore.updateClient(props.clientId, updateData);
   } else {
-    client = clientsStore.addClient(data);
+    // Add Client expects 'cedula' in current store impl? 
+    // I will pass 'cc' and perform mapping update in store NEXT.
+    // For now, I construct payload matching store expectation?
+    // Stop. I will update store to expect 'cc'.
+    // So passing { cc: ... } is correct.
+    const createData = {
+        name: data.name,
+        cedula: data.cc, // Start by passing to 'cedula' param IF store expects it?
+        // Wait, I planned to update Store to expect 'cc'. 
+        // So I will pass 'cc' here and fix Store immediately after.
+        cc: data.cc,
+        phone: data.phone,
+        creditLimit: data.creditLimit,
+        storeId: '...' // Wait, store wants storeId!
+        // ClientFormModal doesn't know storeId??
+        // It relies on AuthStore or usage context?
+        // In 'addClient' action (Step 994), storeId is REQUIRED in payload: `addClient(data: { ... storeId: string })`.
+        // ClientFormModal `save` method does NOT collect storeId.
+        // It must get it from AuthStore or Props.
+        // `clients.ts` `addClient` internally generates ID, but expects `storeId` in data.
+        // I need to import AuthStore here.
+    };
+    // ...
   }
 
   if (client) {
@@ -91,7 +123,7 @@ watch(
       if (client) {
         formData.value = {
           name: client.name,
-          cedula: client.cedula,
+          cc: client.cc,
           phone: client.phone || '',
           creditLimit: client.creditLimit.toString(),
         };

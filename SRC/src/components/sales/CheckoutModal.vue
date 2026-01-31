@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useAuthStore } from '../../stores/auth';
-import type { Client } from '../../stores/clients';
+import type { Client } from '../../types';
 import Decimal from 'decimal.js';
 import UIBaseModal from '@/components/ui/BaseModal.vue';
 import {
@@ -406,7 +406,7 @@ watch(currentMethod, (newMethod) => {
                                     {{ client.name }}
                                 </div>
                                 <div class="text-xs truncate" :class="selectedFiadoClient?.id === client.id ? 'text-indigo-100' : 'text-slate-500'">
-                                    CC: {{ client.cedula }}
+                                    CC: {{ client.cc }}
                                 </div>
                             </div>
                             <CheckCircle2 v-if="selectedFiadoClient?.id === client.id" class="ml-auto text-white" :size="20" />

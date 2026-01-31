@@ -13,6 +13,7 @@ import { Client } from '../../types';
 import { Database } from '../../types/database.types';
 import { Decimal } from 'decimal.js';
 import { createSupabaseRepository, EntityRepository, RepositoryMappers } from './supabaseAdapter';
+import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 
 // Constants
 const TABLE_NAME = 'clients';
@@ -82,6 +83,8 @@ export interface ClientRepository extends EntityRepository<Client> {
     getByCedula(cedula: string, storeId?: string): Promise<Client | null>;
     searchByName(query: string, storeId?: string): Promise<Client[]>;
     updateDebt(id: string, amount: number): Promise<boolean>;
+    getTransactions(clientId: string): Promise<any[]>;
+    addTransaction(tx: any): Promise<boolean>;
 }
 
 // Create base repository
@@ -114,10 +117,6 @@ export const clientRepository: ClientRepository = {
         return all.filter(c => c.name.toLowerCase().includes(lowerQuery));
     },
 
-    /**
-     * Update client debt
-     * Adds amount to current balance
-     */
     async updateDebt(id: string, amount: number): Promise<boolean> {
         const client = await baseRepository.getById(id);
         if (!client) return false;
@@ -132,6 +131,67 @@ export const clientRepository: ClientRepository = {
         } as Partial<Client>);
 
         return updated !== null;
+    },
+
+    /**
+     * Get Client Transactions
+     */
+    async getTransactions(clientId: string): Promise<any[]> {
+        if (isSupabaseConfigured() && navigator.onLine) {
+            const supabase = getSupabaseClient()!;
+            const { data, error } = await supabase
+                .from('client_transactions')
+                .select('*')
+                .eq('client_id', clientId)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching transactions:', error);
+                return [];
+            }
+            return data.map(t => ({
+                id: t.id,
+                clientId: t.client_id,
+                type: t.transaction_type as 'purchase' | 'payment',
+                amount: new Decimal(t.amount),
+                description: t.description || '',
+                date: t.created_at,
+                saleId: t.sale_id
+            }));
+        }
+        return []; // TODO: Implement local storage fallback for transactions?
+    },
+
+    async addTransaction(tx: {
+        id: string,
+        clientId: string,
+        type: 'purchase' | 'payment',
+        amount: number,
+        description: string,
+        date: string,
+        saleId?: string
+    }): Promise<boolean> {
+        if (isSupabaseConfigured() && navigator.onLine) {
+            const supabase = getSupabaseClient()!;
+            const { error } = await supabase
+                .from('client_transactions')
+                .insert({
+                    id: tx.id,
+                    client_id: tx.clientId,
+                    transaction_type: tx.type,
+                    amount: tx.amount,
+                    description: tx.description,
+                    created_at: tx.date,
+                    sale_id: tx.saleId || null
+                });
+
+            if (error) {
+                console.error('Error adding transaction:', error);
+                return false;
+            }
+            return true;
+        }
+        return false; // Local fallback?
     }
 };
 
