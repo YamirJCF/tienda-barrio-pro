@@ -152,7 +152,7 @@ export const clientRepository: ClientRepository = {
             return data.map(t => ({
                 id: t.id,
                 clientId: t.client_id,
-                type: t.transaction_type as 'purchase' | 'payment',
+                type: (t.transaction_type === 'compra' ? 'purchase' : 'payment') as 'purchase' | 'payment',
                 amount: new Decimal(t.amount),
                 description: t.description || '',
                 date: t.created_at,
@@ -173,12 +173,16 @@ export const clientRepository: ClientRepository = {
     }): Promise<boolean> {
         if (isSupabaseConfigured() && navigator.onLine) {
             const supabase = getSupabaseClient()!;
+
+            // Map Domain Types -> DB Types (WO-002 Violation Fix)
+            const dbType = tx.type === 'purchase' ? 'compra' : 'pago';
+
             const { error } = await supabase
                 .from('client_transactions')
                 .insert({
                     id: tx.id,
                     client_id: tx.clientId,
-                    transaction_type: tx.type,
+                    transaction_type: dbType, // Mapped value
                     amount: tx.amount,
                     description: tx.description,
                     created_at: tx.date,

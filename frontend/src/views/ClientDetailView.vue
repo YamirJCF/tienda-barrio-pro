@@ -122,7 +122,16 @@ const registerPayment = () => {
   const amount = new Decimal(paymentAmount.value);
   if (amount.lte(0)) return;
 
-  clientsStore.registerPayment(clientId.value, amount, 'Abono Efectivo');
+  // Validation: Prevent negative balance (Overpayment)
+  if (amount.gt(client.value.totalDebt)) {
+      alert(`El abono no puede superar la deuda actual (${formatCurrency(client.value.totalDebt)}).\nEl sistema no maneja "Saldo a Favor" por defecto.`);
+      return;
+  }
+
+  // Ensure amount is valid before sending
+  const finalAmount = amount.toNumber(); // Convert to number if needed by store, though store likely takes Decimal or number
+  
+  clientsStore.registerPayment(clientId.value, new Decimal(finalAmount), 'Abono Efectivo');
   paymentAmount.value = '';
   showPaymentModal.value = false;
 };

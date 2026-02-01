@@ -23,6 +23,14 @@ const router = useRouter();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
 
+onMounted(async () => {
+  // WO-006: Ensure clients are fetched from server on load
+  // preventing "missing data" issues if cache is empty or stale.
+  if (authStore.currentUser?.storeId) {
+      await clientsStore.initialize(authStore.currentUser.storeId);
+  }
+});
+
 // State
 const searchQuery = ref('');
 const showClientModal = ref(false);
