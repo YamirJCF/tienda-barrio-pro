@@ -85,6 +85,8 @@ export interface ClientRepository extends EntityRepository<Client> {
     updateDebt(id: string, amount: number): Promise<boolean>;
     getTransactions(clientId: string): Promise<any[]>;
     addTransaction(tx: any): Promise<boolean>;
+    /** FRD-012: Reconcile pending transactions with actual sale_id after sync */
+    updatePendingTransactionSaleId(description: string, saleId: string): Promise<boolean>;
 }
 
 // Create base repository
@@ -186,17 +188,61 @@ export const clientRepository: ClientRepository = {
                     amount: tx.amount,
                     description: tx.description,
                     created_at: tx.date,
+                    // FRD-012: Allow null sale_id for offline purchases
+                    // Will be reconciled when sale syncs
                     sale_id: tx.saleId || null
                 });
 
             if (error) {
-                console.error('Error adding transaction:', error);
+                // FRD-011: Log with context for debugging
+                console.error('[ClientRepo] Error adding transaction:', {
+                    code: error.code,
+                    message: error.message,
+                    details: error.details
+                });
+
+                // FK violation (23503) means sale doesn't exist yet - expected for offline
+                if (error.code === '23503') {
+                    console.warn('[ClientRepo] FK violation - sale may be pending sync. Transaction will retry.');
+                }
                 return false;
             }
             return true;
         }
-        return false; // Local fallback?
+        // Offline fallback: transaction will be created when sale syncs
+        console.warn('[ClientRepo] Offline - transaction not persisted, will sync with sale');
+        return false;
+    },
+
+    /**
+     * FRD-012: Reconciliation - Update pending transactions with the actual sale_id
+     * Called after a sale is synced from offline queue
+     */
+    async updatePendingTransactionSaleId(
+        description: string,
+        saleId: string
+    ): Promise<boolean> {
+        if (!isSupabaseConfigured() || !navigator.onLine) return false;
+
+        const supabase = getSupabaseClient()!;
+
+        // Find transaction by description pattern (contains ticket number)
+        const { error } = await supabase
+            .from('client_transactions')
+            .update({ sale_id: saleId })
+            .is('sale_id', null)
+            .eq('transaction_type', 'compra')
+            .ilike('description', `%${description}%`);
+
+        if (error) {
+            console.error('[ClientRepo] Error reconciling transaction:', error);
+            return false;
+        }
+
+        console.log('[ClientRepo] Reconciled pending transaction with sale_id:', saleId);
+        return true;
     }
 };
 
 export default clientRepository;
+

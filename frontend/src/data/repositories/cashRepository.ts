@@ -11,7 +11,7 @@
 
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
-import { addToSyncQueue } from '../syncQueue';
+// addToSyncQueue removed - cash operations require online (FRD-012)
 
 // Interface adapted to what the UI Store expects, but mapped to DB
 export interface CashControlEvent {
@@ -119,6 +119,15 @@ export const cashRepository: CashRepository = {
             return { success: false, error: errorMsg };
         }
 
+        // FRD-012: Cash operations do NOT support offline mode
+        if (!navigator.onLine) {
+            logger.warn('[CashRepo] Cash operation blocked - requires connection');
+            return {
+                success: false,
+                error: 'Abrir o cerrar caja requiere conexión a internet'
+            };
+        }
+
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
         // 1. Try Online RPC
@@ -185,26 +194,8 @@ export const cashRepository: CashRepository = {
             }
         }
 
-        // 2. Offline: Queue it
-        try {
-            // Note: complex offline logic for session IDs might be needed. 
-            // For now, we queue generic 'CASH_EVENT' and let Sync Queue handle re-mapping if possible.
-            await addToSyncQueue('CASH_EVENT', event);
-
-            // Optimistic Update
-            const statusCache = {
-                date: new Date().toISOString().split('T')[0],
-                isOpen: event.type === 'open',
-                openingAmount: event.type === 'open' ? event.amount_declared : 0,
-                lastEvent: event,
-                sessionId: event.id || 'offline-pending' // Provisional ID
-            };
-            localStorage.setItem('tienda-store-status', JSON.stringify(statusCache));
-
-            return { success: true, data: { offline: true } };
-        } catch (e: any) {
-            return { success: false, error: e.message };
-        }
+        // If we reached here, online RPC failed
+        return { success: false, error: 'Error al procesar operación de caja' };
     }
 };
 

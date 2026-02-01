@@ -133,6 +133,12 @@ export const expenseRepository: ExpenseRepository = {
      * Create a new expense
      */
     async createExpense(expense: Omit<Expense, 'id' | 'created_at'>): Promise<Expense | null> {
+        // FRD-012: Expenses do NOT support offline mode
+        if (!navigator.onLine) {
+            logger.warn('[ExpenseRepo] Expense blocked - requires connection');
+            return null;
+        }
+
         // ===== VALIDATION CHECKPOINT (Fase 2 Blindaje) =====
         if (!expense.store_id || expense.store_id.trim() === '') {
             const error = new Error('Cannot create Expense without valid store_id. This would fail RLS policies.');
@@ -197,23 +203,9 @@ export const expenseRepository: ExpenseRepository = {
             }
         }
 
-        // Offline
-        const { addToSyncQueue } = await import('../syncQueue');
-        await addToSyncQueue('CREATE_EXPENSE', { ...dbRow, movement_type: 'expense' });
-
-        // Save to Local 'tienda-expenses'
-        // We should update the list in localStorage manually or use baseRepository.update?
-        // baseRepository.create stores it. But create() doesn't let us inject session_id easily.
-        // Reuse baseRepository.create?
-        // The Mapper forces session_id = ''.
-        // We can't use baseRepository.create() cleanly if we need extra fields.
-
-        // Workaround: We don't save to 'tienda-expenses' via baseRepository. 
-        // We manually append to localStorage 'tienda-expenses'?
-        // Or we let the sync queue handle it and UI updates optimistically?
-        // Returning the domain object implies success.
-
-        return payload;
+        // If we reached here, online insert failed
+        logger.error('[ExpenseRepo] Expense creation failed');
+        return null;
     }
 };
 

@@ -27,7 +27,7 @@ const MAX_QUEUE_SIZE = 50;
 /**
  * Transaction Types
  */
-export type TransactionType = 'CREATE_SALE' | 'UPDATE_STOCK' | 'CREATE_CLIENT' | 'UPDATE_DEBT' | 'CREATE_MOVEMENT' | 'CREATE_EXPENSE' | 'CASH_EVENT';
+export type TransactionType = 'CREATE_SALE' | 'CREATE_MOVEMENT' | 'CREATE_CLIENT';
 
 
 
@@ -338,7 +338,9 @@ async function processItem(item: QueueItem): Promise<boolean> {
             return true;
 
         default:
-            return true; // Skip unknown
+            // FRD-012: Only sales-related types are supported offline
+            logger.error(`[SyncQueue] ❌ Unsupported transaction type: ${item.type}`);
+            throw new Error(`Unsupported offline transaction: ${item.type}`);
     }
 }
 
