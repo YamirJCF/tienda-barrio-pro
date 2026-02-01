@@ -176,7 +176,9 @@ export const authRepository = {
     async recoverPassword(email: string): Promise<{ success: boolean; error?: string }> {
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: `${window.location.origin}/#/reset-password` // Specific route for reset
+                // Use root path - AuthCallbackView will detect PASSWORD_RECOVERY event
+                // and redirect to /update-password. Avoids double hash fragment conflict.
+                redirectTo: `${window.location.origin}/`
             });
 
             if (error) {

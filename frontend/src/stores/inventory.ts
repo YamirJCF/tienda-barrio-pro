@@ -16,6 +16,8 @@ export const useInventoryStore = defineStore(
     const isLoading = ref(false);
     const error = ref<string | null>(null);
     const initialized = ref(false);
+    // WO-006: Track loaded store to prevent data cross-contamination between sessions
+    const loadedStoreId = ref<string | null>(null);
     let realtimeSubscription: RealtimeChannel | null = null;
 
     // Computed
@@ -64,10 +66,6 @@ export const useInventoryStore = defineStore(
 
       logger.log('[InventoryStore] Setting up realtime subscription');
 
-      // let filter = `store_id=eq.${storeId}`; // This filter would need to be applied to the channel or the payload
-      // If storeId is not provided, we might want to be careful or subscribe to everything logic permits
-      // For now assuming storeId is available or we subscribe to global changes if RLS allows
-
       realtimeSubscription = supabase
         .channel('public:products')
         .on(
@@ -96,8 +94,6 @@ export const useInventoryStore = defineStore(
       } else if (eventType === 'UPDATE') {
         const index = products.value.findIndex(p => p.id === newRecord.id);
         if (index !== -1) {
-          // Merge to preserve optimistic updates or local state if conflicts
-          // For "Server Wins" strategy (WO-003), we blindly accept server state
           products.value[index] = ensureDecimals(newRecord);
         }
       } else if (eventType === 'DELETE') {
@@ -119,10 +115,17 @@ export const useInventoryStore = defineStore(
      * Initialize store by fetching from repository
      */
     const initialize = async (storeId?: string) => {
-      if (initialized.value && products.value.length > 0) return;
-
       const authStore = useAuthStore();
       const effectiveStoreId = storeId || authStore.currentUser?.storeId;
+
+      if (!effectiveStoreId) return;
+
+      // Only return early if initialized AND the data belongs to the SAME store
+      if (initialized.value &&
+        products.value.length > 0 &&
+        loadedStoreId.value === effectiveStoreId) {
+        return;
+      }
 
       isLoading.value = true;
       try {
@@ -135,6 +138,7 @@ export const useInventoryStore = defineStore(
         }
 
         initialized.value = true;
+        loadedStoreId.value = effectiveStoreId;
       } catch (e: any) {
         error.value = e.message || 'Error loading products';
         logger.error('[InventoryStore] Init failed', e);
@@ -145,11 +149,6 @@ export const useInventoryStore = defineStore(
 
     const addProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
       const now = new Date().toISOString();
-      // Generate ID client-side even for Supabase to ensure optimistic UI
-      // But let repository handle actual creation logic if needed
-      // Actually repository generic create expects Omit<T,'id'> but we are using string UUIDs
-      // The generic adapter handles ID generation if missing for localStorage
-
       const priceRounded = roundHybrid50(productData.price);
 
       const authStore = useAuthStore();
@@ -171,11 +170,9 @@ export const useInventoryStore = defineStore(
       };
 
       try {
-        // Optimistic UI update could happen here, but for creation we wait for repo in WO-002
         const created = await productRepository.create(newProductData);
         if (created) {
           const withDecimals = ensureDecimals(created);
-          // Check if already added by realtime (race condition)
           const exists = products.value.find(p => p.id === withDecimals.id);
           if (!exists) {
             products.value.push(withDecimals);
@@ -193,7 +190,6 @@ export const useInventoryStore = defineStore(
       const index = products.value.findIndex((p) => p.id === id);
       if (index === -1) return null;
 
-      // SPEC-010: Si se actualiza el precio, forzar redondeo
       const processedUpdates = updates.price
         ? { ...updates, price: roundHybrid50(updates.price) }
         : updates;
@@ -206,7 +202,6 @@ export const useInventoryStore = defineStore(
       try {
         const updated = await productRepository.update(id, updatePayload as any);
         if (updated) {
-          // Realtime might update it too, but we update local state immediately
           const merged = ensureDecimals({
             ...products.value[index],
             ...updated
@@ -274,30 +269,8 @@ export const useInventoryStore = defineStore(
       const qty = movement.quantity instanceof Decimal ? movement.quantity : new Decimal(movement.quantity);
       let newStock = product.stock;
 
-      // Calculate new stock based on type
       if (['entrada', 'devolucion', 'ajuste'].includes(movement.type)) {
-        // Ajuste logic matches DB trigger: addition (signed logic if needed, but here usually positive for entry)
-        // IF type is adjustment, user should provide signed value OR type handled differently?
-        // For simplicity and matching trigger: Ajuste is ADDED. If user wants to reduce, they use AJUSTE NEGATIVO?
-        // No, usually "Quantity" is absolute.
-        // DB Trigger: ELSIF NEW.movement_type = 'ajuste' THEN UPDATE SET current_stock = current_stock + NEW.quantity;
-        // IF UI provides 'Ajuste Negativo' (via reason), type is still 'ajuste'? 
-        // WO-201 says: StockEntryView handles Entradas/Salidas/Ajustes.
-        // T1.2: "Lógica de movimientos".
-
-        // Let's assume quantity is absolute.
-        // If type is 'salida' or 'venta', we subtract.
-        // If type is 'entrada', 'devolucion', 'ajuste', we add? 
-        // Wait, 'ajuste' usually implies setting to a value or adding a delta. 
-        // If kardex stores movement, it stores the DELTA usually.
-        // Let's assume input quantity is always POSITIVE in UI usually.
-
         if (movement.type === 'ajuste') {
-          // For safety, let's treat 'ajuste' as a delta.
-          // If from UI "Ajuste" usually implies Correction.
-          // If logic is "Set to X", we calculate delta.
-          // But here we receive "quantity".
-          // Let's assume it's a delta.
           newStock = newStock.plus(qty);
         } else {
           newStock = newStock.plus(qty);
@@ -306,7 +279,6 @@ export const useInventoryStore = defineStore(
         newStock = newStock.minus(qty);
       }
 
-      // 🛡️ T-001: Validación crítica - Rechazar si resultaría en stock negativo
       if (newStock.lt(0)) {
         return {
           success: false,
@@ -314,7 +286,6 @@ export const useInventoryStore = defineStore(
         };
       }
 
-      // Optimistic Update
       const oldStock = product.stock;
       product.stock = newStock;
       product.updatedAt = new Date().toISOString();
@@ -328,7 +299,7 @@ export const useInventoryStore = defineStore(
         const success = await productRepository.registerMovement({
           productId: movement.productId,
           type: movement.type,
-          quantity: qty.toNumber(), // Convert to number for DB/JSON
+          quantity: qty.toNumber(),
           reason: finalReason
         });
 
@@ -337,32 +308,12 @@ export const useInventoryStore = defineStore(
           return { success: false, error: 'Error al registrar movimiento en repositorio' };
         }
 
-        // T-002: FIFO Active Cost Update (Replacing WAC)
-        // Logic: We only update the product 'cost' if this new batch becomes the ACTIVE batch.
-        // This happens if the product was previously out of stock (or negative).
-        // If we already have stock (oldStock > 0), this new batch goes to the back of the queue,
-        // so the 'Reference Cost' (Next to Sell) remains the OLD cost.
-
-        // We already have 'oldStock' calculated above.
-        // Note: 'oldStock' here is the stock BEFORE this movement.
-
         if (movement.type === 'entrada' && movement.unitCost !== undefined && movement.unitCost > 0) {
           const incomingCost = new Decimal(movement.unitCost);
 
-          // If we had no stock before, this new batch is now the "Active" one.
-          // Update the display cost to match this batch.
-          if (oldStock.lte(0)) { // Less than or Equal to 0
+          if (oldStock.lte(0)) {
             product.cost = incomingCost.toDecimalPlaces(2);
-
-            // Persist cost update (if offline, this helps UI. If online, Trigger handles it too but no harm sending it)
-            // Actually, if online, the Trigger in DB will authoritative update it.
-            // Sending it here ensures Optimistic UI is correct immediately.
             try {
-              // Only send update if we are purely local or want to force it. 
-              // Repository 'registerMovement' just records movement. 
-              // We might need to explicitly update product cost if repo doesn't do it automatically via trigger return?
-              // Realtime subscription will handle the Trigger update coming back from DB.
-              // So this local update is primarily for Optimistic UI and Offline mode.
               logger.log(`[Inventory] FIFO: Zero stock detected. Updating Active Cost to: ${product.cost}`);
               await productRepository.update(product.id, { cost: product.cost });
             } catch (e) {
@@ -370,7 +321,6 @@ export const useInventoryStore = defineStore(
             }
           } else {
             logger.log(`[Inventory] FIFO: Stock exists (${oldStock}). New batch goes to queue. Cost remains: ${product.cost}`);
-            // Do NOT update cost. It remains the cost of the older active batch.
           }
         }
       } catch (e) {
@@ -378,11 +328,8 @@ export const useInventoryStore = defineStore(
         return { success: false, error: 'Excepción al registrar movimiento' };
       }
 
-      // 🛡️ Audit Mode / Offline Simulation: Create Local Batch
-      // SPEC-010: If we are offline, we simulate the batch creation so user sees "traceability"
       if (!isSupabaseConfigured() && movement.type === 'entrada' && movement.unitCost !== undefined) {
         try {
-          // Dynamic import to avoid circular dependency at top level if any
           const { useBatchStore } = await import('./batches');
           const batchStore = useBatchStore();
 
@@ -397,7 +344,6 @@ export const useInventoryStore = defineStore(
         }
       }
 
-      // Check for low stock notification
       if (product.stock.lt(product.minStock) && !product.notifiedLowStock) {
         const notificationsStore = useNotificationsStore();
         notificationsStore.addNotification({
@@ -420,13 +366,10 @@ export const useInventoryStore = defineStore(
       return { success: true, product };
     };
 
-    // Cleanup on unmount (if component context)
     onUnmounted(() => {
       unsubscribeRealtime();
     });
 
-    // OPTIMISTIC ONLY: Update stock locally without DB calls
-    // Used when another process (like Sale RPC) handles the DB persistence
     const adjustStockLocal = (productId: string, delta: number | Decimal) => {
       const product = products.value.find((p) => p.id === productId);
       if (!product) return;

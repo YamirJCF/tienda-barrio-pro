@@ -22,6 +22,9 @@ export const useSalesStore = defineStore(
   () => {
     const sales = ref<Sale[]>([]);
     const nextTicketNumber = ref(1); // WO-001: Changed from nextId to nextTicketNumber
+    // WO-006: Track loaded store to prevent data cross-contamination
+    const loadedStoreId = ref<string | null>(null);
+
     // const isStoreOpen = ref(false); // REMOVED: Managed by storeStatus
     // const openingCash = ref<Decimal>(new Decimal(0)); // REMOVED: Managed by storeStatus
 
@@ -147,6 +150,13 @@ export const useSalesStore = defineStore(
     const initialize = async () => {
       const storeId = authStore.currentUser?.storeId;
       if (!storeId) return;
+
+      // WO-006: Reset state if switching stores
+      if (loadedStoreId.value && loadedStoreId.value !== storeId) {
+        sales.value = [];
+        nextTicketNumber.value = 1;
+      }
+      loadedStoreId.value = storeId;
 
       // 1. Fetch Last Ticket Number (Online/Offline resilient)
       const { saleRepository } = await import('../data/repositories/saleRepository');

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useInventoryStore } from '../stores/inventory';
+import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
 import { useNotificationsStore } from '../stores/notificationsStore';
 import { Decimal } from 'decimal.js';
@@ -26,6 +27,7 @@ import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 const router = useRouter();
 const salesStore = useSalesStore();
 const inventoryStore = useInventoryStore();
+const cashRegisterStore = useCashRegisterStore(); // Added for sync
 const authStore = useAuthStore();
 const notificationsStore = useNotificationsStore();
 const { formatWithSign } = useCurrencyFormat();
@@ -33,6 +35,16 @@ const { formatWithSign } = useCurrencyFormat();
 // State
 
 const profileSidebarOpen = ref(false);
+
+onMounted(async () => {
+  salesStore.initialize();
+  inventoryStore.initialize();
+  
+  if (authStore.currentUser?.storeId) {
+      // WO-006: Sync cash session state to avoid showing previous user's session
+      await cashRegisterStore.syncFromBackend(authStore.currentUser.storeId);
+  }
+});
 
 // WO: initializeSampleData eliminada - SPEC-007
 
