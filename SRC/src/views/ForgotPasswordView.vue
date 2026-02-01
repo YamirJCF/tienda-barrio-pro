@@ -29,6 +29,10 @@ const handleSubmit = async () => {
       const result = await authStore.recoverPassword(email.value);
       
       if (!result.success) {
+          const err = result.error?.toLowerCase() || '';
+          if (err.includes('rate limit') || err.includes('too many requests')) {
+             throw new Error('Has solicitado demasiados correos. Por favor espera 30 minutos antes de intentar de nuevo.');
+          }
           throw new Error(result.error || 'No se pudo enviar el correo.');
       }
       
@@ -36,7 +40,7 @@ const handleSubmit = async () => {
       isSuccess.value = true;
       logger.log('Password recovery email sent to:', email.value);
   }, {
-      errorMessage: 'Error al enviar correo. Verifica que sea correcto.',
+      // Allow dynamic error messages
       checkConnectivity: true
   });
 };

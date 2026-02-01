@@ -6,6 +6,7 @@ import { getStorageKey } from '../utils/storage';
 import { generateUUID } from '../utils/uuid';
 import type { Sale } from '../types';
 import { useCashRegisterStore } from './cashRegister';
+import { useAuthStore } from './auth';
 
 export interface DailyStats {
   date: string;
@@ -26,6 +27,7 @@ export const useSalesStore = defineStore(
 
     // Dependencies
     const cashRegisterStore = useCashRegisterStore();
+    const authStore = useAuthStore();
 
     // Computed Properties delegating to CashRegister
     const isStoreOpen = computed(() => cashRegisterStore.isOpen);
@@ -143,85 +145,73 @@ export const useSalesStore = defineStore(
 
     // Methods
     const initialize = async () => {
-      // Optimistic Merge: Load local pending sales from SyncQueue (Audit Mode / Offline)
+      const storeId = authStore.currentUser?.storeId;
+      if (!storeId) return;
+
+      // 1. Fetch Last Ticket Number (Online/Offline resilient)
+      const { saleRepository } = await import('../data/repositories/saleRepository');
+      const lastTicket = await saleRepository.getLastTicketNumber(storeId);
+      if (lastTicket > 0) {
+        nextTicketNumber.value = lastTicket + 1;
+      }
+
+      // 2. Fetch Today's Sales (Hydrate UI)
       try {
-        // Dynamic import to avoid circular dependency
+        const today = new Date().toISOString().split('T')[0];
+        // Fetch sales for today (UTC date string, handled by repo)
+        // Ideally should match local time date string if repo supports it
+        // For now, assume repo mapper handles it or we filter client side
+        const remoteSales = await saleRepository.getByDateRange(today, today, storeId);
+
+        // Merge with existing (if any) to avoid overwrite if persisted
+        const existingIds = new Set(sales.value.map(s => s.id));
+        remoteSales.forEach(s => {
+          if (!existingIds.has(s.id)) {
+            sales.value.push(s);
+          }
+        });
+
+        // Re-sort
+        sales.value.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      } catch (e) {
+        console.warn('Failed to load today sales', e);
+      }
+
+      // 3. Load Pending Sales
+      try {
         const { getPendingSales } = await import('../data/syncQueue');
         const pendingPayloads = await getPendingSales();
-
+        // ... (existing pending logic) ... 
         if (pendingPayloads.length > 0) {
-          // Map payloads back to Sale objects
-          // We have to synthesize some fields that are missing in the payload (id, ticketNumber)
-          // We use the timestamp to sort/dedup
           const mappedPending = pendingPayloads.map((p, index) => {
-            // Try to match existing sale in state to avoid dupes
-            // Using timestamp if available or some other key?
-            // Payload doesn't have ID.
-            // But we can generate a temporary view-only ID.
             const tempId = `audit-pending-${p.timestamp}`;
-
-            // Check if already exists in store (persistence might have saved it)
-            const exists = sales.value.find(s => s.date === new Date(p.timestamp).toISOString().split('T')[0] && s.total.equals(new Decimal(p.total)));
-            // The above check is weak. 
-            // Ideally we check if we have this "Sale" in memory.
-            // But let's assume if it's in Queue, it MIGHT be in Store.
-            // For now, let's just add if not found by strict ID comparison? No ID.
-            // Let's filter `sales.value` to see if we have these.
-
             return {
               id: tempId,
-              ticketNumber: 0, // Placeholder
+              ticketNumber: nextTicketNumber.value + index, // Estimate ticket for pending
               timestamp: new Date(p.timestamp).toISOString(),
               date: new Date(p.timestamp).toISOString().split('T')[0],
-              items: p.items.map((i: any) => ({
-                ...i,
-                price: new Decimal(i.price),
-                subtotal: new Decimal(i.subtotal)
-              })),
+              items: p.items.map((i: any) => ({ ...i, price: new Decimal(i.price), subtotal: new Decimal(i.subtotal) })),
               total: new Decimal(p.total),
-              effectiveTotal: new Decimal(p.total), // Simplified
+              effectiveTotal: new Decimal(p.total),
               paymentMethod: p.paymentMethod,
               payments: p.payments ? p.payments.map((pay: any) => ({ ...pay, amount: new Decimal(pay.amount) })) : [],
               syncStatus: 'pending',
-              client: undefined // or fetch if needed
+              client: undefined
             } as Sale;
           });
 
-          // Merge strategy: Add only those that don't look like duplicates?
-          // Or simply append with a clear flag?
-          // Problem: If "sales" array is empty (cleared LS), we append all.
-          // If "sales" array has them (persisted LS), we get doubles.
-          // WE SHOULD TRUST LS "sales" array first. 
-          // BUT if LS was cleared (Audit Guide says clear LS), then "sales" is empty.
-          // So we populate from Queue.
-          // We should only add if `sales.value` is empty?
-          // Or filter `mappedPending` to exclude those present in `sales.value`.
-
-          const currentIds = new Set(sales.value.map(s => s.timestamp)); // timestamp matches?
-
+          const currentIds = new Set(sales.value.map(s => s.timestamp));
           mappedPending.forEach(pendingSale => {
-            // Fuzzy match: if we have a sale with same timestamp (+- 10ms?)
-            // The queue timestamp is creation time.
-            // Store sale has timestamp too.
-            // Let's rely on that.
             const isDupe = sales.value.some(s => Math.abs(new Date(s.timestamp).getTime() - new Date(pendingSale.timestamp).getTime()) < 100);
-
-            if (!isDupe) {
-              sales.value.push(pendingSale);
-            }
+            if (!isDupe) sales.value.push(pendingSale);
           });
-
-          // Sort by date desc
           sales.value.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         }
-
       } catch (e) {
         console.warn('Failed to load pending sales', e);
       }
     };
-
-    // openStore and closeStore REMOVED - Managed by StoreStatus / CashControlView
-
 
     // WO-001: Changed to use UUID and ticketNumber
     // T2.1/T2.2: Use SaleRepository and update inventory
@@ -229,7 +219,7 @@ export const useSalesStore = defineStore(
       const now = new Date();
       // Generate ID client-side for UI even if repo generates one
       const tempId = generateUUID();
-      const ticketNum = nextTicketNumber.value++;
+      const ticketNum = nextTicketNumber.value; // Store current expectation
 
       const newSale: Sale = {
         ...saleData,
@@ -243,7 +233,6 @@ export const useSalesStore = defineStore(
       // 1. Process via Repository (Online RPC or Offline Queue)
       // Import dynamically to avoid circular dependencies if any, or static import better
       const { saleRepository } = await import('../data/repositories/saleRepository');
-      // Construct payload expected by repository (simplified structure usually)
       // Construct payload expected by repository (simplified structure usually)
       const repoPayload = {
         items: saleData.items.map(item => ({
@@ -265,7 +254,9 @@ export const useSalesStore = defineStore(
         employeeId: saleData.employeeId
       };
 
-      const result = await saleRepository.processSale(repoPayload, 'default-store'); // Store ID hardcoded for now
+      const storeId = authStore.currentUser?.storeId;
+      if (!storeId) throw new Error("Store ID not found in session");
+      const result = await saleRepository.processSale(repoPayload, storeId);
 
       if (!result.success) {
         console.error('Sale processing failed:', result.error);
@@ -275,9 +266,19 @@ export const useSalesStore = defineStore(
         throw new Error(result.error);
       }
 
-      // If repo returned a real ID (online), update it? 
-      // Usually keep the UUID we generated to assume consistency, unless repo enforces ID.
-      // With our UUID policy, we are safe.
+      // If repo returned success:
+      // 1. If backend gave authoritative ticket number, use it.
+      if (result.ticketNumber) {
+        newSale.ticketNumber = result.ticketNumber;
+        nextTicketNumber.value = result.ticketNumber + 1; // Update counter for next one
+      } else {
+        // Offline or legacy, use optimistic and increment
+        nextTicketNumber.value++;
+      }
+
+      // 2. If backend gave authoritative ID, use it?
+      // We keep UUID for consistency unless you want to switch. 
+      // But repo result.id is useful for tracking if needed.
 
       sales.value.push(newSale);
 

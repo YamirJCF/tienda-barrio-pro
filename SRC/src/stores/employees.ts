@@ -16,6 +16,12 @@ export const useEmployeesStore = defineStore(
       return employees.value.filter((e) => e.isActive);
     });
 
+    // Computed: Active OPERATIONAL employees (excluding owner/admin)
+    // Aligns with backend RPC logic: owner_* accounts don't count against the 5-employee limit
+    const activeOperationalEmployees = computed(() => {
+      return employees.value.filter((e) => e.isActive && !e.username.startsWith('owner_'));
+    });
+
     // Methods
 
     /**
@@ -23,6 +29,22 @@ export const useEmployeesStore = defineStore(
      */
     const initialize = async (storeId: string) => {
       if (!storeId) return;
+
+      // AUTO-FIX: Clean corrupted localStorage data before loading
+      try {
+        const storedData = localStorage.getItem('tienda-employees');
+        if (storedData) {
+          const parsed = JSON.parse(storedData);
+          if (!Array.isArray(parsed)) {
+            logger.warn('[EmployeeStore] Detected corrupted localStorage data, cleaning...');
+            localStorage.removeItem('tienda-employees');
+          }
+        }
+      } catch (e) {
+        logger.warn('[EmployeeStore] Error checking localStorage, cleaning...', e);
+        localStorage.removeItem('tienda-employees');
+      }
+
       loading.value = true;
       try {
         const data = await employeeRepository.getAll(storeId);
@@ -49,8 +71,8 @@ export const useEmployeesStore = defineStore(
         throw new Error('Se requiere conexión a internet para crear empleados de forma segura.');
       }
 
-      // Business Rule: Max 5 active employees
-      if (activeEmployees.value.length >= 5 && data.isActive) {
+      // Business Rule: Max 5 active OPERATIONAL employees (excluding owner/admin)
+      if (activeOperationalEmployees.value.length >= 5 && data.isActive) {
         throw new Error('Límite de empleados activos alcanzado (Máx 5). Desactiva uno existente primero.');
       }
 
@@ -193,6 +215,7 @@ export const useEmployeesStore = defineStore(
     return {
       employees,
       activeEmployees,
+      activeOperationalEmployees,
       loading,
       error,
       initialize,

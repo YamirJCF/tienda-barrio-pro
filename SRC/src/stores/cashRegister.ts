@@ -43,6 +43,39 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
     });
 
     // Methods
+    const syncFromBackend = async (storeId: string) => {
+        try {
+            const { cashRepository } = await import('../data/repositories/cashRepository');
+            const status = await cashRepository.getStoreStatus(storeId);
+
+            if (status.isOpen && status.sessionId) {
+                // Reconstruct session from status
+                currentSession.value = {
+                    id: status.sessionId,
+                    storeId: storeId,
+                    employeeId: status.lastEvent?.authorized_by_id || 'unknown',
+                    status: 'open',
+                    openingTime: status.lastEvent?.created_at || new Date().toISOString(),
+                    openingBalance: new Decimal(status.openingAmount),
+                    transactions: [], // We might need to fetch transactions if we want full history, but start with empty
+                    notes: ''
+                };
+                console.log('✅ [CashRegisterStore] Restored open session from backend');
+                return true;
+            } else {
+                // Ensure local state matches closed backend
+                if (currentSession.value?.status === 'open') {
+                    console.warn('⚠️ [CashRegisterStore] Closing local session as backend is closed');
+                    currentSession.value = null;
+                }
+                return false;
+            }
+        } catch (e) {
+            console.error('🚫 [CashRegisterStore] Sync failed:', e);
+            return false;
+        }
+    };
+
     const openRegister = async (employeeId: string, storeId: string, amount: Decimal | number, notes?: string) => {
         if (isOpen.value) throw new Error("La caja ya está abierta");
 
@@ -78,11 +111,25 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             });
 
             if (!result.success) {
+                // Handle "Already Open" gracefully
+                if (result.error && (result.error.includes('Ya existe una caja abierta') || result.error.includes('CASH_ALREADY_OPEN'))) {
+                    console.warn('⚠️ [CashRegisterStore] Backend reported register already open. Syncing...');
+                    await syncFromBackend(storeId);
+                    if (isOpen.value) return; // Recovered successfully
+                }
+
                 console.error('🚫 [CashRegisterStore] Repository registration failed:', result.error);
                 throw new Error(result.error || 'Failed to register opening event');
             }
             console.log('✅ [CashRegisterStore] Opening event registered via repository');
         } catch (e: any) {
+            // Handle "Already Open" gracefully (if thrown directly)
+            if (e.message && (e.message.includes('Ya existe una caja abierta') || e.message.includes('CASH_ALREADY_OPEN'))) {
+                console.warn('⚠️ [CashRegisterStore] Backend reported register already open (caught). Syncing...');
+                await syncFromBackend(storeId);
+                if (isOpen.value) return; // Recovered successfully
+            }
+
             console.error('🚫 [CashRegisterStore] Repository call failed:', e.message);
             // Continue with local state but log warning
             console.warn('⚠️ [CashRegisterStore] Continuing with local state only');
@@ -178,7 +225,8 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         openRegister,
         closeRegister,
         registerExpense,
-        addIncome
+        addIncome,
+        syncFromBackend
     };
 }, {
     persist: {

@@ -87,6 +87,9 @@ export const authRepository = {
      */
     async loginStore(email: string, password: string): Promise<LoginResponse> {
         try {
+            // Force clean state to prevent "Multiple GoTrueClient" or zombie session issues
+            await supabase.auth.signOut();
+
             const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password

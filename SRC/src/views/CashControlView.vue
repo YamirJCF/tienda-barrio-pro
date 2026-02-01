@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useCashControlStore } from '../stores/cashControl';
@@ -31,6 +31,12 @@ const { showSuccess, showError } = useNotifications();
 // Composable: Request Management
 import { useAsyncAction } from '../composables/useAsyncAction';
 const { execute: executeAction, isLoading: isSubmitting } = useAsyncAction();
+
+onMounted(async () => {
+    if (authStore.currentStore?.id) {
+        await cashRegisterStore.syncFromBackend(authStore.currentStore.id);
+    }
+});
 
 // PIN Challenge State
 const showPinModal = ref(false);

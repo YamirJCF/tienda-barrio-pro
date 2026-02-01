@@ -236,6 +236,7 @@ const save = async () => {
     cost: formData.value.cost ? new Decimal(formData.value.cost) : undefined,
     stock: stockToSave,
     minStock: parseInt(formData.value.minStock) || 5,
+    storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '', // Inject storeId
   };
 
   logger.log('[ProductForm] productData:', productData);

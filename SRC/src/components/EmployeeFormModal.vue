@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { useEmployeesStore } from '../stores/employees';
-import type { Employee } from '../types'; // Correct import
+import type { Employee, EmployeePermissions } from '../types'; // Correct import
 import { useAuthStore } from '../stores/auth'; 
 import BaseModal from './ui/BaseModal.vue';
 import BaseInput from './ui/BaseInput.vue';
@@ -44,10 +44,12 @@ const modalTitle = computed(() =>
 
 const isValid = computed(() => {
   const { name, username, pin } = formData.value;
+  // PIN is only required when creating new employee
+  const pinValid = isEdit.value || pin.length === 4;
   return (
     name.trim().length >= 2 &&
     username.trim().length >= 4 &&
-    pin.length === 4
+    pinValid
   );
 });
 
@@ -99,10 +101,10 @@ const resetForm = () => {
 const save = async () => {
   if (!isValid.value) return;
 
-  const data = {
+  const baseData = {
     name: formData.value.name.trim(),
     username: formData.value.username.trim(),
-    pin: formData.value.pin,
+    pin: formData.value.pin || '', // Empty string means "don't update PIN" when editing
     permissions: {
       canSell: true, // Always true
       canViewInventory: formData.value.canViewInventory,
@@ -118,9 +120,9 @@ const save = async () => {
       let employee: Employee | null;
 
       if (isEdit.value && props.employeeId) {
-        employee = await employeesStore.updateEmployee(props.employeeId, data);
+        employee = await employeesStore.updateEmployee(props.employeeId, baseData);
       } else {
-        employee = await employeesStore.addEmployee(data);
+        employee = await employeesStore.addEmployee(baseData);
       }
 
       if (employee) {
@@ -141,15 +143,17 @@ watch(
     if (show && employeeId) {
       const employee = employeesStore.getEmployeeById(employeeId as string);
       if (employee) {
+        // Defensive: Handle legacy permission schemas
+        const perms = (employee.permissions || {}) as Partial<EmployeePermissions>;
         formData.value = {
           name: employee.name,
           username: employee.username,
           pin: employee.pin,
           canSell: true, 
-          canViewInventory: employee.permissions.canViewInventory,
-          canFiar: employee.permissions.canFiar,
-          canViewReports: employee.permissions.canViewReports,
-          canOpenCloseCash: employee.permissions.canOpenCloseCash,
+          canViewInventory: perms.canViewInventory ?? false,
+          canFiar: perms.canFiar ?? false,
+          canViewReports: perms.canViewReports ?? false,
+          canOpenCloseCash: perms.canOpenCloseCash ?? false,
         };
       }
     } else if (show && !employeeId) {

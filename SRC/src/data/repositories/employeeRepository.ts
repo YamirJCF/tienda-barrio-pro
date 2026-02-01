@@ -41,9 +41,10 @@ export const employeeMapper: RepositoryMappers<EmployeeDB, Employee> = {
             storeId: row.store_id,
             name: row.name,
             username: row.username,
-            pin: row.pin_hash, // In domain we store the hash if fetched, or empty? Domain interface says 'pin'. 
-            // For security we might not want to expose hash, but type requires string.
-            // Use hash as value.
+            pin: '', // SECURITY: Never expose hash to UI. PIN is write-only field.
+            // When creating: plain PIN → hashed by RPC
+            // When reading: hash → masked as empty string
+            // When updating: only update if new PIN provided
             permissions: perms,
             isActive: row.is_active || false,
             createdAt: row.created_at,
@@ -56,24 +57,20 @@ export const employeeMapper: RepositoryMappers<EmployeeDB, Employee> = {
             throw new Error('Cannot persist Employee without valid storeId.');
         }
 
-        // TS requires 'role' and 'display_name' per database.types.ts
-        // We provide defaults mapped from existing data to satisfy TS.
-        // If DB rejects them, we will need to update DB or Types.
+        // Map to actual DB schema (no display_name or role in real DB)
         return {
             id: entity.id,
             store_id: entity.storeId,
             name: entity.name,
-            display_name: entity.name, // Mapping name to display_name
             username: entity.username,
             pin_hash: entity.pin, // CAUTION: If updating, this might be hash or plain. 
             // Update method should handle PIN separately usually.
             // But if standard update, we trust domain has hash.
-            role: 'employee', // Default role
             permissions: entity.permissions as unknown as any, // JSONB
             is_active: entity.isActive,
             created_at: entity.createdAt,
             updated_at: new Date().toISOString()
-        };
+        } as any; // Cast to any to bypass TS mismatch with generated types
     }
 };
 
@@ -98,7 +95,30 @@ const baseRepository = createSupabaseRepository<Employee, EmployeeDB>(
  * Extended Employee Repository implementation
  */
 export const employeeRepository: EmployeeRepository = {
-    ...baseRepository,
+    getAll: (storeId: string) => baseRepository.getAll(storeId),
+
+    getById: baseRepository.getById,
+
+    /**
+     * Custom UPDATE method to handle PIN correctly
+     * If PIN is empty, don't update it (keep existing hash)
+     * If PIN is provided, it's a plain PIN that needs hashing via RPC
+     */
+    async update(id: string, data: Partial<Employee>): Promise<Employee | null> {
+        // If PIN is empty or not provided, use standard update without PIN
+        if (!data.pin || data.pin.trim() === '') {
+            // Remove PIN from data to avoid overwriting hash
+            const { pin, ...dataWithoutPin } = data;
+            return baseRepository.update(id, dataWithoutPin as any);
+        }
+
+        // If PIN is provided, we need to hash it
+        // For now, throw error because we don't have an RPC for updating PIN during employee edit
+        // The proper way is to use the "Change PIN" functionality separately
+        throw new Error('No se puede cambiar el PIN durante la edición. Usa la función "Cambiar PIN" específica.');
+    },
+
+    delete: (id: string) => baseRepository.delete(id),
 
     /**
      * Create Employee via RPC (SECURE)
@@ -128,14 +148,23 @@ export const employeeRepository: EmployeeRepository = {
 
                 if (result && result.success) {
                     // Success! RPC returns ID.
-                    // We need to return the full object.
-                    // Ideally we fetch it back or construct it.
-                    // RPC returns: { success: true, employee_id: uuid }
+                    // Construct Employee object directly from data we have
+                    // instead of fetching (which can fail due to RLS/timing issues)
                     const newId = result.employee_id;
 
-                    // Fetch full object to be safe and get canonical data
-                    const created = await baseRepository.getById(newId);
-                    return created;
+                    const newEmployee: Employee = {
+                        id: newId,
+                        storeId: data.storeId,
+                        name: data.name,
+                        username: data.username,
+                        pin: '****', // Masked, we don't store plain PIN
+                        permissions: data.permissions,
+                        isActive: data.isActive !== undefined ? data.isActive : true,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    return newEmployee;
                 } else {
                     throw new Error(result?.error || 'Unknown RPC error');
                 }

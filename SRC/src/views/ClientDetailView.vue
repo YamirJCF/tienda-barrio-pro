@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useClientsStore } from '../stores/clients';
-import { type Client } from '../types';
+import { type Client, type ClientTransaction } from '../types';
 import { Decimal } from 'decimal.js';
 import BaseModal from '../components/ui/BaseModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
@@ -279,7 +279,7 @@ const registerPayment = () => {
                   : 'text-red-600 dark:text-red-400'
               "
             >
-              {{ tx.type === 'payment' ? '-' : '+' }}{{ formatCurrency(tx.amount) }}
+              {{ tx.type === 'payment' ? '-' : '+' }}{{ formatCurrency(new Decimal(tx.amount)) }}
             </p>
             <p class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">
               {{ tx.type === 'payment' ? 'Pago' : 'Deuda' }}

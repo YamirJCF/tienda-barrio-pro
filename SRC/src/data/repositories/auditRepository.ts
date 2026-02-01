@@ -6,7 +6,7 @@ export interface AuditLog {
     created_at: string;
     store_id: string;
     user_id?: string;
-    event_type: 'login_success' | 'login_failed' | 'pin_change' | 'unauthorized_access' | 'price_change' | 'stock_adjustment' | 'shift_modified';
+    event_type: 'login_success' | 'login_failed' | 'pin_change' | 'unauthorized_access' | 'price_change' | 'stock_adjustment' | 'shift_modified' | 'SALE_CREATED';
     severity: 'info' | 'warning' | 'critical';
     details: Record<string, any>;
     ip_address?: string;
@@ -27,12 +27,12 @@ export const auditRepository = {
         userId?: string
     ): Promise<boolean> {
         try {
-            const { error } = await (supabase.from('system_audit_logs').insert({
+            const { error } = await (supabase.from('audit_logs').insert({
                 store_id: storeId,
-                user_id: userId,
+                actor_id: userId,
                 event_type: eventType,
                 severity,
-                details,
+                metadata: details,
                 ip_address: 'client-side' // En producción, Supabase lo captura o se usa Edge Function
             }) as any);
 
@@ -58,10 +58,10 @@ export const auditRepository = {
     ): Promise<AuditLog[]> {
         try {
             let query = supabase
-                .from('system_audit_logs')
+                .from('audit_logs')
                 .select(`
           *,
-          employees:user_id (name)
+          employees:actor_id (name)
         `)
                 .eq('store_id', storeId)
                 .order('created_at', { ascending: false })
@@ -69,7 +69,7 @@ export const auditRepository = {
 
             if (filters?.severity) query = query.eq('severity', filters.severity);
             if (filters?.eventType) query = query.eq('event_type', filters.eventType);
-            if (filters?.userId) query = query.eq('user_id', filters.userId);
+            if (filters?.userId) query = query.eq('actor_id', filters.userId);
 
             const { data, error } = await (query as any);
 
@@ -77,6 +77,7 @@ export const auditRepository = {
 
             return (data || []).map((log: any) => ({
                 ...log,
+                details: log.metadata, // Correctly map DB metadata to Domain details
                 user_name: log.employees?.name || 'Sistema/Desconocido'
             }));
         } catch (e) {

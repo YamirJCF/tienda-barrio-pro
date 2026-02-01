@@ -105,6 +105,12 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
                 localStorageAdapter.set(localStorageKey, data);
             }
 
+            // Defensive: Ensure data is not null
+            if (!data) {
+                logger.warn(`[SupabaseRepo:${tableName}] getAll returned null, using empty array`);
+                return [];
+            }
+
             return mapToDomain(data as unknown as TPersistence[]) as TDomain[];
         } catch (error) {
             logger.log(`[SupabaseRepo:${tableName}] getAll exception:`, error);
@@ -190,7 +196,11 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
         }
 
         // 1. Optimistic / Offline Save (Always save to LS)
-        const existing = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+        let existing = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+        if (!Array.isArray(existing)) {
+            logger.warn(`[SupabaseAdapter:${tableName}] localStorage data corrupted in create, resetting`);
+            existing = [];
+        }
         existing.push(enrichedPayload);
         localStorageAdapter.set(localStorageKey, existing);
 
@@ -249,7 +259,14 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
 
         // 1. Get current state (Local prefered for speed/merging?)
         // Let's get from LS first to merge.
-        const existingList = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+        let existingList = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+
+        // Defensive: Ensure it's actually an array (could be corrupted data)
+        if (!Array.isArray(existingList)) {
+            logger.warn(`[SupabaseAdapter:${tableName}] localStorage data corrupted, resetting to empty array`);
+            existingList = [];
+        }
+
         const index = existingList.findIndex(item => item.id === id);
 
         if (index === -1) {
@@ -341,7 +358,11 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
      */
     const deleteRecord = async (id: string): Promise<boolean> => {
         // 1. Delete Local
-        const existing = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+        let existing = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+        if (!Array.isArray(existing)) {
+            logger.warn(`[SupabaseAdapter:${tableName}] localStorage data corrupted in delete, resetting`);
+            existing = [];
+        }
         const filtered = existing.filter(item => item.id !== id);
 
         if (filtered.length !== existing.length) {

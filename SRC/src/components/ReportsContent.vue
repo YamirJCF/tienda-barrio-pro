@@ -88,7 +88,7 @@ const getSalesByCashier = (sales: typeof salesStore.sales) => {
 const filteredSales = computed(() => {
   const { start, end } = getDateRange(selectedPeriod.value);
   const periodSales = salesStore.sales.filter((sale) => {
-    const d = new Date(sale.date);
+    const d = new Date(sale.date + 'T00:00:00');
     return d >= start && d <= end;
   });
   return getSalesByCashier(periodSales);
@@ -99,7 +99,7 @@ const previousPeriodSales = computed(() => {
   // Offset 1 period back
   const { start, end } = getDateRange(selectedPeriod.value, 1);
   const periodSales = salesStore.sales.filter((sale) => {
-    const d = new Date(sale.date);
+    const d = new Date(sale.date + 'T00:00:00');
     return d >= start && d <= end;
   });
   return getSalesByCashier(periodSales);
