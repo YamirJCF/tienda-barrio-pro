@@ -36,7 +36,7 @@ const handleResend = async () => {
     if (!canResend.value) return;
     
     // TODO: Call Store action resendVerificationEmail()
-    console.log("Resending email...");
+
     startTimer();
 };
 

@@ -60,7 +60,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     transactions: [], // We might need to fetch transactions if we want full history, but start with empty
                     notes: ''
                 };
-                console.log('✅ [CashRegisterStore] Restored open session from backend');
+
                 return true;
             } else {
                 // Ensure local state matches closed backend
@@ -121,7 +121,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                 console.error('🚫 [CashRegisterStore] Repository registration failed:', result.error);
                 throw new Error(result.error || 'Failed to register opening event');
             }
-            console.log('✅ [CashRegisterStore] Opening event registered via repository');
+
         } catch (e: any) {
             // Handle "Already Open" gracefully (if thrown directly)
             if (e.message && (e.message.includes('Ya existe una caja abierta') || e.message.includes('CASH_ALREADY_OPEN'))) {
@@ -171,7 +171,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                 console.error('🚫 [CashRegisterStore] Repository close failed:', result.error);
                 // Don't throw - still archive locally
             } else {
-                console.log('✅ [CashRegisterStore] Closing event registered via repository');
+
             }
         } catch (e: any) {
             console.error('🚫 [CashRegisterStore] Repository close call failed:', e.message);
