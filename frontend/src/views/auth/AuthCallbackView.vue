@@ -30,10 +30,33 @@ const router = useRouter();
 const authStore = useAuthStore();
 const errorMessage = ref('');
 
+/**
+ * Parse URL hash fragment to extract Supabase auth tokens
+ * Handles Hash Router conflict: /#/access_token=... or /#access_token=...
+ */
+function parseHashParams(): Record<string, string> {
+  const hash = window.location.hash;
+  const params: Record<string, string> = {};
+  
+  // Remove leading #/ or # for hash router compatibility
+  let hashContent = hash.startsWith('#/') ? hash.substring(2) : hash.substring(1);
+  
+  // Split by & to get key=value pairs
+  const pairs = hashContent.split('&');
+  for (const pair of pairs) {
+    const [key, value] = pair.split('=');
+    if (key && value) {
+      params[key] = decodeURIComponent(value);
+    }
+  }
+  
+  return params;
+}
+
 onMounted(async () => {
-  // Check for errors in hash (Supabase returns /#error=...)
   const hash = window.location.hash;
   
+  // Check for errors in hash (Supabase returns /#error=...)
   if (hash.includes('error=')) {
       if (hash.includes('otp_expired')) {
           errorMessage.value = 'Este enlace ha expirado. Es posible que hayas solicitado uno nuevo posteriormente, lo cual invalida los anteriores.';
@@ -49,11 +72,52 @@ onMounted(async () => {
       return; // Stop processing
   }
 
-  // Handles Supabase Auth Callback logic
-  
-  // 1. Listen for Supabase events (Standard flow)
+  // Parse tokens from hash (handles Hash Router conflict)
+  const params = parseHashParams();
+  const accessToken = params['access_token'];
+  const refreshToken = params['refresh_token'];
+  const type = params['type']; // 'recovery', 'signup', 'magiclink'
+
+  console.log('[AuthCallback] Detected type:', type, '| Has tokens:', !!accessToken);
+
+  // If we have tokens, manually set the session
+  if (accessToken && refreshToken) {
+    try {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
+
+      if (error) {
+        console.error('[AuthCallback] Error setting session:', error);
+        errorMessage.value = 'Error al verificar la sesión. El enlace puede haber expirado.';
+        return;
+      }
+
+      // Handle based on type
+      if (type === 'recovery') {
+        console.log('[AuthCallback] Recovery flow detected, redirecting to update-password');
+        router.replace('/update-password');
+        return;
+      }
+
+      // For signup or magiclink, go to dashboard
+      if (data.session) {
+        console.log('[AuthCallback] Session established, redirecting to dashboard');
+        router.replace('/dashboard');
+        return;
+      }
+    } catch (err) {
+      console.error('[AuthCallback] Unexpected error:', err);
+      errorMessage.value = 'Error inesperado al procesar el enlace.';
+      return;
+    }
+  }
+
+  // Fallback: Listen for Supabase events (for non-hash-router scenarios)
   const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    // CRITICAL: Handle Password Recovery
+    console.log('[AuthCallback] Auth event:', event);
+    
     if (event === 'PASSWORD_RECOVERY') {
        router.replace('/update-password');
        return;
@@ -64,7 +128,11 @@ onMounted(async () => {
     }
   });
 
-  // Manual hash parsing removed per security requirements
-  // Flow relies strictly on supabase.auth.onAuthStateChange
+  // Timeout fallback: if nothing happens in 5 seconds, show error
+  setTimeout(() => {
+    if (!errorMessage.value) {
+      errorMessage.value = 'No se pudo verificar la sesión. Intenta solicitar un nuevo enlace.';
+    }
+  }, 5000);
 });
 </script>
