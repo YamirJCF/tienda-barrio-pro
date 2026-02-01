@@ -114,8 +114,9 @@ interface SalePayload {
 }
 
 export interface SaleRepository extends EntityRepository<Sale> {
-    processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; error?: string }>;
+    processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }>;
     getByDateRange(startDate: string, endDate: string, storeId?: string): Promise<Sale[]>;
+    getLastTicketNumber(storeId: string): Promise<number>;
 }
 
 // Create base repository with Mappers
@@ -135,7 +136,7 @@ export const saleRepository: SaleRepository = {
      * Process a new sale (Atomic Transaction)
      * Uses RPC 'procesar_venta' if online, fallback to Sync Queue if offline
      */
-    async processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; error?: string }> {
+    async processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }> {
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
         // 1. Try Online (RPC)
@@ -156,11 +157,12 @@ export const saleRepository: SaleRepository = {
 
                     const { data, error } = await supabase.rpc('procesar_venta', {
                         p_store_id: storeId,
+                        p_employee_id: saleData.employeeId || null,
                         p_items: p_items,
-                        p_payment_method: saleData.paymentMethod === 'mixed' ? 'efectivo' : saleData.paymentMethod,
+                        p_total: new Decimal(saleData.total).toNumber(),
+                        p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod,
                         p_amount_received: p_amount_received,
-                        p_client_id: saleData.clientId || null,
-                        p_employee_id: saleData.employeeId
+                        p_client_id: saleData.clientId || null
                     });
 
                     if (error) {
@@ -173,7 +175,7 @@ export const saleRepository: SaleRepository = {
                         }
                     } else {
                         if (data && data.success) {
-                            return { success: true, id: data.id };
+                            return { success: true, id: data.id, ticketNumber: data.ticket_number };
                         } else {
                             return { success: false, error: data?.error || 'Unknown RPC error' };
                         }
@@ -222,15 +224,94 @@ export const saleRepository: SaleRepository = {
     },
 
     /**
-     * Get sales by date range
+     * Get sales by date range with full items join
      */
     async getByDateRange(startDate: string, endDate: string, storeId?: string): Promise<Sale[]> {
-        // Uses getAll which now uses Mappers
+        if (!storeId) return [];
+        const isOnline = navigator.onLine && isSupabaseConfigured();
+
+        if (isOnline) {
+            const supabase = getSupabaseClient();
+            if (supabase) {
+                // Normalize Start/End dates to ISO timestamps
+                const startIso = startDate.includes('T') ? startDate : `${startDate}T00:00:00`;
+                const endIso = endDate.includes('T') ? endDate : `${endDate}T23:59:59`;
+
+                // Fetch sales with items and product names
+                const { data, error } = await supabase
+                    .from('sales')
+                    .select(`
+                        *,
+                        sale_items (
+                            product_id,
+                            quantity,
+                            unit_price,
+                            subtotal,
+                            products ( name )
+                        )
+                    `)
+                    .eq('store_id', storeId)
+                    .gte('created_at', startIso)
+                    .lte('created_at', endIso)
+                    .order('created_at', { ascending: false });
+
+                if (error) {
+                    logger.error('[SaleRepo] Failed to fetch sales breakdown', error);
+                    return [];
+                }
+
+                if (data) {
+                    return data.map((row: any) => ({
+                        id: row.id,
+                        ticketNumber: row.ticket_number,
+                        date: row.created_at.split('T')[0],
+                        timestamp: row.created_at,
+                        // Fix 1: Map 'efectivo' to 'cash' for frontend consistency
+                        paymentMethod: row.payment_method === 'efectivo' ? 'cash' : row.payment_method,
+                        total: new Decimal(row.total),
+                        items: row.sale_items.map((item: any) => ({
+                            productId: item.product_id,
+                            productName: item.products?.name || 'Producto Desconocido',
+                            quantity: item.quantity, // Number in DB
+                            price: new Decimal(item.unit_price),
+                            subtotal: new Decimal(item.subtotal)
+                        })),
+                        roundingDifference: row.rounding_difference ? new Decimal(row.rounding_difference) : undefined,
+                        effectiveTotal: new Decimal(row.total).add(row.rounding_difference ? new Decimal(row.rounding_difference) : 0),
+                        amountReceived: row.amount_received ? new Decimal(row.amount_received) : undefined,
+                        change: row.change_given ? new Decimal(row.change_given) : undefined,
+                        clientId: row.client_id || undefined,
+                        employeeId: row.employee_id,
+                        syncStatus: row.sync_status
+                    }));
+                }
+            }
+        }
+
+        // Fallback to basic getAll (local persistence might lack items if not cached properly, 
+        // but typically serialization saves items)
         const all = await baseRepository.getAll(storeId);
         return all.filter(s => {
-            // Basic date string comparison
             return s.date >= startDate && s.date <= endDate;
         });
+    },
+
+    async getLastTicketNumber(storeId: string): Promise<number> {
+        if (navigator.onLine && isSupabaseConfigured()) {
+            const supabase = getSupabaseClient();
+            if (supabase) {
+                const { data } = await supabase
+                    .from('sales')
+                    .select('ticket_number')
+                    .eq('store_id', storeId)
+                    .order('ticket_number', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (data) return data.ticket_number;
+            }
+        }
+        return 0;
     }
 };
 

@@ -35,6 +35,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/CheckEmailView.vue'),
     meta: { requiresAuth: true }, // Acceso permitido solo a usuarios registrados (aunque no verificados)
   },
+  {
+    path: '/update-password',
+    name: 'update-password',
+    component: () => import('../views/auth/UpdatePasswordView.vue'),
+    meta: { requiresAuth: false }, // Allow access with Supabase session (bypass Pinia check)
+  },
   // WO-008: Sala de Espera Diaria
   {
     path: '/daily-waiting-room',

@@ -29,16 +29,16 @@ type ProductDB = Database['public']['Tables']['products']['Row'];
  */
 const MEASUREMENT_UNIT_TO_DB: Record<string, string> = {
     'un': 'unidad',
-    'kg': 'kilogramo',
-    'lb': 'libra',
-    'g': 'gramo'
+    'kg': 'kg',
+    'lb': 'lb',
+    'g': 'g'
 };
 
 const MEASUREMENT_UNIT_FROM_DB: Record<string, string> = {
     'unidad': 'un',
-    'kilogramo': 'kg',
-    'libra': 'lb',
-    'gramo': 'g'
+    'kg': 'kg',
+    'lb': 'lb',
+    'g': 'g'
 };
 
 /**
@@ -70,6 +70,7 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
         return {
             id: row.id,
             name: row.name,
+            plu: row.plu || undefined, // CRITICAL: Map PLU for POS search functionality
             price: new Decimal(row.price),
             // Map current_stock (DB) to stock (Domain)
             stock: new Decimal(row.current_stock),

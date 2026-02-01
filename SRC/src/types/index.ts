@@ -1,7 +1,7 @@
 import { Decimal } from 'decimal.js';
 import type { Database } from './supabase';
 
-export type MeasurementUnit = 'un' | 'kg' | 'lb' | 'g';
+export type MeasurementUnit = 'un' | 'kg' | 'lb' | 'g' | 'unidad';
 
 // WO-001: UUID Refactoring - All IDs changed from number to string
 // Maps to: Database['public']['Tables']['products']['Row']

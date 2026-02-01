@@ -266,7 +266,8 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, 
       payments: payments, // Pass full details
       amountReceived,
       change: undefined, // Change is visual, logic is in balances
-      clientId: clientId // Passed from CheckoutModal
+      clientId: clientId, // Passed from CheckoutModal
+      employeeId: authStore.currentUser?.employeeId || authStore.currentUser?.id // Resilient: Valid for both Employees (UUID in employeeId) and Admins (UUID in id)
     });
 
     const saleId = salesStore.sales[salesStore.sales.length - 1]?.id;

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useEmployeesStore, type Employee } from '../stores/employees';
+import { useEmployeesStore } from '../stores/employees';
+import { Employee } from '../types';
+import { useAuthStore } from '../stores/auth';
 import { useAsyncAction } from '../composables/useAsyncAction'; // Request Management
 import EmployeeFormModal from '../components/EmployeeFormModal.vue';
 import BottomNav from '../components/BottomNav.vue';
@@ -20,14 +22,32 @@ import {
 } from 'lucide-vue-next';
 
 const router = useRouter();
+const authStore = useAuthStore();
 const employeesStore = useEmployeesStore();
+
+// Initialize store on mount
+onMounted(async () => {
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+  if (storeId) {
+    await employeesStore.initialize(storeId);
+  }
+});
 
 // State
 const showEmployeeModal = ref(false);
-const editingEmployeeId = ref<number | undefined>(undefined);
+const editingEmployeeId = ref<string | undefined>(undefined);
 const showPinModal = ref(false);
 const selectedEmployee = ref<Employee | null>(null);
 const newPin = ref('');
+
+// Computed: Filter out system owner employees from UI
+// Owners (username starting with 'owner_') are technical system employees
+// Admins authenticate with email/password, not PIN, so they never interact with these
+const visibleEmployees = computed(() => {
+  return employeesStore.employees.filter(e => !e.username.startsWith('owner_'));
+});
+
+const hasVisibleEmployees = computed(() => visibleEmployees.value.length > 0);
 
 // Methods
 const goBack = () => {
@@ -163,7 +183,7 @@ const handleEmployeeSaved = () => {
     <main class="flex-1 overflow-y-auto px-4 pt-4">
       <!-- Empty State -->
       <div
-        v-if="employeesStore.employees.length === 0"
+        v-if="!hasVisibleEmployees"
         class="flex flex-col items-center justify-center h-full text-center"
       >
         <div
@@ -188,7 +208,7 @@ const handleEmployeeSaved = () => {
       <!-- Employee List -->
       <div v-else class="flex flex-col gap-3">
         <div
-          v-for="employee in employeesStore.employees"
+          v-for="employee in visibleEmployees"
           :key="employee.id"
           class="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-transparent hover:border-gray-100 dark:hover:border-gray-700 transition-all"
           :class="{ 'opacity-60': !employee.isActive }"

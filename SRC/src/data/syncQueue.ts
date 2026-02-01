@@ -307,6 +307,7 @@ async function processItem(item: QueueItem): Promise<boolean> {
             // Call RPC
             const { data, error } = await supabase.rpc('procesar_venta', {
                 p_store_id: item.payload.storeId,
+                p_employee_id: item.payload.employeeId || null,
                 // Offline Mapper: CamelCase -> SnakeCase
                 // This is needed because addToSyncQueue saves raw payload (Camel)
                 p_items: item.payload.items.map((i: any) => ({
@@ -315,10 +316,10 @@ async function processItem(item: QueueItem): Promise<boolean> {
                     unit_price: i.price,
                     subtotal: i.subtotal
                 })),
-                p_payment_method: item.payload.paymentMethod === 'mixed' ? 'efectivo' : item.payload.paymentMethod,
+                p_total: item.payload.total,
+                p_payment_method: (item.payload.paymentMethod === 'mixed' || item.payload.paymentMethod === 'cash') ? 'efectivo' : item.payload.paymentMethod,
                 p_amount_received: item.payload.amountReceived,
-                p_client_id: item.payload.clientId,
-                p_employee_id: item.payload.employeeId
+                p_client_id: item.payload.clientId
             });
             if (error) throw error;
             return data.success;
