@@ -189,7 +189,7 @@ router.beforeEach((to, from, next) => {
 
     // Si el status no es 'approved', bloquear acceso
     if (dailyStatus !== 'approved') {
-      console.log('[Router] Bloqueo de seguridad diaria. Status:', dailyStatus);
+
       return next({ name: 'daily-waiting-room' });
     }
   }

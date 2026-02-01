@@ -42,7 +42,7 @@ export function useHeartbeat() {
         if (isPaused.value && checkPauseTimeout()) {
             // If timeout exceeded, we STOP sending pulses.
             // This will cause the backend logic (or presence store) to mark as 'offline' eventually.
-            console.log('[Heartbeat] Pause limit exceeded. Stopping pulse.');
+
             return;
         }
 

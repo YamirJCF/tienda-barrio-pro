@@ -290,7 +290,7 @@ export const useAuthStore = defineStore(
         const today = new Date().toDateString();
 
         if (lastDate !== today) {
-          console.log('[Auth] Daily Pass vencido (Nuevo día)');
+
           dailyAccessState.value.status = 'expired';
         }
       }
@@ -300,7 +300,7 @@ export const useAuthStore = defineStore(
     // Action: Solicitar acceso
     const requestDailyPass = async () => {
       // En producción: RPC request_daily_pass() con ping count
-      console.log("[Auth] Solicitando Pase Diario...");
+
       dailyAccessState.value.status = 'pending';
       dailyAccessState.value.requestedAt = new Date().toISOString();
       dailyAccessState.value.fingerprint = getDeviceFingerprint();
@@ -311,7 +311,7 @@ export const useAuthStore = defineStore(
     const approveRequest = async () => {
       if (!isAdmin.value) return false;
 
-      console.log("[Auth] Admin aprobando solicitud...");
+
       dailyAccessState.value.status = 'approved';
       dailyAccessState.value.lastApprovedAt = new Date().toISOString();
       return true;

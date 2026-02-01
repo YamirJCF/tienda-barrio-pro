@@ -13,7 +13,7 @@ export const initAuditMode = () => {
     // 🔓 FORCE DISABLE AUDIT MODE (User Request: Connect to DB)
     // We override any persisted state to ensure we connect to production DB
     if (isEnabled) {
-        console.log('🔓 Switching to Production Mode...');
+
         localStorage.setItem(AUDIT_MODE_KEY, 'false');
         isEnabled = false;
     }
