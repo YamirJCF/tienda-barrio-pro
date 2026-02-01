@@ -59,11 +59,14 @@ const TABLE_SCHEMAS: Record<string, {
         get allFields() { return [...this.requiredFields, ...this.optionalFields]; }
     },
     sales: {
-        requiredFields: ['store_id', 'employee_id', 'payment_method', 'ticket_number', 'total'],
+        // NOTE: This schema validates the RPC payload for procesar_venta, NOT the table structure
+        // The backend generates ticket_number, so it's not required in the payload
+        // employee_id is optional (can be null for admin sales)
+        requiredFields: ['store_id', 'payment_method', 'total', 'items'],
         optionalFields: [
-            'id', 'amount_received', 'change_given', 'client_id', 'created_at',
+            'id', 'employee_id', 'amount_received', 'change_given', 'client_id', 'created_at',
             'is_voided', 'local_id', 'rounding_difference', 'sync_status',
-            'void_reason', 'voided_by'
+            'void_reason', 'voided_by', 'ticket_number', 'payments'
         ],
         get allFields() { return [...this.requiredFields, ...this.optionalFields]; }
     },

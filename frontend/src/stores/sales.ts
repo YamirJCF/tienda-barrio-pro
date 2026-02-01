@@ -306,17 +306,28 @@ export const useSalesStore = defineStore(
       });
 
       // 4. Update Client Debt (Fiado)
+      // FRD-011: Error handling - show warning if transaction record fails but don't block sale
       if (newSale.paymentMethod === 'fiado' && newSale.clientId) {
-        const { useClientsStore } = await import('./clients');
-        const clientsStore = useClientsStore();
+        try {
+          const { useClientsStore } = await import('./clients');
+          const clientsStore = useClientsStore();
 
-        // Add debt to client
-        clientsStore.addPurchaseDebt(
-          newSale.clientId,
-          newSale.total instanceof Decimal ? newSale.total : new Decimal(newSale.total),
-          `Compra Ticket #${newSale.ticketNumber}`,
-          newSale.id
-        );
+          // Add debt to client
+          await clientsStore.addPurchaseDebt(
+            newSale.clientId,
+            newSale.total instanceof Decimal ? newSale.total : new Decimal(newSale.total),
+            `Compra Ticket #${newSale.ticketNumber}`,
+            newSale.id
+          );
+        } catch (debtError: any) {
+          console.warn('[SalesStore] Error registering client debt transaction:', debtError);
+          // FRD-011: Show comprehensible message to user
+          // The sale was processed, debt was updated, but transaction history may be incomplete
+          const { useNotifications } = await import('../composables/useNotifications');
+          const { showWarning } = useNotifications();
+          showWarning('Deuda registrada. El historial se sincronizará cuando haya conexión.');
+          // Don't throw - the sale itself was successful
+        }
       }
 
       return newSale;
