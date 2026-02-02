@@ -11,6 +11,7 @@ import {
   Banknote, 
   Save 
 } from 'lucide-vue-next';
+import { useNotifications } from '../composables/useNotifications';
 
 // Props
 // WO-001: Changed clientId from number to string for UUID
@@ -28,6 +29,7 @@ const emit = defineEmits<{
 const clientsStore = useClientsStore();
 import { useAuthStore } from '../stores/auth';
 const authStore = useAuthStore();
+const { showError, showSuccess } = useNotifications();
 
 // Form state
 const formData = ref({
@@ -84,7 +86,7 @@ const save = async () => {
     // FIX: Inject storeId from AuthStore
     const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
     if (!storeId) {
-        alert('Error: No se ha identificado la tienda activa. Recarga la página.');
+        showError('Error: No se ha identificado la tienda activa. Recarga la página.');
         return;
     }
 

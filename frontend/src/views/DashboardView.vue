@@ -22,6 +22,7 @@ import {
 import BottomNav from '../components/BottomNav.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 import StatCard from '../components/ui/StatCard.vue';
+import AccessRequestsWidget from '../components/admin/AccessRequestsWidget.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 
 const router = useRouter();
@@ -128,6 +129,9 @@ const navigateToNotifications = () => {
     </header>
 
     <main class="p-4 flex flex-col gap-6 max-w-md mx-auto">
+      <!-- Admin: Access Requests Widget -->
+      <AccessRequestsWidget v-if="isAdmin" />
+
       <!-- Status Card -->
       <div
         class="w-full rounded-2xl bg-slate-800 p-6 text-white shadow-lg flex flex-col items-center gap-6"

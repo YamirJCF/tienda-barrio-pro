@@ -152,42 +152,50 @@ export const useEmployeesStore = defineStore(
     const toggleActive = async (id: string) => {
       const employee = employees.value.find((e) => e.id === id);
       if (employee) {
-        if (!employee.isActive && activeEmployees.value.length >= 5) {
-          throw new Error('Límite de empleados activos alcanzado. No se puede activar.');
+        // Security Rule: Online Only
+        if (!navigator.onLine) {
+          throw new Error('Cambiar estado requiere conexión a internet.');
         }
 
-        // Optimistic Update? Or wait? 
-        // Wait is safer for consistency
         const newState = !employee.isActive;
-        await updateEmployee(id, { isActive: newState });
-        return true;
+
+        try {
+          // Use RPC
+          const result = await employeeRepository.toggleActiveSecure(id, newState);
+
+          if (!result.success) {
+            // Handle "Limit Reached" specifically if needed, but error message works
+            throw new Error(result.error || 'Error al cambiar estado');
+          }
+
+          // Update Local State on success
+          employee.isActive = newState;
+          return true;
+
+        } catch (e: any) {
+          logger.error('[EmployeeStore] Toggle Active failed', e);
+          throw e;
+        }
       }
       return false;
     };
 
     const updatePin = async (id: string, newPin: string) => {
-      // This implies re-hashing. 
-      // If we use standard update, we are sending Plain PIN to DB 'pin_hash' column if using generic update?
-      // WAIT. The Generic Adapter `update` just sends fields.
-      // But `pin_hash` expects a HASH.
-      // Sending plain pin to `pin_hash` column is WRONG if DB doesn't trigger-hash it on update.
-      // The DB trigger `trg_employees_updated` only updates timestamp.
-      // We need an RPC for `update_pin` or handle it in repo.
-      // For now, let's assume updatePin is NOT supported in this phase or we use the insecure generic update
-      // which would break Login (comparing hash vs generic plain).
-      // CORRECT FIX: We need `repo.updatePin` which calls an RPC. 
-      // But WO didn't specify it. 
-      // Current scope: Persistence of CREATION.
-      // I will comment this limitation or try to use generic update effectively.
-      // Actually `crear_empleado` handles hashing. 
-      // If I update `pin_hash` with plain text, login fails.
-      // I will leave it as is but note it uses generic update (BROKEN for Login).
-      // However, to unblock, I should probably throw error "Not implemented secure update".
-      // Or... does the generic update allow? No.
-      // I will simply NOT implement remote updatePin for now, or just do local?
-      // Local is useless as we don't store plain pin anymore.
+      // Security: Require Online
+      if (!navigator.onLine) {
+        throw new Error('Cambio de PIN requiere internet (Seguridad).');
+      }
 
-      throw new Error('Actualización de PIN no implementada en esta fase de blindaje.');
+      try {
+        const result = await employeeRepository.updatePin(id, newPin);
+        if (!result.success) {
+          throw new Error(result.error || 'Error al actualizar PIN');
+        }
+        return true;
+      } catch (e: any) {
+        logger.error('[EmployeeStore] Update PIN failed', e);
+        throw e;
+      }
     };
 
     const getEmployeeById = (id: string) => {

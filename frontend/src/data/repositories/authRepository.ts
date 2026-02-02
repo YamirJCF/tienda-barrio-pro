@@ -346,6 +346,10 @@ export const authRepository = {
      * Aprobar o rechazar solicitud de acceso
      * Updated: Use RPC 'aprobar_pase_diario' for approval
      */
+    /**
+     * Aprobar o rechazar solicitud de acceso
+     * Updated: Use RPC 'aprobar_pase_diario' for approval
+     */
     async updateAccessRequestStatus(requestId: string, status: 'approved' | 'rejected', reviewedBy: string) {
         if (status === 'approved') {
             const { data, error } = await supabase.rpc('aprobar_pase_diario', {
@@ -366,6 +370,68 @@ export const authRepository = {
                 .eq('id', requestId);
             if (error) throw error;
             return data;
+        }
+    },
+
+    /**
+     * FRD-001: Solicitar Pase Diario (Real Backend)
+     */
+    async requestDailyPass(employeeId: string, fingerprint: string): Promise<{ success: boolean; status?: string; error?: string; retry_count?: number }> {
+        try {
+            // FIX: Strip 'emp-' prefix if present, as backend expects raw UUID
+            const cleanId = employeeId.startsWith('emp-') ? employeeId.replace('emp-', '') : employeeId;
+
+            const { data, error } = await supabase.rpc('solicitar_pase_diario', {
+                p_employee_id: cleanId,
+                p_device_fingerprint: fingerprint
+            });
+
+            if (error) {
+                logger.error('[AuthRepo] Request Pass Error:', error);
+                return { success: false, error: error.message };
+            }
+
+            const result = data as any;
+            if (!result.success) {
+                return { success: false, error: result.error, status: 'error' };
+            }
+
+            return {
+                success: true,
+                status: result.status,
+                retry_count: result.retry_count
+            };
+        } catch (err: any) {
+            return { success: false, error: err.message };
+        }
+    },
+
+    /**
+     * FRD-001: Verificar estado (Real Backend)
+     */
+    async checkDailyPassStatus(employeeId: string, fingerprint: string): Promise<{ status: 'none' | 'pending' | 'approved' | 'rejected' | 'expired'; retry_count?: number }> {
+        try {
+            // FIX: Strip 'emp-' prefix
+            const cleanId = employeeId.startsWith('emp-') ? employeeId.replace('emp-', '') : employeeId;
+
+            const { data, error } = await supabase.rpc('check_daily_pass_status', {
+                p_employee_id: cleanId,
+                p_device_fingerprint: fingerprint
+            });
+
+            if (error) {
+                logger.error('[AuthRepo] Check Status Error:', error);
+                return { status: 'none' };
+            }
+
+            const result = data as any;
+            return {
+                status: result.status || 'none',
+                retry_count: result.retry_count
+            };
+        } catch (err) {
+            logger.error('[AuthRepo] Check Status Exception:', err);
+            return { status: 'none' };
         }
     }
 };

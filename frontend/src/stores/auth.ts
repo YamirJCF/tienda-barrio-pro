@@ -220,6 +220,10 @@ export const useAuthStore = defineStore(
         permissions: employee.permissions,
       };
       isAuthenticated.value = true;
+
+      // Zero Trust: Check daily pass immediately
+      checkDailyApproval();
+
       return true;
     };
 
@@ -247,19 +251,25 @@ export const useAuthStore = defineStore(
     // -----------------------------------------------------
 
     interface DailyPassState {
-      status: 'pending' | 'approved' | 'rejected' | 'expired';
-      lastApprovedAt: string | null; // ISO
+      status: 'pending' | 'approved' | 'rejected' | 'expired' | 'none';
+      lastApprovedAt: string | null | undefined; // ISO
       fingerprint: string | null;
       requestedAt: string | null;
+      approvedBy?: string;
     }
 
     // State principal de seguridad diaria
+    // State principal de seguridad diaria
     const dailyAccessState = ref<DailyPassState>({
-      status: 'expired', // Default to expired for Zero Trust
+      status: 'expired',
       lastApprovedAt: null,
       fingerprint: null,
       requestedAt: null
     });
+
+    // Admin: Pending Requests State
+    const pendingRequests = ref<any[]>([]);
+
 
     // Mantenemos propiedad computada para compatibilidad
     // 'deviceApproved' ahora deriva calculando la expiración
@@ -281,54 +291,76 @@ export const useAuthStore = defineStore(
     };
 
     // Action: Verificar estado al cargar app
+    // Action: Verificar estado al cargar app (Real Backend)
     const checkDailyApproval = async () => {
-      // En producción: Supabase RPC check_daily_pass(fingerprint)
+      if (!currentUser.value || !('username' in currentUser.value)) return 'none';
 
-      // Simulación Local: Auto-expirar si cambió el día
-      if (dailyAccessState.value.status === 'approved' && dailyAccessState.value.lastApprovedAt) {
-        const lastDate = new Date(dailyAccessState.value.lastApprovedAt).toDateString();
-        const today = new Date().toDateString();
+      const fingerprint = getDeviceFingerprint(); // Sync
+      const result = await authRepository.checkDailyPassStatus(currentUser.value.id, fingerprint);
 
-        if (lastDate !== today) {
+      dailyAccessState.value.status = result.status;
 
-          dailyAccessState.value.status = 'expired';
-        }
+      if (result.status === 'approved') {
+        dailyAccessState.value.approvedBy = 'system'; // Or fetch who approved
+        dailyAccessState.value.lastApprovedAt = new Date().toISOString();
       }
+
       return dailyAccessState.value.status;
     };
 
-    // Action: Solicitar acceso
+    // Action: Solicitar acceso (Real Backend)
     const requestDailyPass = async () => {
-      // En producción: RPC request_daily_pass() con ping count
+      if (!currentUser.value || !('username' in currentUser.value)) return false;
 
-      dailyAccessState.value.status = 'pending';
-      dailyAccessState.value.requestedAt = new Date().toISOString();
-      dailyAccessState.value.fingerprint = getDeviceFingerprint();
-      return true;
+      const fingerprint = getDeviceFingerprint(); // Sync
+      const result = await authRepository.requestDailyPass(currentUser.value.id, fingerprint);
+
+      if (result.success) {
+        dailyAccessState.value.status = (result.status as any) || 'pending';
+        dailyAccessState.value.fingerprint = fingerprint;
+        dailyAccessState.value.requestedAt = new Date().toISOString();
+        return true;
+      } else {
+        console.error("Pass Request Error:", result.error);
+        return false;
+      }
     };
 
-    // Action: Aprobar (Solo Admin - Simulado)
-    const approveRequest = async () => {
-      if (!isAdmin.value) return false;
-
-
-      dailyAccessState.value.status = 'approved';
-      dailyAccessState.value.lastApprovedAt = new Date().toISOString();
-      return true;
+    // Action: Fetch Pending Requests (Admin)
+    const fetchPendingRequests = async () => {
+      if (!currentStore.value?.id) return;
+      const requests = await authRepository.getPendingAccessRequests(currentStore.value.id);
+      pendingRequests.value = requests || [];
     };
 
-    // Action: Rechazar (Solo Admin)
-    const rejectRequest = async () => {
-      if (!isAdmin.value) return false;
-
-      dailyAccessState.value = {
-        status: 'rejected',
-        lastApprovedAt: null,
-        fingerprint: null,
-        requestedAt: null
-      };
-      return true;
+    // Action: Aprobar (Real Backend)
+    const approveRequest = async (requestId: string) => {
+      if (!currentUser.value) return false;
+      try {
+        await authRepository.updateAccessRequestStatus(requestId, 'approved', currentUser.value.id);
+        // Refresh list
+        await fetchPendingRequests();
+        return true;
+      } catch (e) {
+        console.error(e);
+        return false;
+      }
     };
+
+    // Action: Rechazar (Real Backend)
+    const rejectRequest = async (requestId: string) => {
+      if (!currentUser.value) return false;
+      try {
+        await authRepository.updateAccessRequestStatus(requestId, 'rejected', currentUser.value.id);
+        await fetchPendingRequests();
+        return true;
+      } catch (e) {
+        console.error(e);
+        return false;
+      }
+    };
+
+
 
     // Helper to manually set status (used by Login flows)
     const setDeviceStatus = (status: 'pending' | 'approved' | 'rejected' | 'expired') => {
@@ -382,10 +414,14 @@ export const useAuthStore = defineStore(
       canViewInventory,
       canViewReports,
       canFiar,
-      canOpenCloseCash, // SPEC-006
+      canOpenCloseCash,
       canAccessPOS,
-      canManageInventory, // Fix
-      canManageClients,   // Fix
+      canManageInventory,
+      canManageClients,
+
+      // Admin Lists
+      pendingRequests,
+
       // Methods
       registerStore,
       login,
@@ -402,6 +438,7 @@ export const useAuthStore = defineStore(
       requestDailyPass,
       approveRequest,
       rejectRequest,
+      fetchPendingRequests,
       setDeviceStatus,
     };
   },

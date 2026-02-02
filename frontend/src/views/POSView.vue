@@ -237,6 +237,13 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, 
 
   const success = await executeSale(async () => {
     // ============================================
+    // SAFEGUARD: Check Register Status (JIT)
+    // ============================================
+    if (!cashRegisterStore.isOpen) {
+        throw new Error('La caja está cerrada. No se puede procesar la venta.');
+    }
+
+    // ============================================
     // SIMULATED PROCESSING DELAY
     // ============================================
     await new Promise((resolve) => setTimeout(resolve, 600));
@@ -275,7 +282,9 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, 
     // Distribute Payments to Registers / Ledgers
     for (const payment of payments) {
         if (payment.method === 'cash') {
-            // Register ONLY the cash portion in the drawer
+            // ⚠️ CRITICAL: DO NOT MANUALLY ADD CASH MOVEMENT FOR SALES HERE.
+            // The DB Trigger 'sync_sale_to_cash' handles the financial record.
+            // This call only updates the local UI state.
             cashRegisterStore.addIncome(payment.amount, `Venta ${currentTicket} (Efectivo)`, saleId);
         } 
         // Other methods handled by backend/RPC usually, or separate stores if needed

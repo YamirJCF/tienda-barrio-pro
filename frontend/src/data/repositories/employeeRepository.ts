@@ -82,6 +82,8 @@ export interface EmployeeRepository extends EntityRepository<Employee> {
     // Overrides base create to be safer
     create(data: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Promise<Employee | null>;
     validatePin(username: string, pin: string): Promise<Employee | null>;
+    updatePin(employeeId: string, newPin: string): Promise<{ success: boolean; error?: string }>;
+    toggleActiveSecure(employeeId: string, newStatus: boolean): Promise<{ success: boolean; error?: string }>;
 }
 
 // Create base repository
@@ -101,20 +103,14 @@ export const employeeRepository: EmployeeRepository = {
 
     /**
      * Custom UPDATE method to handle PIN correctly
-     * If PIN is empty, don't update it (keep existing hash)
-     * If PIN is provided, it's a plain PIN that needs hashing via RPC
      */
     async update(id: string, data: Partial<Employee>): Promise<Employee | null> {
         // If PIN is empty or not provided, use standard update without PIN
         if (!data.pin || data.pin.trim() === '') {
-            // Remove PIN from data to avoid overwriting hash
             const { pin, ...dataWithoutPin } = data;
             return baseRepository.update(id, dataWithoutPin as any);
         }
 
-        // If PIN is provided, we need to hash it
-        // For now, throw error because we don't have an RPC for updating PIN during employee edit
-        // The proper way is to use the "Change PIN" functionality separately
         throw new Error('No se puede cambiar el PIN durante la edición. Usa la función "Cambiar PIN" específica.');
     },
 
@@ -122,9 +118,9 @@ export const employeeRepository: EmployeeRepository = {
 
     /**
      * Create Employee via RPC (SECURE)
-     * Hashes PIN on server side
      */
     async create(data: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Promise<Employee | null> {
+        // ... (existing code for create) ...
         // 1. Validation
         if (!data.storeId) throw new Error('Store ID required');
 
@@ -137,7 +133,7 @@ export const employeeRepository: EmployeeRepository = {
                     p_store_id: data.storeId,
                     p_name: data.name,
                     p_username: data.username,
-                    p_pin: data.pin, // Plain text PIN, RPC will hash it
+                    p_pin: data.pin,
                     p_permissions: data.permissions
                 });
 
@@ -147,23 +143,18 @@ export const employeeRepository: EmployeeRepository = {
                 }
 
                 if (result && result.success) {
-                    // Success! RPC returns ID.
-                    // Construct Employee object directly from data we have
-                    // instead of fetching (which can fail due to RLS/timing issues)
                     const newId = result.employee_id;
-
                     const newEmployee: Employee = {
                         id: newId,
                         storeId: data.storeId,
                         name: data.name,
                         username: data.username,
-                        pin: '****', // Masked, we don't store plain PIN
+                        pin: '****',
                         permissions: data.permissions,
                         isActive: data.isActive !== undefined ? data.isActive : true,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString()
                     };
-
                     return newEmployee;
                 } else {
                     throw new Error(result?.error || 'Unknown RPC error');
@@ -171,7 +162,7 @@ export const employeeRepository: EmployeeRepository = {
 
             } catch (e: any) {
                 logger.error('[EmployeeRepo] Create Exception:', e);
-                throw e; // Re-throw to UI
+                throw e;
             }
         } else {
             throw new Error('Se requiere conexión a internet para crear empleados (Seguridad de PIN).');
@@ -179,9 +170,70 @@ export const employeeRepository: EmployeeRepository = {
     },
 
     /**
+     * Update PIN via RPC
+     */
+    async updatePin(employeeId: string, newPin: string): Promise<{ success: boolean; error?: string }> {
+        if (isSupabaseConfigured() && navigator.onLine) {
+            const supabase = getSupabaseClient()!;
+            try {
+                const { data, error } = await supabase.rpc('actualizar_pin_empleado', {
+                    p_employee_id: employeeId,
+                    p_new_pin: newPin
+                });
+
+                if (error) {
+                    logger.error('[EmployeeRepo] RPC updatePin error:', error);
+                    return { success: false, error: error.message };
+                }
+
+                if (data && data.success) {
+                    return { success: true };
+                }
+
+                return { success: false, error: data?.error || 'Unknown RPC error' };
+            } catch (e: any) {
+                logger.error('[EmployeeRepo] Update PIN Exception:', e);
+                return { success: false, error: e.message };
+            }
+        }
+        return { success: false, error: 'Offline PIN update not supported' };
+    },
+
+    /**
+     * Toggle Active Status via RPC (SECURE)
+     */
+    async toggleActiveSecure(employeeId: string, newStatus: boolean): Promise<{ success: boolean; error?: string }> {
+        if (isSupabaseConfigured() && navigator.onLine) {
+            const supabase = getSupabaseClient()!;
+            try {
+                const { data, error } = await supabase.rpc('toggle_empleado_activo', {
+                    p_employee_id: employeeId,
+                    p_new_status: newStatus
+                });
+
+                if (error) {
+                    logger.error('[EmployeeRepo] RPC toggleActive error:', error);
+                    return { success: false, error: error.message };
+                }
+
+                if (data && data.success) {
+                    return { success: true };
+                }
+
+                return { success: false, error: data?.error || 'Unknown RPC error' };
+            } catch (e: any) {
+                logger.error('[EmployeeRepo] Toggle Active Exception:', e);
+                return { success: false, error: e.message };
+            }
+        }
+        return { success: false, error: 'Cambio de estado requiere conexión a internet.' };
+    },
+
+    /**
      * Validate PIN via RPC
      */
     async validatePin(username: string, pin: string): Promise<Employee | null> {
+        // ... (existing validate pin) ...
         if (isSupabaseConfigured() && navigator.onLine) {
             const supabase = getSupabaseClient()!;
             const { data, error } = await supabase.rpc('validar_pin_empleado', {
@@ -193,27 +245,20 @@ export const employeeRepository: EmployeeRepository = {
                 return null;
             }
 
-            // Map result.employee to Domain
-            // Result shape: { success: true, employee: { id, name... } }
-            // Note: RPC returns snake_case or camel? SQL says:
-            // json_build_object('id', v_employee.id ...) -> keys are what we defined.
-            // In SQL v2: 'id', 'name', 'username', 'permissions', 'store_id'
             const raw = data.employee;
-
-            // Manual mapping from RPC result
             return {
                 id: raw.id,
-                storeId: raw.store_id, // RPC returned store_id
+                storeId: raw.store_id,
                 name: raw.name,
                 username: raw.username,
-                pin: '***', // Masked, we don't need hash here
+                pin: '***',
                 permissions: raw.permissions,
-                isActive: true, // If validated, it is active
+                isActive: true,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             } as Employee;
         }
-        return null; // TODO: Local offline login?
+        return null;
     }
 };
 

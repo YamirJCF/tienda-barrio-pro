@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useCashRegisterStore } from '../../stores/cashRegister';
 import Decimal from 'decimal.js';
 import { Store, CheckCircle, AlertTriangle, Loader2 } from 'lucide-vue-next';
+import { useNotifications } from '@/composables/useNotifications';
 
 // Props & Emits
 interface Props {
@@ -21,6 +22,7 @@ const cashRegisterStore = useCashRegisterStore();
 const physicalCount = ref('');
 const notes = ref('');
 const isLoading = ref(false);
+const { showError, showSuccess } = useNotifications(); // Hook
 
 // Computed
 const systemExpected = computed(() => cashRegisterStore.currentBalance);
@@ -77,7 +79,7 @@ const handleClose = () => {
     close();
   } catch (error) {
     console.error(error);
-    alert('Error al cerrar la caja');
+    showError('Error al cerrar la caja');
   } finally {
     isLoading.value = false;
   }

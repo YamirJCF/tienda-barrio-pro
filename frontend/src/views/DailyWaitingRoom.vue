@@ -89,9 +89,26 @@ const handleLogout = () => {
     router.push('/login');
 };
 
-onMounted(() => {
+onMounted(async () => {
+    // Si no hay solicitud pendiente, pedirla automáticamente
+    if (authStore.dailyAccessStatus === 'none' || authStore.dailyAccessStatus === 'expired') {
+        showInfo('Contactando al Supervisor...');
+        const success = await authStore.requestDailyPass();
+        if (success) {
+            showSuccess('Solicitud Enviada Correctamente');
+        } else {
+            showError('No se pudo enviar la solicitud. Revisa tu conexión.');
+        }
+    }
+    
     startPolling();
-    startCooldown(120); // Start with 2 min cooldown
+    
+    // Si ya enviamos solicitud (auto o previa), iniciar cooldown visual
+    if (authStore.dailyAccessStatus === 'pending') {
+        startCooldown(60); 
+    } else {
+        startCooldown(0); // Permitir botón si falló
+    }
 });
 
 onUnmounted(() => {
