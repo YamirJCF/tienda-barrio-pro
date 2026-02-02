@@ -212,8 +212,15 @@ const handlePOSKeydown = (e: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handlePOSKeydown);
+  
   // Ensure inventory is loaded
   inventoryStore.initialize();
+
+  // FIX: Force sync of Cash Register status. 
+  // RLS fix allows reading, but we must fetch to see 'isOpen'.
+  if (authStore.currentStore?.id) {
+    cashRegisterStore.syncFromBackend(authStore.currentStore.id);
+  }
 });
 
 onUnmounted(() => {

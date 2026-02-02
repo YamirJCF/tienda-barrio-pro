@@ -17,7 +17,9 @@ import {
   MoveRight,
   ChevronRight,
   Settings,
-  Users
+  Users,
+  Calculator,
+  Package
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
@@ -284,6 +286,70 @@ const navigateToNotifications = () => {
               >
             </div>
              <ChevronRight :size="20" class="text-slate-400" />
+          </button>
+        </div>
+      </section>
+
+      <!-- Quick Actions - Employee Only -->
+      <section v-else>
+        <h3 class="ml-1 text-sm font-bold text-slate-900 dark:text-white mb-3">
+          Acciones Rápidas
+        </h3>
+        <div
+          class="flex flex-col overflow-hidden rounded-xl bg-white dark:bg-surface-dark shadow-sm border border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800"
+        >
+          <!-- Vender -->
+          <button
+            @click="navigateTo('/pos')"
+            class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
+              >
+                <Calculator :size="20" />
+              </div>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
+                >Realizar Venta</span
+              >
+            </div>
+            <ChevronRight :size="20" class="text-slate-400" />
+          </button>
+
+          <!-- Productos -->
+          <button
+            @click="navigateTo('/inventory')"
+            class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+              >
+                <Package :size="20" />
+              </div>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
+                >Gestionar Productos</span
+              >
+            </div>
+            <ChevronRight :size="20" class="text-slate-400" />
+          </button>
+             
+          <!-- Clientes -->
+          <button
+            @click="navigateTo('/clients')"
+            class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
+              >
+                <Users :size="20" />
+              </div>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
+                >Ver Clientes</span
+              >
+            </div>
+            <ChevronRight :size="20" class="text-slate-400" />
           </button>
         </div>
       </section>

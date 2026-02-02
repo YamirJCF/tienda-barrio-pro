@@ -15,6 +15,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { authRepository } from '../data/repositories/authRepository'; // Added
 import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
 import { Hourglass, Ban, RefreshCw, Smartphone, Loader2 } from 'lucide-vue-next';
 
@@ -73,17 +74,33 @@ const checkDeviceStatus = async (): Promise<void> => {
   pollCount.value++;
   
   try {
-    // TODO: Replace with actual RPC call to check device status
-    // const status = await supabase.rpc('check_device_status', { fingerprint: deviceId.value });
+    const passId = authStore.dailyAccessState.passId;
+    if (!passId) {
+        console.warn('[GatekeeperPending] No passId found to poll.');
+        return;
+    }
+
+    const { status, employee } = await authRepository.checkMyPassStatus(passId);
     
-    // Simulated: Keep as pending (in real app, would update based on server response)
     lastChecked.value = new Date();
     
-    // If approved, redirect to dashboard
-    if (authStore.deviceApproved === 'approved') {
-      stopPolling();
-      router.push('/');
+    if (status === 'approved' && employee) {
+       // FINALIZAR LOGIN
+       authStore.loginAsEmployee({
+          id: employee.id,
+          name: employee.name,
+          username: employee.username || employee.alias, // Fallback
+          permissions: employee.permissions || {}
+       }, employee.store_id);
+       
+       authStore.setDeviceStatus('approved');
+       stopPolling();
+       router.push('/');
+    } else if (status === 'rejected') {
+        authStore.setDeviceStatus('rejected');
+        stopPolling();
     }
+    // If pending, just continue
   } catch (error) {
     console.error('[GatekeeperPending] Error checking status:', error);
   } finally {

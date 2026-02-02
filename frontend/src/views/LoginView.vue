@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { Store, Eye, EyeOff, User, Lock, ArrowLeft, ChevronRight } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
-import { useEmployeesStore } from '../stores/employees';
+import { authRepository } from '../data/repositories/authRepository';
 import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
 import BaseButton from '@/components/ui/BaseButton.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
@@ -12,7 +12,6 @@ import GatekeeperPending from './GatekeeperPending.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
-const employeesStore = useEmployeesStore();
 
 // WO-004 T4.4: Rate Limiting
 const {
@@ -28,6 +27,7 @@ const username = ref('');
 const password = ref('');
 const showPassword = ref(false);
 const errorMessage = ref('');
+const employeeContext = ref<any>(null); // Store info for employee login
 // isLoading handled by useAsyncAction
 
 // SPEC-005: Detectar tipo de usuario basado en presencia de @
@@ -42,13 +42,35 @@ const { execute: executeLogin, isLoading } = useAsyncAction();
 // WO-003: Progressive Login State
 const currentStep = ref<'identity' | 'credential'>('identity');
 
-const handleContinue = () => {
+const handleContinue = async () => {
   if (!username.value.trim()) {
       errorMessage.value = 'Por favor ingresa tu usuario o correo';
       return;
   }
   errorMessage.value = '';
-  currentStep.value = 'credential';
+
+  // ZERO-AUTH: Resolve Alias if Employee
+  if (!isAdminLogin.value) {
+    isLoading.value = true;
+    try {
+        const result = await authRepository.getEmployeePublicInfo(username.value);
+        isLoading.value = false;
+        
+        if (!result.success || !result.data) {
+            errorMessage.value = 'Alias de empleado no encontrado';
+            return;
+        }
+        
+        employeeContext.value = result.data;
+        // Proceed
+        currentStep.value = 'credential';
+    } catch (e) {
+        isLoading.value = false;
+        errorMessage.value = 'Error verificando alias';
+    }
+  } else {
+     currentStep.value = 'credential';
+  }
 };
 
 const handleBack = () => {
@@ -92,37 +114,53 @@ const handleLogin = async () => {
       throw new Error(`Correo o contraseña incorrectos (${remainingAttempts.value} intentos restantes)`);
     } else {
       // =============================================
-      // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos
-      // =============================================
-      // =============================================
-      // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos
+      // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos (Zero-Auth)
       // =============================================
       
-      // WO-REM-002: RPC Check (Async)
-      // No requerimos tienda previa, el RPC nos dirá el store_id
-      const localEmployee = await employeesStore.validatePin(username.value, password.value);
+      const fingerprint = await authStore.dailyAccessState.fingerprint || 'unknown-device'; // Should be handled by repo, but passing simple string
       
-      if (localEmployee) {
-        // Login local exitoso
-        authStore.loginAsEmployee(
-          {
-            id: localEmployee.id,
-            name: localEmployee.name,
-            username: localEmployee.username,
-            permissions: localEmployee.permissions,
-          },
-          localEmployee.storeId, // ID obtenido del RPC
-        );
+      const result = await authRepository.requestEmployeeAccess(
+        username.value,
+        password.value,
+        fingerprint
+      );
 
-        // authStore.setDeviceStatus('approved'); // REMOVED: Zero Trust Enforced
-        recordSuccess();
-        router.push('/');
-        return;
+      if (result.success) {
+         if (result.status === 'approved') {
+             // Access Granted
+             authStore.loginAsEmployee(
+                 {
+                    id: result.employee.id,
+                    name: result.employee.name,
+                    username: username.value,
+                    permissions: result.employee.permissions || {}
+                 },
+                 result.employee.store_id
+             );
+             
+             authStore.setDeviceStatus('approved');
+             recordSuccess();
+             router.push('/');
+             return;
+         } else if (result.status === 'pending') {
+             // Pending Approval
+             // We need to set state so GatekeeperPending component picks it up
+             authStore.setDeviceStatus('pending');
+             
+             // Store PASS_ID for polling
+             if (result.pass_id) {
+                 authStore.dailyAccessState.passId = result.pass_id;
+             }
+             
+             return; // UI updates automatically via reactive state
+         } else {
+             throw new Error(result.message || 'Acceso denegado');
+         }
       }
 
-      // Si no hay empleado local, mostrar error
+      // Si falló logicamente (PIN mal)
       recordFailedAttempt();
-      throw new Error(`Usuario o PIN incorrectos (${remainingAttempts.value} intentos restantes)`);
+      throw new Error(result.message || result.error_code || 'PIN Incorrecto o Error de acceso');
     }
   }, {
     // Options
@@ -254,7 +292,12 @@ const handleServerError = (errorCode: string, errorMsg: string) => {
                     </div>
                     <div class="flex-1 overflow-hidden">
                         <p class="text-xs text-gray-500 font-medium">Accediendo como</p>
-                        <p class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{{ username }}</p>
+                        <p class="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                            {{ employeeContext ? employeeContext.name : username }}
+                        </p>
+                        <p v-if="employeeContext" class="text-xs text-primary font-medium truncate">
+                            {{ employeeContext.store_name }}
+                        </p>
                     </div>
                     <button 
                       type="button" 

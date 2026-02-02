@@ -217,9 +217,27 @@ export const useAuthStore = defineStore(
         type: 'employee',
         storeId: storeId,
         employeeId: employee.id,
-        permissions: employee.permissions,
+        permissions: {
+          ...employee.permissions,
+          // Default to true if not present but required for basic operation
+          canManageClients: (employee.permissions as any).canManageClients ?? true,
+          canManageInventory: (employee.permissions as any).canManageInventory ?? false
+        },
       };
       isAuthenticated.value = true;
+
+      // FIX: Populate 'stores' so 'currentStore' computed property works for employees
+      const existingStore = stores.value.find(s => s.id === storeId);
+      if (!existingStore) {
+        stores.value.push({
+          id: storeId,
+          storeName: 'Tienda', // Placeholder until fetched
+          ownerName: 'Owner',  // Placeholder
+          email: '',
+          password: '',
+          createdAt: new Date().toISOString()
+        });
+      }
 
       // Zero Trust: Check daily pass immediately
       checkDailyApproval();
@@ -256,6 +274,7 @@ export const useAuthStore = defineStore(
       fingerprint: string | null;
       requestedAt: string | null;
       approvedBy?: string;
+      passId?: string; // New field for polling
     }
 
     // State principal de seguridad diaria
@@ -292,11 +311,17 @@ export const useAuthStore = defineStore(
 
     // Action: Verificar estado al cargar app
     // Action: Verificar estado al cargar app (Real Backend)
+    // Action: Verificar estado al cargar app (Real Backend)
     const checkDailyApproval = async () => {
-      if (!currentUser.value || !('username' in currentUser.value)) return 'none';
+      // FIX: Removed 'username' check as CurrentUser interface uses 'email' for employees/admins
+      if (!currentUser.value) return 'none';
 
-      const fingerprint = getDeviceFingerprint(); // Sync
-      const result = await authRepository.checkDailyPassStatus(currentUser.value.id, fingerprint);
+      // Auto-recover fingerprint if lost (Critical for page refresh)
+      if (!dailyAccessState.value.fingerprint) {
+        dailyAccessState.value.fingerprint = getDeviceFingerprint();
+      }
+
+      const result = await authRepository.checkDailyPassStatus(currentUser.value.id, dailyAccessState.value.fingerprint);
 
       dailyAccessState.value.status = result.status;
 
