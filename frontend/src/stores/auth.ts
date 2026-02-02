@@ -309,8 +309,9 @@ export const useAuthStore = defineStore(
     };
 
     // Action: Solicitar acceso (Real Backend)
-    const requestDailyPass = async () => {
-      if (!currentUser.value || !('username' in currentUser.value)) return false;
+    const requestDailyPass = async (): Promise<{ success: boolean; error?: string }> => {
+      // FIX: Removed 'username' check as CurrentUser interface uses 'email' for employees/admins
+      if (!currentUser.value) return { success: false, error: 'No user session' };
 
       const fingerprint = getDeviceFingerprint(); // Sync
       const result = await authRepository.requestDailyPass(currentUser.value.id, fingerprint);
@@ -319,10 +320,10 @@ export const useAuthStore = defineStore(
         dailyAccessState.value.status = (result.status as any) || 'pending';
         dailyAccessState.value.fingerprint = fingerprint;
         dailyAccessState.value.requestedAt = new Date().toISOString();
-        return true;
+        return { success: true };
       } else {
         console.error("Pass Request Error:", result.error);
-        return false;
+        return { success: false, error: result.error || 'Unknown error' };
       }
     };
 

@@ -7,11 +7,13 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useNotifications } from '@/composables/useNotifications';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import { Hourglass, AlertCircle, BellRing } from 'lucide-vue-next';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { showInfo, showSuccess, showError } = useNotifications();
 
 // State
 const isPolling = ref(false);
@@ -93,11 +95,11 @@ onMounted(async () => {
     // Si no hay solicitud pendiente, pedirla automáticamente
     if (authStore.dailyAccessStatus === 'none' || authStore.dailyAccessStatus === 'expired') {
         showInfo('Contactando al Supervisor...');
-        const success = await authStore.requestDailyPass();
-        if (success) {
+        const result = await authStore.requestDailyPass();
+        if (result.success) {
             showSuccess('Solicitud Enviada Correctamente');
         } else {
-            showError('No se pudo enviar la solicitud. Revisa tu conexión.');
+            showError(`Error: ${result.error}`);
         }
     }
     
