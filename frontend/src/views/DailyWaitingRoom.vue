@@ -44,8 +44,10 @@ const startPolling = () => {
     pollingInterval = setInterval(async () => {
         // Consultar estado real al store
         const status = await authStore.checkDailyApproval();
+        console.log('[WaitingRoom] Polling Status:', status);
         
         if (status === 'approved') {
+            console.log('[WaitingRoom] Approved! Redirecting...');
             router.push('/');
         } else if (status === 'rejected') {
             isLocked.value = true;
@@ -176,6 +178,14 @@ const formatTime = (seconds: number) => {
           >
               Cancelar y Cerrar Sesión
           </button>
+      </div>
+
+       <div class="mt-8 p-4 bg-gray-900 rounded-lg text-xs text-green-400 font-mono text-left opacity-90">
+          <p><strong>DEBUG INFO:</strong></p>
+          <p>User ID: {{ authStore.currentUser?.id }}</p>
+          <p>Access Status: {{ authStore.dailyAccessStatus }}</p>
+          <p>Fingerprint: {{ authStore.dailyAccessState?.fingerprint?.substring(0, 15) }}...</p>
+          <p>Last Poll: {{ new Date().toLocaleTimeString() }}</p>
       </div>
 
     </div>

@@ -40,7 +40,7 @@ export const employeeMapper: RepositoryMappers<EmployeeDB, Employee> = {
             id: row.id,
             storeId: row.store_id,
             name: row.name,
-            username: row.username,
+            username: (row as any).alias, // DB column renamed to 'alias', mapping to domain 'username'
             pin: '', // SECURITY: Never expose hash to UI. PIN is write-only field.
             // When creating: plain PIN → hashed by RPC
             // When reading: hash → masked as empty string

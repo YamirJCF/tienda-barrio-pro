@@ -26,6 +26,24 @@ export interface RegisterResponse {
     error?: string;
 }
 
+export interface EmployeePublicInfo {
+    employee_id: string;
+    name: string;
+    store_id: string;
+    store_name: string;
+}
+
+export interface AccessRequestResponse {
+    success: boolean;
+    status?: 'pending' | 'approved' | 'rejected' | 'expired';
+    message?: string;
+    pass_id?: string;
+    employee?: any;
+    error_code?: string;
+}
+
+
+
 export const authRepository = {
     /**
      * Registra una nueva tienda (Admin) usando Supabase Auth Nativo
@@ -198,8 +216,59 @@ export const authRepository = {
     },
 
     /**
-     * SPEC-005: Login unificado de empleado (Gatekeeper de 3 capas)
-     * Updated for Schema v2: Uses 'validar_pin_empleado' RPC
+     * ZER0-AUTH: Paso 1 - Resolver Alias Global a Tienda/Empleado
+     */
+    async getEmployeePublicInfo(alias: string): Promise<{ success: boolean; data?: EmployeePublicInfo; error?: string }> {
+        try {
+            const { data, error } = await supabase.rpc('get_employee_public_info' as any, {
+                p_alias: alias
+            });
+
+            if (error) throw error;
+            const result = data as any;
+
+            if (!result.success) {
+                return { success: false, error: result.error };
+            }
+
+            return { success: true, data: result as EmployeePublicInfo };
+        } catch (err: any) {
+            logger.error('[AuthRepo] Public Info Error:', err);
+            return { success: false, error: err.message };
+        }
+    },
+
+    /**
+     * ZERO-AUTH: Paso 2 - Solicitar Acceso (Login + Daily Pass Request)
+     * Reemplaza a loginEmpleado anterior.
+     */
+    async requestEmployeeAccess(
+        alias: string,
+        pin: string,
+        fingerprint: string
+    ): Promise<AccessRequestResponse> {
+        try {
+            const { data, error } = await supabase.rpc('request_employee_access' as any, {
+                p_alias: alias,
+                p_pin: pin,
+                p_device_fingerprint: fingerprint
+            });
+
+            if (error) throw error;
+
+            return data as AccessRequestResponse;
+        } catch (err: any) {
+            logger.error('[AuthRepo] Request Access Error:', err);
+            return {
+                success: false,
+                error_code: 'RPC_ERROR',
+                message: err.message
+            };
+        }
+    },
+
+    /**
+     * DEPRECATED: Old Login Method (Kept for compatibility if needed temporarily)
      */
     async loginEmpleado(
         username: string,
@@ -207,83 +276,8 @@ export const authRepository = {
         fingerprint: string,
         userAgent: string
     ): Promise<LoginResponse> {
-        // 🛡️ AUDIT MODE MOCK
-        if (isAuditMode()) {
-            logger.log('[AuthRepo] 🛡️ Audit Mode: Mocking login success');
-            return {
-                success: true,
-                employee: {
-                    id: 'mock-emp-001',
-                    name: 'Empleado Demo (Auditoría)',
-                    email: username || 'demo@audit.com',
-                    type: 'employee',
-                    storeId: 'audit-store-001',
-                    employeeId: '101', // Converted to string
-                    permissions: {
-                        canSell: true,
-                        canViewInventory: true,
-                        canViewReports: true,
-                        canFiar: true,
-                        canOpenCloseCash: true,
-                        canManageInventory: true,
-                        canManageClients: true
-                    }
-                },
-                store_state: { is_open: true }
-            };
-        }
-
-        try {
-            // Updated to use 'validar_pin_empleado' which exists in Schema v2
-            const { data, error } = await supabase.rpc('validar_pin_empleado', {
-                p_username: username.toLowerCase(),
-                p_pin: pin
-            });
-
-            if (error) {
-                logger.error('[AuthRepository] Error in validar_pin_empleado:', error);
-                return {
-                    success: false,
-                    error: error.message
-                };
-            }
-
-            const response = data as any;
-
-            if (!response.success) {
-                return {
-                    success: false,
-                    error_code: response.error_code || 'AUTH_FAILED',
-                    error: response.message || response.error || 'Credenciales inválidas'
-                };
-            }
-
-            // Note: validar_pin_empleado returns employee info but maybe not store_state?
-            // Schema v2 validates PIN. We might need to fetch store state separately or logic resides in middleware.
-            // Assuming response structure contains necessary info based on "Json" return type.
-
-            const employee: CurrentUser = {
-                id: response.employee.id,
-                name: response.employee.name,
-                email: response.employee.username,
-                type: 'employee',
-                storeId: response.employee.store_id,
-                employeeId: response.employee.id,
-                permissions: response.employee.permissions || {}
-            };
-
-            return {
-                success: true,
-                employee,
-                store_state: response.store_state || { is_open: false } // Fallback if not provided
-            };
-        } catch (err) {
-            logger.error('[AuthRepository] Unexpected error:', err);
-            return {
-                success: false,
-                error: 'Error inesperado en el servidor'
-            };
-        }
+        logger.warn('[AuthRepo] Deprecated loginEmpleado called. Use requestEmployeeAccess instead.');
+        return { success: false, error: 'Método obsoleto. Actualice la aplicación.' };
     },
 
     /**
@@ -342,34 +336,52 @@ export const authRepository = {
         }));
     },
 
+
     /**
      * Aprobar o rechazar solicitud de acceso
-     * Updated: Use RPC 'aprobar_pase_diario' for approval
-     */
-    /**
-     * Aprobar o rechazar solicitud de acceso
-     * Updated: Use RPC 'aprobar_pase_diario' for approval
+     * Updated: Utiliza la nueva RPC 'approve_daily_pass'
      */
     async updateAccessRequestStatus(requestId: string, status: 'approved' | 'rejected', reviewedBy: string) {
-        if (status === 'approved') {
-            const { data, error } = await supabase.rpc('aprobar_pase_diario', {
-                p_pass_id: requestId,
-                p_admin_id: reviewedBy
+        try {
+            if (status === 'approved') {
+                const { data, error } = await supabase.rpc('approve_daily_pass' as any, {
+                    p_pass_id: requestId
+                });
+                if (error) throw error;
+                return data;
+            } else {
+                // Reject: Update status directly (if RLS allows) or use a RPC if needed.
+                // Assuming RLS allows update if Admin.
+                const { data, error } = await supabase
+                    .from('daily_passes')
+                    .update({
+                        status: 'rejected',
+                        resolved_by: reviewedBy, // If column exists
+                        // resolved_at: new Date().toISOString() // handled by trigger usually or manual
+                    })
+                    .eq('id', requestId);
+
+                if (error) throw error;
+                return data;
+            }
+        } catch (err) {
+            logger.error('[AuthRepo] Approval Error', err);
+            throw err;
+        }
+    },
+
+    /**
+     * Polling para el Frontend: Check status de mi pase específico
+     */
+    async checkMyPassStatus(passId: string): Promise<{ status: string; employee?: any }> {
+        try {
+            const { data, error } = await supabase.rpc('check_my_pass_status' as any, {
+                p_pass_id: passId
             });
             if (error) throw error;
-            return data;
-        } else {
-            // Reject: Update status directly
-            const { data, error } = await supabase
-                .from('daily_passes')
-                .update({
-                    status: 'rejected',
-                    resolved_by: reviewedBy,
-                    resolved_at: new Date().toISOString()
-                })
-                .eq('id', requestId);
-            if (error) throw error;
-            return data;
+            return data as any;
+        } catch (err) {
+            return { status: 'error' };
         }
     },
 
@@ -380,6 +392,14 @@ export const authRepository = {
         try {
             // FIX: Strip 'emp-' prefix if present, as backend expects raw UUID
             const cleanId = employeeId.startsWith('emp-') ? employeeId.replace('emp-', '') : employeeId;
+
+            // ARCHITECT FIX: Ensure Session Exists before RPC
+            // If the initial login didn't establish the session (race condition or failure), do it now.
+            const { data: sessionData } = await supabase.auth.getSession();
+            if (!sessionData.session) {
+                logger.log('[AuthRepo] No session found during Request Pass. Attempting Anon Sign-in...');
+                await supabase.auth.signInAnonymously();
+            }
 
             const { data, error } = await supabase.rpc('solicitar_pase_diario', {
                 p_employee_id: cleanId,
@@ -413,6 +433,7 @@ export const authRepository = {
         try {
             // FIX: Strip 'emp-' prefix
             const cleanId = employeeId.startsWith('emp-') ? employeeId.replace('emp-', '') : employeeId;
+            console.log('[AuthRepo] Checking Daily Pass for Clean ID:', cleanId, typeof cleanId);
 
             const { data, error } = await supabase.rpc('check_daily_pass_status', {
                 p_employee_id: cleanId,
