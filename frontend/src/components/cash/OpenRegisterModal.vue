@@ -5,6 +5,7 @@ import { useEmployeesStore } from '../../stores/employees';
 import { useAuthStore } from '../../stores/auth'; // Import auth store
 import Decimal from 'decimal.js';
 import { Store, Loader2 } from 'lucide-vue-next';
+import { useNotifications } from '@/composables/useNotifications';
 
 // Props & Emits
 interface Props {
@@ -23,7 +24,9 @@ const employeesStore = useEmployeesStore();
 // State
 const amount = ref('');
 const notes = ref('');
+
 const isLoading = ref(false);
+const { showError, showSuccess } = useNotifications(); // Hook
 
 // Computed
 const isValid = computed(() => {
@@ -46,9 +49,16 @@ const handleOpen = () => {
     const authStore = useAuthStore(); // Added authStore usage
     // Using store user if available, fallback to 1 (legacy) or handle error
     const employeeId = authStore.currentUser?.id || '1';
+    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id; // Get storeId
+
+    if (!storeId) {
+       showError('Error: No se ha identificado la tienda activa.');
+       return;
+    }
     
     cashRegisterStore.openRegister(
-      employeeId, 
+      employeeId,
+      storeId, 
       new Decimal(amount.value), 
       notes.value
     );
@@ -57,7 +67,7 @@ const handleOpen = () => {
     close();
   } catch (error) {
     console.error(error);
-    alert('Error al abrir la caja');
+    showError('Error al abrir la caja');
   } finally {
     isLoading.value = false;
   }

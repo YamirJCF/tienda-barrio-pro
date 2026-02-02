@@ -142,7 +142,7 @@ const handlePinInput = (value: string | number) => {
 const savePin = async () => {
   if (selectedEmployee.value && newPin.value.length === 4) {
     await executePin(async () => {
-        employeesStore.updatePin(selectedEmployee.value!.id, newPin.value);
+        await employeesStore.updatePin(selectedEmployee.value!.id, newPin.value);
         showPinModal.value = false;
         selectedEmployee.value = null;
         newPin.value = '';

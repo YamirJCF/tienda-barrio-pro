@@ -7,6 +7,7 @@ import BaseModal from './ui/BaseModal.vue';
 import BaseInput from './ui/BaseInput.vue';
 import BaseButton from './ui/BaseButton.vue';
 import { User, IdCard, Lock } from 'lucide-vue-next';
+import { useNotifications } from '../composables/useNotifications';
 
 // Props
 interface Props {
@@ -98,6 +99,8 @@ const resetForm = () => {
 
 
 
+const { showError, showSuccess } = useNotifications();
+
 const save = async () => {
   if (!isValid.value) return;
 
@@ -120,6 +123,11 @@ const save = async () => {
       let employee: Employee | null;
 
       if (isEdit.value && props.employeeId) {
+        // PREVENTIVE CHECK: If trying to change PIN in Edit Mode
+        if (formData.value.pin && formData.value.pin.length > 0) {
+            showError('Por seguridad, el PIN no se puede cambiar aquí. Usa el botón "Cambiar PIN".');
+            return;
+        }
         employee = await employeesStore.updateEmployee(props.employeeId, baseData);
       } else {
         employee = await employeesStore.addEmployee(baseData);
@@ -127,10 +135,11 @@ const save = async () => {
 
       if (employee) {
         emit('saved', employee);
+        showSuccess(isEdit.value ? 'Empleado actualizado' : 'Empleado creado');
         close();
       }
   } catch (e: any) {
-      alert(e.message);
+      showError(e.message);
   }
 };
 

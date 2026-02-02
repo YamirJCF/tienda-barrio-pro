@@ -75,12 +75,12 @@ export type Database = {
                     actor_id?: string | null
                     actor_role?: string | null
                     created_at?: string
-                    event_type?: string
+                    event_type: string
                     id?: string
                     ip_address?: string | null
                     metadata?: Json
                     severity?: string
-                    store_id?: string
+                    store_id: string
                     user_agent?: string | null
                 }
                 Relationships: [
@@ -97,36 +97,48 @@ export type Database = {
                 Row: {
                     amount: number
                     created_at: string
-                    description: string
+                    created_by: string
+                    description: string | null
                     id: string
                     movement_type: string
-                    sale_id: string | null
+                    payment_method: string | null
+                    related_entity_id: string | null
+                    related_entity_type: string | null
                     session_id: string
+                    store_id: string
                 }
                 Insert: {
                     amount: number
                     created_at?: string
-                    description: string
+                    created_by: string
+                    description?: string | null
                     id?: string
                     movement_type: string
-                    sale_id?: string | null
+                    payment_method?: string | null
+                    related_entity_id?: string | null
+                    related_entity_type?: string | null
                     session_id: string
+                    store_id: string
                 }
                 Update: {
                     amount?: number
                     created_at?: string
-                    description?: string
+                    created_by?: string
+                    description?: string | null
                     id?: string
                     movement_type?: string
-                    sale_id?: string | null
+                    payment_method?: string | null
+                    related_entity_id?: string | null
+                    related_entity_type?: string | null
                     session_id?: string
+                    store_id?: string
                 }
                 Relationships: [
                     {
-                        foreignKeyName: "cash_movements_sale_id_fkey"
-                        columns: ["sale_id"]
+                        foreignKeyName: "cash_movements_created_by_fkey"
+                        columns: ["created_by"]
                         isOneToOne: false
-                        referencedRelation: "sales"
+                        referencedRelation: "employees"
                         referencedColumns: ["id"]
                     },
                     {
@@ -136,6 +148,13 @@ export type Database = {
                         referencedRelation: "cash_sessions"
                         referencedColumns: ["id"]
                     },
+                    {
+                        foreignKeyName: "cash_movements_store_id_fkey"
+                        columns: ["store_id"]
+                        isOneToOne: false
+                        referencedRelation: "stores"
+                        referencedColumns: ["id"]
+                    },
                 ]
             }
             cash_sessions: {
@@ -143,6 +162,7 @@ export type Database = {
                     actual_balance: number | null
                     closed_at: string | null
                     closed_by: string | null
+                    created_at: string
                     difference: number | null
                     expected_balance: number | null
                     id: string
@@ -156,12 +176,13 @@ export type Database = {
                     actual_balance?: number | null
                     closed_at?: string | null
                     closed_by?: string | null
+                    created_at?: string
                     difference?: number | null
                     expected_balance?: number | null
                     id?: string
                     opened_at?: string
                     opened_by: string
-                    opening_balance: number
+                    opening_balance?: number
                     status?: string
                     store_id: string
                 }
@@ -169,6 +190,7 @@ export type Database = {
                     actual_balance?: number | null
                     closed_at?: string | null
                     closed_by?: string | null
+                    created_at?: string
                     difference?: number | null
                     expected_balance?: number | null
                     id?: string
@@ -202,87 +224,39 @@ export type Database = {
                     },
                 ]
             }
-            client_transactions: {
-                Row: {
-                    amount: number
-                    client_id: string
-                    created_at: string
-                    description: string | null
-                    id: string
-                    sale_id: string | null
-                    transaction_type: string
-                }
-                Insert: {
-                    amount: number
-                    client_id: string
-                    created_at?: string
-                    description?: string | null
-                    id?: string
-                    sale_id?: string | null
-                    transaction_type: string
-                }
-                Update: {
-                    amount?: number
-                    client_id?: string
-                    created_at?: string
-                    description?: string | null
-                    id?: string
-                    sale_id?: string | null
-                    transaction_type?: string
-                }
-                Relationships: [
-                    {
-                        foreignKeyName: "client_transactions_client_id_fkey"
-                        columns: ["client_id"]
-                        isOneToOne: false
-                        referencedRelation: "clients"
-                        referencedColumns: ["id"]
-                    },
-                    {
-                        foreignKeyName: "client_transactions_sale_id_fkey"
-                        columns: ["sale_id"]
-                        isOneToOne: false
-                        referencedRelation: "sales"
-                        referencedColumns: ["id"]
-                    },
-                ]
-            }
             clients: {
                 Row: {
+                    address: string | null
                     balance: number | null
                     created_at: string
-                    credit_limit: number
-                    deleted_at: string | null
+                    email: string | null
                     id: string
-                    id_number: string
-                    is_deleted: boolean | null
                     name: string
+                    notes: string | null
                     phone: string | null
                     store_id: string
                     updated_at: string
                 }
                 Insert: {
+                    address?: string | null
                     balance?: number | null
                     created_at?: string
-                    credit_limit?: number
-                    deleted_at?: string | null
+                    email?: string | null
                     id?: string
-                    id_number: string
-                    is_deleted?: boolean | null
                     name: string
+                    notes?: string | null
                     phone?: string | null
                     store_id: string
                     updated_at?: string
                 }
                 Update: {
+                    address?: string | null
                     balance?: number | null
                     created_at?: string
-                    credit_limit?: number
-                    deleted_at?: string | null
+                    email?: string | null
                     id?: string
-                    id_number?: string
-                    is_deleted?: boolean | null
                     name?: string
+                    notes?: string | null
                     phone?: string | null
                     store_id?: string
                     updated_at?: string
@@ -343,69 +317,7 @@ export type Database = {
                         foreignKeyName: "daily_passes_resolved_by_fkey"
                         columns: ["resolved_by"]
                         isOneToOne: false
-                        referencedRelation: "employees"
-                        referencedColumns: ["id"]
-                    },
-                ]
-            }
-            daily_reports: {
-                Row: {
-                    average_ticket: number | null
-                    cash_sales: number | null
-                    closing_balance: number | null
-                    created_at: string
-                    credit_sales: number | null
-                    difference: number | null
-                    digital_sales: number | null
-                    id: string
-                    low_stock_alerts: number | null
-                    opening_balance: number | null
-                    products_sold: number | null
-                    report_date: string
-                    store_id: string
-                    total_sales: number | null
-                    total_transactions: number | null
-                }
-                Insert: {
-                    average_ticket?: number | null
-                    cash_sales?: number | null
-                    closing_balance?: number | null
-                    created_at?: string
-                    credit_sales?: number | null
-                    difference?: number | null
-                    digital_sales?: number | null
-                    id?: string
-                    low_stock_alerts?: number | null
-                    opening_balance?: number | null
-                    products_sold?: number | null
-                    report_date: string
-                    store_id: string
-                    total_sales?: number | null
-                    total_transactions?: number | null
-                }
-                Update: {
-                    average_ticket?: number | null
-                    cash_sales?: number | null
-                    closing_balance?: number | null
-                    created_at?: string
-                    credit_sales?: number | null
-                    difference?: number | null
-                    digital_sales?: number | null
-                    id?: string
-                    low_stock_alerts?: number | null
-                    opening_balance?: number | null
-                    products_sold?: number | null
-                    report_date?: string
-                    store_id?: string
-                    total_sales?: number | null
-                    total_transactions?: number | null
-                }
-                Relationships: [
-                    {
-                        foreignKeyName: "daily_reports_store_id_fkey"
-                        columns: ["store_id"]
-                        isOneToOne: false
-                        referencedRelation: "stores"
+                        referencedRelation: "admin_profiles"
                         referencedColumns: ["id"]
                     },
                 ]
@@ -413,39 +325,33 @@ export type Database = {
             employees: {
                 Row: {
                     created_at: string
-                    display_name: string
                     id: string
-                    is_active: boolean | null
+                    is_active: boolean
                     name: string
                     permissions: Json
                     pin_hash: string
-                    role: string
                     store_id: string
                     updated_at: string
                     username: string
                 }
                 Insert: {
                     created_at?: string
-                    display_name?: string
                     id?: string
-                    is_active?: boolean | null
+                    is_active?: boolean
                     name: string
                     permissions?: Json
                     pin_hash: string
-                    role?: string
                     store_id: string
                     updated_at?: string
                     username: string
                 }
                 Update: {
                     created_at?: string
-                    display_name?: string
                     id?: string
-                    is_active?: boolean | null
+                    is_active?: boolean
                     name?: string
                     permissions?: Json
                     pin_hash?: string
-                    role?: string
                     store_id?: string
                     updated_at?: string
                     username?: string
@@ -460,43 +366,50 @@ export type Database = {
                     },
                 ]
             }
-            error_logs: {
+            expenses: {
                 Row: {
-                    context: Json | null
+                    amount: number
+                    category: string
                     created_at: string
-                    error_message: string
-                    error_type: string
+                    created_by: string
+                    date: string
+                    description: string
                     id: string
-                    stack_trace: string | null
-                    store_id: string | null
-                    user_id: string | null
-                    user_role: string | null
+                    store_id: string
+                    updated_at: string
                 }
                 Insert: {
-                    context?: Json | null
-                    created_at?: string
-                    error_message: string
-                    error_type: string
+                    amount: number
+                    category: string
+                    created_at: string
+                    created_by: string
+                    date?: string
+                    description: string
                     id?: string
-                    stack_trace?: string | null
-                    store_id?: string | null
-                    user_id?: string | null
-                    user_role?: string | null
+                    store_id: string
+                    updated_at?: string
                 }
                 Update: {
-                    context?: Json | null
+                    amount?: number
+                    category?: string
                     created_at?: string
-                    error_message?: string
-                    error_type?: string
+                    created_by?: string
+                    date?: string
+                    description?: string
                     id?: string
-                    stack_trace?: string | null
-                    store_id?: string | null
-                    user_id?: string | null
-                    user_role?: string | null
+                    store_id?: string
+                    updated_at?: string
                 }
                 Relationships: [
                     {
-                        foreignKeyName: "error_logs_store_id_fkey"
+                        foreignKeyName: "expenses_created_by_fkey"
+                        columns: ["created_by"]
+                        isOneToOne: false
+                        referencedRelation: "employees"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "expenses_store_id_fkey"
                         columns: ["store_id"]
                         isOneToOne: false
                         referencedRelation: "stores"
@@ -504,146 +417,131 @@ export type Database = {
                     },
                 ]
             }
-            inventory_movements: {
+            notification_queue: {
                 Row: {
-                    created_at: string
-                    created_by: string | null
+                    created_at: string | null
+                    error_log: string | null
                     id: string
-                    movement_type: string
-                    product_id: string
-                    quantity: number
-                    reason: string | null
+                    payload: Json
+                    processed_at: string | null
+                    recipient_email: string | null
+                    status: string | null
+                    type: string
                 }
                 Insert: {
-                    created_at?: string
-                    created_by?: string | null
+                    created_at?: string | null
+                    error_log?: string | null
                     id?: string
-                    movement_type: string
-                    product_id: string
-                    quantity: number
-                    reason?: string | null
+                    payload: Json
+                    processed_at?: string | null
+                    recipient_email?: string | null
+                    status?: string | null
+                    type: string
                 }
                 Update: {
-                    created_at?: string
-                    created_by?: string | null
+                    created_at?: string | null
+                    error_log?: string | null
                     id?: string
-                    movement_type?: string
-                    product_id?: string
-                    quantity?: number
-                    reason?: string | null
+                    payload?: Json
+                    processed_at?: string | null
+                    recipient_email?: string | null
+                    status?: string | null
+                    type?: string
                 }
-                Relationships: [
-                    {
-                        foreignKeyName: "inventory_movements_created_by_fkey"
-                        columns: ["created_by"]
-                        isOneToOne: false
-                        referencedRelation: "employees"
-                        referencedColumns: ["id"]
-                    },
-                    {
-                        foreignKeyName: "inventory_movements_product_id_fkey"
-                        columns: ["product_id"]
-                        isOneToOne: false
-                        referencedRelation: "products"
-                        referencedColumns: ["id"]
-                    },
-                ]
+                Relationships: []
             }
-            price_change_logs: {
+            product_prices: {
                 Row: {
-                    changed_by: string | null
+                    cost_price: number | null
                     created_at: string
+                    effective_date: string
+                    history: Json | null
                     id: string
-                    new_price: number
-                    previous_price: number
                     product_id: string
-                    reason: string | null
+                    sale_price: number
+                    store_id: string
                 }
                 Insert: {
-                    changed_by?: string | null
+                    cost_price?: number | null
                     created_at?: string
+                    effective_date?: string
+                    history?: Json | null
                     id?: string
-                    new_price: number
-                    previous_price: number
                     product_id: string
-                    reason?: string | null
+                    sale_price: number
+                    store_id: string
                 }
                 Update: {
-                    changed_by?: string | null
+                    cost_price?: number | null
                     created_at?: string
+                    effective_date?: string
+                    history?: Json | null
                     id?: string
-                    new_price?: number
-                    previous_price?: number
                     product_id?: string
-                    reason?: string | null
+                    sale_price?: number
+                    store_id?: string
                 }
                 Relationships: [
                     {
-                        foreignKeyName: "price_change_logs_changed_by_fkey"
-                        columns: ["changed_by"]
-                        isOneToOne: false
-                        referencedRelation: "employees"
-                        referencedColumns: ["id"]
-                    },
-                    {
-                        foreignKeyName: "price_change_logs_product_id_fkey"
+                        foreignKeyName: "product_prices_product_id_fkey"
                         columns: ["product_id"]
                         isOneToOne: false
                         referencedRelation: "products"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "product_prices_store_id_fkey"
+                        columns: ["store_id"]
+                        isOneToOne: false
+                        referencedRelation: "stores"
                         referencedColumns: ["id"]
                     },
                 ]
             }
             products: {
                 Row: {
-                    plu: string | null
-                    brand: string | null
-                    category: string | null
-                    cost_price: number | null
+                    barcode: string | null
+                    category_id: string | null
                     created_at: string
-                    current_stock: number
+                    description: string | null
                     id: string
-                    is_weighable: boolean | null
-                    low_stock_alerted: boolean | null
-                    measurement_unit: string
-                    min_stock: number
+                    is_active: boolean
+                    low_stock_threshold: number
                     name: string
-                    price: number
+                    sku: string | null
+                    stock: number
                     store_id: string
+                    unit_type: string
                     updated_at: string
                 }
                 Insert: {
-                    plu?: string | null
-                    brand?: string | null
-                    category?: string | null
-                    cost_price?: number | null
+                    barcode?: string | null
+                    category_id?: string | null
                     created_at?: string
-                    current_stock?: number
+                    description?: string | null
                     id?: string
-                    is_weighable?: boolean | null
-                    low_stock_alerted?: boolean | null
-                    measurement_unit?: string
-                    min_stock?: number
+                    is_active?: boolean
+                    low_stock_threshold?: number
                     name: string
-                    price: number
+                    sku?: string | null
+                    stock?: number
                     store_id: string
+                    unit_type?: string
                     updated_at?: string
                 }
                 Update: {
-                    plu?: string | null
-                    brand?: string | null
-                    category?: string | null
-                    cost_price?: number | null
+                    barcode?: string | null
+                    category_id?: string | null
                     created_at?: string
-                    current_stock?: number
+                    description?: string | null
                     id?: string
-                    is_weighable?: boolean | null
-                    low_stock_alerted?: boolean | null
-                    measurement_unit?: string
-                    min_stock?: number
+                    is_active?: boolean
+                    low_stock_threshold?: number
                     name?: string
-                    price?: number
+                    sku?: string | null
+                    stock?: number
                     store_id?: string
+                    unit_type?: string
                     updated_at?: string
                 }
                 Relationships: [
@@ -660,29 +558,29 @@ export type Database = {
                 Row: {
                     created_at: string
                     id: string
+                    price_at_sale: number
                     product_id: string
                     quantity: number
                     sale_id: string
                     subtotal: number
-                    unit_price: number
                 }
                 Insert: {
                     created_at?: string
                     id?: string
+                    price_at_sale: number
                     product_id: string
                     quantity: number
                     sale_id: string
                     subtotal: number
-                    unit_price: number
                 }
                 Update: {
                     created_at?: string
                     id?: string
+                    price_at_sale?: number
                     product_id?: string
                     quantity?: number
                     sale_id?: string
                     subtotal?: number
-                    unit_price?: number
                 }
                 Relationships: [
                     {
@@ -703,58 +601,37 @@ export type Database = {
             }
             sales: {
                 Row: {
-                    amount_received: number | null
-                    change_given: number | null
                     client_id: string | null
                     created_at: string
-                    employee_id: string
+                    created_by: string
                     id: string
-                    is_voided: boolean | null
-                    local_id: string | null
+                    notes: string | null
                     payment_method: string
-                    rounding_difference: number | null
+                    status: string
                     store_id: string
-                    sync_status: string | null
-                    ticket_number: number
-                    total: number
-                    void_reason: string | null
-                    voided_by: string | null
+                    total_amount: number
                 }
                 Insert: {
-                    amount_received?: number | null
-                    change_given?: number | null
                     client_id?: string | null
                     created_at?: string
-                    employee_id: string
+                    created_by: string
                     id?: string
-                    is_voided?: boolean | null
-                    local_id?: string | null
+                    notes?: string | null
                     payment_method: string
-                    rounding_difference?: number | null
+                    status?: string
                     store_id: string
-                    sync_status?: string | null
-                    ticket_number: number
-                    total: number
-                    void_reason?: string | null
-                    voided_by?: string | null
+                    total_amount: number
                 }
                 Update: {
-                    amount_received?: number | null
-                    change_given?: number | null
                     client_id?: string | null
                     created_at?: string
-                    employee_id?: string
+                    created_by?: string
                     id?: string
-                    is_voided?: boolean | null
-                    local_id?: string | null
+                    notes?: string | null
                     payment_method?: string
-                    rounding_difference?: number | null
+                    status?: string
                     store_id?: string
-                    sync_status?: string | null
-                    ticket_number?: number
-                    total?: number
-                    void_reason?: string | null
-                    voided_by?: string | null
+                    total_amount?: number
                 }
                 Relationships: [
                     {
@@ -765,8 +642,8 @@ export type Database = {
                         referencedColumns: ["id"]
                     },
                     {
-                        foreignKeyName: "sales_employee_id_fkey"
-                        columns: ["employee_id"]
+                        foreignKeyName: "sales_created_by_fkey"
+                        columns: ["created_by"]
                         isOneToOne: false
                         referencedRelation: "employees"
                         referencedColumns: ["id"]
@@ -778,118 +655,64 @@ export type Database = {
                         referencedRelation: "stores"
                         referencedColumns: ["id"]
                     },
-                    {
-                        foreignKeyName: "sales_voided_by_fkey"
-                        columns: ["voided_by"]
-                        isOneToOne: false
-                        referencedRelation: "employees"
-                        referencedColumns: ["id"]
-                    },
                 ]
             }
             stores: {
                 Row: {
-                    address: string | null
-                    business_category: string | null
                     created_at: string
                     currency: string
-                    email: string | null
+                    email: string
                     id: string
-                    is_active: boolean | null
-                    is_temporarily_closed: boolean
+                    is_active: boolean
                     logo_url: string | null
                     name: string
+                    owner: string
                     phone: string | null
-                    settings: Json
+                    settings: Json | null
                     slug: string
                     subscription_plan: string
+                    tax_rate: number
+                    theme_config: Json | null
                     timezone: string
                     updated_at: string
                 }
                 Insert: {
-                    address?: string | null
-                    business_category?: string | null
                     created_at?: string
                     currency?: string
-                    email?: string | null
-                    id: string
-                    is_active?: boolean | null
-                    is_temporarily_closed?: boolean
+                    email: string
+                    id?: string
+                    is_active?: boolean
                     logo_url?: string | null
                     name: string
+                    owner: string
                     phone?: string | null
-                    settings?: Json
+                    settings?: Json | null
                     slug: string
                     subscription_plan?: string
+                    tax_rate?: number
+                    theme_config?: Json | null
                     timezone?: string
                     updated_at?: string
                 }
                 Update: {
-                    address?: string | null
-                    business_category?: string | null
                     created_at?: string
                     currency?: string
-                    email?: string | null
+                    email?: string
                     id?: string
-                    is_active?: boolean | null
-                    is_temporarily_closed?: boolean
+                    is_active?: boolean
                     logo_url?: string | null
                     name?: string
+                    owner?: string
                     phone?: string | null
-                    settings?: Json
+                    settings?: Json | null
                     slug?: string
                     subscription_plan?: string
+                    tax_rate?: number
+                    theme_config?: Json | null
                     timezone?: string
                     updated_at?: string
                 }
                 Relationships: []
-            }
-            sync_queue: {
-                Row: {
-                    created_at: string
-                    entity_id: string
-                    entity_type: string
-                    id: string
-                    last_error: string | null
-                    payload: Json
-                    retry_count: number | null
-                    status: string
-                    store_id: string
-                    synced_at: string | null
-                }
-                Insert: {
-                    created_at?: string
-                    entity_id: string
-                    entity_type: string
-                    id?: string
-                    last_error?: string | null
-                    payload: Json
-                    retry_count?: number | null
-                    status?: string
-                    store_id: string
-                    synced_at?: string | null
-                }
-                Update: {
-                    created_at?: string
-                    entity_id?: string
-                    entity_type?: string
-                    id?: string
-                    last_error?: string | null
-                    payload?: Json
-                    retry_count?: number | null
-                    status?: string
-                    store_id?: string
-                    synced_at?: string | null
-                }
-                Relationships: [
-                    {
-                        foreignKeyName: "sync_queue_store_id_fkey"
-                        columns: ["store_id"]
-                        isOneToOne: false
-                        referencedRelation: "stores"
-                        referencedColumns: ["id"]
-                    },
-                ]
             }
         }
         Views: {
@@ -898,9 +721,15 @@ export type Database = {
         Functions: {
             abrir_caja: {
                 Args: {
-                    p_store_id: string
                     p_employee_id: string
                     p_opening_balance: number
+                }
+                Returns: Json
+            }
+            actualizar_pin_empleado: {
+                Args: {
+                    p_employee_id: string
+                    p_new_pin: string
                 }
                 Returns: Json
             }
@@ -914,24 +743,33 @@ export type Database = {
             cerrar_caja: {
                 Args: {
                     p_session_id: string
-                    p_employee_id: string
                     p_actual_balance: number
+                    p_employee_id: string
+                }
+                Returns: Json
+            }
+            check_daily_pass_status: {
+                Args: {
+                    p_employee_id: string
+                    p_device_fingerprint: string
                 }
                 Returns: Json
             }
             crear_empleado: {
                 Args: {
-                    p_store_id: string
                     p_name: string
                     p_username: string
                     p_pin: string
-                    p_permissions?: Json
+                    p_permissions: Json
                 }
                 Returns: Json
             }
             expire_daily_passes: {
-                Args: Record<PropertyKey, never>
-                Returns: unknown
+                Args: {
+                    p_store_id: string
+                    p_employee_id: string
+                }
+                Returns: void
             }
             get_current_employee_id: {
                 Args: Record<PropertyKey, never>
@@ -946,54 +784,34 @@ export type Database = {
                 Returns: boolean
             }
             log_price_change: {
-                Args: Record<PropertyKey, never>
-                Returns: unknown
+                Args: {
+                    p_product_id: string
+                    p_old_price: number
+                    p_new_price: number
+                    p_store_id: string
+                }
+                Returns: undefined
             }
             log_security_event: {
                 Args: {
-                    p_store_id: string
                     p_event_type: string
-                    p_severity?: string
-                    p_actor_id?: string
-                    p_actor_role?: string
-                    p_metadata?: Json
+                    p_severity: string
+                    p_metadata: Json
                 }
-                Returns: string
-            }
-            procesar_venta: {
-                Args: {
-                    p_store_id: string
-                    p_employee_id: string
-                    p_items: Json
-                    p_total: number
-                    p_payment_method: string
-                    p_amount_received?: number
-                    p_client_id?: string
-                    p_local_id?: string
-                }
-                Returns: Json
-            }
-            registrar_abono: {
-                Args: {
-                    p_client_id: string
-                    p_amount: number
-                }
-                Returns: Json
+                Returns: boolean
             }
             solicitar_pase_diario: {
                 Args: {
                     p_employee_id: string
-                    p_device_fingerprint?: string
+                    p_device_fingerprint: string
                 }
                 Returns: Json
             }
-            update_product_stock: {
-                Args: Record<PropertyKey, never>
-                Returns: unknown
-            }
-            update_timestamp: {
-                Args: Record<PropertyKey, never>
-                Returns: unknown
+            toggle_empleado_activo: {
+                Args: {
+                    p_employee_id: string
+                }
+                Returns: Json
             }
             validar_pin_empleado: {
                 Args: {
@@ -1011,3 +829,106 @@ export type Database = {
         }
     }
 }
+
+export type Tables<
+    PublicTableNameOrOptions extends
+    | keyof (Database["public"]["Tables"] & Database["public"]["Views"])
+    | { schema: keyof Database },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+    ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+            Row: infer R
+        }
+    ? R
+    : never
+    : PublicTableNameOrOptions extends keyof (Database["public"]["Tables"] &
+        Database["public"]["Views"])
+    ? (Database["public"]["Tables"] &
+        Database["public"]["Views"])[PublicTableNameOrOptions] extends {
+            Row: infer R
+        }
+    ? R
+    : never
+    : never
+
+export type TablesInsert<
+    PublicTableNameOrOptions extends
+    | keyof Database["public"]["Tables"]
+    | { schema: keyof Database },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+    ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+        Insert: infer I
+    }
+    ? I
+    : never
+    : PublicTableNameOrOptions extends keyof Database["public"]["Tables"]
+    ? Database["public"]["Tables"][PublicTableNameOrOptions] extends {
+        Insert: infer I
+    }
+    ? I
+    : never
+    : never
+
+export type TablesUpdate<
+    PublicTableNameOrOptions extends
+    | keyof Database["public"]["Tables"]
+    | { schema: keyof Database },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+    ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+        Update: infer U
+    }
+    ? U
+    : never
+    : PublicTableNameOrOptions extends keyof Database["public"]["Tables"]
+    ? Database["public"]["Tables"][PublicTableNameOrOptions] extends {
+        Update: infer U
+    }
+    ? U
+    : never
+    : never
+
+export type Enums<
+    DefaultSchemaEnumNameOrOptions extends
+    | keyof Database["public"]["Enums"]
+    | { schema: keyof Database },
+    EnumName extends DefaultSchemaEnumNameOrOptions extends {
+        schema: keyof Database
+    }
+    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
+    ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+    : DefaultSchemaEnumNameOrOptions extends keyof Database["public"]["Enums"]
+    ? Database["public"]["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+    PublicCompositeTypeNameOrOptions extends
+    | keyof Database["public"]["CompositeTypes"]
+    | { schema: keyof Database },
+    CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+        schema: keyof Database
+    }
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+    ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+    : PublicCompositeTypeNameOrOptions extends keyof Database["public"]["CompositeTypes"]
+    ? Database["public"]["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+    public: {
+        Enums: {},
+    },
+} as const

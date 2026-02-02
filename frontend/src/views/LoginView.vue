@@ -94,13 +94,12 @@ const handleLogin = async () => {
       // =============================================
       // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos
       // =============================================
-      const firstStore = authStore.getFirstStore();
-      if (!firstStore) {
-        throw new Error('No hay tienda configurada');
-      }
-
-      // OPCIÓN A: Primero intentar login LOCAL usando employeesStore
+      // =============================================
+      // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos
+      // =============================================
+      
       // WO-REM-002: RPC Check (Async)
+      // No requerimos tienda previa, el RPC nos dirá el store_id
       const localEmployee = await employeesStore.validatePin(username.value, password.value);
       
       if (localEmployee) {
@@ -112,10 +111,10 @@ const handleLogin = async () => {
             username: localEmployee.username,
             permissions: localEmployee.permissions,
           },
-          firstStore.id,
+          localEmployee.storeId, // ID obtenido del RPC
         );
 
-        authStore.setDeviceStatus('approved');
+        // authStore.setDeviceStatus('approved'); // REMOVED: Zero Trust Enforced
         recordSuccess();
         router.push('/');
         return;

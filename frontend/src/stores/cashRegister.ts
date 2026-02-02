@@ -57,9 +57,16 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     status: 'open',
                     openingTime: status.lastEvent?.created_at || new Date().toISOString(),
                     openingBalance: new Decimal(status.openingAmount),
-                    transactions: [], // We might need to fetch transactions if we want full history, but start with empty
+
+                    transactions: [], // Initialize empty to prevent UI crash before fetch
                     notes: ''
                 };
+
+                // Fetch transactions from DB (Source of Truth) to populate history
+                const transactions = await cashRepository.getSessionTransactions(status.sessionId!);
+                if (transactions.length > 0) {
+                    currentSession.value.transactions = transactions;
+                }
 
                 return true;
             } else {
@@ -185,7 +192,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         return session;
     };
 
-    const registerExpense = (amount: Decimal | number, description: string, category: string = 'General') => {
+    const registerExpense = async (amount: Decimal | number, description: string, category: string = 'General') => {
         if (!currentSession.value) throw new Error("La caja está cerrada");
 
         const transaction: CashTransaction = {
@@ -197,10 +204,21 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             timestamp: new Date().toISOString()
         };
 
+        // Persist to Backend (Obligatory)
+        const { cashRepository } = await import('../data/repositories/cashRepository');
+        const result = await cashRepository.addMovement(transaction, currentSession.value.id);
+
+        if (!result.success) {
+            console.error('🚫 [CashRegisterStore] Failed to persist expense:', result.error);
+            // We still update locally but warn? Or throw?
+            // Throwing allows UI to show error
+            throw new Error(result.error || 'Fallo al guardar gasto');
+        }
+
         currentSession.value.transactions.push(transaction);
     };
 
-    const addIncome = (amount: Decimal | number, description: string, saleId?: string) => {
+    const addIncome = async (amount: Decimal | number, description: string, saleId?: string) => {
         if (!currentSession.value) return;
 
         const transaction: CashTransaction = {
@@ -211,6 +229,18 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             timestamp: new Date().toISOString(),
             relatedSaleId: saleId
         };
+
+        // Note: If saleId is present, this is a UI-only update. 
+        // The backend source of truth is the trigger.
+        // Only persist if NOT a sale (Trigger handles sales)
+        if (!saleId) {
+            const { cashRepository } = await import('../data/repositories/cashRepository');
+            const result = await cashRepository.addMovement(transaction, currentSession.value.id);
+            if (!result.success) {
+                console.error('🚫 [CashRegisterStore] Failed to persist income:', result.error);
+                // Throw or swallow? Swallow generic income for now logic-wise, but logging is good.
+            }
+        }
 
         currentSession.value.transactions.push(transaction);
     };
@@ -245,6 +275,13 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     if (state.currentSession.closingBalance) state.currentSession.closingBalance = new Decimal(state.currentSession.closingBalance);
                     if (state.currentSession.calculatedBalance) state.currentSession.calculatedBalance = new Decimal(state.currentSession.calculatedBalance);
                     if (state.currentSession.discrepancy) state.currentSession.discrepancy = new Decimal(state.currentSession.discrepancy);
+
+
+
+                    // Resilience: Ensure transactions exists
+                    if (!state.currentSession.transactions) {
+                        state.currentSession.transactions = [];
+                    }
 
                     state.currentSession.transactions = state.currentSession.transactions.map((t: CashTransaction | any) => ({
                         ...t,

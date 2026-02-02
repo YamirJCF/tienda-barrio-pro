@@ -9,9 +9,11 @@
  * @module data/repositories/cashRepository
  */
 
+import { Decimal } from 'decimal.js';
+import type { CashTransaction } from '../../types';
+
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
-// addToSyncQueue removed - cash operations require online (FRD-012)
 
 // Interface adapted to what the UI Store expects, but mapped to DB
 export interface CashControlEvent {
@@ -30,6 +32,8 @@ export interface CashControlEvent {
 export interface CashRepository {
     getStoreStatus(storeId: string): Promise<{ isOpen: boolean; openingAmount: number; lastEvent?: CashControlEvent; sessionId?: string }>;
     registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string }>;
+    getSessionTransactions(sessionId: string): Promise<CashTransaction[]>;
+    addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; error?: string }>;
 }
 
 export const cashRepository: CashRepository = {
@@ -84,8 +88,6 @@ export const cashRepository: CashRepository = {
             const storedStatus = localStorage.getItem('tienda-store-status');
             if (storedStatus) {
                 const parsed = JSON.parse(storedStatus);
-                // Basic validation: check date? Or just trust local state for offline flow?
-                // Ideally, we trust local state if recent.
                 return {
                     isOpen: parsed.isOpen,
                     openingAmount: parsed.openingAmount || 0,
@@ -104,14 +106,12 @@ export const cashRepository: CashRepository = {
      * Register an Open or Close event
      */
     async registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string }> {
-        // ===== VALIDATION CHECKPOINT (Fase 2 Blindaje) =====
         if (!event.store_id || event.store_id.trim() === '') {
             const errorMsg = 'Cannot register CashEvent without valid store_id. This would fail RLS policies.';
             console.error('🚫 [CashRepo] RLSViolationError:', errorMsg);
             return { success: false, error: errorMsg };
         }
 
-        // Validate UUID format
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(event.store_id)) {
             const errorMsg = `Invalid UUID format for store_id: "${event.store_id}"`;
@@ -119,7 +119,6 @@ export const cashRepository: CashRepository = {
             return { success: false, error: errorMsg };
         }
 
-        // FRD-012: Cash operations do NOT support offline mode
         if (!navigator.onLine) {
             logger.warn('[CashRepo] Cash operation blocked - requires connection');
             return {
@@ -130,7 +129,6 @@ export const cashRepository: CashRepository = {
 
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
-        // 1. Try Online RPC
         if (isOnline) {
             const supabase = getSupabaseClient()!;
             try {
@@ -146,8 +144,6 @@ export const cashRepository: CashRepository = {
                     };
                 } else if (event.type === 'close') {
                     rpcName = 'cerrar_caja';
-                    // We need session ID for closing. Inherited from event.id or passed context?
-                    // Assuming event.id is the sessionId when type is close (caller must ensure this)
                     if (!event.id) {
                         return { success: false, error: "Session ID required for closing" };
                     }
@@ -168,11 +164,9 @@ export const cashRepository: CashRepository = {
                         return { success: false, error: error.message };
                     }
                 } else {
-                    // Success
                     const response = data as any;
                     if (response.success) {
-                        // Cache locally
-                        const sessionId = response.session_id || event.id; // Get ID from response if open
+                        const sessionId = response.session_id || event.id;
 
                         const statusCache = {
                             date: new Date().toISOString().split('T')[0],
@@ -194,8 +188,68 @@ export const cashRepository: CashRepository = {
             }
         }
 
-        // If we reached here, online RPC failed
         return { success: false, error: 'Error al procesar operación de caja' };
+    },
+
+    /**
+     * Get transactions for a specific session
+     */
+    async getSessionTransactions(sessionId: string): Promise<CashTransaction[]> {
+        const supabase = getSupabaseClient()!;
+        try {
+            const { data, error } = await supabase
+                .from('cash_movements')
+                .select('*')
+                .eq('session_id', sessionId)
+                .order('created_at', { ascending: true });
+
+            if (error) {
+                logger.error('[CashRepo] Fetch transactions error', error);
+                return [];
+            }
+
+            return (data || []).map(row => ({
+                id: row.id,
+                type: row.movement_type === 'ingreso' ? 'income' : 'expense',
+                amount: new Decimal(row.amount),
+                description: row.description,
+                timestamp: row.created_at,
+                relatedSaleId: row.sale_id,
+                category: 'General'
+            }));
+
+        } catch (e) {
+            logger.error('[CashRepo] Exception fetching transactions', e);
+            return [];
+        }
+    },
+
+    /**
+     * Add a manual movement (expense or income)
+     */
+    async addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; error?: string }> {
+        const supabase = getSupabaseClient()!;
+        try {
+            const movementType = transaction.type === 'income' ? 'ingreso' : 'gasto';
+
+            const { error } = await supabase
+                .from('cash_movements')
+                .insert({
+                    session_id: sessionId,
+                    movement_type: movementType,
+                    amount: transaction.amount.toNumber(),
+                    description: transaction.description,
+                    created_at: transaction.timestamp,
+                    sale_id: transaction.relatedSaleId || null
+                });
+
+            if (error) {
+                return { success: false, error: error.message };
+            }
+            return { success: true };
+        } catch (e: any) {
+            return { success: false, error: e.message };
+        }
     }
 };
 

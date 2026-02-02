@@ -41,7 +41,6 @@ watch(
 const handleApprove = async () => {
     await authStore.approveRequest();
     isVisible.value = false;
-    // alert(`Acceso concedido`);
 };
 
 const handleReject = async () => {
