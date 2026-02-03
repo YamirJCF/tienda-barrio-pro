@@ -5,6 +5,7 @@ import { Store, Eye, EyeOff, User, Lock, ArrowLeft, ChevronRight } from 'lucide-
 import { useAuthStore } from '../stores/auth';
 import { authRepository } from '../data/repositories/authRepository';
 import { useRateLimiter } from '../composables/useRateLimiter'; // WO-004 T4.4
+import { useAsyncAction } from '../composables/useAsyncAction';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import PinKeypad from '../components/PinKeypad.vue';
@@ -28,19 +29,34 @@ const password = ref('');
 const showPassword = ref(false);
 const errorMessage = ref('');
 const employeeContext = ref<any>(null); // Store info for employee login
-// isLoading handled by useAsyncAction
 
 // SPEC-005: Detectar tipo de usuario basado en presencia de @
 const isAdminLogin = computed(() => username.value.includes('@'));
-const credentialLabel = computed(() => (isAdminLogin.value ? 'Contraseña' : 'PIN'));
-const credentialPlaceholder = computed(() => (isAdminLogin.value ? '••••••••' : '••••'));
 
 // Composable: Request Management
-import { useAsyncAction } from '../composables/useAsyncAction';
 const { execute: executeLogin, isLoading } = useAsyncAction();
 
 // WO-003: Progressive Login State
 const currentStep = ref<'identity' | 'credential'>('identity');
+
+// Helper: Friendly Error Messages
+const getFriendlyErrorMessage = (error: any): string => {
+    const code = error.code || error.message || '';
+    
+    const messages: Record<string, string> = {
+        'ACCOUNT_LOCKED': '🔒 Cuenta bloqueada. Intenta más tarde.',
+        'GATEKEEPER_PENDING': '📱 Dispositivo en espera de aprobación.',
+        'GATEKEEPER_REJECTED': '🚫 Acceso denegado.',
+        'INVALID_CREDENTIALS': 'Credenciales incorrectas.',
+        'USER_NOT_FOUND': 'Usuario no encontrado.',
+        '406': 'Error de Sesión (406). Intenta recargar.',
+        '409': 'Conflicto de Sesión (409). Reintentando...',
+        '422': 'Error de Datos (422). Verifica tu usuario.',
+    };
+
+    // Return mapped message or the original plain text if simple
+    return messages[code] || error.message || 'Error desconocido al iniciar sesión.';
+};
 
 const handleContinue = async () => {
   if (!username.value.trim()) {
@@ -64,9 +80,9 @@ const handleContinue = async () => {
         employeeContext.value = result.data;
         // Proceed
         currentStep.value = 'credential';
-    } catch (e) {
+    } catch (e: any) {
         isLoading.value = false;
-        errorMessage.value = 'Error verificando alias';
+        errorMessage.value = getFriendlyErrorMessage(e);
     }
   } else {
      currentStep.value = 'credential';
@@ -88,129 +104,82 @@ const handleLogin = async () => {
     return;
   }
 
+  // We wrap logic inside executeLogin but catch errors internally 
+  // to show them Inline instead of Toast (UX Choice)
   await executeLogin(async () => {
     // UX Delay
     await new Promise((resolve) => setTimeout(resolve, 300));
-
-    // 1. VALIDACIÓN PREVENTIVA: Eliminada.
-    // El login valida contra Supabase directamente.
     
-    // SPEC-005: Flujo basado en detección automática
-    if (isAdminLogin.value) {
-      // =============================================
-      // FLUJO ADMIN (contiene @)
-      // =============================================
-      const success = await authStore.login(username.value, password.value);
-      
-      if (success) {
-        // Admin siempre tiene acceso completo
-        authStore.setDeviceStatus('approved');
-        recordSuccess(); 
-        router.push('/');
-        return;
-      }
-      recordFailedAttempt();
-      // Throwing error for useAsyncAction to handle
-      throw new Error(`Correo o contraseña incorrectos (${remainingAttempts.value} intentos restantes)`);
-    } else {
-      // =============================================
-      // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos (Zero-Auth)
-      // =============================================
-      
-      const fingerprint = await authStore.dailyAccessState.fingerprint || 'unknown-device'; // Should be handled by repo, but passing simple string
-      
-      const result = await authRepository.requestEmployeeAccess(
-        username.value,
-        password.value,
-        fingerprint
-      );
+    try {
+        // SPEC-005: Flujo basado en detección automática
+        if (isAdminLogin.value) {
+          // =============================================
+          // FLUJO ADMIN (contiene @)
+          // =============================================
+          const success = await authStore.login(username.value, password.value);
+          
+          if (success) {
+            authStore.setDeviceStatus('approved');
+            recordSuccess(); 
+            router.push('/');
+            return;
+          }
+          recordFailedAttempt();
+          throw new Error(`Correo o contraseña incorrectos`);
+        } else {
+          // =============================================
+          // FLUJO EMPLEADO (sin @) - PIN de 4 dígitos (Zero-Auth)
+          // =============================================
+          const fingerprint = await authStore.dailyAccessState.fingerprint || 'unknown-device';
+          
+          const result = await authRepository.requestEmployeeAccess(
+            username.value,
+            password.value,
+            fingerprint
+          );
 
-      if (result.success) {
-         if (result.status === 'approved') {
-             // Access Granted
-             authStore.loginAsEmployee(
-                 {
-                    id: result.employee.id,
-                    name: result.employee.name,
-                    username: username.value,
-                    permissions: result.employee.permissions || {}
-                 },
-                 result.employee.store_id
-             );
-             
-             authStore.setDeviceStatus('approved');
-             recordSuccess();
-             router.push('/');
-             return;
-         } else if (result.status === 'pending') {
-             // Pending Approval
-             // We need to set state so GatekeeperPending component picks it up
-             authStore.setDeviceStatus('pending');
-             
-             // Store PASS_ID for polling
-             if (result.pass_id) {
-                 authStore.dailyAccessState.passId = result.pass_id;
+          if (result.success) {
+             if (result.status === 'approved') {
+                 authStore.loginAsEmployee(
+                     {
+                        id: result.employee.id,
+                        name: result.employee.name,
+                        username: username.value,
+                        permissions: result.employee.permissions || {}
+                     },
+                     result.employee.store_id
+                 );
+                 
+                 authStore.setDeviceStatus('approved');
+                 recordSuccess();
+                 router.push('/');
+                 return;
+             } else if (result.status === 'pending') {
+                 authStore.setDeviceStatus('pending');
+                 if (result.pass_id) {
+                     authStore.dailyAccessState.passId = result.pass_id;
+                 }
+                 return; 
+             } else {
+                 throw new Error(result.message || 'Acceso denegado');
              }
-             
-             return; // UI updates automatically via reactive state
-         } else {
-             throw new Error(result.message || 'Acceso denegado');
-         }
-      }
+          }
 
-      // Si falló logicamente (PIN mal)
-      recordFailedAttempt();
-      throw new Error(result.message || result.error_code || 'PIN Incorrecto o Error de acceso');
+          // Si falló logicamente (PIN mal)
+          recordFailedAttempt();
+          throw new Error(result.message || result.error_code || 'PIN Incorrecto o Error de acceso');
+        }
+    } catch (e: any) {
+        // Catch here to prevent executeLogin from Toasting
+        errorMessage.value = getFriendlyErrorMessage(e);
+        // Do NOT re-throw if we want to avoid Toast. 
+        // executeLogin will see this as "success" (no throw), but we handled the UI state.
     }
   }, {
     // Options
-    checkConnectivity: true, // Login requires internet (mostly) or we want strict check
-    errorMessage: '', // We use dynamic error throwing above, so fallback is fine
-    showSuccessToast: false // Login typically doesn't need "Success" toast, just redirect
+    checkConnectivity: true, 
+    showSuccessToast: false 
   });
-};
-
-// SPEC-005: Simular respuesta del servidor (reemplazar con RPC real)
-type ServerResponse = {
-  success: boolean;
-  employee?: {
-    id: string;
-    name: string;
-    username: string;
-    permissions: any; // Keep 'any' for nested permissions or strictly type it if possible
-  };
-  store_state?: { is_open: boolean };
-  error_code?: string;
-  error?: string;
-};
-
-const simulateServerResponse = (employee: any, fingerprint: string): ServerResponse => {
-  // En producción, esto sería la respuesta del RPC login_empleado_unificado
-  // Por ahora simulamos éxito
-  return {
-    success: true,
-    employee: employee,
-    store_state: { is_open: true }, // Simular tienda abierta
-  };
-};
-
-// SPEC-005: Manejar códigos de error del servidor
-const handleServerError = (errorCode: string, errorMsg: string) => {
-  const errorMessages: Record<string, string> = {
-    ACCOUNT_LOCKED: '🔒 Cuenta bloqueada. Intenta en 15 minutos.',
-    GATEKEEPER_PENDING: '📱 Dispositivo en espera de aprobación del Administrador.',
-    GATEKEEPER_REJECTED: '🚫 Acceso denegado desde este dispositivo.',
-    INVALID_CREDENTIALS: 'Usuario o PIN incorrectos.',
-  };
-
-  errorMessage.value = errorMessages[errorCode] || errorMsg || 'Error desconocido';
-
-  // Para dispositivo pendiente, mostrar estado especial
-  if (errorCode === 'GATEKEEPER_PENDING') {
-    authStore.setDeviceStatus('pending');
-  } else if (errorCode === 'GATEKEEPER_REJECTED') {
-    authStore.setDeviceStatus('rejected');
-  }
 };
 </script>
 

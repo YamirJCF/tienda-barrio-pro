@@ -12,7 +12,6 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'pin_code') THEN
         ALTER TABLE public.employees ADD COLUMN pin_code TEXT;
     END IF;
-    END IF;
 END $$;
 
 -- 1.1 DROP Legacy Functions to avoid Return Type Conflicts
