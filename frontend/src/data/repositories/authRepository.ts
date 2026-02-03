@@ -44,6 +44,20 @@ export interface AccessRequestResponse {
 
 
 
+/**
+ * Helper to ensure an anonymous session exists for RLS.
+ */
+async function ensureAnonymousSession() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+        const { error: anonError } = await supabase.auth.signInAnonymously();
+        if (anonError) {
+            logger.error('[AuthRepo] Anonymous Auth Failed:', anonError);
+            throw new Error(`Error de Configuración Supabase: ${anonError.message} (Habilita Auth Anónimo)`);
+        }
+    }
+}
+
 export const authRepository = {
     /**
      * Registra una nueva tienda (Admin) usando Supabase Auth Nativo
@@ -248,6 +262,9 @@ export const authRepository = {
         fingerprint: string
     ): Promise<AccessRequestResponse> {
         try {
+            // ZERO-AUTH FIX: Ensure we have an anonymous session so RLS works
+            await ensureAnonymousSession();
+
             const { data, error } = await supabase.rpc('request_employee_access' as any, {
                 p_alias: alias,
                 p_pin: pin,
