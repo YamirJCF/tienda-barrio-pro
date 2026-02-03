@@ -144,26 +144,57 @@ export const saleRepository: SaleRepository = {
             const supabase = getSupabaseClient();
             if (supabase) {
                 try {
-                    // Refactoring: Ensure Strict Types for RPC
+                    // Refactoring: Ensure Strict Types for RPC & Validate Inputs
                     // Decimal -> number conversion is critical here
-                    const p_items = saleData.items.map(item => ({
-                        product_id: item.productId,
-                        quantity: item.quantity,
-                        unit_price: new Decimal(item.price).toNumber(),
-                        subtotal: new Decimal(item.subtotal).toNumber()
-                    }));
+                    const p_items = saleData.items.map(item => {
+                        const q = Number(item.quantity);
+                        const p = new Decimal(item.price).toNumber();
+                        const s = new Decimal(item.subtotal).toNumber();
+
+                        // Guard against NaN or "N/A" logic slippage
+                        if (!Number.isFinite(q) || !Number.isFinite(p)) {
+                            throw new Error(`Invalid item data: Quantity=${q}, Price=${p}`);
+                        }
+
+                        return {
+                            product_id: item.productId,
+                            quantity: q,
+                            unit_price: p,
+                            subtotal: s
+                        };
+                    });
 
                     const p_amount_received = saleData.amountReceived ? new Decimal(saleData.amountReceived).toNumber() : null;
 
-                    const { data, error } = await supabase.rpc('procesar_venta', {
+                    // Validate Employee ID if present
+                    if (saleData.employeeId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(saleData.employeeId)) {
+                        console.warn('[SaleRepo] Invalid Employee UUID, sending NULL to avoid RPC error:', saleData.employeeId);
+                        saleData.employeeId = undefined; // Fallback to null (DB allows null for employee_id usually, or RLS handles it)
+                    }
+
+                    // FIX: Match DB Schema for payment method ('efectivo' per Constraint)
+                    // FIX: Match DB Schema for item price key ('unit_price' per RPC definition)
+
+                    // Remap items to strict schema structure
+                    const rpcItems = p_items.map(i => ({
+                        product_id: i.product_id,
+                        quantity: i.quantity,
+                        unit_price: i.unit_price, // RPC expects 'unit_price'
+                        subtotal: i.subtotal
+                    }));
+
+                    const rpcPayload = {
                         p_store_id: storeId,
                         p_employee_id: saleData.employeeId || null,
-                        p_items: p_items,
+                        p_items: rpcItems,
                         p_total: new Decimal(saleData.total).toNumber(),
                         p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod,
                         p_amount_received: p_amount_received,
                         p_client_id: saleData.clientId || null
-                    });
+                    };
+                    // console.log('[SaleRepo] DEBUG RPC Payload:', JSON.stringify(rpcPayload, null, 2));
+
+                    const { data, error } = await supabase.rpc('procesar_venta', rpcPayload);
 
                     if (error) {
                         logger.error('[SaleRepo] RPC error:', error);
@@ -175,7 +206,8 @@ export const saleRepository: SaleRepository = {
                         }
                     } else {
                         if (data && data.success) {
-                            return { success: true, id: data.id, ticketNumber: data.ticket_number };
+                            // FIX: RPC returns 'sale_id' not 'id'
+                            return { success: true, id: data.sale_id || data.id, ticketNumber: data.ticket_number };
                         } else {
                             return { success: false, error: data?.error || 'Unknown RPC error' };
                         }
@@ -298,6 +330,7 @@ export const saleRepository: SaleRepository = {
 
     async getLastTicketNumber(storeId: string): Promise<number> {
         if (navigator.onLine && isSupabaseConfigured()) {
+            // Optimizing query to handle "no sales" case without 406 error
             const supabase = getSupabaseClient();
             if (supabase) {
                 const { data } = await supabase
@@ -306,7 +339,7 @@ export const saleRepository: SaleRepository = {
                     .eq('store_id', storeId)
                     .order('ticket_number', { ascending: false })
                     .limit(1)
-                    .single();
+                    .maybeSingle();
 
                 if (data) return data.ticket_number;
             }

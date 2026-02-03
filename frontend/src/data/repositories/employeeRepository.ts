@@ -62,7 +62,7 @@ export const employeeMapper: RepositoryMappers<EmployeeDB, Employee> = {
             id: entity.id,
             store_id: entity.storeId,
             name: entity.name,
-            username: entity.username,
+            alias: entity.username, // FIXED: Map domain 'username' to DB 'alias'
             pin_hash: entity.pin, // CAUTION: If updating, this might be hash or plain. 
             // Update method should handle PIN separately usually.
             // But if standard update, we trust domain has hash.

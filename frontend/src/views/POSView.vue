@@ -235,7 +235,9 @@ onUnmounted(() => {
 const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, clientId?: string) => {
   const currentTicket = ticketNumber.value;
   // Determine dominant method for the sale record (simplification)
-  const isMixed = payments.length > 1;
+  // FIX: Audit detected that multiple chunks of same method (e.g. 2 cash bills) were treated as 'mixed'
+  const uniqueMethods = new Set(payments.map(p => p.method));
+  const isMixed = uniqueMethods.size > 1;
   const primaryMethod = isMixed ? 'mixed' : payments[0].method;
   
   // Calculate total cash received for change calculation (only relevant if cash is involved)

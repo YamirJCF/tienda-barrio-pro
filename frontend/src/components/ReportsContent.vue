@@ -165,7 +165,7 @@ const topProducts = computed(() => {
   });
 
   return Object.entries(productSales)
-    .map(([id, data]) => ({ id: Number(id), ...data }))
+    .map(([id, data]) => ({ id: id, ...data }))
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 5);
 });

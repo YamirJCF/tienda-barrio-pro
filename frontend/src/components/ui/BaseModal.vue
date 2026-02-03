@@ -5,6 +5,10 @@
  */
 import { X } from 'lucide-vue-next';
 
+defineOptions({
+  inheritAttrs: false
+});
+
 interface Props {
   modelValue: boolean;
   title?: string;
@@ -28,6 +32,7 @@ const close = () => {
   <Teleport to="body">
     <Transition name="modal">
       <div
+        v-bind="$attrs"
         v-if="modelValue"
         class="fixed inset-0 z-50 flex flex-col justify-end bg-gray-900/40"
         @click.self="close"

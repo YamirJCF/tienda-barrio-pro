@@ -108,13 +108,16 @@ const handlePinSuccess = async () => {
                 return;
             }
             
-            if (authStore.currentUser?.id) {
-                await cashRegisterStore.openRegister(
-                    authStore.currentUser.id,
-                    storeId,  // storeId requerido para RLS
-                    new Decimal(amount.value),
-                    notes.value
-                );
+                if (authStore.currentUser?.id) {
+                    // FIX: Use raw UUID for employees (remove 'emp-' prefix) to satisfy Postgres UUID type
+                    const secureId = authStore.currentUser.employeeId || authStore.currentUser.id;
+                    
+                    await cashRegisterStore.openRegister(
+                        secureId,
+                        storeId,  // storeId requerido para RLS
+                        new Decimal(amount.value),
+                        notes.value
+                    );
             } else {
                 throw new Error('Usuario no autenticado');
             }

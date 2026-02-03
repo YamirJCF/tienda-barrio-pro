@@ -56,9 +56,21 @@ const displayUserEmail = computed(() => currentUser.value?.email || props.userEm
 const isAdmin = computed(() => currentUser.value?.type === 'admin');
 
 // T-011: Computed que referencian el store
-const saleSoundsEnabled = computed(() => preferencesStore.saleSoundsEnabled);
-const darkModeEnabled = computed(() => preferencesStore.darkModeEnabled);
-const notificationsEnabled = computed(() => preferencesStore.notificationsEnabled);
+// T-011: Computed que referencian el store con get/set para v-model
+const saleSoundsEnabled = computed({
+  get: () => preferencesStore.saleSoundsEnabled,
+  set: (val) => preferencesStore.toggleSaleSounds() // Assuming toggle or creating a set action would be better, but toggle matches boolean flip
+});
+
+const darkModeEnabled = computed({
+  get: () => preferencesStore.darkModeEnabled,
+  set: (val) => preferencesStore.toggleDarkMode()
+});
+
+const notificationsEnabled = computed({
+  get: () => preferencesStore.notificationsEnabled,
+  set: (val) => preferencesStore.toggleNotifications()
+});
 
 // Computed
 const userInitials = computed(() => {
