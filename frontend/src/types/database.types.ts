@@ -332,7 +332,7 @@ export type Database = {
                     pin_hash: string
                     store_id: string
                     updated_at: string
-                    username: string
+                    alias: string
                 }
                 Insert: {
                     created_at?: string
@@ -343,7 +343,7 @@ export type Database = {
                     pin_hash: string
                     store_id: string
                     updated_at?: string
-                    username: string
+                    alias: string
                 }
                 Update: {
                     created_at?: string
@@ -354,7 +354,7 @@ export type Database = {
                     pin_hash?: string
                     store_id?: string
                     updated_at?: string
-                    username?: string
+                    alias?: string
                 }
                 Relationships: [
                     {
@@ -798,7 +798,19 @@ export type Database = {
                     p_severity: string
                     p_metadata: Json
                 }
-                Returns: boolean
+                Returns: string
+            }
+            procesar_venta: {
+                Args: {
+                    p_store_id: string
+                    p_employee_id: string | null
+                    p_items: Json
+                    p_total: number
+                    p_payment_method: string
+                    p_amount_received: number | null
+                    p_client_id: string | null
+                }
+                Returns: Json
             }
             solicitar_pase_diario: {
                 Args: {

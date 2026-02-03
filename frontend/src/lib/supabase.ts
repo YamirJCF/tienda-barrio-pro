@@ -1,11 +1,11 @@
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from '../types/database.types'
+/**
+ * Supabase Client (Legacy Adapter)
+ * Redirects to the centralized singleton in data/supabaseClient
+ * to ensure shared session state and prevent "Multiple GoTrueClient" errors.
+ */
+import { requireSupabase } from '../data/supabaseClient';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Re-export the singleton instance
+// This enforces that AuthRepository and other consumers use the SAME client instance
+export const supabase = requireSupabase();
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL and Anon Key are required. Check your .env file.')
-}
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)

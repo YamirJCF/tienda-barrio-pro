@@ -195,6 +195,7 @@ watch(() => props.modelValue, (val) => {
 
 watch(currentMethod, (newMethod) => {
     reference.value = ''; // Clear reference
+    payments.value = []; // FIX: Prevent accidental mixed payments by clearing previous chunks on tab switch
     
     // Nequi Logic: Auto-set exact amount
     if (newMethod === 'nequi') {

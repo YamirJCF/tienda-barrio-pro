@@ -47,37 +47,59 @@ export const cashRepository: CashRepository = {
         // Default closed state
         let status = { isOpen: false, openingAmount: 0, lastEvent: undefined as CashControlEvent | undefined, sessionId: undefined as string | undefined };
 
-        // 1. Try Online
+        // 1. Try Online via RPC (Security Definer - Bypasses RLS)
+        // This prevents "Blind Spots" where session exists but RLS hides it
         if (isOnline) {
             const supabase = getSupabaseClient()!;
             try {
-                // Fetch active session
-                // Schema v2: cash_sessions has status 'open' or 'closed'
-                const { data, error } = await supabase
-                    .from('cash_sessions')
-                    .select('*')
-                    .eq('store_id', storeId)
-                    .eq('status', 'open')
-                    .order('opened_at', { ascending: false }) // Get most recent open
-                    .limit(1);
+                // Try Robust RPC first
+                const { data, error } = await supabase.rpc('get_active_cash_session', { p_store_id: storeId });
 
-                if (!error && data && data.length > 0) {
-                    const session = data[0];
-                    status.isOpen = true;
-                    status.openingAmount = Number(session.opening_balance);
-                    status.sessionId = session.id;
-                    status.lastEvent = {
-                        id: session.id,
-                        store_id: session.store_id,
-                        type: 'open',
-                        amount_declared: Number(session.opening_balance),
-                        authorized_by_name: 'Unknown', // Not fetched here
-                        authorized_by_type: 'employee',
-                        authorized_by_id: session.opened_by
-                    };
+                if (!error && data) {
+                    const result = data as any;
+                    if (result.isOpen) {
+                        status.isOpen = true;
+                        status.openingAmount = Number(result.openingAmount);
+                        status.sessionId = result.sessionId;
+                        status.lastEvent = {
+                            id: result.sessionId,
+                            store_id: storeId,
+                            type: 'open',
+                            amount_declared: Number(result.openingAmount),
+                            authorized_by_name: 'Unknown',
+                            authorized_by_type: 'employee',
+                            authorized_by_id: result.openedBy
+                        };
+                        return status;
+                    }
+                } else {
+                    // Fallback to legacy select if RPC fails or not exists (backward compat)
+                    // ... existing select logic ...
+                    const { data: legacyData, error: legacyError } = await supabase
+                        .from('cash_sessions')
+                        .select('*')
+                        .eq('store_id', storeId)
+                        .eq('status', 'open')
+                        .order('opened_at', { ascending: false })
+                        .limit(1);
+
+                    if (!legacyError && legacyData && legacyData.length > 0) {
+                        const session = legacyData[0];
+                        status.isOpen = true;
+                        status.openingAmount = Number(session.opening_balance);
+                        status.sessionId = session.id;
+                        status.lastEvent = {
+                            id: session.id,
+                            store_id: session.store_id,
+                            type: 'open',
+                            amount_declared: Number(session.opening_balance),
+                            authorized_by_name: 'Unknown',
+                            authorized_by_type: 'employee',
+                            authorized_by_id: session.opened_by
+                        };
+                        return status;
+                    }
                 }
-                return status;
-
             } catch (e) {
                 logger.error('[CashRepo] Online status check failed', e);
             }
@@ -136,6 +158,14 @@ export const cashRepository: CashRepository = {
                 let rpcArgs = {};
 
                 if (event.type === 'open') {
+                    // VALIDATION: Ensure employee ID is UUID (prevents 22P02 error)
+                    if (event.authorized_by_id && !uuidRegex.test(event.authorized_by_id)) {
+                        return {
+                            success: false,
+                            error: `Invalid Employee UUID: ${event.authorized_by_id}. (Check AuthStore prefixes)`
+                        };
+                    }
+
                     rpcName = 'abrir_caja';
                     rpcArgs = {
                         p_store_id: event.store_id,
