@@ -23,7 +23,7 @@
           <p class="step-label">{{ subtitle }}</p>
           <PinKeypad
             ref="pinKeypad"
-            :length="6"
+            :length="4"
             :error="error"
             :disabled="loading"
             @complete="handlePinComplete"
@@ -45,6 +45,9 @@
 import { ref, watch, computed } from 'vue';
 import PinKeypad from './PinKeypad.vue';
 import { useCashControlStore } from '../stores/cashControl';
+import { useAuthStore } from '../stores/auth';
+import { authRepository } from '../data/repositories/authRepository';
+import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
 
 const props = withDefaults(defineProps<{
   isVisible: boolean;
@@ -59,6 +62,8 @@ const emit = defineEmits<{
 }>();
 
 const cashControlStore = useCashControlStore();
+const authStore = useAuthStore();
+const { getShortFingerprint } = useDeviceFingerprint();
 
 const error = ref<string | null>(null);
 const loading = ref(false);
@@ -72,8 +77,8 @@ const title = computed(() =>
 
 const subtitle = computed(() => 
   props.action === 'open' 
-    ? 'Ingresa el PIN de Caja para abrir el turno:' 
-    : 'Ingresa el PIN de Caja para cerrar el turno:'
+    ? 'Ingresa TU PIN de Empleado para abrir el turno:' 
+    : 'Ingresa TU PIN de Empleado para cerrar el turno:'
 );
 
 const formatTime = (seconds: number): string => {
@@ -87,7 +92,25 @@ const handlePinComplete = async (pin: string) => {
   error.value = null;
 
   try {
-    const result = await cashControlStore.validatePin(pin);
+    // SECURITY UPGRADE: Verify against Backend (Zero-Auth Strategy)
+    // Instead of local LS hash, we verify if this PIN can request access for current user
+    if (!authStore.currentUser?.email) {
+        throw new Error("Usuario no identificado");
+    }
+
+    // We can re-use requestEmployeeAccess logic or a new verifyPin endpoint.
+    // Re-using requestEmployeeAccess is standard for "sudo" mode.
+    const fingerprint = await getShortFingerprint(); // Does not need exact match, just value
+    
+    // We send the ALIAS (which is mapped to email/username in store)
+    // If it's an employee, email is the alias. If admin, it's the email. 
+    const identity = authStore.currentUser.email; // username field holds alias
+
+    const result = await authRepository.requestEmployeeAccess(
+        identity, 
+        pin, 
+        fingerprint || 'sudo-check'
+    );
 
     if (result.success) {
       // Success! Emit and close
@@ -96,8 +119,13 @@ const handlePinComplete = async (pin: string) => {
       emit('close');
     } else {
       // Failure - shake and show error
-      error.value = result.error ?? 'PIN incorrecto';
-      attemptsRemaining.value = result.attemptsRemaining ?? null;
+      console.warn('[PinChallenge] Validation Failed:', { 
+        identity, 
+        error: result.message, 
+        code: result.error_code 
+      });
+      
+      error.value = result.message || 'PIN Incorrecto';
       
       // Trigger shake animation
       isShaking.value = true;
@@ -109,6 +137,7 @@ const handlePinComplete = async (pin: string) => {
       pinKeypad.value?.clear();
     }
   } catch (err) {
+    console.error(err);
     error.value = 'Error de validación';
     pinKeypad.value?.clear();
   } finally {

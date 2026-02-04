@@ -7,7 +7,7 @@ import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
 import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
 import PinChallengeModal from '../components/PinChallengeModal.vue';
-import PinSetupModal from '../components/PinSetupModal.vue';
+// PinSetupModal removed
 import Decimal from 'decimal.js';
 
 import { useAuthStore } from '../stores/auth'; // Import auth store
@@ -32,9 +32,26 @@ const { showSuccess, showError } = useNotifications();
 import { useAsyncAction } from '../composables/useAsyncAction';
 const { execute: executeAction, isLoading: isSubmitting } = useAsyncAction();
 
+// Lifecycle
+// Lifecycle
 onMounted(async () => {
-    if (authStore.currentStore?.id) {
-        await cashRegisterStore.syncFromBackend(authStore.currentStore.id);
+    try {
+        if (!authStore.currentStore) {
+            console.error('🚫 [CashControl] No store loaded in AuthStore!');
+            return;
+        }
+        
+        console.log('🔍 [CashControl] Syncing Status for Store:', authStore.currentStore.id);
+        const result = await cashRegisterStore.syncFromBackend(authStore.currentStore.id);
+        console.log('✅ [CashControl] Sync Result:', { 
+            isOpen: cashRegisterStore.isOpen, 
+            result,
+            session: cashRegisterStore.currentSession 
+        });
+
+        // Computed property 'isOpening' will update automatically based on store state
+    } catch (e) {
+        console.error('🚫 [CashControl] Mount Error:', e);
     }
 });
 
@@ -81,17 +98,16 @@ const differenceStatus = computed(() => {
 
 // STEP 1: User clicks button -> Show PIN modal (do NOT execute yet)
 const handleSubmit = () => {
-    // Check if PIN is configured first
-    if (!cashControlStore.hasPinConfigured) {
-        // PO-02: Instead of error, prompt to setup PIN
-        showPinSetupModal.value = true;
+    // ADMIN BYPASS: Admins (Owners) are already strongly authenticated
+    if (authStore.isAdmin) {
+        pendingAction.value = isOpening.value ? 'open' : 'close';
+        handlePinSuccess(); // Skip challenge
         return;
     }
-    
-    // Set the pending action type
+
+    // EMPLOYEE: Requires PIN Challenge (Zero-Auth Strategy)
+    // PIN Validation is now handled "Just in Time" by the Modal using Backend Auth
     pendingAction.value = isOpening.value ? 'open' : 'close';
-    
-    // Show PIN challenge modal
     showPinModal.value = true;
 };
 
@@ -243,19 +259,7 @@ const goBack = () => router.back();
             @success="handlePinSuccess"
         />
 
-        <!-- PO-02: Pin Setup Modal (Inline Creation) -->
-        <PinSetupModal
-            :isVisible="showPinSetupModal"
-            mode="setup"
-            @close="showPinSetupModal = false"
-            @success="
-                showPinSetupModal = false;
-                cashControlStore.checkPinConfigured().then(() => {
-                   showSuccess('PIN configurado. Ahora autoriza la operación.');
-                   handleSubmit(); // Auto-retrigger logic to show challenge
-                })
-            "
-        />
+        <!-- PO-02: Pin Setup Modal REMOVED (Zero-Auth Strategy uses Employee PIN) -->
     </div>
 </template>
 

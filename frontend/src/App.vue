@@ -29,6 +29,10 @@ const { currentAlert, isVisible, handlePrimary, handleSecondary, dismissAlert } 
 import { useHeartbeat } from './composables/useHeartbeat';
 useHeartbeat();
 
+// Security: Revocation Guard (Checks for ban/revocation)
+import { useRevocationGuard } from './composables/useRevocationGuard';
+useRevocationGuard();
+
 const errorDetected = ref(false);
 
 // CAPTURA DE ERRORES GLOBAL
