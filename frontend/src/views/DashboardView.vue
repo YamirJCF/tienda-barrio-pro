@@ -43,9 +43,16 @@ onMounted(async () => {
   salesStore.initialize();
   inventoryStore.initialize();
   
-  if (authStore.currentUser?.storeId) {
+  // FIX: Admin users might not have storeId in currentUser, but have selected currentStore
+  const activeStoreId = authStore.currentStore?.id || authStore.currentUser?.storeId;
+
+  if (activeStoreId) {
+      console.log('🔍 [Dashboard] Syncing Status for Store:', activeStoreId);
       // WO-006: Sync cash session state to avoid showing previous user's session
-      await cashRegisterStore.syncFromBackend(authStore.currentUser.storeId);
+      await cashRegisterStore.syncFromBackend(activeStoreId);
+      console.log('✅ [Dashboard] Sync Result:', { isOpen: cashRegisterStore.isOpen });
+  } else {
+      console.warn('⚠️ [Dashboard] No active store ID found for sync');
   }
 });
 

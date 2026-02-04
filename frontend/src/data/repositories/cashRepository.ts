@@ -71,6 +71,10 @@ export const cashRepository: CashRepository = {
                             authorized_by_id: result.openedBy
                         };
                         return status;
+                    } else {
+                        // RPC Authoritatively says "Closed" -> Trust it.
+                        // Do NOT fallback to LocalStorage (which might have stale "Open" state)
+                        return status; // Default is closed
                     }
                 } else {
                     // Fallback to legacy select if RPC fails or not exists (backward compat)

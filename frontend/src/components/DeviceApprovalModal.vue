@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { logger } from '../utils/logger';
 import { authRepository } from '../data/repositories/authRepository';
 import { useAuthStore } from '../stores/auth';
-import { Smartphone, X, Clock, Check, ShieldCheck, CheckCircle, BadgeCheck } from 'lucide-vue-next';
+import { Smartphone, X, Clock, Check, ShieldCheck, CheckCircle, BadgeCheck, UserX } from 'lucide-vue-next';
 
 // Props y Emits
 const props = defineProps<{
@@ -259,9 +259,19 @@ const formatDate = (isoDate: string): string => {
                       {{ parseDevice(device.userAgent) }}
                     </p>
                   </div>
-                  <span class="text-green-600 dark:text-green-400">
-                    <BadgeCheck :size="20" />
-                  </span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-green-600 dark:text-green-400" title="Aprobado">
+                      <BadgeCheck :size="20" />
+                    </span>
+                    <button
+                      @click="rejectDevice(device)"
+                      class="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 transition-colors"
+                      title="Revocar Acceso"
+                      :disabled="isLoading"
+                    >
+                      <UserX :size="18" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>

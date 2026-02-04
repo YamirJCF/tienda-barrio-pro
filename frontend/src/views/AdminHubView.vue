@@ -19,7 +19,8 @@ import {
   Users, 
   ChevronRight, 
   KeyRound,
-  AlertTriangle 
+  AlertTriangle,
+  Smartphone 
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 import ReportsContent from '../components/ReportsContent.vue';
@@ -109,7 +110,16 @@ watch(activeTab, (newTab) => {
         <h2 class="text-xl font-bold leading-tight tracking-tight flex-1 dark:text-white">
           Administración
         </h2>
-        <div class="flex items-center justify-end">
+        <div class="flex items-center justify-end gap-2">
+          <!-- Device Management Trigger -->
+          <button
+            @click="showDeviceModal = true"
+            aria-label="Gestionar Dispositivos"
+            class="flex items-center justify-center h-9 w-9 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+             <Smartphone :size="20" stroke-width="2" />
+          </button>
+
           <button
             @click="showProfileSidebar = true"
             aria-label="Perfil de usuario"
