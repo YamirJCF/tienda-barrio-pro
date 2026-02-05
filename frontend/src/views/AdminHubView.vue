@@ -23,7 +23,7 @@ import {
   Smartphone 
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
-import ReportsContent from '../components/ReportsContent.vue';
+import SmartDailySummary from '../components/SmartDailySummary.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
 // WO-004: Modal de PIN para SPEC-006 (consolidado)
 // T-008: Modal de PIN para SPEC-006 (consolidado)
@@ -413,7 +413,7 @@ watch(activeTab, (newTab) => {
 
       <!-- Reportes Tab Content -->
       <section v-if="activeTab === 'reportes'">
-        <ReportsContent />
+        <SmartDailySummary />
       </section>
 
       <div class="h-10"></div>

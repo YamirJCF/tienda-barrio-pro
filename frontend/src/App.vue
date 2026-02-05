@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onErrorCaptured } from 'vue';
-import { RouterView } from 'vue-router';
+import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue';
+import { RouterView, useRouter } from 'vue-router';
 import ToastNotification from './components/ToastNotification.vue';
 import { useNetworkStatus } from './composables/useNetworkStatus';
 import { checkDataIntegrity } from './composables/useDataIntegrity';
@@ -34,6 +34,25 @@ import { useRevocationGuard } from './composables/useRevocationGuard';
 useRevocationGuard();
 
 const errorDetected = ref(false);
+const router = useRouter();
+
+// ============================================
+// FRD-012-R: Sync Auth Required Handler (RN-R05)
+// ============================================
+const handleSyncAuthRequired = () => {
+  console.warn('[App] sync:auth_required event received - session expired during sync');
+  // Redirect to login with message
+  alert('Tu sesión expiró. Por favor, inicia sesión nuevamente para sincronizar las ventas pendientes.');
+  router.push('/login');
+};
+
+onMounted(() => {
+  window.addEventListener('sync:auth_required', handleSyncAuthRequired);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('sync:auth_required', handleSyncAuthRequired);
+});
 
 // CAPTURA DE ERRORES GLOBAL
 onErrorCaptured((err, instance, info) => {

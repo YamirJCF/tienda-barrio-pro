@@ -14,9 +14,9 @@
             <i class="material-icons text-gray-400">wifi_off</i>
           </div>
           <div class="ml-3 w-0 flex-1 pt-0.5">
-            <p class="text-sm font-medium text-gray-900">Estás en modo Offline</p>
+            <p class="text-sm font-medium text-gray-900">📡 Modo Offline</p>
             <p class="mt-1 text-sm text-gray-500">
-              Las ventas se guardarán localmente y se sincronizarán cuando recuperes la conexión.
+              Ventas limitadas al stock local. Se sincronizarán al recuperar conexión.
             </p>
           </div>
           <!-- Close button -->
