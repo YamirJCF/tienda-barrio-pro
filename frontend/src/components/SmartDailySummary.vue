@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, computed } from 'vue';
 import { useReportsStore } from '../stores/reports';
-import { useQuantityFormat } from '../composables/useQuantityFormat';
+import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import {
   Banknote,
   Smartphone,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-vue-next';
 
 const reportsStore = useReportsStore();
-const { formatCurrency } = useQuantityFormat();
+const { formatCurrency } = useCurrencyFormat();
 
 onMounted(() => {
   reportsStore.fetchDailySummary();
