@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 import { ArrowLeft } from 'lucide-vue-next';
-import ReportsContent from '../components/ReportsContent.vue';
+import SmartDailySummary from '../components/SmartDailySummary.vue';
 import BottomNav from '../components/BottomNav.vue';
 
 const router = useRouter();
@@ -29,7 +29,7 @@ const goBack = () => {
     </header>
 
     <main class="flex-1 pt-4">
-      <ReportsContent />
+      <SmartDailySummary />
     </main>
 
     <BottomNav />
