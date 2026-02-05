@@ -117,6 +117,7 @@ export interface SaleRepository extends EntityRepository<Sale> {
     processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }>;
     getByDateRange(startDate: string, endDate: string, storeId?: string): Promise<Sale[]>;
     getLastTicketNumber(storeId: string): Promise<number>;
+    voidSale(saleId: string, reason: string): Promise<{ success: boolean; error?: string }>;
 }
 
 // Create base repository with Mappers
@@ -136,101 +137,75 @@ export const saleRepository: SaleRepository = {
      * Process a new sale (Atomic Transaction)
      * Uses RPC 'procesar_venta' if online, fallback to Sync Queue if offline
      */
+    /**
+     * Process a new sale (Atomic Transaction V2)
+     * Uses RPC 'rpc_procesar_venta_v2' - Financial Core
+     */
     async processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }> {
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
-        // 1. Try Online (RPC)
+        // 1. Try Online (RPC V2)
         if (isOnline) {
             const supabase = getSupabaseClient();
             if (supabase) {
                 try {
                     // Refactoring: Ensure Strict Types for RPC & Validate Inputs
-                    // Decimal -> number conversion is critical here
                     const p_items = saleData.items.map(item => {
                         const q = Number(item.quantity);
-                        const p = new Decimal(item.price).toNumber();
-                        const s = new Decimal(item.subtotal).toNumber();
-
-                        // Guard against NaN or "N/A" logic slippage
-                        if (!Number.isFinite(q) || !Number.isFinite(p)) {
-                            throw new Error(`Invalid item data: Quantity=${q}, Price=${p}`);
+                        // V2: Price is NOT sent to backend for calculation, only ID and Qty
+                        if (!Number.isFinite(q)) {
+                            throw new Error(`Invalid item quantity: ${q}`);
                         }
-
                         return {
                             product_id: item.productId,
-                            quantity: q,
-                            unit_price: p,
-                            subtotal: s
+                            quantity: q
                         };
                     });
 
                     const p_amount_received = saleData.amountReceived ? new Decimal(saleData.amountReceived).toNumber() : null;
 
-                    // Validate Employee ID if present
+                    // Validate Employee ID
                     if (saleData.employeeId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(saleData.employeeId)) {
-                        console.warn('[SaleRepo] Invalid Employee UUID, sending NULL to avoid RPC error:', saleData.employeeId);
-                        saleData.employeeId = undefined; // Fallback to null (DB allows null for employee_id usually, or RLS handles it)
+                        console.warn('[SaleRepo] Invalid Employee UUID, sending NULL:', saleData.employeeId);
+                        saleData.employeeId = undefined;
                     }
-
-                    // FIX: Match DB Schema for payment method ('efectivo' per Constraint)
-                    // FIX: Match DB Schema for item price key ('unit_price' per RPC definition)
-
-                    // Remap items to strict schema structure
-                    const rpcItems = p_items.map(i => ({
-                        product_id: i.product_id,
-                        quantity: i.quantity,
-                        unit_price: i.unit_price, // RPC expects 'unit_price'
-                        subtotal: i.subtotal
-                    }));
 
                     const rpcPayload = {
                         p_store_id: storeId,
-                        p_employee_id: saleData.employeeId || null,
-                        p_items: rpcItems,
-                        p_total: new Decimal(saleData.total).toNumber(),
+                        p_client_id: saleData.clientId || null,
                         p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod,
                         p_amount_received: p_amount_received,
-                        p_client_id: saleData.clientId || null
+                        p_items: p_items
                     };
-                    // console.log('[SaleRepo] DEBUG RPC Payload:', JSON.stringify(rpcPayload, null, 2));
 
-                    const { data, error } = await supabase.rpc('procesar_venta', rpcPayload);
+                    const { data, error } = await supabase.rpc('rpc_procesar_venta_v2', rpcPayload);
 
                     if (error) {
-                        logger.error('[SaleRepo] RPC error:', error);
-                        // If network error, fall through to offline handling
+                        logger.error('[SaleRepo] RPC V2 error:', error);
                         if (error.message && (error.message.includes('FetchError') || error.message.includes('Network request failed'))) {
-                            // Fallthrough
+                            // Fallthrough to offline
                         } else {
                             return { success: false, error: error.message };
                         }
                     } else {
                         if (data && data.success) {
-                            // FIX: RPC returns 'sale_id' not 'id'
-                            return { success: true, id: data.sale_id || data.id, ticketNumber: data.ticket_number };
+                            return { success: true, id: data.sale_id, ticketNumber: data.ticket_number };
                         } else {
                             return { success: false, error: data?.error || 'Unknown RPC error' };
                         }
                     }
 
                 } catch (e) {
-                    logger.error('[SaleRepo] RPC exception:', e);
-                    // Fallthrough to offline
+                    logger.error('[SaleRepo] RPC V2 exception:', e);
                 }
             }
         }
 
         // 2. Offline Mode (Sync Queue)
-        // Add to IndexedDB queue for later processing
         try {
-            // Generate ID client-side for UI consistency
             const newId = crypto.randomUUID();
-
-            // Normalize Payload for Queue
-            // Ensure numbers for storage to match RPC expectations later
             const enrichedPayload = {
                 ...saleData,
-                // Ensure primitives for storage
                 total: new Decimal(saleData.total).toNumber(),
                 amountReceived: saleData.amountReceived ? new Decimal(saleData.amountReceived).toNumber() : undefined,
                 items: saleData.items.map(item => ({
@@ -241,7 +216,8 @@ export const saleRepository: SaleRepository = {
                 storeId,
                 id: newId
             };
-
+            // Note: Offline queue will still need V1-like processing or V2-compatible sync handler later.
+            // For now, we queue it. V2 Sync handler usually needs to be updated too, but focusing on Online first.
             const queued = await addToSyncQueue('CREATE_SALE', enrichedPayload);
 
             if (queued) {
@@ -252,6 +228,39 @@ export const saleRepository: SaleRepository = {
 
         } catch (e: any) {
             return { success: false, error: e.message || 'Offline save failed' };
+        }
+    },
+
+    /**
+     * Void a sale (Atomic Reversal)
+     * Uses RPC 'rpc_anular_venta'
+     */
+    async voidSale(saleId: string, reason: string): Promise<{ success: boolean; error?: string }> {
+        if (!navigator.onLine || !isSupabaseConfigured()) {
+            return { success: false, error: 'Voiding requires online connection' };
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
+        try {
+            const { data, error } = await supabase.rpc('rpc_anular_venta', {
+                p_sale_id: saleId,
+                p_reason: reason
+            });
+
+            if (error) {
+                logger.error('[SaleRepo] Void Sale RPC error:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (data && data.success) {
+                return { success: true };
+            } else {
+                return { success: false, error: data?.error || 'Void failed' };
+            }
+        } catch (e: any) {
+            return { success: false, error: e.message };
         }
     },
 
