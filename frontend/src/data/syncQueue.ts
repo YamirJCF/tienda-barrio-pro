@@ -304,25 +304,22 @@ async function processItem(item: QueueItem): Promise<boolean> {
 
     switch (item.type) {
         case 'CREATE_SALE':
-            // Call RPC
-            const { data, error } = await supabase.rpc('procesar_venta', {
-                p_store_id: item.payload.storeId,
-                p_employee_id: item.payload.employeeId || null,
-                // Offline Mapper: CamelCase -> SnakeCase
-                // This is needed because addToSyncQueue saves raw payload (Camel)
-                p_items: item.payload.items.map((i: any) => ({
-                    product_id: i.productId,
-                    quantity: i.quantity,
-                    unit_price: i.price,
-                    subtotal: i.subtotal
-                })),
-                p_total: item.payload.total,
+            // FRD-012-R / RN-R03: Use RPC V2 (Financial Core)
+            // V2 does NOT accept prices - server calculates from DB
+            const p_items_v2 = item.payload.items.map((i: any) => ({
+                product_id: i.productId || i.product_id,
+                quantity: Number(i.quantity)
+            }));
+
+            const { data, error } = await supabase.rpc('rpc_procesar_venta_v2', {
+                p_store_id: item.payload.storeId || item.payload.store_id,
+                p_client_id: item.payload.clientId || item.payload.client_id || null,
                 p_payment_method: (item.payload.paymentMethod === 'mixed' || item.payload.paymentMethod === 'cash') ? 'efectivo' : item.payload.paymentMethod,
-                p_amount_received: item.payload.amountReceived,
-                p_client_id: item.payload.clientId
+                p_amount_received: item.payload.amountReceived || item.payload.amount_received || null,
+                p_items: p_items_v2
             });
             if (error) throw error;
-            return data.success;
+            return data?.success ?? false;
 
         case 'CREATE_CLIENT':
             // Direct Insert

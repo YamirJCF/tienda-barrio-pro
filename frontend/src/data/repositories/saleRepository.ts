@@ -202,7 +202,45 @@ export const saleRepository: SaleRepository = {
         }
 
         // 2. Offline Mode (Sync Queue)
+        // FRD-012-R: Validate locally BEFORE queueing to prevent invalid sales
         try {
+            // 2.1 Validate Stock Local (RN-R01)
+            const { useInventoryStore } = await import('../../stores/inventory');
+            const inventoryStore = useInventoryStore();
+
+            for (const item of saleData.items) {
+                const product = inventoryStore.getProductById(item.productId);
+                if (!product) {
+                    return {
+                        success: false,
+                        error: `Producto no encontrado: ${item.productName}`
+                    };
+                }
+                const qty = new Decimal(item.quantity);
+                if (product.stock.lt(qty)) {
+                    return {
+                        success: false,
+                        error: `Stock insuficiente para ${item.productName}. Disponible: ${product.stock.toFixed(0)}`
+                    };
+                }
+            }
+
+            // 2.2 Validate Credit Limit for Fiado (RN-R02)
+            if (saleData.paymentMethod === 'fiado' && saleData.clientId) {
+                const { useClientsStore } = await import('../../stores/clients');
+                const clientsStore = useClientsStore();
+                const availableCredit = clientsStore.getAvailableCredit(saleData.clientId);
+                const saleTotal = new Decimal(saleData.total);
+
+                if (saleTotal.gt(availableCredit)) {
+                    return {
+                        success: false,
+                        error: `Límite de crédito excedido. Disponible: $${availableCredit.toFixed(0)}`
+                    };
+                }
+            }
+
+            // 2.3 Queue Sale
             const newId = crypto.randomUUID();
             const enrichedPayload = {
                 ...saleData,
