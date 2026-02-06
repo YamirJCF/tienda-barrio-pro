@@ -90,23 +90,27 @@ export const deserializeTransaction = (data: SerializedTransaction): ClientTrans
 });
 
 export const clientsSerializer = {
-  serialize: (state: ClientsState): string => {
+  serialize: (state: any): string => {
+    // Only serialize data arrays, not UI state
     const serialized: SerializedClientsState = {
-      clients: state.clients.map(serializeClient),
-      transactions: state.transactions.map(serializeTransaction),
+      clients: (state.clients || []).map(serializeClient),
+      transactions: (state.transactions || []).map(serializeTransaction),
       nextClientId: state.nextClientId,
       nextTransactionId: state.nextTransactionId,
     };
     return JSON.stringify(serialized);
   },
 
-  deserialize: (value: string): ClientsState => {
+  deserialize: (value: string): any => {
     const data: SerializedClientsState = JSON.parse(value);
     return {
       clients: data.clients?.map(deserializeClient) || [],
       transactions: data.transactions?.map(deserializeTransaction) || [],
       nextClientId: data.nextClientId || 1,
       nextTransactionId: data.nextTransactionId || 1,
+      // Restore default UI state
+      isLoading: false,
+      error: null,
     };
   },
 };

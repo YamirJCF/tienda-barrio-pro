@@ -54,8 +54,29 @@ onUnmounted(() => {
   window.removeEventListener('sync:auth_required', handleSyncAuthRequired);
 });
 
-// CAPTURA DE ERRORES GLOBAL
+// CAPTURA DE ERRORES GLOBAL (MEJORADO PARA OFFLINE)
 onErrorCaptured((err, instance, info) => {
+  // Ignorar errores de red que ya están siendo manejados por los repositorios
+  if (err instanceof TypeError && (
+    err.message.includes('Failed to fetch') ||
+    err.message.includes('NetworkError') ||
+    err.message.includes('fetch failed')
+  )) {
+    console.warn('⚠️ Error de red capturado (ignorado - modo offline activo):', err.message);
+    return false; // Prevent propagation but don't show error overlay
+  }
+
+  // Ignorar errores de Supabase que ya están siendo manejados
+  if (err.message && (
+    err.message.includes('ERR_INTERNET_DISCONNECTED') ||
+    err.message.includes('dynamically imported module') ||
+    err.message.includes('websocket')
+  )) {
+    console.warn('⚠️ Error de Supabase capturado (ignorado):', err.message);
+    return false;
+  }
+
+  // Solo mostrar overlay para errores críticos no manejados
   console.error('🔥 Error Crítico Capturado:', err);
   errorDetected.value = true;
   return false; // Evita que el error rompa la app completa
