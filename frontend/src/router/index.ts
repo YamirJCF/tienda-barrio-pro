@@ -2,6 +2,13 @@ import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
+// OFFLINE-CRITICAL: Eager imports for offline functionality
+import POSView from '../views/POSView.vue';
+import InventoryView from '../views/InventoryView.vue';
+import ClientListView from '../views/ClientListView.vue';
+import CashControlView from '../views/CashControlView.vue';
+import AdminHubView from '../views/AdminHubView.vue';
+import EmployeeManagerView from '../views/EmployeeManagerView.vue';
 // ⚠️ SystemAuditView se importa dinámicamente solo en DEV (ver abajo)
 
 const routes: RouteRecordRaw[] = [
@@ -59,25 +66,25 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin',
     name: 'admin',
-    component: () => import('../views/AdminHubView.vue'),
+    component: AdminHubView,
     meta: { requiresAuth: true }
   },
   {
     path: '/pos',
     name: 'pos',
-    component: () => import('../views/POSView.vue'),
+    component: POSView,
     meta: { requiresAuth: true }
   },
   {
     path: '/inventory',
     name: 'inventory',
-    component: () => import('../views/InventoryView.vue'),
+    component: InventoryView,
     meta: { requiresAuth: true }
   },
   {
     path: '/clients',
     name: 'clients',
-    component: () => import('../views/ClientListView.vue'),
+    component: ClientListView,
     meta: { requiresAuth: true }
   },
   {
@@ -89,7 +96,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/employees',
     name: 'employees',
-    component: () => import('../views/EmployeeManagerView.vue'),
+    component: EmployeeManagerView,
     meta: { requiresAuth: true },
   },
   {
@@ -101,7 +108,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/cash-control',
     name: 'cash-control',
-    component: () => import('../views/CashControlView.vue'),
+    component: CashControlView,
     meta: { requiresAuth: true },
   },
   {

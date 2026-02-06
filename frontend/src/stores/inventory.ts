@@ -398,4 +398,19 @@ export const useInventoryStore = defineStore(
       adjustStockLocal,
     };
   },
+  {
+    persist: {
+      key: 'tienda-inventory',
+      serializer: {
+        serialize: (state: any) => {
+          const { inventorySerializer } = require('../data/serializers/inventorySerializer');
+          return inventorySerializer.serialize(state);
+        },
+        deserialize: (value: string) => {
+          const { inventorySerializer } = require('../data/serializers/inventorySerializer');
+          return inventorySerializer.deserialize(value);
+        },
+      },
+    },
+  },
 );

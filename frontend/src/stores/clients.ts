@@ -30,6 +30,14 @@ export const useClientsStore = defineStore(
     // Actions
     const initialize = async (storeId: string) => {
       if (!storeId) return;
+
+      // OFFLINE-FIRST: If we already have clients loaded (from persist), skip network call when offline
+      const isOnline = navigator.onLine;
+      if (!isOnline && clients.value.length > 0) {
+        logger.log('[ClientsStore] Offline mode: using persisted clients');
+        return;
+      }
+
       isLoading.value = true;
       try {
         const data = await clientRepository.getAll(storeId);
@@ -38,6 +46,11 @@ export const useClientsStore = defineStore(
       } catch (e: any) {
         logger.error('[ClientsStore] Init failed', e);
         error.value = 'Error al cargar clientes';
+        // FRD-012: Don't clear existing clients on network error
+        // If we have persisted data, keep it
+        if (clients.value.length > 0) {
+          logger.warn('[ClientsStore] Network failed, but keeping persisted clients');
+        }
       } finally {
         isLoading.value = false;
       }

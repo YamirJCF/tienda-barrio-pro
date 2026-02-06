@@ -100,6 +100,11 @@ export function useDataSource() {
         logger.log('[DataSource] Network came online');
         isOnline.value = true;
         await checkConnection();
+
+        // Trigger sync queue processing for offline transactions
+        const { processSyncQueue } = await import('../data/syncQueue');
+        processSyncQueue(); // Fire and forget
+
         // Trigger sync event
         window.dispatchEvent(new CustomEvent('data-source-online'));
     };

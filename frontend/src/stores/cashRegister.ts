@@ -44,8 +44,25 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
     // Methods
     const syncFromBackend = async (storeId: string) => {
+        // OFFLINE-FIRST: Preserve existing session without attempting sync
+        const hasExistingSession = currentSession.value?.status === 'open';
+
+        // If we have a session and are offline, don't even try to sync
+        if (!navigator.onLine && hasExistingSession) {
+            console.log('⚠️ [CashRegisterStore] Offline detected - preserving local session');
+            return true;
+        }
+
         try {
             const { cashRepository } = await import('../data/repositories/cashRepository');
+            const { isSupabaseConfigured } = await import('../data/supabaseClient');
+
+            // If Supabase not configured, preserve existing state
+            if (!isSupabaseConfigured()) {
+                console.warn('⚠️ [CashRegisterStore] Supabase not configured - preserving local session');
+                return hasExistingSession;
+            }
+
             const status = await cashRepository.getStoreStatus(storeId);
 
             if (status.isOpen && status.sessionId) {
@@ -70,15 +87,27 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
                 return true;
             } else {
-                // Ensure local state matches closed backend
-                if (currentSession.value?.status === 'open') {
-                    console.warn('⚠️ [CashRegisterStore] Closing local session as backend is closed');
-                    currentSession.value = null;
+                // Backend says closed - but ONLY clear if we don't have existing session
+                // This handles the case where:
+                // 1. User opened cash offline
+                // 2. Backend doesn't know about it yet
+                // 3. We shouldn't close the local session just because backend is out of sync
+                if (hasExistingSession) {
+                    console.warn('⚠️ [CashRegisterStore] Backend closed, but preserving existing local session (offline resilience)');
+                    return true;
                 }
+
+                // No existing session and backend is closed - that's fine
+                currentSession.value = null;
                 return false;
             }
         } catch (e) {
             console.error('🚫 [CashRegisterStore] Sync failed:', e);
+            // FRD-012: ALWAYS preserve existing session on error
+            if (hasExistingSession) {
+                console.log('✅ [CashRegisterStore] Network error - preserving existing session');
+                return true;
+            }
             return false;
         }
     };
