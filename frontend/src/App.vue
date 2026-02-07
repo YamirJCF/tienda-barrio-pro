@@ -8,6 +8,7 @@ import { checkDataIntegrity } from './composables/useDataIntegrity';
 import CriticalAlertModal from './components/CriticalAlertModal.vue';
 import { useCriticalAlerts } from './composables/useCriticalAlerts';
 import OfflineBanner from './components/common/OfflineBanner.vue';
+import GlobalNetworkHandler from './components/common/GlobalNetworkHandler.vue';
 import AdminInterruptionModal from './components/security/AdminInterruptionModal.vue';
 
 // ============================================
@@ -132,6 +133,8 @@ const resetApp = () => {
       </transition>
     </RouterView>
 
+    <!-- Global Network Handler - Always active -->
+    <GlobalNetworkHandler />
     <OfflineBanner />
     <AdminInterruptionModal />
     <ToastNotification />

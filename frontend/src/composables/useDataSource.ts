@@ -97,11 +97,13 @@ export function useDataSource() {
      * Handle online event
      */
     const handleOnline = async () => {
+        console.log('🟢 [DataSource] Network came online - handleOnline fired!');
         logger.log('[DataSource] Network came online');
         isOnline.value = true;
         await checkConnection();
 
         // Trigger sync queue processing for offline transactions
+        console.log('🔄 [DataSource] Importing and calling processSyncQueue...');
         const { processSyncQueue } = await import('../data/syncQueue');
         processSyncQueue(); // Fire and forget
 
@@ -145,9 +147,11 @@ export function useDataSource() {
 
     // Setup event listeners on mount
     onMounted(() => {
+        console.log('🎯 [DataSource] useDataSource composable MOUNTED - registering event listeners');
         isOnline.value = navigator.onLine;
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
+        console.log('✅ [DataSource] Event listeners registered. Current navigator.onLine:', navigator.onLine);
         startConnectionMonitoring();
     });
 
