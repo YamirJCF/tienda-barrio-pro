@@ -219,21 +219,36 @@ export const processSyncQueue = async (): Promise<void> => {
     logger.log('[SyncQueue] ✅ Session validated - proceeding with queue processing');
 
     const db = await getDB();
-    const tx = db.transaction([QUEUE_STORE, CORRUPTED_STORE], 'readwrite');
-    const store = tx.objectStore(QUEUE_STORE);
-    const corruptedStore = tx.objectStore(CORRUPTED_STORE);
-    const index = store.index('by-timestamp');
 
-    let cursor = await index.openCursor();
+    // PHASE 1: Read all queue items (single read transaction)
+    const queueItems: QueueItem[] = [];
+    const readTx = db.transaction(QUEUE_STORE, 'readonly');
+    const readStore = readTx.objectStore(QUEUE_STORE);
+    const readIndex = readStore.index('by-timestamp');
+    let readCursor = await readIndex.openCursor();
 
-    while (cursor) {
-        const item = cursor.value;
+    while (readCursor) {
+        queueItems.push(readCursor.value);
+        readCursor = await readCursor.continue();
+    }
 
-        // 🛡️ SECURITY CHECK: Discard Audit Items encountered in Production
+    await readTx.done;
+
+    if (queueItems.length === 0) {
+        logger.log('[SyncQueue] Queue is empty');
+        return;
+    }
+
+    logger.log(`[SyncQueue] Processing ${queueItems.length} items`);
+
+    // PHASE 2: Process each item with separate transactions
+    for (const item of queueItems) {
+        // 🛡️ SECURITY CHECK: Discard Audit Items
         if (item.isAudit) {
-            logger.warn(`[SyncQueue] 🛡️ Discarding Audit Item found in Production Queue: ${item.id}`);
-            await cursor.delete();
-            cursor = await cursor.continue();
+            logger.warn(`[SyncQueue] 🛡️ Discarding Audit Item: ${item.id}`);
+            const deleteTx = db.transaction(QUEUE_STORE, 'readwrite');
+            await deleteTx.objectStore(QUEUE_STORE).delete(item.id);
+            await deleteTx.done;
             continue;
         }
 
@@ -248,51 +263,61 @@ export const processSyncQueue = async (): Promise<void> => {
                 missingRequired: driftResult.missingRequired
             });
 
-            // Move to corrupted_items instead of retrying infinitely
-            await corruptedStore.put({
+            // Move to corrupted_items
+            const corruptTx = db.transaction([QUEUE_STORE, CORRUPTED_STORE], 'readwrite');
+            await corruptTx.objectStore(CORRUPTED_STORE).put({
                 ...item,
                 corruptedAt: Date.now(),
-                reason: 'Schema Drift - payload structure incompatible with current database schema',
+                reason: 'Schema Drift',
                 obsoleteFields: driftResult.obsoleteFields,
                 missingRequired: driftResult.missingRequired
             });
-            await cursor.delete();
+            await corruptTx.objectStore(QUEUE_STORE).delete(item.id);
+            await corruptTx.done;
 
             window.dispatchEvent(new CustomEvent('sync:schema_drift', {
                 detail: { itemId: item.id, type: item.type, ...driftResult }
             }));
-
-            cursor = await cursor.continue();
             continue;
         }
 
+        // Process the item
         try {
             const success = await processItem({ ...item, payload: sanitizedPayload });
 
             if (success) {
-                await cursor.delete();
-                logger.log(`[SyncQueue] Processed ${item.type} (${item.id})`);
+                // Remove from queue
+                const deleteTx = db.transaction(QUEUE_STORE, 'readwrite');
+                await deleteTx.objectStore(QUEUE_STORE).delete(item.id);
+                await deleteTx.done;
+                logger.log(`[SyncQueue] ✅ Processed ${item.type} (${item.id})`);
             } else {
                 throw new Error('Processing failed');
             }
         } catch (error: any) {
-            logger.error(`[SyncQueue] Failed to process ${item.id}`, error);
+            logger.error(`[SyncQueue] ❌ Failed to process ${item.id}`, error);
 
             // Move to DLQ if max retries exceeded
             if (item.retryCount >= 3) {
-                await addToDLQ(item, error.message || 'Unknown error');
-                await cursor.delete(); // Remove from main queue
+                const dlqTx = db.transaction([QUEUE_STORE, DLQ_STORE], 'readwrite');
+                await dlqTx.objectStore(DLQ_STORE).put({
+                    ...item,
+                    error: error.message || 'Unknown error',
+                    failedAt: Date.now()
+                });
+                await dlqTx.objectStore(QUEUE_STORE).delete(item.id);
+                await dlqTx.done;
+                logger.log(`[SyncQueue] Moved ${item.id} to DLQ after 3 retries`);
             } else {
                 // Increment retry count
+                const updateTx = db.transaction(QUEUE_STORE, 'readwrite');
                 const updated = { ...item, retryCount: item.retryCount + 1 };
-                await cursor.update(updated);
+                await updateTx.objectStore(QUEUE_STORE).put(updated);
+                await updateTx.done;
+                logger.log(`[SyncQueue] Retry count for ${item.id}: ${updated.retryCount}`);
             }
         }
-
-        cursor = await cursor.continue();
     }
-
-    await tx.done;
 };
 
 /**
@@ -311,15 +336,33 @@ async function processItem(item: QueueItem): Promise<boolean> {
                 quantity: Number(i.quantity)
             }));
 
-            const { data, error } = await supabase.rpc('rpc_procesar_venta_v2', {
-                p_store_id: item.payload.storeId || item.payload.store_id,
-                p_client_id: item.payload.clientId || item.payload.client_id || null,
-                p_payment_method: (item.payload.paymentMethod === 'mixed' || item.payload.paymentMethod === 'cash') ? 'efectivo' : item.payload.paymentMethod,
-                p_amount_received: item.payload.amountReceived || item.payload.amount_received || null,
-                p_items: p_items_v2
-            });
-            if (error) throw error;
-            return data?.success ?? false;
+            // ARCH-005: Trigger-Based Sync (Option 2)
+            // Instead of calling RPC directly (which has schema cache issues),
+            // we insert into pending_sales and let the DB trigger process it.
+            const { data: pendingData, error: pendingError } = await supabase
+                .from('pending_sales')
+                .insert({
+                    store_id: item.payload.storeId || item.payload.store_id,
+                    client_id: item.payload.clientId || item.payload.client_id || null,
+                    payment_method: ['cash', 'mixed', 'efectivo'].includes(item.payload.paymentMethod)
+                        ? 'efectivo'
+                        : (item.payload.paymentMethod || 'efectivo'), // Default fallback for null/undefined
+                    amount_received: item.payload.amountReceived || item.payload.amount_received || null,
+                    items: p_items_v2,
+                    status: 'pending' // Trigger will change this to 'processed' or 'failed'
+                })
+                .select('id, status, error_message')
+                .single();
+
+            if (pendingError) throw pendingError;
+
+            // Check if trigger processed it successfully
+            // Note: The trigger runs BEFORE insert/update commit, so status should be updated immediately
+            if (pendingData.status === 'failed') {
+                throw new Error(pendingData.error_message || 'Server-side processing failed');
+            }
+
+            return true;
 
         case 'CREATE_CLIENT':
             // Direct Insert
