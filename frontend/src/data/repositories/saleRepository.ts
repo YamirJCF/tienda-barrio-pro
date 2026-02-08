@@ -115,6 +115,7 @@ interface SalePayload {
 
 export interface SaleRepository extends EntityRepository<Sale> {
     processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }>;
+    forceSale(saleData: SalePayload, storeId: string, justification: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }>;
     getByDateRange(startDate: string, endDate: string, storeId?: string): Promise<Sale[]>;
     getLastTicketNumber(storeId: string): Promise<number>;
     voidSale(saleId: string, reason: string): Promise<{ success: boolean; error?: string }>;
@@ -266,6 +267,70 @@ export const saleRepository: SaleRepository = {
 
         } catch (e: any) {
             return { success: false, error: e.message || 'Offline save failed' };
+        }
+    },
+
+    /**
+     * Force Sale (Admin Override for Insufficient Stock)
+     * Uses RPC 'rpc_force_sale' - FRD-014
+     * 
+     * ARCHITECTURAL DECISION (2026-02-07): Force Sale is ONLINE ONLY.
+     * Offline attempts are rejected to maintain data integrity and audit trail.
+     */
+    async forceSale(saleData: SalePayload, storeId: string, justification: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }> {
+        const isOnline = navigator.onLine && isSupabaseConfigured();
+
+        // ARCH DECISION: Force Sale requires online connection
+        if (!isOnline) {
+            logger.warn('[SaleRepo] Force Sale blocked - requires online connection');
+            return {
+                success: false,
+                error: 'Conecta a internet para forzar ventas. Las ventas forzadas requieren conexión para auditoría inmediata.'
+            };
+        }
+
+        // Online RPC Call
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+            return { success: false, error: 'Supabase client not configured' };
+        }
+
+        try {
+            const p_items = saleData.items.map(item => {
+                const q = Number(item.quantity);
+                if (!Number.isFinite(q)) {
+                    throw new Error(`Invalid item quantity: ${q}`);
+                }
+                return {
+                    product_id: item.productId,
+                    quantity: q
+                };
+            });
+
+            const rpcPayload = {
+                p_store_id: storeId,
+                p_client_id: saleData.clientId || null,
+                p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod,
+                p_items: p_items,
+                p_justification: justification
+            };
+
+            const { data, error } = await supabase.rpc('rpc_force_sale', rpcPayload);
+
+            if (error) {
+                logger.error('[SaleRepo] Force Sale RPC error:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (data && data.success) {
+                logger.log('[SaleRepo] ✅ Force Sale successful:', data.sale_id);
+                return { success: true, id: data.sale_id, ticketNumber: data.ticket_number };
+            }
+
+            return { success: false, error: data?.error || 'Unknown RPC error' };
+        } catch (e: any) {
+            logger.error('[SaleRepo] Force Sale exception:', e);
+            return { success: false, error: e.message || 'Force sale failed' };
         }
     },
 

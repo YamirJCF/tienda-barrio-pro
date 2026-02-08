@@ -23,6 +23,7 @@ import {
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
+import SyncIndicator from '../components/common/SyncIndicator.vue';
 import StatCard from '../components/ui/StatCard.vue';
 import AccessRequestsWidget from '../components/admin/AccessRequestsWidget.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
@@ -116,6 +117,7 @@ const navigateToNotifications = () => {
         {{ storeName }}
       </h1>
       <div class="flex items-center gap-4">
+        <SyncIndicator />
         <button
           @click="navigateToNotifications"
           class="relative text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors"

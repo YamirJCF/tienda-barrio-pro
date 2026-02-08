@@ -20,8 +20,10 @@ import CheckoutModal from '../components/sales/CheckoutModal.vue';
 import ProductSearchModal from '../components/ProductSearchModal.vue';
 import QuickNoteModal from '../components/QuickNoteModal.vue';
 import WeightCalculatorModal from '../components/WeightCalculatorModal.vue';
+import ForceSaleModal from '../components/ForceSaleModal.vue';
 import NoPermissionOverlay from '../components/ui/NoPermissionOverlay.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import SyncIndicator from '../components/common/SyncIndicator.vue';
 import POSNumpad from '../components/pos/POSNumpad.vue';
 import { 
   ArrowLeft, 
@@ -109,6 +111,11 @@ const showSearch = ref(false);
 const showNote = ref(false);
 const showWeightCalculator = ref(false);
 const selectedWeighableProduct = ref<Product | null>(null);
+
+// Force Sale State (FRD-014)
+const showForceSaleModal = ref(false);
+const forceSaleItems = ref<any[]>([]);
+const pendingSaleData = ref<{ payments: PaymentTransaction[], totalPaid: Decimal, clientId?: string } | null>(null);
 
 // Composable: Numpad logic
 const { input: pluInput, handleNumpad, clear: clearPluInput } = useNumpad({
@@ -306,6 +313,35 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, 
     showSuccessToast: false,
   });
 
+  // Handle Failure: Check if Stock Error + Admin -> Force Sale Flow
+  if (!success) {
+    // Note: salesStore doesn't expose lastError, so we check the service error or re-try parsing
+    // For now, we'll re-validate stock locally to determine if Force Sale is applicable
+    let hasStockIssue = false;
+    forceSaleItems.value = cartStore.items.map((item) => {
+      const product = inventoryStore.getProductById(item.id);
+      const requested = typeof item.quantity === 'object' ? (item.quantity as Decimal).toNumber() : Number(item.quantity);
+      const available = product?.stock.toNumber() || 0;
+      const deficit = Math.max(0, requested - available);
+      
+      if (deficit > 0) hasStockIssue = true;
+      
+      return {
+        product_id: item.id,
+        name: item.name,
+        quantity: requested,
+        deficit: deficit
+      };
+    }).filter(item => item.deficit > 0);
+
+    // ARCH DECISION: Force Sale only allowed ONLINE
+    if (authStore.isAdmin && hasStockIssue && forceSaleItems.value.length > 0 && navigator.onLine) {
+      pendingSaleData.value = { payments, totalPaid, clientId };
+      showForceSaleModal.value = true;
+      return; // Don't clear cart yet
+    }
+  }
+
   if (success) {
     cartStore.clearCart();
     showCheckout.value = false;
@@ -315,6 +351,77 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, 
       showSaleOffline(currentTicket);
     }
   }
+};
+
+// Force Sale Handlers (FRD-014)
+const handleForceSale = async (justification: string) => {
+  if (!pendingSaleData.value) return;
+
+  const { payments, totalPaid, clientId } = pendingSaleData.value;
+  const currentTicket = ticketNumber.value;
+
+  // Call Force Sale RPC
+  const success = await executeSale(async () => {
+    if (!cashRegisterStore.isOpen) {
+      throw new Error('La caja está cerrada. No se puede procesar la venta.');
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    const saleItems = cartStore.items.map((item) => {
+      const qty =
+        typeof item.quantity === 'object' && 'toNumber' in item.quantity
+          ? (item.quantity as Decimal).toNumber()
+          : Number(item.quantity);
+
+      return {
+        productId: item.id,
+        productName: item.name,
+        quantity: qty,
+        price: item.price,
+        subtotal: item.subtotal || item.price.times(item.quantity),
+      };
+    });
+
+    // Call the Force Sale repository method
+    const result = await salesStore.forceSale({
+      items: saleItems,
+      total: cartStore.total,
+      paymentMethod: payments.length > 1 ? 'mixed' : payments[0].method,
+      clientId,
+    }, authStore.currentStore!.id, justification);
+
+    if (!result.success) {
+      throw new Error(result.error || 'Force sale failed');
+    }
+
+    // Update cash register for cash payments
+    const cashPayment = payments.find(p => p.method === 'cash');
+    if (cashPayment) {
+      cashRegisterStore.addIncome(cashPayment.amount, `Venta Forzada ${currentTicket}`, result.id);
+    }
+
+    return true;
+  }, {
+    checkConnectivity: false,
+    errorMessage: 'Error al procesar la venta forzada.',
+    showSuccessToast: false,
+  });
+
+  if (success) {
+    cartStore.clearCart();
+    showCheckout.value = false;
+    showForceSaleModal.value = false;
+    pendingSaleData.value = null;
+    forceSaleItems.value = [];
+    showSaleSuccess(currentTicket);
+  }
+};
+
+const handleForceSaleCancel = () => {
+  showForceSaleModal.value = false;
+  pendingSaleData.value = null;
+  forceSaleItems.value = [];
 };
 </script>
 
@@ -367,6 +474,9 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, 
         </div>
         
         <div class="flex items-center gap-2">
+          <!-- Sync Indicator -->
+          <SyncIndicator />
+          
           <!-- Botón de Pausa (Heartbeat) -->
           <BaseButton 
             aria-label="Pause Session"
@@ -522,6 +632,14 @@ const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, 
 
     <WeightCalculatorModal v-model="showWeightCalculator" :product="selectedWeighableProduct"
       @confirm="handleWeightCalculatorConfirm" />
+
+    <!-- Force Sale Modal (FRD-014) -->
+    <ForceSaleModal 
+      :is-open="showForceSaleModal"
+      :items="forceSaleItems"
+      @confirm="handleForceSale"
+      @cancel="handleForceSaleCancel"
+    />
   </div>
 </template>
 

@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -1139,6 +1139,16 @@ export type Database = {
         Args: { p_reason: string; p_sale_id: string }
         Returns: Json
       }
+      rpc_force_sale: {
+        Args: {
+          p_client_id: string
+          p_items: Json
+          p_justification: string
+          p_payment_method: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
       rpc_procesar_venta_v2: {
         Args: {
           p_amount_received: number
@@ -1294,4 +1304,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

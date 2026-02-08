@@ -5,6 +5,7 @@ import { cartSerializer } from '../data/serializers';
 import { getStorageKey } from '../utils/storage';
 import { getLegalCashPayable, roundToNearest50 } from '../utils/currency';
 import { useInventoryStore } from './inventory';
+import { useAuthStore } from './auth';
 import type { CartItem, MeasurementUnit } from '../types';
 
 export const useCartStore = defineStore(
@@ -12,6 +13,7 @@ export const useCartStore = defineStore(
   () => {
     const items = ref<CartItem[]>([]);
     const inventoryStore = useInventoryStore();
+    const authStore = useAuthStore();
 
     // BR-03: Fiscal Calculation (Exact Math)
     const total = computed(() => {
@@ -41,6 +43,9 @@ export const useCartStore = defineStore(
 
     // Helper: Validar stock disponible
     const checkStockAvailability = (productId: string, quantityToAdd: Decimal | number): boolean => {
+      // Force Sale (FRD-014): Admins can bypass stock checks
+      if (authStore.isAdmin) return true;
+
       const product = inventoryStore.products.find(p => p.id === productId);
       if (!product) return false; // Producto no encontrado en inventario local
 

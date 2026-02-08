@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue';
 import { useCartStore } from '../stores/cart';
 import { useInventoryStore } from '../stores/inventory';
+import { useAuthStore } from '../stores/auth';
 import type { Product } from '../types';
 import { useNotifications } from './useNotifications';
 import { logger } from '../utils/logger';
@@ -15,6 +16,7 @@ interface UsePOSConfig {
 export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOSConfig) {
     const cartStore = useCartStore();
     const inventoryStore = useInventoryStore();
+    const authStore = useAuthStore();
     const { showSuccess, showError } = useNotifications();
 
     // State
@@ -48,10 +50,13 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
             const qty = isNaN(rawQty) || rawQty <= 0 ? 1 : rawQty;
 
             if (pendingProduct.value.stock.lt(qty)) {
-                showError(`Stock insuficiente. Disponible: ${pendingProduct.value.stock.toFixed(0)} un`);
-                clearPluInput();
-                resetModes();
-                return;
+                if (!authStore.isAdmin) {
+                    showError(`Stock insuficiente. Disponible: ${pendingProduct.value.stock.toFixed(0)} un`);
+                    clearPluInput();
+                    resetModes();
+                    return;
+                }
+                // Admin override: Allow adding to trigger Force Sale at checkout
             }
 
             // Validation only - Stock is deducted at checkout
@@ -115,10 +120,13 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
                 }
 
                 if (pendingProduct.value.stock.lt(quantity)) {
-                    showError(`Stock insuficiente. Disponible: ${pendingProduct.value.stock.toFixed(0)} un`);
-                    clearPluInput();
-                    resetModes();
-                    return;
+                    if (!authStore.isAdmin) {
+                        showError(`Stock insuficiente. Disponible: ${pendingProduct.value.stock.toFixed(0)} un`);
+                        clearPluInput();
+                        resetModes();
+                        return;
+                    }
+                    // Admin override: Allow adding
                 }
 
                 // Validation only
@@ -149,10 +157,13 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
             const quantity = pendingQuantity.value;
 
             if (product.stock.lt(quantity)) {
-                showError(`Stock insuficiente. Disponible: ${product.stock.toFixed(0)} un`);
-                clearPluInput();
-                resetModes();
-                return;
+                if (!authStore.isAdmin) {
+                    showError(`Stock insuficiente. Disponible: ${product.stock.toFixed(0)} un`);
+                    clearPluInput();
+                    resetModes();
+                    return;
+                }
+                // Admin override: Allow adding
             }
 
             // Validation only
