@@ -7,6 +7,7 @@ import { generateUUID } from '../utils/uuid';
 import type { Sale } from '../types';
 import { useCashRegisterStore } from './cashRegister';
 import { useAuthStore } from './auth';
+import { saleRepository } from '../data/repositories/saleRepository';
 
 export interface DailyStats {
   date: string;
@@ -159,7 +160,6 @@ export const useSalesStore = defineStore(
       loadedStoreId.value = storeId;
 
       // 1. Fetch Last Ticket Number (Online/Offline resilient)
-      const { saleRepository } = await import('../data/repositories/saleRepository');
       const lastTicket = await saleRepository.getLastTicketNumber(storeId);
       if (lastTicket > 0) {
         nextTicketNumber.value = lastTicket + 1;
@@ -241,8 +241,6 @@ export const useSalesStore = defineStore(
       };
 
       // 1. Process via Repository (Online RPC or Offline Queue)
-      // Import dynamically to avoid circular dependencies if any, or static import better
-      const { saleRepository } = await import('../data/repositories/saleRepository');
       // Construct payload expected by repository (simplified structure usually)
       const repoPayload = {
         items: saleData.items.map(item => {
@@ -361,6 +359,32 @@ export const useSalesStore = defineStore(
       return sales.value.find((sale) => sale.ticketNumber === ticketNumber);
     };
 
+    /**
+     * Force Sale (Admin Override for Insufficient Stock)
+     * Wrapper for repository's forceSale method (FRD-014)
+     */
+    const forceSale = async (
+      saleData: Omit<Sale, 'id' | 'ticketNumber' | 'timestamp' | 'date' | 'roundingDifference' | 'effectiveTotal' | 'payments'>,
+      storeId: string,
+      justification: string
+    ) => {
+      const repoPayload = {
+        items: saleData.items.map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: typeof item.quantity === 'number' ? item.quantity : Number(item.quantity),
+          price: item.price instanceof Decimal ? item.price.toNumber() : Number(item.price),
+          subtotal: item.subtotal instanceof Decimal ? item.subtotal.toNumber() : Number(item.subtotal),
+        })),
+        total: saleData.total instanceof Decimal ? saleData.total.toNumber() : Number(saleData.total),
+        paymentMethod: saleData.paymentMethod,
+        clientId: (saleData.clientId && saleData.clientId !== 'N/A') ? saleData.clientId : null,
+      };
+
+      return await saleRepository.forceSale(repoPayload, storeId, justification);
+    };
+
+
     return {
       sales,
       nextTicketNumber, // WO-001: Renamed from nextId
@@ -382,6 +406,7 @@ export const useSalesStore = defineStore(
       // openStore, // REMOVED
       // closeStore, // REMOVED
       addSale,
+      forceSale,
       getSaleById,
       getSaleByTicketNumber, // WO-001: New function
     };

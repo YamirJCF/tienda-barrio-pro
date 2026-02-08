@@ -336,32 +336,45 @@ async function processItem(item: QueueItem): Promise<boolean> {
                 quantity: Number(i.quantity)
             }));
 
-            // ARCH-005: Trigger-Based Sync (Option 2)
-            // Instead of calling RPC directly (which has schema cache issues),
-            // we insert into pending_sales and let the DB trigger process it.
-            const { data: pendingData, error: pendingError } = await supabase
-                .from('pending_sales')
-                .insert({
-                    store_id: item.payload.storeId || item.payload.store_id,
-                    client_id: item.payload.clientId || item.payload.client_id || null,
-                    payment_method: ['cash', 'mixed', 'efectivo'].includes(item.payload.paymentMethod)
-                        ? 'efectivo'
-                        : (item.payload.paymentMethod || 'efectivo'), // Default fallback for null/undefined
-                    amount_received: item.payload.amountReceived || item.payload.amount_received || null,
-                    items: p_items_v2,
-                    status: 'pending' // Trigger will change this to 'processed' or 'failed'
-                })
-                .select('id, status, error_message')
-                .single();
+            // ARCH-005: RPC-Based Sync (Restored)
+            // DIAGNOSTIC RESULT 2026-02-07: RPC is healthy, Table does not exist.
+            // Reverting to RPC strategy to restore immediate functionality.
 
-            if (pendingError) throw pendingError;
+            // FIX 2026-02-07: Convert Decimal objects to numbers for JSON serialization
+            // Decimal objects from IndexedDB cause "t.NN.unidad" serialization errors
+            const rawAmountReceived = item.payload.amountReceived || item.payload.amount_received;
+            const numericAmountReceived = rawAmountReceived
+                ? (typeof rawAmountReceived === 'object' && rawAmountReceived.toNumber
+                    ? rawAmountReceived.toNumber()
+                    : Number(rawAmountReceived))
+                : null;
 
-            // Check if trigger processed it successfully
-            // Note: The trigger runs BEFORE insert/update commit, so status should be updated immediately
-            if (pendingData.status === 'failed') {
-                throw new Error(pendingData.error_message || 'Server-side processing failed');
+            const rpcPayload = {
+                p_store_id: item.payload.storeId || item.payload.store_id,
+                p_client_id: item.payload.clientId || item.payload.client_id || null,
+                p_payment_method: ['cash', 'mixed', 'efectivo'].includes(item.payload.paymentMethod)
+                    ? 'efectivo'
+                    : (item.payload.paymentMethod || 'efectivo'),
+                p_amount_received: numericAmountReceived,
+                p_items: p_items_v2
+            };
+
+            const { data, error } = await supabase.rpc('rpc_procesar_venta_v2', rpcPayload);
+
+            if (error) {
+                // If RPC not found (404), throw specific error to handle differently if needed
+                if (error.code === 'PGRST202') {
+                    throw new Error('RPC_NOT_FOUND: Server function missing');
+                }
+                throw error;
             }
 
+            if (!data || !data.success) {
+                throw new Error(data?.error || 'RPC processing failed without specific error');
+            }
+
+            // Success!
+            logger.log(`[SyncQueue] ✅ RPC processed sale ${item.id} -> SaleID: ${data.sale_id}`);
             return true;
 
         case 'CREATE_CLIENT':
@@ -466,5 +479,42 @@ export default {
     processSyncQueue,
     getQueueSize,
     getPendingMovements,
-    getPendingSales
+    getPendingSales,
+
+    // Conflict Resolution Exports
+    getDLQItems: async (): Promise<QueueItem[]> => {
+        const db = await getDB();
+        return db.getAll(DLQ_STORE);
+    },
+
+    getDLQSize: async (): Promise<number> => {
+        const db = await getDB();
+        return db.count(DLQ_STORE);
+    },
+
+    retryDLQItem: async (id: string): Promise<void> => {
+        const db = await getDB();
+        const tx = db.transaction([DLQ_STORE, QUEUE_STORE], 'readwrite');
+        const item = await tx.objectStore(DLQ_STORE).get(id);
+
+        if (item) {
+            // Reset retry count and timestamp to process immediately
+            const retriedItem = {
+                ...item,
+                retryCount: 0,
+                error: undefined,
+                failedAt: undefined
+            };
+            await tx.objectStore(QUEUE_STORE).put(retriedItem);
+            await tx.objectStore(DLQ_STORE).delete(id);
+            logger.log(`[SyncQueue] Retrying item from DLQ: ${id}`);
+        }
+        await tx.done;
+    },
+
+    deleteDLQItem: async (id: string): Promise<void> => {
+        const db = await getDB();
+        await db.delete(DLQ_STORE, id);
+        logger.log(`[SyncQueue] Deleted item from DLQ: ${id}`);
+    }
 };
