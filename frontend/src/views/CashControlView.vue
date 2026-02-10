@@ -62,8 +62,16 @@ const pendingAction = ref<'open' | 'close'>('open');
 
 // Computed State
 const isOpening = computed(() => !cashRegisterStore.isOpen);
-const title = computed(() => isOpening.value ? 'Apertura de Caja' : 'Cierre de Caja');
-const buttonText = computed(() => isOpening.value ? 'ABRIR TURNO' : 'CERRAR TURNO');
+const isStale = computed(() => cashRegisterStore.isStaleSession);
+const staleDate = computed(() => cashRegisterStore.staleSessionDate);
+const title = computed(() => {
+    if (isStale.value) return '⚠️ Cierre Pendiente';
+    return isOpening.value ? 'Apertura de Caja' : 'Cierre de Caja';
+});
+const buttonText = computed(() => {
+    if (isStale.value) return 'CERRAR TURNO PENDIENTE';
+    return isOpening.value ? 'ABRIR TURNO' : 'CERRAR TURNO';
+});
 
 // Form State
 const amount = ref(0);
@@ -151,14 +159,18 @@ const handlePinSuccess = async () => {
     });
 };
 
-const goBack = () => router.back();
+const goBack = () => {
+    // FRD-015: Block navigation when stale shift requires closure
+    if (isStale.value) return;
+    router.back();
+};
 </script>
 
 <template>
     <div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
         <!-- Header -->
         <div class="bg-white dark:bg-gray-800 p-4 shadow-sm border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <button @click="goBack" class="p-2 -ml-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <button @click="goBack" class="p-2 -ml-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" :class="{ 'opacity-30 cursor-not-allowed': isStale }">
                 <ArrowLeft :size="24" :stroke-width="1.5" />
             </button>
             <h1 class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ title }}</h1>
@@ -166,6 +178,22 @@ const goBack = () => router.back();
         </div>
 
         <div class="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6">
+
+            <!-- FRD-015: Stale Shift Alert Banner -->
+            <div v-if="isStale" class="bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-400 dark:border-amber-600 rounded-2xl p-4 animate-slide-up">
+                <div class="flex items-start gap-3">
+                    <div class="bg-amber-100 dark:bg-amber-800/40 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <AlertTriangle :size="22" class="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-amber-800 dark:text-amber-200 text-sm">Turno Sin Cerrar</h3>
+                        <p class="text-amber-700 dark:text-amber-300 text-xs mt-1 leading-relaxed">
+                            Existe un turno abierto desde <strong>{{ staleDate }}</strong> que no fue cerrado.
+                            Debes cerrarlo ahora para poder continuar operando.
+                        </p>
+                    </div>
+                </div>
+            </div>
             
             <!-- Opening State: Simple Form -->
             <div v-if="isOpening" class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700 animate-slide-up">

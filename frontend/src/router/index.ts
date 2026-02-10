@@ -172,7 +172,7 @@ const router = createRouter({
 });
 
 // GUARDIA DE SEGURIDAD
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
   const isAuthenticated = authStore.isAuthenticated;
   const hasStore = authStore.hasStores;
@@ -198,12 +198,22 @@ router.beforeEach((to, from, next) => {
   // =============================================
   // WO-008: Daily Access Check (Zero Trust)
   // =============================================
+  // =============================================
+  // WO-008: Daily Access Check (Zero Trust)
+  // =============================================
   if (isAuthenticated && to.meta.requiresAuth && to.name !== 'daily-waiting-room' && to.name !== 'check-email') {
     const dailyStatus = authStore.dailyAccessStatus;
 
-    // Si el status no es 'approved', bloquear acceso
-    if (dailyStatus !== 'approved') {
+    // FIX: Force clean login on startup if session is expired
+    // Handles User Request: "Always start at login"
+    if (dailyStatus === 'expired' || dailyStatus === 'none') {
+      console.log('🔒 [Router] Session expired or invalid on sensitive route. Forcing logout.');
+      await authStore.logout();
+      return next({ name: 'login' });
+    }
 
+    // Si el status no es 'approved' (pending/rejected), bloquear acceso ir a Waiting Room
+    if (dailyStatus !== 'approved') {
       return next({ name: 'daily-waiting-room' });
     }
   }
@@ -211,6 +221,17 @@ router.beforeEach((to, from, next) => {
   // =============================================
   // SPEC-005: Permissions Guards
   // =============================================
+
+  // FRD-004/FRD-015: Stale Shift Guard
+  // If a cash session from a previous day is still open, block everything except cash-control
+  if (isAuthenticated && to.meta.requiresAuth && to.name !== 'cash-control' && to.name !== 'login') {
+    const { useCashRegisterStore } = await import('../stores/cashRegister');
+    const cashRegisterStore = useCashRegisterStore();
+    if (cashRegisterStore.isStaleSession) {
+      console.log('🔒 [Router] Stale shift detected. Redirecting to cash-control for mandatory closure.');
+      return next({ name: 'cash-control' });
+    }
+  }
 
   // 1. Employee Management: STRICTLY Admin only
   if (to.name === 'employees' && !authStore.isAdmin) {
