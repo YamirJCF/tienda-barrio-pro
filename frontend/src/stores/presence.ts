@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useAuthStore } from './auth';
+import { supabase } from '../lib/supabase';
 
 export type PresenceStatus = 'online' | 'paused' | 'offline' | 'ghost';
 
@@ -19,29 +20,74 @@ export const usePresenceStore = defineStore('presence', () => {
     const activeSessions = ref<Map<number, EmployeePresence>>(new Map());
     const authStore = useAuthStore();
 
+    // Realtime Channel
+    let channel: any = null;
+
     // Thresholds (ms)
     const THRESHOLD_OFFLINE = 5 * 60 * 1000; // 5 min sin señal -> Offline
     const THRESHOLD_GHOST = 10 * 60 * 1000;  // 10 min sin señal + caja abierta -> Ghost
 
     // Actions
-    const reportHeartbeat = (status: 'online' | 'paused' = 'online') => {
-        if (!authStore.isEmployee || !authStore.currentUser?.employeeId) return;
+    const initPresence = (storeId: string) => {
+        if (channel) return; // Ya conectado
 
-        const empId = authStore.currentUser.employeeId;
+        const roomName = `room:store_${storeId}`;
 
-        // Update local state (simulating server Update)
+        channel = supabase.channel(roomName, {
+            config: {
+                presence: {
+                    key: authStore.currentUser?.employeeId?.toString() || 'unknown',
+                },
+            },
+        });
+
+        channel
+            .on('presence', { event: 'sync' }, () => {
+                const newState = channel.presenceState();
+
+                // Reconstruir mapa local desde el estado del servidor (Source of Truth)
+                const newMap = new Map<number, EmployeePresence>();
+
+                for (const key in newState) {
+                    const presences = newState[key];
+                    // Tomamos el más reciente si hubiera duplicados por refresh
+                    const latest = presences[0] as EmployeePresence;
+                    if (latest && latest.employeeId) {
+                        newMap.set(Number(latest.employeeId), latest);
+                    }
+                }
+
+                activeSessions.value = newMap;
+            })
+            .subscribe(async (status: string) => {
+                if (status === 'SUBSCRIBED') {
+                    // Enviar estado inicial
+                    await reportHeartbeat('online');
+                }
+            });
+    };
+
+    const cleanupPresence = () => {
+        if (channel) {
+            supabase.removeChannel(channel);
+            channel = null;
+        }
+        activeSessions.value.clear();
+    };
+
+    const reportHeartbeat = async (status: 'online' | 'paused' = 'online') => {
+        if (!authStore.isEmployee || !authStore.currentUser?.employeeId || !channel) return;
+
         const session: EmployeePresence = {
-            employeeId: empId,
+            employeeId: Number(authStore.currentUser.employeeId),
             name: authStore.currentUser.name,
             storeId: authStore.currentUser.storeId,
             lastSeen: new Date().toISOString(),
             status: status,
-            isRegisterOpen: true, // TODO: Link to real register status
+            isRegisterOpen: true, // Idealmente esto vendría del cashRegisterStore
         };
 
-        // In a real backend, this would be a Supabase RPC call
-        // For now, we mock it in local state (which syncs if using realtime broadcast)
-        activeSessions.value.set(empId, session);
+        await channel.track(session);
     };
 
     const getPresence = (employeeId: number): EmployeePresence | undefined => {
@@ -72,6 +118,8 @@ export const usePresenceStore = defineStore('presence', () => {
 
     return {
         activeSessions,
+        initPresence,
+        cleanupPresence,
         reportHeartbeat,
         getPresence,
         getEmployeeStatus

@@ -1,184 +1,97 @@
-# FRD-008: Resumen Diario Inteligente (Módulo Primario)
+# FRD-008: Resumen Diario y Abastecimiento Inteligente
 
-### Nombre de la Funcionalidad
-Resumen Diario Inteligente / Smart Daily Summary
-
-#### Descripción
-Sistema de visualización de información comercial diseñado para usuarios no técnicos. Presenta el estado del negocio en formato conversacional que responde las 3 preguntas fundamentales del tendero: ¿Cuánto vendí?, ¿Dónde está el dinero?, y ¿Qué debo atender?
-
----
-
-## Principio de Diseño
-
-El usuario DEBE entender el estado de su negocio en **menos de 5 segundos**. Cero porcentajes, cero gráficas complejas, cero terminología técnica.
+## 1. Descripción General
+El módulo de Reportes es la herramienta de inteligencia de negocios diseñada para usuarios no técnicos. Su propósito es responder, en lenguaje natural y en menos de 5 segundos, las dos preguntas críticas del operación diaria:
+1.  **Evaluación de Desempeño:** "¿Cómo me fue hoy?" (Resumen Diario).
+2.  **Gestión de Abastecimiento:** "¿Qué debo comprar hoy para no perder ventas?" (Smart Supply).
 
 ---
 
-## Reglas de Negocio
+## 2. Reglas de Negocio
 
-> [!IMPORTANT]
-> **Políticas Globales Obligatorias:**
-> Este módulo DEBE cumplir:
-> - [SPEC-011: Estándar de Decimales](../TECH_SPECS/decimal-format-standard.md)
+### RN-008-01: Lenguaje Humano Obligatorio
+El sistema DEBE presentar toda la información financiera en formato conversacional.
+- **Prohibido:** Mostrar códigos de error, IDs, o términos técnicos ("ROI", "Margen Bruto", "Lead Time").
+- **Permitido:** Frases directas ("Ventas de hoy", "Te queda stock para 3 días").
 
-### Políticas de Formato
+### RN-008-02: Política de "Verdad Tangible"
+El sistema NO PUEDE mostrar proyecciones o sugerencias de compra si no cuenta con datos históricos suficientes.
+- **Umbral de Silencio:** Si un producto tiene menos de 15 días de historial de ventas, el sistema DEBE mostrar un estado de "Recopilando información" y NO PUEDE generar alertas de abastecimiento.
+- **Contexto:** Toda sugerencia de compra DEBE incluir la razón verificable (ej: "Se agotó 2 días antes de la entrega anterior").
 
-- Todos los montos se muestran como enteros sin decimales.
-- Formato: Separador de miles con punto (ej: $185.500).
+### RN-008-03: Configurabilidad del Abastecimiento
+El sistema DEBE permitir la configuración de proveedores para calcular las alertas de reabastecimiento.
+- Todo producto DEBE estar asociado a un proveedor (o al "Proveedor General" por defecto).
+- El cálculo de días de autonomía DEBE considerar el tiempo de entrega del proveedor (Días de espera).
 
----
-
-### Estructura del Resumen
-
-El resumen se compone de 5 zonas jerárquicas (de arriba hacia abajo):
-
-| Zona | Contenido | Prioridad Visual |
-|------|-----------|------------------|
-| **A. Encabezado** | Fecha + Indicador Semáforo | Pequeña |
-| **B. Número Héroe** | Ventas totales del día | MUY GRANDE |
-| **C. Desglose de Dinero** | Efectivo / Nequi / Fiado | Media |
-| **D. Alertas** | Máximo 2 alertas activas | Destacada |
-| **E. Recordatorio** | Acción sugerida para mañana | Destacada |
+### RN-008-04: Detección de Demanda Reprimida
+El sistema DEBE identificar los días donde el stock se agotó antes del cierre de la operación (ej: 5:00 PM) y marcar esos días como "Días Saturados".
+- Si un producto presenta "Días Saturados" en más del 50% de la ventana de análisis, el sistema DEBE activar una alerta de "Pérdida de Ventas".
 
 ---
 
-### Indicador Semáforo (Zona A)
+## 3. Casos de Uso
 
-Compara ventas de hoy vs promedio de los últimos 7 días:
-
-| Estado | Color | Condición |
-|--------|-------|-----------|
-| Excelente | Verde | Ventas > promedio + 10% |
-| Normal | Amarillo | Ventas entre ±10% del promedio |
-| Bajo | Rojo | Ventas < promedio - 10% |
-
-Al tocar el indicador: Modal explicativo con "Hoy vendiste $X, tu promedio es $Y".
-
----
-
-### Desglose de Dinero (Zona C)
-
-Cada línea es interactiva (tocar para profundizar):
-
-| Línea | Descripción | Al tocar |
-|-------|-------------|----------|
-| Efectivo | Suma de ventas en efectivo del día | Lista de ventas en efectivo |
-| Nequi | Suma de ventas Nequi del día | Lista de ventas Nequi |
-| Fiado | Suma de ventas fiadas del día | Ir a lista de clientes con deuda |
-
----
-
-### Sistema de Alertas (Zona D)
-
-Máximo 2 alertas visibles (las más urgentes). Prioridad:
-
-| Prioridad | Tipo | Condición | Mensaje |
-|-----------|------|-----------|---------|
-| 1 | Stock Crítico | Stock = 0 | "[Producto] se agotó" |
-| 2 | Stock Bajo | Stock < mínimo | "[Producto] casi se acaba (quedan X)" |
-| 3 | Fiado Grande | Venta fiado > $50,000 hoy | "Vendiste $X a [Cliente] a crédito" |
-
-Al tocar alerta: Navegar al producto o cliente correspondiente.
-
----
-
-### Recordatorio Inteligente (Zona E)
-
-Generado automáticamente según prioridad:
-
-| Prioridad | Condición | Mensaje |
-|-----------|-----------|---------|
-| 1 | Hay ventas Nequi hoy | "Mañana recuerda: Revisar Nequi ($X)" |
-| 2 | Hay fiados pendientes | "Mañana recuerda: Cobrar a [Cliente con mayor deuda]" |
-| 3 | Hay productos stock bajo | "Mañana recuerda: Pedir [Producto más urgente]" |
-| 4 | Ninguna de las anteriores | "¡Todo en orden! Descansa bien 😊" |
-
----
-
-### Matriz de Permisos
-
-| Zona | Admin | Empleado con `canViewReports` | Empleado sin permiso |
-|------|-------|-------------------------------|----------------------|
-| Ver Resumen | ✅ | ✅ | ❌ (Bloqueado) |
-| Tocar Efectivo/Nequi | ✅ | ✅ | - |
-| Tocar Fiado (ir a clientes) | ✅ | ❌ | - |
-| Ver Alertas | ✅ | ✅ | - |
-| Ver Recordatorio | ✅ | ✅ | - |
-
----
-
-## Estados de la Interfaz
-
-### Estado: Cargando
-- Mostrar esqueleto animado de 3 líneas.
-- Duración máxima visible: 3 segundos (mostrar error si excede).
-
-### Estado: Sin Ventas
-- Mostrar "$0" con mensaje: "Hoy no has vendido nada aún".
-- Mensaje motivacional: "¡Ánimo! Tu primer cliente está por llegar."
-
-### Estado: Error de Conexión
-- Mostrar mensaje: "No pudimos cargar el resumen".
-- Instrucción: "Revisa tu conexión a internet y vuelve a intentar."
-- Botón: "Reintentar"
-
----
-
-## Lenguaje de la Interfaz
-
-**Regla de Oro:** No usar terminología técnica. Todo en lenguaje conversacional.
-
-| ❌ NO decir | ✅ SÍ decir |
-|-------------|-------------|
-| "Crecimiento +15.3%" | "Vendiste $20,000 más que ayer" |
-| "Total: $185,500" | "Hoy vendiste $185,500" |
-| "Método de pago: Cash" | "💵 Efectivo: $120,000 (en caja)" |
-| "Stock: 2 / Min: 5" | "Azúcar casi se acaba (quedan 2)" |
-| "Pending collections" | "📖 Por cobrar: $20,500" |
-
----
-
-## Casos de Uso
-
-**Caso A: Consultar Resumen al Cerrar Turno**
-- **Actor:** Usuario con permiso de reportes
-- **Precondición:** Hay ventas registradas hoy.
+### Caso A: Consultar el Estado del Negocio (Cierre de Turno)
+- **Actor:** Dueño de Tienda / Encargado
+- **Precondición:** Existen ventas registradas en el día en curso.
 - **Flujo Principal:**
-    1. Usuario navega a Reportes desde el menú.
-    2. Sistema muestra resumen diario con fecha de hoy.
-    3. Usuario ve indicador semáforo + monto total + desglose.
-    4. Usuario toca "Fiado $20,500".
-    5. Sistema navega a lista de clientes con deuda.
-- **Postcondición:** Usuario informado del estado del negocio.
+    1. El Actor accede al módulo de Reportes.
+    2. El Sistema muestra el "Semáforo de Desempeño" (Comparando hoy vs promedio semanal).
+    3. El Sistema presenta el "Número Héroe" (Total vendido) destacado.
+    4. El Sistema despliega el desglose de dinero por método de pago (Efectivo/Digital/Fiado).
+    5. El Actor selecciona la tarjeta de "Efectivo".
+    6. El Sistema navega al detalle de transacciones en efectivo.
+- **Postcondición:** El Actor conoce el total a cuadrar en caja.
 
-**Caso B: Revisar Alertas de Stock**
+### Caso B: Gestión de Reabastecimiento Crítico
+- **Actor:** Dueño de Tienda
+- **Precondición:** Existen productos cuyo stock actual no cubre el tiempo de espera del proveedor.
+- **Flujo Principal:**
+    1. El Sistema identifica productos en riesgo de agotarse antes de la próxima visita del proveedor.
+    2. El Sistema muestra una tarjeta roja: "Pedidos Urgentes".
+    3. El Actor selecciona la tarjeta.
+    4. El Sistema lista los productos sugeridos y la cantidad a pedir.
+    5. El Actor marca los productos como "Añadidos a lista de compra" (mental o externa).
+- **Postcondición:** El Actor recibe la alerta preventiva de quiebre de stock.
+
+### Caso C: Asignación Masiva de Proveedores
 - **Actor:** Admin
-- **Precondición:** Hay productos con stock bajo.
+- **Precondición:** Existen múltiples productos asignados al "Proveedor General" por defecto.
 - **Flujo Principal:**
-    1. Usuario ve alerta: "Azúcar casi se acaba (quedan 2)".
-    2. Toca la alerta.
-    3. Sistema navega a la ficha del producto.
-    4. Usuario puede registrar entrada de stock.
-- **Postcondición:** Usuario atendió la alerta.
+    1. El Actor accede a la configuración de "Analítica de Abastecimiento".
+    2. El Sistema alerta: "Tienes 50 productos sin proveedor específico".
+    3. El Actor selecciona "Asignar Proveedor".
+    4. El Sistema permite seleccionar múltiples productos de una lista.
+    5. El Actor elige el proveedor "Panadería Central" y confirma.
+    6. El Sistema recalcula las alertas de esos productos usando la frecuencia de la "Panadería Central".
+- **Postcondición:** Los productos tienen reglas de abastecimiento precisas.
+
+### Caso D: Análisis de Producto Nuevo (Silencio Prudente)
+- **Actor:** Sistema (Automático)
+- **Precondición:** Se ha creado un producto hace 3 días.
+- **Flujo Principal:**
+    1. El Sistema intenta calcular la velocidad de venta.
+    2. El Sistema detecta que la antigüedad es menor a 15 días.
+    3. El Sistema omite cualquier alerta de colores (Verde/Amarillo/Rojo).
+    4. En su lugar, muestra un estado Gris: "Aprendiendo de tus ventas...".
+- **Postcondición:** El Usuario no recibe alertas falsas o prematuras.
 
 ---
 
-## Criterios de Aceptación
+## 4. Criterios de Aceptación
 
-### Rendimiento
-- [ ] El resumen carga en menos de 2 segundos.
-- [ ] El indicador semáforo se calcula correctamente vs promedio 7 días.
+### Funcionales
+- [ ] El desglose de dinero DEBE coincidir exactamente con la suma de las transacciones del día.
+- [ ] El sistema DEBE asignar automáticamente el "Proveedor General" a productos nuevos.
+- [ ] La alerta de "Pérdida de Ventas" (Azul) SOLO debe aparecer si se detectan quiebres de stock tempranos (Días Saturados).
+- [ ] El sistema NO PUEDE mostrar decimales en los montos monetarios principales.
 
-### UX
-- [ ] Usuario entiende el estado del negocio en menos de 5 segundos.
-- [ ] Cero números con decimales visibles.
-- [ ] Cero porcentajes visibles.
-- [ ] Cada línea del desglose responde al toque con feedback visual.
-- [ ] Existe estado vacío con mensaje motivacional.
-- [ ] Existe estado de carga con esqueleto.
+### De Interfaz (UX)
+- [ ] El usuario DEBE poder ver el resumen financiero sin hacer scroll en dispositivos móviles estándar.
+- [ ] Los términos técnicos ("Lead Time", "Forecast") ESTÁN PROHIBIDOS en la interfaz.
+- [ ] Las alertas de abastecimiento DEBEN estar agrupadas por urgencia (Urgente > Advertencia > Informativo).
 
-### Funcionalidad
-- [ ] Tocar Efectivo muestra lista de ventas del día.
-- [ ] Tocar Fiado navega a clientes.
-- [ ] Tocar Alerta navega al producto/cliente relacionado.
-- [ ] Recordatorio se genera automáticamente según prioridad.
+### De Rendimiento
+- [ ] La carga del resumen diario NO DEBE exceder los 2 segundos.
+- [ ] El cálculo de alertas de abastecimiento DEBE realizarse en segundo plano o estar cacheado para no bloquear la navegación.

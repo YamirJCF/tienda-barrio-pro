@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router';
 import { ArrowLeft } from 'lucide-vue-next';
 import SmartDailySummary from '../components/SmartDailySummary.vue';
+import SmartSupplySection from '../components/reports/SmartSupplySection.vue';
 import BottomNav from '../components/BottomNav.vue';
 
 const router = useRouter();
@@ -30,6 +31,11 @@ const goBack = () => {
 
     <main class="flex-1 pt-4">
       <SmartDailySummary />
+      
+      <!-- Sección Smart Supply (Fase 2) -->
+      <div class="mt-6 border-t border-slate-200 dark:border-slate-800">
+        <SmartSupplySection />
+      </div>
     </main>
 
     <BottomNav />

@@ -103,13 +103,17 @@ export function useHeartbeat() {
     };
 
     onMounted(() => {
-        if (authStore.isAuthenticated) {
+        if (authStore.isAuthenticated && authStore.currentUser?.storeId) {
+            // Conectar al canal de la tienda
+            presenceStore.initPresence(authStore.currentUser.storeId);
             startHeartbeat();
         }
     });
 
     onUnmounted(() => {
         stopHeartbeat();
+        // Opcional: Desconectar presence si es deseable liberar recursos inmediatamente
+        // presenceStore.cleanupPresence(); 
     });
 
     return {

@@ -2,7 +2,10 @@
 import { PropType, computed } from 'vue';
 import type { HistoryItem } from '../../composables/useHistory';
 import { formatRelativeTime } from '../../composables/useRelativeTime';
-import { Tag, ShoppingCart, Banknote, LogIn, Lock, Shield, ChevronRight, User, HelpCircle } from 'lucide-vue-next';
+import { 
+  Tag, ShoppingCart, Banknote, LogIn, Lock, Shield, 
+  ChevronRight, User, HelpCircle, Vault, Package
+} from 'lucide-vue-next';
 
 const props = defineProps({
   item: {
@@ -19,6 +22,8 @@ const iconComponent = computed(() => {
     'login': LogIn,
     'lock': Lock,
     'shield': Shield,
+    'vault': Vault,
+    'package': Package,
   };
   return map[props.item.icon] || HelpCircle;
 });
@@ -39,13 +44,23 @@ const iconComponent = computed(() => {
     <!-- Content -->
     <div class="flex-1 min-w-0">
       <div class="flex justify-between items-start mb-0.5">
-        <h3 class="font-bold text-slate-900 dark:text-white truncate pr-2">
-          {{ item.title }}
-        </h3>
+        <div class="flex items-center gap-2 min-w-0">
+          <h3 class="font-bold text-slate-900 dark:text-white truncate">
+            {{ item.title }}
+          </h3>
+          <!-- Badge -->
+          <span
+            v-if="item.badge"
+            class="shrink-0 px-2 py-0.5 text-[10px] font-bold uppercase rounded-full"
+            :class="item.badge.color"
+          >
+            {{ item.badge.text }}
+          </span>
+        </div>
         <!-- Amount (if exists) -->
         <span
           v-if="item.amountFormatted"
-          class="shrink-0 font-bold text-slate-900 dark:text-emerald-400"
+          class="shrink-0 font-bold text-slate-900 dark:text-emerald-400 ml-2"
           :class="{ 'text-red-600 dark:text-red-400': item.type === 'expenses' }"
         >
           {{ item.type === 'expenses' ? '-' : '' }}{{ item.amountFormatted }}

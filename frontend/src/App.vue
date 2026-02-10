@@ -41,6 +41,13 @@ const router = useRouter();
 // FRD-012-R: Sync Auth Required Handler (RN-R05)
 // ============================================
 const handleSyncAuthRequired = () => {
+  // If user is already on login page, silently ignore - this is expected
+  const currentPath = router.currentRoute.value.path;
+  if (currentPath === '/login' || currentPath === '/' || currentPath.includes('login')) {
+    console.log('[App] sync:auth_required ignored - user already on login page');
+    return;
+  }
+  
   console.warn('[App] sync:auth_required event received - session expired during sync');
   // Redirect to login with message
   alert('Tu sesión expiró. Por favor, inicia sesión nuevamente para sincronizar las ventas pendientes.');
