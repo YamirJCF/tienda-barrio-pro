@@ -8,6 +8,7 @@ import { productRepository, productMapper } from '../data/repositories/productRe
 import { logger } from '../utils/logger';
 import { getSupabaseClient, isSupabaseConfigured } from '../data/supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { inventorySerializer } from '../data/serializers/inventorySerializer';
 
 export const useInventoryStore = defineStore(
   'inventory',
@@ -473,11 +474,9 @@ export const useInventoryStore = defineStore(
       key: 'tienda-inventory',
       serializer: {
         serialize: (state: any) => {
-          const { inventorySerializer } = require('../data/serializers/inventorySerializer');
           return inventorySerializer.serialize(state);
         },
         deserialize: (value: string) => {
-          const { inventorySerializer } = require('../data/serializers/inventorySerializer');
           return inventorySerializer.deserialize(value);
         },
       },

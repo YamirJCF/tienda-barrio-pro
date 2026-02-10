@@ -43,11 +43,7 @@ const subtitle = computed(() => {
 const startPolling = () => {
     pollingInterval = setInterval(async () => {
         // Consultar estado real al store
-        const status = await authStore.checkDailyApproval();
-        console.log('[WaitingRoom] Polling Status:', status);
-        
         if (status === 'approved') {
-            console.log('[WaitingRoom] Approved! Redirecting...');
             router.push('/');
         } else if (status === 'rejected') {
             isLocked.value = true;

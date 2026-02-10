@@ -206,8 +206,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             if (!result.success) {
                 console.error('🚫 [CashRegisterStore] Repository close failed:', result.error);
                 // Don't throw - still archive locally
-            } else {
-
             }
         } catch (e: any) {
             console.error('🚫 [CashRegisterStore] Repository close call failed:', e.message);
