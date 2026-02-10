@@ -173,7 +173,8 @@ export const processSyncQueue = async (): Promise<void> => {
 
     // ===== ANTI-401 PROTOCOL: Session Auto-Recovery (Fase Final Blindaje) =====
     // Step 1: Check current session
-    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: initialData, error: sessionError } = await supabase.auth.getSession();
+    let session = initialData.session;
 
     // Step 2: If no session or error, attempt refresh
     if (sessionError || !session) {
@@ -384,18 +385,20 @@ async function processItem(item: QueueItem): Promise<boolean> {
             return true;
         }
 
-        case 'CREATE_CLIENT':
+        case 'CREATE_CLIENT': {
             // Direct Insert
             const { error: clientError } = await supabase.from('clients').insert(item.payload);
             if (clientError) throw clientError;
             return true;
+        }
 
-        case 'CREATE_MOVEMENT':
+        case 'CREATE_MOVEMENT': {
             // Direct Insert to inventory_movements
             // Trigger trg_inventory_movement will update stock automatically
             const { error: moveError } = await supabase.from('inventory_movements').insert(item.payload);
             if (moveError) throw moveError;
             return true;
+        }
 
         default:
             // FRD-012: Only sales-related types are supported offline
