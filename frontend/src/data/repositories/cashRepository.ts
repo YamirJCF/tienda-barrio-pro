@@ -45,7 +45,7 @@ export const cashRepository: CashRepository = {
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
         // Default closed state
-        let status = { isOpen: false, openingAmount: 0, lastEvent: undefined as CashControlEvent | undefined, sessionId: undefined as string | undefined };
+        const status = { isOpen: false, openingAmount: 0, lastEvent: undefined as CashControlEvent | undefined, sessionId: undefined as string | undefined };
 
         // 1. Try Online via RPC (Security Definer - Bypasses RLS)
         // This prevents "Blind Spots" where session exists but RLS hides it
