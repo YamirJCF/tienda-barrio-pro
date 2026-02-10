@@ -4,7 +4,7 @@ import { Decimal } from 'decimal.js';
 import { useNotificationsStore } from './notificationsStore';
 import { useAuthStore } from './auth';
 import type { Product } from '../types';
-import { productRepository } from '../data/repositories/productRepository';
+import { productRepository, productMapper } from '../data/repositories/productRepository';
 import { logger } from '../utils/logger';
 import { getSupabaseClient, isSupabaseConfigured } from '../data/supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
@@ -86,15 +86,26 @@ export const useInventoryStore = defineStore(
     const handleRealtimeEvent = (payload: any) => {
       const { eventType, new: newRecord, old: oldRecord } = payload;
 
+      // Map DB fields (current_stock, measurement_unit) to domain fields (stock, measurementUnit)
+      const mapRecord = (record: any): Product => {
+        try {
+          return ensureDecimals(productMapper.toDomain(record));
+        } catch (e) {
+          // Fallback if mapper fails (e.g., missing fields in realtime payload)
+          logger.warn('[InventoryStore] Realtime mapper fallback', e);
+          return ensureDecimals(record);
+        }
+      };
+
       if (eventType === 'INSERT') {
         const exists = products.value.find(p => p.id === newRecord.id);
         if (!exists) {
-          products.value.push(ensureDecimals(newRecord));
+          products.value.push(mapRecord(newRecord));
         }
       } else if (eventType === 'UPDATE') {
         const index = products.value.findIndex(p => p.id === newRecord.id);
         if (index !== -1) {
-          products.value[index] = ensureDecimals(newRecord);
+          products.value[index] = mapRecord(newRecord);
         }
       } else if (eventType === 'DELETE') {
         const index = products.value.findIndex(p => p.id === oldRecord.id);
@@ -160,8 +171,13 @@ export const useInventoryStore = defineStore(
         return null;
       }
 
+      // Save initial stock — product will be created with stock=0
+      // then an 'entrada' movement registers the real stock via DB trigger
+      const initialStock = new Decimal(productData.stock || 0);
+
       const newProductData = {
         ...productData,
+        stock: new Decimal(0), // Start at 0, movement will set real stock
         price: priceRounded,
         createdAt: now,
         updatedAt: now,
@@ -177,11 +193,47 @@ export const useInventoryStore = defineStore(
           if (!exists) {
             products.value.push(withDecimals);
           }
+
+          // Register initial stock as 'entrada' movement
+          // The DB trigger will set current_stock to the correct value
+          if (initialStock.gt(0)) {
+            try {
+              await productRepository.registerMovement({
+                productId: withDecimals.id,
+                type: 'entrada',
+                quantity: initialStock.toNumber(),
+                reason: 'Stock inicial al crear producto',
+                storeId: storeId
+              });
+              // Update local state to reflect the movement
+              withDecimals.stock = initialStock;
+              const idx = products.value.findIndex(p => p.id === withDecimals.id);
+              if (idx !== -1) {
+                products.value[idx] = withDecimals;
+              }
+              logger.log(`[InventoryStore] Initial stock movement registered: ${initialStock} for ${withDecimals.name}`);
+            } catch (movErr) {
+              // Non-critical: product was created, movement is for history only
+              logger.warn('[InventoryStore] Failed to register initial stock movement', movErr);
+            }
+          }
+
           return withDecimals;
         }
       } catch (e: any) {
-        error.value = 'Failed to add product';
+        const errorMsg = e.message || 'Error al agregar producto';
+        error.value = errorMsg;
         logger.error('[InventoryStore] Add failed', e);
+
+        // Surface error to the user via notification
+        const notificationsStore = useNotificationsStore();
+        notificationsStore.addNotification({
+          type: 'general',
+          icon: 'error',
+          title: 'Error al crear producto',
+          message: errorMsg,
+          isRead: false
+        });
       }
       return null;
     };
@@ -209,8 +261,20 @@ export const useInventoryStore = defineStore(
           products.value[index] = merged;
           return merged;
         }
-      } catch (e) {
+      } catch (e: any) {
+        const errorMsg = e.message || 'Error al actualizar producto';
+        error.value = errorMsg;
         logger.error('[InventoryStore] Update failed', e);
+
+        // Surface error to the user via notification
+        const notificationsStore = useNotificationsStore();
+        notificationsStore.addNotification({
+          type: 'general',
+          icon: 'error',
+          title: 'Error al actualizar producto',
+          message: errorMsg,
+          isRead: false
+        });
       }
       return null;
     };
@@ -258,7 +322,10 @@ export const useInventoryStore = defineStore(
         quantity: number | Decimal;
         reason?: string;
         expirationDate?: string;
-        unitCost?: number; // New param
+        unitCost?: number;
+        supplierId?: string;
+        invoiceRef?: string;
+        paymentType?: 'contado' | 'credito';
       }
     ): Promise<{ success: boolean; product?: Product; error?: string }> => {
       const product = products.value.find((p) => p.id === movement.productId);
@@ -300,7 +367,10 @@ export const useInventoryStore = defineStore(
           productId: movement.productId,
           type: movement.type,
           quantity: qty.toNumber(),
-          reason: finalReason
+          reason: finalReason,
+          supplierId: movement.supplierId,
+          invoiceRef: movement.invoiceRef,
+          paymentType: movement.paymentType
         });
 
         if (!success) {

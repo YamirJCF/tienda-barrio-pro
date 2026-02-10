@@ -47,12 +47,21 @@
       <section v-if="movementType === 'entrada'" class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50">
         <h2 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">Datos del Proveedor</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="space-y-1">
-            <BaseInput
-              v-model="supplierName"
-              label="Proveedor"
-              placeholder="Ej: Distribuidora Central"
-            />
+        <div class="space-y-1">
+            <label class="text-xs text-gray-400 block mb-1">Proveedor</label>
+            <select
+              v-model="selectedSupplierId"
+              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Sin asignar --</option>
+              <option 
+                v-for="supplier in suppliers" 
+                :key="supplier.id" 
+                :value="supplier.id"
+              >
+                {{ supplier.name }}
+              </option>
+            </select>
           </div>
           <div class="space-y-1">
             <BaseInput
@@ -215,20 +224,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useInventoryStore } from '../stores/inventory';
+import { useAuthStore } from '../stores/auth';
 import { Decimal } from 'decimal.js';
 import type { Product } from '../types';
+import { useSuppliersStore } from '../stores/suppliers';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import { ArrowLeft, Search, ListPlus, X, Save } from 'lucide-vue-next';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();
+const authStore = useAuthStore();
+const suppliersStore = useSuppliersStore();
+
+// Fetch suppliers on mount
+onMounted(async () => {
+  const storeId = authStore.currentStore?.id;
+  if (storeId) {
+    await suppliersStore.fetchSuppliers(storeId);
+  }
+});
+
+// Computed
+const suppliers = computed(() => suppliersStore.suppliers);
 
 // State
-const supplierName = ref('');
+const selectedSupplierId = ref('');
 const invoiceRef = ref('');
 const paymentType = ref('contado');
 const movementType = ref('entrada');
@@ -344,6 +368,12 @@ const { execute: executeSave, isLoading: isSaving } = useAsyncAction();
 const { showSuccess, showWarning, showError } = useNotifications();
 
 const saveEntry = async () => {
+  // Validación: Si hay proveedor seleccionado, debe haber tipo de pago
+  if (movementType.value === 'entrada' && selectedSupplierId.value && !paymentType.value) {
+    showWarning('Cuando indicas un proveedor, debes especificar si es Contado o Crédito');
+    return;
+  }
+  
   if (entryItems.value.length === 0) return;
   
   await executeSave(async () => {
@@ -357,14 +387,17 @@ const saveEntry = async () => {
       const qty = new Decimal(item.quantity);
       if (qty.gt(0)) {
           // T1.2: Register logical movement
-          const result = await inventoryStore.registerStockMovement({
-            productId: item.productId,
-            type: movementType.value as any, 
-            quantity: qty,
-            reason: reason.value,
-            expirationDate: item.expirationDate,
-            unitCost: item.unitCost // Pass the cost
-          });
+            const result = await inventoryStore.registerStockMovement({
+              productId: item.productId,
+              type: movementType.value as any, 
+              quantity: qty,
+              reason: reason.value,
+              expirationDate: item.expirationDate,
+              unitCost: item.unitCost,
+              supplierId: selectedSupplierId.value || undefined,
+              invoiceRef: invoiceRef.value || undefined,
+              paymentType: paymentType.value as 'contado' | 'credito'
+            });
           
           if (result.success) {
             successCount++;

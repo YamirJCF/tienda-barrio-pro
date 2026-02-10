@@ -213,6 +213,15 @@ const goBack = () => router.back();
                     </div>
                 </div>
 
+                <!-- Informational Note -->
+                <div class="flex items-start gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40">
+                    <Info :size="16" class="text-blue-500 mt-0.5 flex-shrink-0" />
+                    <p class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                        Este resumen solo contabiliza <strong>dinero en efectivo</strong> que entra y sale del cajón físico. 
+                        Ventas por Nequi y Fiado se registran por separado.
+                    </p>
+                </div>
+
                 <!-- Counting Input -->
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
                      <label class="block text-xs font-bold uppercase text-gray-400 mb-2 text-center">¿Cuánto contaste?</label>

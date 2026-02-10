@@ -80,7 +80,7 @@ const TABLE_SCHEMAS: Record<string, {
     },
     inventory_movements: {
         requiredFields: ['product_id', 'movement_type', 'quantity'],
-        optionalFields: ['id', 'created_at', 'created_by', 'reason'],
+        optionalFields: ['id', 'created_at', 'created_by', 'reason', 'supplier_id', 'invoice_reference', 'payment_type'],
         get allFields() { return [...this.requiredFields, ...this.optionalFields]; }
     },
     cash_sessions: {
@@ -164,7 +164,12 @@ const CAMEL_TO_SNAKE_MAP: Record<string, string> = {
     lastError: 'last_error',
     retryCount: 'retry_count',
     deviceFingerprint: 'device_fingerprint',
-    passDate: 'pass_date'
+    passDate: 'pass_date',
+
+    // Inventory movement fields (added for supplier tracking)
+    supplierId: 'supplier_id',
+    invoiceRef: 'invoice_reference',
+    paymentType: 'payment_type'
 };
 
 // ============================================

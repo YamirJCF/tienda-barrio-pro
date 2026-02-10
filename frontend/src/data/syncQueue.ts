@@ -177,6 +177,16 @@ export const processSyncQueue = async (): Promise<void> => {
 
     // Step 2: If no session or error, attempt refresh
     if (sessionError || !session) {
+        // Step 2a: Check if user was ever authenticated
+        // If no auth tokens exist in storage, user hasn't logged in yet - silently skip
+        const hasStoredSession = Object.keys(localStorage).some(key =>
+            key.includes('supabase') && key.includes('auth')
+        );
+        if (!hasStoredSession) {
+            logger.log('[SyncQueue] No stored session found - user not authenticated, skipping.');
+            return;
+        }
+
         logger.warn('[SyncQueue] 🔄 Session missing - attempting auto-refresh...');
 
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
@@ -184,7 +194,6 @@ export const processSyncQueue = async (): Promise<void> => {
         if (refreshError || !refreshData.session) {
             // Step 3: Refresh failed - HARD STOP + AUTH_REQUIRED
             logger.error('[SyncQueue] 🔒 AUTH_REQUIRED: Session refresh failed - cannot proceed');
-            console.error('🚫 [SyncQueue] Auto-recovery failed. User must re-authenticate.');
 
             window.dispatchEvent(new CustomEvent('sync:auth_required', {
                 detail: {
@@ -192,11 +201,6 @@ export const processSyncQueue = async (): Promise<void> => {
                     originalError: refreshError?.message || 'No session available',
                     timestamp: new Date().toISOString()
                 }
-            }));
-
-            // Emit legacy event for backward compatibility
-            window.dispatchEvent(new CustomEvent('sync:reauth_required', {
-                detail: { reason: 'Session expired or missing' }
             }));
 
             return; // PAUSE QUEUE - Don't burn through items with 401s

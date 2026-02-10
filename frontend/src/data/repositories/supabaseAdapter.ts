@@ -95,14 +95,29 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
                 return localData as unknown as TDomain[];
             }
 
-            // Sync/Cache to local storage on successful fetch?
-            // "Offline First" usually implies keeping local cache updated.
-            // For simplicity in this phase, we act as simple Repo.
-            // But to support "Read Offline after Online", we should update LS here?
-            // ADR says: "localStorage guarda copias exactas de DB".
-            // So we should save `data` (TPersistence) to LS.
-            if (data) {
+            // Sync cache to localStorage on successful fetch
+            // SAFETY: Only update LS if Supabase returned data  
+            // Protect against wiping local cache when RLS returns empty due to session issues
+            if (data && data.length > 0) {
                 localStorageAdapter.set(localStorageKey, data);
+            } else if (data && data.length === 0) {
+                // Supabase returned empty - check if we had local data
+                const localData = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+                if (localData.length > 0) {
+                    logger.warn(`[SupabaseRepo:${tableName}] ⚠️ Supabase returned 0 items but localStorage has ${localData.length}. Possible RLS issue. NOT overwriting localStorage.`);
+                    // Emit event so the UI can warn the user
+                    window.dispatchEvent(new CustomEvent('sync:data_desync', {
+                        detail: {
+                            table: tableName,
+                            localCount: localData.length,
+                            remoteCount: 0,
+                            message: `Supabase devolvió 0 ${tableName} pero hay ${localData.length} localmente. Posible problema de sesión/RLS.`
+                        }
+                    }));
+                } else {
+                    // Both empty - safe to sync
+                    localStorageAdapter.set(localStorageKey, data);
+                }
             }
 
             // Defensive: Ensure data is not null
@@ -215,15 +230,22 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
                     .single();
 
                 if (error) {
+                    // CRITICAL: Remove from localStorage since DB rejected it
+                    // This prevents phantom data that disappears on reload
+                    const rollbackList = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+                    const filteredList = rollbackList.filter(e => e.id !== newId);
+                    localStorageAdapter.set(localStorageKey, filteredList);
+
                     // FRD-006: Check for RLS error specifically
                     if (error.code === '42501' || error.message?.includes('row-level security')) {
                         logger.error(`[SupabaseRepo:${tableName}] RLS rejection:`, error.message);
                         emitSyncEvent(SyncEvents.RLS_ERROR, { table: tableName, error: error.message });
-                    } else {
-                        logger.log(`[SupabaseRepo:${tableName}] create error (saved locally):`, error.message);
                     }
-                    // Return local entity since we saved it
-                    return newEntityDomain;
+
+                    logger.error(`[SupabaseRepo:${tableName}] ❌ create FAILED - rolled back localStorage:`, error.message);
+
+                    // Throw so the store layer can show an error to the user
+                    throw new Error(`Error al crear ${tableName}: ${error.message}`);
                 }
 
                 // If success, we might get back updated fields (defaults).
@@ -328,8 +350,20 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
                     .single();
 
                 if (error) {
-                    logger.log(`[SupabaseRepo:${tableName}] update error (saved locally):`, error.message);
-                    return updatedDomain;
+                    // CRITICAL: Rollback localStorage to previous state
+                    if (index !== -1) {
+                        // Restore original data
+                        const rollbackList = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+                        const ri = rollbackList.findIndex(e => e.id === id);
+                        if (ri !== -1) {
+                            const origPersistence = existingList[index]; // original before merge
+                            rollbackList[ri] = origPersistence;
+                            localStorageAdapter.set(localStorageKey, rollbackList);
+                        }
+                    }
+
+                    logger.error(`[SupabaseRepo:${tableName}] ❌ update FAILED - rolled back localStorage:`, error.message);
+                    throw new Error(`Error al actualizar ${tableName}: ${error.message}`);
                 }
 
                 const updatedPersistence = updated as unknown as TPersistence;

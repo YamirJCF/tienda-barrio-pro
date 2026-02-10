@@ -1,0 +1,6 @@
+
+> tienda-de-barrio@0.0.0 lint
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx --fix --ignore-path .gitignore
+
+Invalid option '--ignore-path' - perhaps you meant '--ignore-pattern'?
+You're using eslint.config.js, some command line flags are no longer available. Please see https://eslint.org/docs/latest/use/command-line-interface for details.

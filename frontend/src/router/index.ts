@@ -136,6 +136,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/HistoryView.vue'),
     meta: { requiresAuth: true }
   },
+  // Suppliers Management (Admin only)
+  {
+    path: '/suppliers',
+    name: 'suppliers',
+    component: () => import('../views/SuppliersView.vue'),
+    meta: { requiresAuth: true }
+  },
   // Catch-all for Supabase Auth fragments (access_token=...) and 404s
   {
     path: '/:pathMatch(.*)*',
@@ -223,6 +230,11 @@ router.beforeEach((to, from, next) => {
 
   // 3. Cash Control: Needs permission
   if (to.name === 'cash-control' && !authStore.canOpenCloseCash) {
+    return next({ name: 'dashboard' });
+  }
+
+  // 4. Suppliers: Admin only
+  if (to.name === 'suppliers' && !authStore.isAdmin) {
     return next({ name: 'dashboard' });
   }
 

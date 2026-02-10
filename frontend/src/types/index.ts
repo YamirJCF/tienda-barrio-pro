@@ -21,6 +21,7 @@ export interface Product {
     updatedAt?: string;
     notifiedLowStock?: boolean;
     storeId: string; // REQUIRED - RLS compliance (was optional, caused 401 errors)
+    supplierId?: string; // Smart Supply (FRD-008 Fase 2)
 }
 
 export interface CartItem {

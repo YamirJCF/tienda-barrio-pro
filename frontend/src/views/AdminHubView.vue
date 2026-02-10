@@ -20,10 +20,13 @@ import {
   ChevronRight, 
   KeyRound,
   AlertTriangle,
-  Smartphone 
+  Smartphone,
+  Truck,
+  ClipboardList
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 import SmartDailySummary from '../components/SmartDailySummary.vue';
+import SmartSupplySection from '../components/reports/SmartSupplySection.vue';
 import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
 // WO-004: Modal de PIN para SPEC-006 (consolidado)
 // T-008: Modal de PIN para SPEC-006 (consolidado)
@@ -251,6 +254,32 @@ watch(activeTab, (newTab) => {
               Ver Gastos
             </button>
           </div>
+
+          <!-- Historial Financiero -->
+          <div
+            class="relative flex flex-col justify-between rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-sm border border-slate-100 dark:border-slate-700"
+          >
+            <div class="flex items-start justify-between mb-4">
+              <div
+                class="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400"
+              >
+                <ClipboardList :size="24" />
+              </div>
+            </div>
+            <div class="mb-5">
+              <h4 class="text-lg font-bold text-slate-900 dark:text-white leading-tight">
+                Historial Financiero
+              </h4>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Ventas, caja, compras y auditoría</p>
+            </div>
+            <button
+              @click="navigateTo('/history')"
+              class="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-200 dark:hover:bg-slate-600 active:bg-slate-300"
+            >
+              <Eye :size="18" :stroke-width="1.5" />
+              Ver Historial
+            </button>
+          </div>
         </div>
       </section>
 
@@ -376,6 +405,37 @@ watch(activeTab, (newTab) => {
         </div>
       </section>
 
+      <!-- Inventario -->
+      <section v-if="activeTab === 'gestion'">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">📦 Inventario</h3>
+        <div
+          class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
+        >
+          <!-- Proveedores -->
+          <button
+            @click="navigateTo('/suppliers')"
+            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group"
+          >
+            <div class="flex items-center gap-4">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
+              >
+                <Truck :size="20" />
+              </div>
+              <div>
+                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Proveedores
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  Administrar catálogo de proveedores
+                </p>
+              </div>
+            </div>
+            <ChevronRight :size="20" class="text-slate-300 group-hover:text-primary transition-colors" />
+          </button>
+        </div>
+      </section>
+
       <!-- WO-004: Sección Seguridad (PIN) -->
       <section v-if="activeTab === 'gestion'">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">🔐 Seguridad</h3>
@@ -414,6 +474,11 @@ watch(activeTab, (newTab) => {
       <!-- Reportes Tab Content -->
       <section v-if="activeTab === 'reportes'">
         <SmartDailySummary />
+        
+        <!-- Smart Supply Section (FRD-008 Fase 2) -->
+        <div class="mt-6 border-t border-slate-200 dark:border-slate-800">
+          <SmartSupplySection />
+        </div>
       </section>
 
       <div class="h-10"></div>

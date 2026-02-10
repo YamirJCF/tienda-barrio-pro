@@ -132,7 +132,9 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             plu: entity.plu || null,
             is_weighable: entity.isWeighable || false,
             // Map notifiedLowStock (Domain) to low_stock_alerted (DB)
-            low_stock_alerted: entity.notifiedLowStock || false
+            low_stock_alerted: entity.notifiedLowStock || false,
+            // Supplier FK - preserve existing value
+            supplier_id: entity.supplierId || null
         };
     }
 };
@@ -163,6 +165,9 @@ export interface ProductRepository extends EntityRepository<Product> {
         reason?: string;
         storeId?: string;
         employeeId?: string;
+        supplierId?: string;
+        invoiceRef?: string;
+        paymentType?: 'contado' | 'credito';
     }): Promise<boolean>;
     getMovementHistory(productId: string, limit?: number): Promise<InventoryMovementHistory[]>;
 }
@@ -284,6 +289,9 @@ export const productRepository: ProductRepository = {
             reason?: string;
             storeId?: string;
             employeeId?: string;
+            supplierId?: string;
+            invoiceRef?: string;
+            paymentType?: 'contado' | 'credito';
         }
     ): Promise<boolean> {
         const isOnline = isSupabaseConfigured() && navigator.onLine;
@@ -297,7 +305,10 @@ export const productRepository: ProductRepository = {
                     movement_type: movement.type,
                     quantity: movement.quantity,
                     reason: movement.reason,
-                    created_by: movement.employeeId
+                    created_by: movement.employeeId,
+                    supplier_id: movement.supplierId || null,
+                    invoice_reference: movement.invoiceRef || null,
+                    payment_type: movement.paymentType || null
                 });
 
                 if (!error) return true;
@@ -317,7 +328,10 @@ export const productRepository: ProductRepository = {
                 movement_type: movement.type,
                 quantity: movement.quantity,
                 reason: movement.reason,
-                created_by: movement.employeeId
+                created_by: movement.employeeId,
+                supplier_id: movement.supplierId || null,
+                invoice_reference: movement.invoiceRef || null,
+                payment_type: movement.paymentType || null
             });
 
             // Update local product stock manually since trigger won't run
