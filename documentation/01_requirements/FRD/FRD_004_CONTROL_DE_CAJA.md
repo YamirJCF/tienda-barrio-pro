@@ -74,6 +74,20 @@ Módulo crítico que controla el flujo de efectivo físico en la tienda. Estable
     4. Sistema registra el movimiento y resta del Saldo Esperado inmediatamente.
 - **Postcondición:** Movimiento registrado, saldo actualizado.
 
+**Caso D: Recuperación de Turno Olvidado**
+- **Actor:** Empleado o Admin (Cualquiera que inicie sesión)
+- **Precondición:** Existe un turno abierto con fecha anterior a hoy.
+- **Flujo Principal:**
+    1. Usuario inicia sesión.
+    2. Sistema detecta turno caducado.
+    3. Sistema muestra alerta bloqueante: "Turno anterior no cerrado".
+    4. Sistema redirige forzosamente a la pantalla de Cierre de Caja.
+    5. Usuario realiza el conteo del dinero actual (real).
+    6. Usuario confirma cierre (ingresa PIN si aplica).
+    7. Sistema cierra el turno antiguo con fecha de cierre actual.
+    8. Sistema libera el bloqueo y permite abrir un Nuevo Turno.
+- **Postcondición:** Turno viejo cerrado, sistema listo para operar hoy.
+
 ---
 
 ## Requisitos de Datos (Para Equipo Data)
@@ -110,3 +124,6 @@ Módulo crítico que controla el flujo de efectivo físico en la tienda. Estable
 - [ ] Cada movimiento de caja tiene descripción obligatoria.
 - [ ] El cierre genera un registro inmutable con la diferencia calculada.
 - [ ] Al cerrar la caja, todos los pases diarios de empleados expiran automáticamente.
+- [ ] El sistema detecta y bloquea turnos con fecha de apertura < hoy.
+- [ ] No se permite abrir un nuevo turno si existe uno caducado pendiente de cierre.
+```

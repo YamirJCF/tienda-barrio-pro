@@ -68,7 +68,8 @@ export const cashRepository: CashRepository = {
                             amount_declared: Number(result.openingAmount),
                             authorized_by_name: 'Unknown',
                             authorized_by_type: 'employee',
-                            authorized_by_id: result.openedBy
+                            authorized_by_id: result.openedBy,
+                            created_at: result.openedAt // FRD-015: Critical for stale shift detection
                         };
                         return status;
                     } else {
@@ -99,7 +100,8 @@ export const cashRepository: CashRepository = {
                             amount_declared: Number(session.opening_balance),
                             authorized_by_name: 'Unknown',
                             authorized_by_type: 'employee',
-                            authorized_by_id: session.opened_by
+                            authorized_by_id: session.opened_by,
+                            created_at: session.opened_at // FRD-015: Critical for stale shift detection
                         };
                         return status;
                     }

@@ -42,6 +42,26 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             .reduce((sum, t) => sum.plus(new Decimal(t.amount)), new Decimal(0));
     });
 
+    // FRD-004/FRD-015: Stale Shift Detection
+    // A session is "stale" if it was opened on a previous date and is still open
+    const isStaleSession = computed(() => {
+        if (!currentSession.value || currentSession.value.status !== 'open') return false;
+        const openedDate = new Date(currentSession.value.openingTime).toDateString();
+        const today = new Date().toDateString();
+        return openedDate !== today;
+    });
+
+    // Human-readable date of the stale session for UI display
+    const staleSessionDate = computed(() => {
+        if (!currentSession.value) return '';
+        return new Date(currentSession.value.openingTime).toLocaleDateString('es-CO', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    });
+
     // Methods
     const syncFromBackend = async (storeId: string) => {
         // OFFLINE-FIRST: Preserve existing session without attempting sync
@@ -279,6 +299,8 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         currentBalance,
         totalExpenses,
         totalIncome,
+        isStaleSession,
+        staleSessionDate,
         openRegister,
         closeRegister,
         registerExpense,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
+import { useAuthStore } from './stores/auth'; // Import Auth Store
 import ToastNotification from './components/ToastNotification.vue';
 import { useNetworkStatus } from './composables/useNetworkStatus';
 import { checkDataIntegrity } from './composables/useDataIntegrity';
@@ -36,6 +37,7 @@ useRevocationGuard();
 
 const errorDetected = ref(false);
 const router = useRouter();
+const authStore = useAuthStore(); // Initialize Auth Store
 
 // ============================================
 // FRD-012-R: Sync Auth Required Handler (RN-R05)
