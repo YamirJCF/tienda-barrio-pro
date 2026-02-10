@@ -39,7 +39,7 @@ export function useCache() {
         const now = Date.now();
         const cached = CACHE_STORE[config.key];
 
-        let result = {
+        const result = {
             data: cached ? cached.data as T : null,
             isStale: false,
             error: null

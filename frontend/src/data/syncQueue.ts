@@ -431,7 +431,7 @@ export const getPendingMovements = async (productId?: string): Promise<any[]> =>
     const all = await db.getAll(QUEUE_STORE);
 
     // Filter for MOVEMENT type
-    let movements: any[] = [];
+    const movements: any[] = [];
 
     all.forEach(item => {
         if (item.type === 'CREATE_MOVEMENT' && (!productId || item.payload.product_id === productId)) {
