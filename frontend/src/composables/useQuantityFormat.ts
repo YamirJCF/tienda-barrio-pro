@@ -33,10 +33,11 @@ export const useQuantityFormat = () => {
         // Unidades y gramos siempre enteros
         return Math.round(num).toString();
       case 'kg':
-      case 'lb':
+      case 'lb': {
         // Kg y lb con máximo 2 decimales, sin trailing zeros
         const rounded = Math.round(num * 100) / 100;
         return Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(2);
+      }
       default:
         // Default: 2 decimales si tiene decimales, entero si no
         return Number.isInteger(num) ? num.toString() : num.toFixed(2);

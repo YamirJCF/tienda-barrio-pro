@@ -332,7 +332,7 @@ async function processItem(item: QueueItem): Promise<boolean> {
     if (!supabase) throw new Error('Supabase client not available');
 
     switch (item.type) {
-        case 'CREATE_SALE':
+        case 'CREATE_SALE': {
             // FRD-012-R / RN-R03: Use RPC V2 (Financial Core)
             // V2 does NOT accept prices - server calculates from DB
             const p_items_v2 = item.payload.items.map((i: any) => ({
@@ -379,7 +379,10 @@ async function processItem(item: QueueItem): Promise<boolean> {
 
             // Success!
             logger.log(`[SyncQueue] ✅ RPC processed sale ${item.id} -> SaleID: ${data.sale_id}`);
+            // Success!
+            logger.log(`[SyncQueue] ✅ RPC processed sale ${item.id} -> SaleID: ${data.sale_id}`);
             return true;
+        }
 
         case 'CREATE_CLIENT':
             // Direct Insert

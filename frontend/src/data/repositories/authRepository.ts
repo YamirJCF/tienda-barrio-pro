@@ -450,7 +450,6 @@ export const authRepository = {
         try {
             // FIX: Strip 'emp-' prefix
             const cleanId = employeeId.startsWith('emp-') ? employeeId.replace('emp-', '') : employeeId;
-            console.log('[AuthRepo] Checking Daily Pass for Clean ID:', cleanId, typeof cleanId);
 
             const { data, error } = await supabase.rpc('check_daily_pass_status', {
                 p_employee_id: cleanId,

@@ -1,5 +1,7 @@
 <template>
-    <!-- This component is invisible but ensures network event listeners are always active -->
+    <div style="display: none;">
+        <!-- This component is invisible but ensures network event listeners are always active -->
+    </div>
 </template>
 
 <script setup lang="ts">
