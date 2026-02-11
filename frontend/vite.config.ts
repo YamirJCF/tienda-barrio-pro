@@ -12,8 +12,9 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [vue()],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+      // 🔒 SECURITY HARDENING (OT-001):
+      // Removed process.env.GEMINI_API_KEY injection to prevent exposure in client bundle.
+      // AI features must use Edge Functions.
     },
     resolve: {
       alias: {

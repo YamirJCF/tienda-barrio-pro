@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { logger } from '../utils/logger';
 import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
 // OFFLINE-CRITICAL: Eager imports for offline functionality
@@ -207,7 +208,7 @@ router.beforeEach(async (to, from, next) => {
     // FIX: Force clean login on startup if session is expired
     // Handles User Request: "Always start at login"
     if (dailyStatus === 'expired' || dailyStatus === 'none') {
-      console.log('🔒 [Router] Session expired or invalid on sensitive route. Forcing logout.');
+      logger.log('🔒 [Router] Session expired or invalid on sensitive route. Forcing logout.');
       await authStore.logout();
       return next({ name: 'login' });
     }
@@ -228,7 +229,7 @@ router.beforeEach(async (to, from, next) => {
     const { useCashRegisterStore } = await import('../stores/cashRegister');
     const cashRegisterStore = useCashRegisterStore();
     if (cashRegisterStore.isStaleSession) {
-      console.log('🔒 [Router] Stale shift detected. Redirecting to cash-control for mandatory closure.');
+      logger.log('🔒 [Router] Stale shift detected. Redirecting to cash-control for mandatory closure.');
       return next({ name: 'cash-control' });
     }
   }

@@ -17,4 +17,6 @@ initAuditMode();
     }
 };
 
-console.log('🛡️ Audit Controls Loaded. Type "Audit.help()" for instructions.');
+if (import.meta.env.DEV) {
+    console.log('🛡️ Audit Controls Loaded. Type "Audit.help()" for instructions.');
+}
