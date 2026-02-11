@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { logger } from '../utils/logger';
 import { getStorageKey } from '../utils/storage';
 import { authRepository, type RegisterResponse } from '../data/repositories/authRepository';
+import { useNotificationsStore } from './notificationsStore';
 
 export type UserType = 'admin' | 'employee';
 
@@ -265,6 +266,14 @@ export const useAuthStore = defineStore(
       return await authRepository.recoverPassword(email);
     };
 
+    const changePassword = async (currentPassword: string, newPassword: string) => {
+      const email = currentUser.value?.email;
+      if (!email) {
+        return { success: false, error: 'No se encontró el email del usuario actual' };
+      }
+      return await authRepository.changePassword(email, currentPassword, newPassword);
+    };
+
     // STUB: Daily Pass Logic (Local Simulation for FRD-001)
     // -----------------------------------------------------
 
@@ -357,16 +366,50 @@ export const useAuthStore = defineStore(
       if (!currentStore.value?.id) return;
       const requests = await authRepository.getPendingAccessRequests(currentStore.value.id);
       pendingRequests.value = requests || [];
+
+      // NOTIFICATION INTEGRATION (Level 2: Access Requests)
+      const notifStore = useNotificationsStore();
+
+      pendingRequests.value.forEach(req => {
+        // Prevent duplicates: Check via metadata
+        const exists = notifStore.notifications.some(n => n.metadata?.requestId === req.id && !n.isRead);
+
+        if (!exists) {
+          notifStore.addNotification({
+            // No custom ID to respect Omit type, store generates UUID
+            type: 'security',
+            title: 'Solicitud de Acceso',
+            message: `${req.device_name || 'Dispositivo'} solicita acceso para ${req.email || 'Empleado'}`,
+            icon: 'shield-check',
+            isRead: false,
+            actionable: true,
+            actions: [
+              { label: 'Aprobar', action: 'approve', primary: true, payload: { id: req.id } },
+              { label: 'Rechazar', action: 'reject', payload: { id: req.id } }
+            ],
+            metadata: { requestId: req.id }
+          });
+        }
+      });
     };
 
     // Action: Aprobar (Real Backend)
     const approveRequest = async (requestId: string) => {
       if (!currentUser.value) return false;
       try {
-        await authRepository.updateAccessRequestStatus(requestId, 'approved', currentUser.value.id);
+        const success = await authRepository.updateAccessRequestStatus(requestId, 'approved', currentUser.value.id);
         // Refresh list
-        await fetchPendingRequests();
-        return true;
+        if (success) {
+          await fetchPendingRequests();
+          // Remove notification if exists
+          const notifStore = useNotificationsStore();
+          const notif = notifStore.notifications.find(n => n.metadata?.requestId === requestId);
+          if (notif) {
+            notifStore.removeNotification(notif.id);
+          }
+          return true;
+        }
+        return false;
       } catch (e) {
         console.error(e);
         return false;
@@ -377,9 +420,19 @@ export const useAuthStore = defineStore(
     const rejectRequest = async (requestId: string) => {
       if (!currentUser.value) return false;
       try {
-        await authRepository.updateAccessRequestStatus(requestId, 'rejected', currentUser.value.id);
+        const success = await authRepository.updateAccessRequestStatus(requestId, 'rejected', currentUser.value.id);
         await fetchPendingRequests();
-        return true;
+
+        if (success) {
+          // Remove notification if exists
+          const notifStore = useNotificationsStore();
+          const notif = notifStore.notifications.find(n => n.metadata?.requestId === requestId);
+          if (notif) {
+            notifStore.removeNotification(notif.id);
+          }
+          return true;
+        }
+        return false;
       } catch (e) {
         console.error(e);
         return false;
@@ -454,6 +507,7 @@ export const useAuthStore = defineStore(
       loginAsAdmin,
       loginAsEmployee,
       recoverPassword,
+      changePassword,
       logout,
       getStoreById,
       getFirstStore,

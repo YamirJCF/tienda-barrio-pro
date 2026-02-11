@@ -8,6 +8,7 @@ import { useSalesStore } from '../stores/sales';
 import { useClientsStore } from '../stores/clients';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
+import { useNotificationsStore } from '../stores/notificationsStore';
 import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNumpad } from '../composables/useNumpad';
@@ -359,6 +360,7 @@ const handleForceSale = async (justification: string) => {
 
   const { payments, totalPaid, clientId } = pendingSaleData.value;
   const currentTicket = ticketNumber.value;
+  let saleId: string | null = null; // Capture for notification
 
   // Call Force Sale RPC
   const success = await executeSale(async () => {
@@ -400,6 +402,8 @@ const handleForceSale = async (justification: string) => {
     if (cashPayment) {
       cashRegisterStore.addIncome(cashPayment.amount, `Venta Forzada ${currentTicket}`, result.id);
     }
+    
+    saleId = result.id; // Correctly capturing ID
 
     return true;
   }, {
@@ -415,6 +419,19 @@ const handleForceSale = async (justification: string) => {
     pendingSaleData.value = null;
     forceSaleItems.value = [];
     showSaleSuccess(currentTicket);
+    
+    // NOTIFICATION INTEGRATION (Level 2: Force Sale Audit)
+    if (saleId) {
+      const notifStore = useNotificationsStore();
+      notifStore.addNotification({
+        type: 'finance', // Audit event
+        title: 'Venta Forzada',
+        message: `Venta forzada autorizada. Justificación: ${justification}`,
+        icon: 'alert-triangle',
+        isRead: false,
+        metadata: { saleId: saleId }
+      });
+    }
   }
 };
 

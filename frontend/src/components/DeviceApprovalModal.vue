@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { logger } from '../utils/logger';
 import { authRepository } from '../data/repositories/authRepository';
 import { useAuthStore } from '../stores/auth';
+import { useNotificationsStore } from '../stores/notificationsStore';
 import { Smartphone, X, Clock, Check, ShieldCheck, CheckCircle, BadgeCheck, UserX } from 'lucide-vue-next';
 
 // Props y Emits
@@ -77,6 +78,14 @@ const approveDevice = async (request: AccessRequest) => {
     if (idx !== -1) {
       requests.value[idx].status = 'approved';
     }
+    
+    // BRIDGE: Remove notification from Notification Center
+    const notifStore = useNotificationsStore();
+    const notif = notifStore.notifications.find(
+      n => n.metadata?.requestId === request.id
+    );
+    if (notif) notifStore.removeNotification(notif.id);
+    
     logger.log('[DeviceApproval] Aprobado:', request.employeeName);
   } catch (error) {
     logger.error('[DeviceApproval] Error approving device:', error);
@@ -101,6 +110,14 @@ const rejectDevice = async (request: AccessRequest) => {
     if (idx !== -1) {
       requests.value[idx].status = 'rejected';
     }
+    
+    // BRIDGE: Remove notification from Notification Center
+    const notifStore = useNotificationsStore();
+    const notif = notifStore.notifications.find(
+      n => n.metadata?.requestId === request.id
+    );
+    if (notif) notifStore.removeNotification(notif.id);
+    
     logger.log('[DeviceApproval] Rechazado:', request.employeeName);
   } catch (error) {
     logger.error('[DeviceApproval] Error rejecting device:', error);

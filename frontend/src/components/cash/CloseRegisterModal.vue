@@ -4,6 +4,7 @@ import { useCashRegisterStore } from '../../stores/cashRegister';
 import Decimal from 'decimal.js';
 import { Store, CheckCircle, AlertTriangle, Loader2 } from 'lucide-vue-next';
 import { useNotifications } from '@/composables/useNotifications';
+import { useNotificationsStore } from '../../stores/notificationsStore';
 
 // Props & Emits
 interface Props {
@@ -75,6 +76,18 @@ const handleClose = () => {
       new Decimal(physicalCount.value),
       notes.value
     );
+
+    // NOTIFICATION INTEGRATION (Level 2: Cash Closing)
+    const notifStore = useNotificationsStore();
+    notifStore.addNotification({
+      type: 'finance',
+      title: 'Cierre de Caja',
+      message: `Cierre exitoso. Total reportado: ${formatCurrency(new Decimal(physicalCount.value))}`,
+      icon: 'banknote',
+      isRead: false,
+      metadata: { amount: parseFloat(physicalCount.value) }
+    });
+
     emit('closed');
     close();
   } catch (error) {

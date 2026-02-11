@@ -225,6 +225,61 @@ export const authRepository = {
         }
     },
 
+    /**
+     * Cambio de contraseña autenticado (desde perfil)
+     * Step 1: Verifica contraseña actual con signInWithPassword
+     * Step 2: Actualiza a nueva contraseña con updateUser
+     */
+    async changePassword(
+        email: string,
+        currentPassword: string,
+        newPassword: string
+    ): Promise<{ success: boolean; error?: string; code?: string }> {
+        try {
+            // Step 1: Verify current password
+            const { error: verifyError } = await supabase.auth.signInWithPassword({
+                email,
+                password: currentPassword
+            });
+
+            if (verifyError) {
+                logger.warn('[AuthRepository] Password verification failed:', verifyError.message);
+                return {
+                    success: false,
+                    error: 'La contraseña actual es incorrecta',
+                    code: 'INVALID_CURRENT_PASSWORD'
+                };
+            }
+
+            // Step 2: Update to new password
+            const { error: updateError } = await supabase.auth.updateUser({
+                password: newPassword
+            });
+
+            if (updateError) {
+                logger.error('[AuthRepository] Password update failed:', updateError.message);
+                return {
+                    success: false,
+                    error: updateError.message,
+                    code: 'UPDATE_FAILED'
+                };
+            }
+
+            // Step 3: Invalidate all other active sessions
+            // Keeps current session alive, forces re-auth on all other devices
+            await supabase.auth.signOut({ scope: 'others' });
+            logger.log('[AuthRepository] Password changed — all other sessions invalidated');
+
+            return { success: true };
+        } catch (err) {
+            logger.error('[AuthRepository] Unexpected password change error:', err);
+            return {
+                success: false,
+                error: 'Error inesperado al cambiar la contraseña'
+            };
+        }
+    },
+
     async logout() {
         await supabase.auth.signOut();
     },
