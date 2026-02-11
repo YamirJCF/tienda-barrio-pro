@@ -44,6 +44,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }, // Acceso permitido solo a usuarios registrados (aunque no verificados)
   },
   {
+    path: '/legal/privacy',
+    name: 'privacy-policy',
+    component: () => import('../views/PrivacyPolicyView.vue'),
+    meta: { guest: true, requiresAuth: false },
+  },
+  {
     path: '/update-password',
     name: 'update-password',
     component: () => import('../views/auth/UpdatePasswordView.vue'),

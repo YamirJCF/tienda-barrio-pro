@@ -349,7 +349,19 @@ const handleLogin = async () => {
         </form>
       </div>
       
-      <!-- Footer links removed from here as they are integrated in steps -->
+      
+      <!-- Footer links -->
+      <div class="mt-8 text-center animate-[fadeIn_0.5s_ease-out_0.2s_both]">
+          <router-link 
+            to="/legal/privacy" 
+            class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          >
+            Política de Privacidad y Tratamiento de Datos
+          </router-link>
+          <p class="text-[10px] text-gray-300 dark:text-gray-600 mt-2">
+             &copy; 2026 Tienda de Barrio Pro
+          </p>
+      </div>
     </div>
 
   </div>

@@ -31,6 +31,7 @@ const confirmPassword = ref('');
 // SPEC-006: PIN eliminado del registro, se configura en AdminHub
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
+const acceptedTerms = ref(false); // Compliance Ley 1581
 
 // ============================================
 // UI STATE
@@ -56,6 +57,7 @@ const isConfirmPasswordValid = computed(
   () => confirmPassword.value.length >= 6 && confirmPassword.value === password.value,
 );
 // SPEC-006: PIN ya no se valida en registro
+const isTermsAccepted = computed(() => acceptedTerms.value === true);
 
 // Botón habilitado solo si todo es válido y no está cargando
 const canSubmit = computed(() => {
@@ -65,6 +67,7 @@ const canSubmit = computed(() => {
     isEmailValid.value &&
     isPasswordValid.value &&
     isConfirmPasswordValid.value && // T-004: Agregado
+    isTermsAccepted.value && // Compliance Ley 1581
     !isLoading.value
   );
 });
@@ -347,6 +350,28 @@ const handleSubmit = async () => {
             </p>
           </div>
         </div>
+      </section>
+
+      <!-- Legal Compliance Section -->
+      <section class="px-5 mt-4">
+          <div class="flex items-start gap-3 p-3 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg border border-emerald-100 dark:border-white/5">
+              <div class="flex items-center h-5">
+                <input
+                  id="terms"
+                  v-model="acceptedTerms"
+                  type="checkbox"
+                  class="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 bg-white"
+                />
+              </div>
+              <div class="ml-1 text-sm">
+                <label for="terms" class="font-medium text-gray-700 dark:text-gray-300">
+                  Acepto la <router-link to="/legal/privacy" target="_blank" class="text-emerald-600 hover:underline">Política de Datos</router-link>
+                </label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012.
+                </p>
+              </div>
+          </div>
       </section>
 
       <!-- SPEC-006: Sección de PIN eliminada - se configura en AdminHub después del registro -->

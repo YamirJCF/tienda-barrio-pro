@@ -13,6 +13,13 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ---
 
+## [v1.1.0] - 2026-02-11 - "Legal & Compliance"
+
+### Legal (Colombia)
+- **Habeas Data (Ley 1581):** Implementada política de privacidad y tratamiento de datos.
+- **Consentimiento:** Checkbox obligatorio en registro y link visible en login.
+- **Documentación:** Agregado `POLITICA_DATOS_COLOMBIA.md`.
+
 ## [v1.0.0] - 2026-02-11 - "Producción Estable"
 
 ### Seguridad (Security)

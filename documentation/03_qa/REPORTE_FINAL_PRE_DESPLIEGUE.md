@@ -1,7 +1,7 @@
-# 🏁 Reporte Final de Auditoría Pre-Despliegue (v1.0.0)
+# 🏁 Reporte Final de Auditoría Pre-Despliegue (v1.1.0)
 
 **Fecha:** 11 de Febrero, 2026
-**Versión Auditada:** `release/v1.0.0-rc1` (Candidate)
+**Versión Auditada:** `release/v1.1.0` (Legal Compliance)
 **Resultado Global:** 🟢 **APROBADO PARA DESPLIEGUE**
 
 ---
@@ -15,6 +15,7 @@ Se han mitigado 3 vulnerabilidades críticas y saneado el código base para prod
 | **OT-001** | 🔴 Exposición de `GEMINI_API_KEY` en cliente | Eliminación de inyección en `vite.config.ts`. Creación de politica BFF. | ✅ Resuelto |
 | **OT-002** | 🟡 Logs de depuración en consola | Implementación de `logger` condicional y limpieza de `init.ts`. | ✅ Resuelto |
 | **OT-003** | 🟠 Incertidumbre en RLS | Generación de script de auditoría SQL (`rls_audit_script.sql`). | ✅ Verificado (100% Cobertura) |
+| **LEGAL** | 🔴 Cumplimiento Ley 1581 | Implementación de Política de Privacidad y Consentimiento UI. | ✅ Implementado (v1.1.0) |
 
 ---
 
