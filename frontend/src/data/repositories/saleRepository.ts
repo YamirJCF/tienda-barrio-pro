@@ -9,7 +9,7 @@
  * @module data/repositories/saleRepository
  */
 
-import { Sale, SaleItem } from '../../types';
+import { Sale, SaleItem, SalePayload, SaleResponse } from '../../types';
 import { Database } from '../../types/database.types';
 import { Decimal } from 'decimal.js';
 import { createSupabaseRepository, EntityRepository, RepositoryMappers } from './supabaseAdapter';
@@ -97,25 +97,9 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
 /**
  * Interface extending base repository with sale-specific methods
  */
-interface SalePayload {
-    items: {
-        productId: string;
-        productName: string;
-        quantity: number;
-        price: any; // Decimal or number
-        subtotal: any; // Decimal or number
-    }[];
-    total: any; // Decimal or number
-    paymentMethod: 'cash' | 'nequi' | 'fiado' | 'mixed';
-    payments?: { method: 'cash' | 'nequi' | 'fiado', amount: number, reference?: string }[];
-    amountReceived?: any; // Decimal or number
-    clientId?: string;
-    employeeId?: string;
-}
-
 export interface SaleRepository extends EntityRepository<Sale> {
-    processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }>;
-    forceSale(saleData: SalePayload, storeId: string, justification: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }>;
+    processSale(saleData: SalePayload, storeId: string): Promise<SaleResponse>;
+    forceSale(saleData: SalePayload, storeId: string, justification: string): Promise<SaleResponse>;
     getByDateRange(startDate: string, endDate: string, storeId?: string): Promise<Sale[]>;
     getLastTicketNumber(storeId: string): Promise<number>;
     voidSale(saleId: string, reason: string): Promise<{ success: boolean; error?: string }>;
@@ -174,7 +158,9 @@ export const saleRepository: SaleRepository = {
                     const rpcPayload = {
                         p_store_id: storeId,
                         p_client_id: saleData.clientId || null,
-                        p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod,
+                        // Fix: Map 'mixed' to 'cash' for backend compatibility (as V2 doesn't explicitly handle mixed yet)
+                        // Pass other methods (nequi, fiado, etc) through as they are in the DB.
+                        p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'cash' : saleData.paymentMethod,
                         p_amount_received: p_amount_received,
                         p_items: p_items
                     };

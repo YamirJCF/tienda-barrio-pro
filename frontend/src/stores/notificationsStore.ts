@@ -32,7 +32,10 @@ export interface SystemNotification {
     clientId?: string;
     saleId?: string;
     amount?: number;
-    requestId?: string; // New: for access requests
+    requestId?: string;
+    employeeName?: string;
+    deviceInfo?: string;
+    status?: 'pending' | 'approved' | 'rejected';
   };
 }
 
@@ -138,9 +141,14 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const hasUnread = computed(() => unreadCount.value > 0);
 
   const sortedByDate = computed(() =>
-    [...notifications.value].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    ),
+    [...notifications.value].sort((a, b) => {
+      // Access request notifications always on top
+      const aIsAccess = a.metadata?.requestId ? 1 : 0;
+      const bIsAccess = b.metadata?.requestId ? 1 : 0;
+      if (aIsAccess !== bIsAccess) return bIsAccess - aIsAccess;
+      // Within same priority, sort by date (newest first)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }),
   );
 
   // Actions
@@ -203,8 +211,17 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   };
 
+  const updateNotification = (id: string, updates: Partial<Omit<SystemNotification, 'id' | 'createdAt'>>): void => {
+    const notification = notifications.value.find((n) => n.id === id);
+    if (notification) {
+      Object.assign(notification, updates);
+      saveToStorage(notifications.value);
+    }
+  };
+
   const clearAll = (): void => {
-    notifications.value = [];
+    // Preserve access request notifications (only removable via revoke/reject)
+    notifications.value = notifications.value.filter(n => !!n.metadata?.requestId);
     saveToStorage(notifications.value);
   };
 
@@ -217,6 +234,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     markAsRead,
     markAllAsRead,
     removeNotification,
+    updateNotification,
     clearAll,
   };
 });

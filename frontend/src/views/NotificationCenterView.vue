@@ -6,9 +6,10 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useNotificationsStore, type SystemNotification } from '../stores/notificationsStore';
-import { useAuthStore } from '../stores/auth';
+
 import { formatRelativeTime } from '../composables/useRelativeTime';
 import { logger } from '../utils/logger';
+import NotificationSecurityWidget from '../components/NotificationSecurityWidget.vue';
 import { 
   ArrowLeft, 
   ChevronLeft, 
@@ -22,10 +23,14 @@ import {
 
 const router = useRouter();
 const notificationsStore = useNotificationsStore();
-const authStore = useAuthStore();
+
 
 // Computed
-const notifications = computed(() => notificationsStore.sortedByDate);
+const notifications = computed(() => {
+  // Filter out access requests as they are shown in the Security Widget
+  return notificationsStore.sortedByDate.filter(n => !n.metadata?.requestId);
+});
+
 const hasUnreadNotifications = computed(() => notificationsStore.hasUnread);
 const isEmpty = computed(() => notifications.value.length === 0);
 
@@ -38,39 +43,7 @@ const markAllAsRead = () => {
   notificationsStore.markAllAsRead();
 };
 
-const handleApprove = async (notificationId: string) => {
-  const notification = notificationsStore.notifications.find(n => n.id === notificationId);
-  const requestId = notification?.metadata?.requestId;
-  
-  if (requestId) {
-    // Call backend to actually approve the request
-    const success = await authStore.approveRequest(requestId);
-    if (!success) {
-      logger.error('[NotificationCenter] Failed to approve request:', requestId);
-    }
-    // approveRequest already removes the notification internally
-  } else {
-    // Fallback: just remove the notification if no requestId
-    notificationsStore.removeNotification(notificationId);
-  }
-};
 
-const handleReject = async (notificationId: string) => {
-  const notification = notificationsStore.notifications.find(n => n.id === notificationId);
-  const requestId = notification?.metadata?.requestId;
-  
-  if (requestId) {
-    // Call backend to actually reject the request
-    const success = await authStore.rejectRequest(requestId);
-    if (!success) {
-      logger.error('[NotificationCenter] Failed to reject request:', requestId);
-    }
-    // rejectRequest already removes the notification internally
-  } else {
-    // Fallback: just remove the notification if no requestId
-    notificationsStore.removeNotification(notificationId);
-  }
-};
 
 const getIconConfig = (notification: SystemNotification) => {
   const bgColorMap: Record<string, string> = {
@@ -147,6 +120,10 @@ const getRelativeTime = (createdAt: string) => {
 
     <!-- Notification List Container -->
     <main class="flex-1 overflow-y-auto p-4 space-y-3 scroll-smooth">
+      
+      <!-- Security Widget (Always Top Priority) -->
+      <NotificationSecurityWidget />
+
       <!-- Empty State -->
       <div
         v-if="isEmpty"
@@ -201,8 +178,9 @@ const getRelativeTime = (createdAt: string) => {
                   >
                     {{ getRelativeTime(notification.createdAt) }}
                   </span>
-                  <!-- T-013: Botón eliminar notificación -->
+                  <!-- T-013: Botón eliminar notificación (hidden for access requests) -->
                   <button
+                    v-if="!notification.metadata?.requestId"
                     @click.stop="notificationsStore.removeNotification(notification.id)"
                     class="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     title="Eliminar"
@@ -222,22 +200,6 @@ const getRelativeTime = (createdAt: string) => {
               >
                 {{ notification.message }}
               </p>
-
-              <!-- Integrated Actions (for actionable notifications) -->
-              <div v-if="notification.actionable && !notification.isRead" class="flex gap-3">
-                <button
-                  @click="handleReject(notification.id)"
-                  class="flex-1 h-10 px-3 rounded-lg border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold shadow-sm active:bg-slate-50 dark:active:bg-slate-700 transition-colors flex items-center justify-center"
-                >
-                  Rechazar
-                </button>
-                <button
-                  @click="handleApprove(notification.id)"
-                  class="flex-1 h-10 px-3 rounded-lg bg-primary text-white text-sm font-bold shadow-sm active:bg-blue-600 transition-colors flex items-center justify-center"
-                >
-                  Aprobar
-                </button>
-              </div>
             </div>
           </div>
 

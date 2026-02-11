@@ -357,9 +357,9 @@ async function processItem(item: QueueItem): Promise<boolean> {
             const rpcPayload = {
                 p_store_id: item.payload.storeId || item.payload.store_id,
                 p_client_id: item.payload.clientId || item.payload.client_id || null,
-                p_payment_method: ['cash', 'mixed', 'efectivo'].includes(item.payload.paymentMethod)
-                    ? 'efectivo'
-                    : (item.payload.paymentMethod || 'efectivo'),
+                p_payment_method: (['cash', 'mixed', 'efectivo'].includes(item.payload.paymentMethod))
+                    ? 'cash' // Standardize on 'cash' code
+                    : (item.payload.paymentMethod || 'cash'),
                 p_amount_received: numericAmountReceived,
                 p_items: p_items_v2
             };

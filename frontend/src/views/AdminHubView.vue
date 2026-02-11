@@ -20,14 +20,13 @@ import {
   ChevronRight, 
   KeyRound,
   AlertTriangle,
-  Smartphone,
   Truck,
   ClipboardList
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 import SmartDailySummary from '../components/SmartDailySummary.vue';
 import SmartSupplySection from '../components/reports/SmartSupplySection.vue';
-import DeviceApprovalModal from '../components/DeviceApprovalModal.vue';
+
 // WO-004: Modal de PIN para SPEC-006 (consolidado)
 // T-008: Modal de PIN para SPEC-006 (consolidado)
 import PinSetupModal from '../components/PinSetupModal.vue';
@@ -46,12 +45,9 @@ const presenceStore = usePresenceStore(); // Initialize
 const initialTab = (route.query.tab as string) || 'gestion';
 const activeTab = ref<'reportes' | 'gestion'>(initialTab as any);
 
-const showDeviceModal = ref(false);
+
 // WO-004: State para modal de PIN (consolidado)
 const showPinSetupModal = ref(false);
-// T-008: State para confirmación de cierre de tienda - REMOVED
-
-// Computed - Estado operativo de la tienda - REMOVED
 
 // Methods
 const goBack = () => {
@@ -86,11 +82,6 @@ onMounted(() => {
     else if ((tabName === 'gestion') && !authStore.isAdmin) {
        if (authStore.canViewReports) activeTab.value = 'reportes';
     }
-
-    // ACCESS REQUEST FETCH (covers direct navigation to AdminHub)
-    if (authStore.isAdmin) {
-      authStore.fetchPendingRequests();
-    }
 });
 
 // Sincronizar URL cuando cambia la pestaña
@@ -119,15 +110,6 @@ watch(activeTab, (newTab) => {
           Administración
         </h2>
         <div class="flex items-center justify-end gap-2">
-          <!-- Device Management Trigger -->
-          <button
-            @click="showDeviceModal = true"
-            aria-label="Gestionar Dispositivos"
-            class="flex items-center justify-center h-9 w-9 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-             <Smartphone :size="20" stroke-width="2" />
-          </button>
-
           <button
             @click="showProfileSidebar = true"
             aria-label="Perfil de usuario"
@@ -441,12 +423,13 @@ watch(activeTab, (newTab) => {
         </div>
       </section>
 
-      <!-- WO-004: Sección Seguridad (PIN) -->
       <section v-if="activeTab === 'gestion'">
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">🔐 Seguridad</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
         >
+
+
           <!-- Configurar/Cambiar PIN de Caja (inteligente) -->
           <button
             @click="showPinSetupModal = true"
@@ -489,8 +472,7 @@ watch(activeTab, (newTab) => {
       <div class="h-10"></div>
     </main>
 
-    <!-- Device Approval Modal -->
-    <DeviceApprovalModal v-model="showDeviceModal" />
+
 
     <!-- WO-004: Modal de PIN (consolidado con detección automática de modo) -->
     <PinSetupModal
@@ -513,5 +495,4 @@ watch(activeTab, (newTab) => {
 </template>
 
 <style scoped>
-/* REMOVED: Deprecated material symbols style block */
 </style>

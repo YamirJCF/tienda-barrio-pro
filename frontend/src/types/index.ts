@@ -54,7 +54,7 @@ export interface Sale {
     timestamp: string; // ISO Full
     items: SaleItem[];
     total: Decimal;
-    paymentMethod: 'cash' | 'nequi' | 'fiado' | 'mixed';
+    paymentMethod: string; // Dynamic from DB
     payments?: PaymentTransaction[]; // WO-PHASE3-001: For mixed payments
     roundingDifference?: Decimal;
     effectiveTotal: Decimal;
@@ -65,9 +65,35 @@ export interface Sale {
     syncStatus?: 'synced' | 'pending' | 'failed'; // SPEC-012: Sync Protocol
 }
 
+// WO-002: DTO for Sale Creation (Repository Pattern)
+export interface SalePayload {
+    items: {
+        productId: string;
+        productName: string;
+        quantity: number;
+        price: any; // Decimal or number
+        subtotal: any; // Decimal or number
+    }[];
+    total: any; // Decimal or number
+    paymentMethod: string; // Dynamic
+    payments?: { method: string, amount: number, reference?: string }[];
+    amountReceived?: any; // Decimal or number
+    clientId?: string;
+    employeeId?: string;
+    forceOffline?: boolean;
+}
+
+export interface SaleResponse {
+    success: boolean;
+    id?: string;
+    ticketNumber?: number;
+    error?: string;
+    code?: string;
+}
+
 // WO-PHASE3-001: Mixed Payments Transaction
 export interface PaymentTransaction {
-    method: 'cash' | 'nequi' | 'fiado';
+    method: string; // Dynamic from DB
     amount: Decimal;
     reference?: string; // For Nequi/Transfer
 }
