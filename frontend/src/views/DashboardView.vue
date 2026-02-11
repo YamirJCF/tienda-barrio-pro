@@ -6,6 +6,7 @@ import { useInventoryStore } from '../stores/inventory';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
 import { useNotificationsStore } from '../stores/notificationsStore';
+import { useDevicesStore } from '../stores/devices'; // [NEW]
 import { Decimal } from 'decimal.js';
 import { 
   Bell, 
@@ -33,6 +34,7 @@ const inventoryStore = useInventoryStore();
 const cashRegisterStore = useCashRegisterStore(); // Added for sync
 const authStore = useAuthStore();
 const notificationsStore = useNotificationsStore();
+const devicesStore = useDevicesStore(); // [NEW]
 const { formatWithSign } = useCurrencyFormat();
 
 // State
@@ -55,9 +57,9 @@ onMounted(async () => {
 
   // ACCESS REQUEST POLLING (replaces deleted AccessRequestsWidget)
   if (authStore.isAdmin) {
-    authStore.fetchPendingRequests(); // Initial fetch
+    devicesStore.fetchPendingRequests(); // [UPDATED]
     pollInterval = setInterval(() => {
-      authStore.fetchPendingRequests();
+      devicesStore.fetchPendingRequests(); // [UPDATED]
     }, 30_000); // Every 30 seconds
   }
 });

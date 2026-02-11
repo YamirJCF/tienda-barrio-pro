@@ -422,19 +422,17 @@ export const authRepository = {
                 if (error) throw error;
                 return data;
             } else {
-                // Reject: Update status directly (if RLS allows) or use a RPC if needed.
-                // Assuming RLS allows update if Admin.
-                const { data, error } = await supabase
+                // Reject/Revoke: Update status directly
+                const { error } = await supabase
                     .from('daily_passes')
                     .update({
                         status: 'rejected',
-                        resolved_by: reviewedBy, // If column exists
-                        // resolved_at: new Date().toISOString() // handled by trigger usually or manual
+                        resolved_by: reviewedBy,
                     })
                     .eq('id', requestId);
 
                 if (error) throw error;
-                return data;
+                return true;
             }
         } catch (err) {
             logger.error('[AuthRepo] Approval Error', err);

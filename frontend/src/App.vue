@@ -38,6 +38,10 @@ useRevocationGuard();
 const errorDetected = ref(false);
 const router = useRouter();
 const authStore = useAuthStore(); // Initialize Auth Store
+// Initialize Config Store (Global System Config)
+import { useConfigStore } from './stores/config';
+const configStore = useConfigStore();
+configStore.init();
 
 // ============================================
 // FRD-012-R: Sync Auth Required Handler (RN-R05)
