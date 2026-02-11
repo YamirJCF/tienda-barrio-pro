@@ -225,16 +225,6 @@ export const useInventoryStore = defineStore(
         const errorMsg = e.message || 'Error al agregar producto';
         error.value = errorMsg;
         logger.error('[InventoryStore] Add failed', e);
-
-        // Surface error to the user via notification
-        const notificationsStore = useNotificationsStore();
-        notificationsStore.addNotification({
-          type: 'general',
-          icon: 'error',
-          title: 'Error al crear producto',
-          message: errorMsg,
-          isRead: false
-        });
       }
       return null;
     };
@@ -266,16 +256,6 @@ export const useInventoryStore = defineStore(
         const errorMsg = e.message || 'Error al actualizar producto';
         error.value = errorMsg;
         logger.error('[InventoryStore] Update failed', e);
-
-        // Surface error to the user via notification
-        const notificationsStore = useNotificationsStore();
-        notificationsStore.addNotification({
-          type: 'general',
-          icon: 'error',
-          title: 'Error al actualizar producto',
-          message: errorMsg,
-          isRead: false
-        });
       }
       return null;
     };

@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { usePreferencesStore } from '../stores/preferences';
 import { useAuthStore } from '../stores/auth';
 import { logger } from '../utils/logger';
+import ChangePasswordModal from '@/components/security/ChangePasswordModal.vue';
 import { 
   X, 
   Settings, 
@@ -90,9 +91,9 @@ const closeSidebar = () => {
   emit('close');
 };
 
-const handleLogout = () => {
+const handleLogout = async () => {
   emit('logout');
-  authStore.logout();
+  await authStore.logout();
   router.push('/login');
 };
 
@@ -105,10 +106,12 @@ const navigateToHelp = () => {
   logger.log('Navigate to help center');
 };
 
+// Password change modal state
+const showPasswordModal = ref(false);
+
 const navigateToSecurity = () => {
-  // T-005: Navegación a configuración de seguridad (Admin > Gestión > Seguridad)
-  router.push('/admin?tab=gestion');
-  emit('close');
+  // Open password change modal directly
+  showPasswordModal.value = true;
 };
 </script>
 
@@ -437,6 +440,9 @@ const navigateToSecurity = () => {
       </div>
     </Transition>
   </Teleport>
+
+  <!-- Password Change Modal -->
+  <ChangePasswordModal v-model="showPasswordModal" />
 </template>
 
 <style scoped>

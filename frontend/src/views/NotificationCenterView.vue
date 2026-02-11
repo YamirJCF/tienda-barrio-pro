@@ -6,6 +6,7 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useNotificationsStore, type SystemNotification } from '../stores/notificationsStore';
+import { useAuthStore } from '../stores/auth';
 import { formatRelativeTime } from '../composables/useRelativeTime';
 import { logger } from '../utils/logger';
 import { 
@@ -21,6 +22,7 @@ import {
 
 const router = useRouter();
 const notificationsStore = useNotificationsStore();
+const authStore = useAuthStore();
 
 // Computed
 const notifications = computed(() => notificationsStore.sortedByDate);
@@ -36,14 +38,38 @@ const markAllAsRead = () => {
   notificationsStore.markAllAsRead();
 };
 
-const handleApprove = (notificationId: string) => {
-  logger.log('Approved:', notificationId);
-  notificationsStore.removeNotification(notificationId);
+const handleApprove = async (notificationId: string) => {
+  const notification = notificationsStore.notifications.find(n => n.id === notificationId);
+  const requestId = notification?.metadata?.requestId;
+  
+  if (requestId) {
+    // Call backend to actually approve the request
+    const success = await authStore.approveRequest(requestId);
+    if (!success) {
+      logger.error('[NotificationCenter] Failed to approve request:', requestId);
+    }
+    // approveRequest already removes the notification internally
+  } else {
+    // Fallback: just remove the notification if no requestId
+    notificationsStore.removeNotification(notificationId);
+  }
 };
 
-const handleReject = (notificationId: string) => {
-  logger.log('Rejected:', notificationId);
-  notificationsStore.removeNotification(notificationId);
+const handleReject = async (notificationId: string) => {
+  const notification = notificationsStore.notifications.find(n => n.id === notificationId);
+  const requestId = notification?.metadata?.requestId;
+  
+  if (requestId) {
+    // Call backend to actually reject the request
+    const success = await authStore.rejectRequest(requestId);
+    if (!success) {
+      logger.error('[NotificationCenter] Failed to reject request:', requestId);
+    }
+    // rejectRequest already removes the notification internally
+  } else {
+    // Fallback: just remove the notification if no requestId
+    notificationsStore.removeNotification(notificationId);
+  }
 };
 
 const getIconConfig = (notification: SystemNotification) => {

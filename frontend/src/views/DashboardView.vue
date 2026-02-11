@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useInventoryStore } from '../stores/inventory';
@@ -25,7 +25,6 @@ import BottomNav from '../components/BottomNav.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 import SyncIndicator from '../components/common/SyncIndicator.vue';
 import StatCard from '../components/ui/StatCard.vue';
-import AccessRequestsWidget from '../components/admin/AccessRequestsWidget.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 
 const router = useRouter();
@@ -37,7 +36,7 @@ const notificationsStore = useNotificationsStore();
 const { formatWithSign } = useCurrencyFormat();
 
 // State
-
+let pollInterval: ReturnType<typeof setInterval> | null = null;
 const profileSidebarOpen = ref(false);
 
 onMounted(async () => {
@@ -52,6 +51,21 @@ onMounted(async () => {
       await cashRegisterStore.syncFromBackend(activeStoreId);
   } else {
       console.warn('⚠️ [Dashboard] No active store ID found for sync');
+  }
+
+  // ACCESS REQUEST POLLING (replaces deleted AccessRequestsWidget)
+  if (authStore.isAdmin) {
+    authStore.fetchPendingRequests(); // Initial fetch
+    pollInterval = setInterval(() => {
+      authStore.fetchPendingRequests();
+    }, 30_000); // Every 30 seconds
+  }
+});
+
+onUnmounted(() => {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
   }
 });
 
@@ -95,9 +109,9 @@ const closeProfileSidebar = () => {
   profileSidebarOpen.value = false;
 };
 
-const handleLogout = () => {
+const handleLogout = async () => {
   profileSidebarOpen.value = false;
-  authStore.logout();
+  await authStore.logout();
   router.push('/login');
 };
 
@@ -138,9 +152,6 @@ const navigateToNotifications = () => {
     </header>
 
     <main class="p-4 flex flex-col gap-6 max-w-md mx-auto">
-      <!-- Admin: Access Requests Widget -->
-      <AccessRequestsWidget v-if="isAdmin" />
-
       <!-- Status Card -->
       <div
         class="w-full rounded-2xl bg-slate-800 p-6 text-white shadow-lg flex flex-col items-center gap-6"

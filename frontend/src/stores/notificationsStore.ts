@@ -8,6 +8,14 @@ import { ref, computed } from 'vue';
 
 // Types
 export type NotificationType = 'security' | 'inventory' | 'finance' | 'general';
+export type NotificationActionType = 'approve' | 'reject' | 'view';
+
+export interface NotificationAction {
+  label: string;
+  action: NotificationActionType;
+  primary?: boolean;
+  payload?: any;
+}
 
 export interface SystemNotification {
   id: string;
@@ -18,11 +26,13 @@ export interface SystemNotification {
   createdAt: string;
   isRead: boolean;
   actionable?: boolean;
+  actions?: NotificationAction[];
   metadata?: {
     productId?: string;
     clientId?: string;
     saleId?: string;
     amount?: number;
+    requestId?: string; // New: for access requests
   };
 }
 

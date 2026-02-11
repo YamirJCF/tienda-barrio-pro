@@ -86,6 +86,11 @@ onMounted(() => {
     else if ((tabName === 'gestion') && !authStore.isAdmin) {
        if (authStore.canViewReports) activeTab.value = 'reportes';
     }
+
+    // ACCESS REQUEST FETCH (covers direct navigation to AdminHub)
+    if (authStore.isAdmin) {
+      authStore.fetchPendingRequests();
+    }
 });
 
 // Sincronizar URL cuando cambia la pestaña
