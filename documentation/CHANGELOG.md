@@ -13,6 +13,23 @@ y este proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ---
 
+## [v1.0.0] - 2026-02-11 - "Producción Estable"
+
+### Seguridad (Security)
+- **CRÍTICO:** Eliminada exposición de API Keys en el cliente (`vite.config.ts`).
+- **CRÍTICO:** Verificación total de políticas RLS en Supabase (100% Cobertura).
+- Implementado `SECURITY_ADVISORY.md` para gestión de secretos en IA.
+
+### Limpieza (Cleanup)
+- Eliminados `console.log` de producción en Router e Inicialización.
+- Estandarización de logs mediante utilidad `logger`.
+
+### Infraestructura
+- Script de auditoría SQL generado en `supabase/verifications/`.
+- Build de producción optimizado y verificado.
+
+---
+
 ## [v0.5.1] - 2026-01-27 - "Documentación y Límites"
 
 ### Documentación (Docs)
