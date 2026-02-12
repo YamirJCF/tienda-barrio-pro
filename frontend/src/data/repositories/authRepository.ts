@@ -58,6 +58,9 @@ async function ensureAnonymousSession() {
     }
 }
 
+
+const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
+
 export const authRepository = {
     /**
      * Registra una nueva tienda (Admin) usando Supabase Auth Nativo
@@ -77,7 +80,7 @@ export const authRepository = {
                         store_name: data.storeName,
                         owner_name: data.ownerName,
                     },
-                    emailRedirectTo: `${window.location.origin}/` // Redirect to root so Hash Router picks up #access_token
+                    emailRedirectTo: `${SITE_URL}/` // Redirect to root so Hash Router picks up #access_token
                 }
             });
 
@@ -111,6 +114,41 @@ export const authRepository = {
                 success: false,
                 error: 'Error inesperado durante el registro'
             };
+        }
+    },
+
+    /**
+     * Reenvía el correo de confirmación de registro
+     */
+    async resendConfirmationEmail(email: string): Promise<{ success: boolean; error?: string; code?: string }> {
+        try {
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email: email,
+                options: {
+                    emailRedirectTo: `${SITE_URL}/`
+                }
+            });
+
+            if (error) {
+                logger.error('[AuthRepository] Resend Error:', error);
+
+                // Rate Limit Check
+                if (error.status === 429) {
+                    return {
+                        success: false,
+                        error: 'Demasiados intentos. Por favor espera 60 segundos.',
+                        code: 'RATE_LIMIT'
+                    };
+                }
+
+                return { success: false, error: error.message };
+            }
+
+            return { success: true };
+        } catch (err) {
+            logger.error('[AuthRepository] Unexpected resend error:', err);
+            return { success: false, error: 'Error inesperado.' };
         }
     },
 
@@ -210,7 +248,7 @@ export const authRepository = {
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
                 // Use root path - AuthCallbackView will detect PASSWORD_RECOVERY event
                 // and redirect to /update-password. Avoids double hash fragment conflict.
-                redirectTo: `${window.location.origin}/`
+                redirectTo: `${SITE_URL}/`
             });
 
             if (error) {

@@ -36,12 +36,63 @@ Despliega la sección "Environment Variables" y agrega las siguientes claves (co
 
 > **Nota:** No agregues claves de Gemini ni otras si no las estás usando en el frontend (recuerda que eliminamos el uso directo de API Keys).
 
-## 3. Desplegar
+### E. Configurar URL del Sitio (Site URL) - ⚠️ CRÍTICO PARA REDIRECCIONES
+Para que los correos de confirmación y recuperación de contraseña funcionen (y no te manden a `localhost`):
+1.  En Vercel, copia la **URL de tu despliegue** (ej. `https://tienda-barrio-pro.vercel.app`).
+2.  Agrega esta URL como variable de entorno `VITE_SITE_URL` en Vercel (opcional, pero recomendado).
+
+## 3. Configuración en Supabase (OBLIGATORIO)
+
+Para corregir el error de "redirección a localhost":
+
+1.  Ve a tu Dashboard de Supabase.
+2.  Entra a **Authentication** > **URL Configuration**.
+3.  En **Site URL**, pega la URL de tu proyecto en Vercel (ej. `https://tienda-barrio-pro.vercel.app`).
+4.  En **Redirect URLs**, asegúrate de agregar también:
+    -   `https://tienda-barrio-pro.vercel.app/`
+    -   `https://tienda-barrio-pro.vercel.app/**`
+5.  Guarda los cambios.
+
+
+## 4. Desplegar
 1. Haz clic en **Deploy**.
 2. Espera a que termine el build (debería tomar ~1-2 minutos).
 3. Si ves fuegos artificiales 🎊, ¡Felicidades!
 
-## 4. Verificación Post-Deploy
-1. Entra a la URL que te da Vercel.
-2. Intenta hacer Login.
-3. Verifica que NO aparezcan errores de "Connection refused" en la consola.
+
+## 6. Personalización de Correos (Para que dejen de verse en inglés)
+
+Hemos creado plantillas profesionales en español para que tus correos se vean bien.
+
+1.  Ve a `documentation/email_templates` en este proyecto para ver los códigos HTML.
+2.  Ve al Dashboard de Supabase > **Authentication** > **Email Templates**.
+
+### A. Confirmar Registro (Confirm Signup)
+-   **Subject**: `Confirma tu cuenta en Tienda de Barrio Pro`
+-   **Body**: Copia el contenido de `documentation/email_templates/confirm_signup.html` y pégalo en la pestaña "Source".
+
+### B. Recuperar Contraseña (Reset Password)
+-   **Subject**: `Restablece tu contraseña - Tienda de Barrio Pro`
+-   **Body**: Copia el contenido de `documentation/email_templates/reset_password.html` y pégalo en la pestaña "Source".
+
+### C. Invitación de Usuario (Invite User)
+-   **Subject**: `Te han invitado a Tienda de Barrio Pro`
+-   **Body**: Copia el contenido de `documentation/email_templates/invite_user.html` y pégalo en la pestaña "Source".
+
+
+Si quieres cambiar la dirección `tienda-barrio-pro.vercel.app`, tienes dos opciones:
+
+### A. Cambiar solo el subdominio (Gratis)
+Si solo quieres cambiar el nombre (ej. `mi-tienda-nueva.vercel.app`):
+1. Ve a **Settings > Domains**.
+2. Haz clic en el botón **"Edit"** del dominio actual.
+3. Escribe el nuevo nombre y dale a **Save**.
+4. Vercel actualizará la URL automáticamente.
+
+### B. Agregar un Dominio Propio (ej. `.com`, `.com.co`)
+Si compraste un dominio en otro sitio (GoDaddy, Namecheap, etc.):
+1. Ve a **Settings > Domains**.
+2. Escribe tu dominio (ej. `www.mitienda.com`) y dale a **Add**.
+3. Vercel te dará unos registros **DNS** (A y CNAME).
+4. Copia esos valores en el panel de control de donde compraste el dominio.
+5. Espera unos minutos a que se propaguen y ¡listo!

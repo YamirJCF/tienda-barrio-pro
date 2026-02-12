@@ -6,13 +6,17 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { Mail } from 'lucide-vue-next';
-// import { useAuthStore } from '../stores/auth'; // Si necesitamos verificar estado
-// import BaseButton from '@/components/ui/BaseButton.vue';
+import { useRoute } from 'vue-router';
+import { authRepository } from '@/data/repositories/authRepository';
+import { useToast } from 'vue-toastification';
+
+const route = useRoute();
+const toast = useToast();
 
 const router = useRouter();
 
 // State
-const email = ref('tu@email.com'); // Idealmente vendría del Store o query param
+const email = ref((route.query.email as string) || 'tu@email.com');
 const cooldown = ref(60);
 const canResend = ref(false);
 
@@ -35,9 +39,25 @@ const startTimer = () => {
 const handleResend = async () => {
     if (!canResend.value) return;
     
-    // TODO: Call Store action resendVerificationEmail()
+    // Disable button immediately
+    canResend.value = false;
+    
+    const { success, error, code } = await authRepository.resendConfirmationEmail(email.value);
 
-    startTimer();
+    if (success) {
+        toast.success('Correo reenviado exitosamente');
+        startTimer(); // Restart cooldown only on success or if we want to prevent spamming
+    } else {
+        if (code === 'RATE_LIMIT') {
+            toast.warning(error || 'Espera unos segundos antes de intentar de nuevo');
+            startTimer(); // Restart timer if rate limited
+        } else {
+            toast.error(error || 'Error al reenviar correo');
+            // Allow retry immediately if it was a network error? Or force wait?
+            // Let's force wait to prevent spamming the error
+            startTimer();
+        }
+    }
 };
 
 const goBack = () => {
@@ -45,10 +65,6 @@ const goBack = () => {
 };
 
 onMounted(() => {
-    // Si pasamos el email por query param
-    // const route = useRoute();
-    // if (route.query.email) email.value = route.query.email as string;
-    
     startTimer();
 });
 
