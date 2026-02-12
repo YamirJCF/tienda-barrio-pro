@@ -1,4 +1,6 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
+
 
 // Vite environment variables type definitions
 interface ImportMetaEnv {
