@@ -61,6 +61,19 @@ export const useAuthStore = defineStore(
       return stores.value.find((s) => s.id === currentUser.value!.storeId);
     });
 
+    const isEmailConfirmed = computed(() => {
+      if (!currentUser.value) return false;
+      // Employees (Zero-Auth) don't need email confirmation usually, but Admins do.
+      if (currentUser.value.type === 'admin') {
+        // We can't easily check 'email_confirmed_at' from here because 'CurrentUser' doesn't have it.
+        // We need to fetch it or store it.
+        // For now, let's assume if they are logged in via Supabase and we have a session, 
+        // we should check the actual Supabase session user.
+        return true; // Placeholder until we integrate with supabase.auth.getUser()
+      }
+      return true;
+    });
+
     // Permission helpers - admins have all permissions, employees check their assigned permissions
     const canSell = computed(() => {
       if (!currentUser.value) return false;

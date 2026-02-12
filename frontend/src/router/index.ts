@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { logger } from '../utils/logger';
+import { supabase } from '../lib/supabase'; // Import supabase client
 import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
 // OFFLINE-CRITICAL: Eager imports for offline functionality
@@ -206,9 +207,29 @@ router.beforeEach(async (to, from, next) => {
   // WO-008: Daily Access Check (Zero Trust)
   // =============================================
   // =============================================
+  // WO-008: Email Confirmation Check (Security Enforcer)
+  // =============================================
+  if (isAuthenticated && to.meta.requiresAuth && to.name !== 'check-email' && to.name !== 'waiting-verification') {
+    // Only check for Admins (Owner accounts)
+    if (authStore.isAdmin) {
+      // We need to check the real session status
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // If session exists but email is not confirmed
+      if (session?.user && !session.user.email_confirmed_at && session.user.identities && session.user.identities[0].identity_data?.email_verified !== true) {
+        logger.warn('🔒 [Router] Unverified email detected. Redirecting to check-email.');
+        return next({
+          name: 'waiting-verification',
+          query: { email: session.user.email }
+        });
+      }
+    }
+  }
+
+  // =============================================
   // WO-008: Daily Access Check (Zero Trust)
   // =============================================
-  if (isAuthenticated && to.meta.requiresAuth && to.name !== 'daily-waiting-room' && to.name !== 'check-email') {
+  if (isAuthenticated && to.meta.requiresAuth && to.name !== 'daily-waiting-room' && to.name !== 'check-email' && to.name !== 'waiting-verification') {
     const dailyStatus = authStore.dailyAccessStatus;
 
     // FIX: Force clean login on startup if session is expired
