@@ -11,9 +11,7 @@ import {
   Delete,
   X,
   CheckCircle2,
-  Trash2,
   Search,
-  UserPlus,
   QrCode,
   Smartphone
 } from 'lucide-vue-next';
@@ -26,7 +24,6 @@ import type { PaymentTransaction } from '../../types';
 interface Props {
   modelValue: boolean;
   total: Decimal;
-  allowFiado?: boolean;
   selectedClient?: Client | null;
 }
 
@@ -237,158 +234,183 @@ watch(currentMethod, (newMethod) => {
     @update:modelValue="close"
     class="checkout-modal"
   >
-    <div class="flex flex-col h-[85vh] md:h-auto overflow-hidden">
+    <div class="flex flex-col h-[85vh] md:h-[75vh] max-h-[800px] overflow-hidden">
         
-        <!-- HEADER / TOTAL -->
-        <div class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-6 flex flex-col items-center justify-center shrink-0">
-             <div class="w-12 h-1 bg-slate-200 rounded-full mb-4"></div>
-            <h2 class="text-slate-500 font-bold tracking-widest text-sm uppercase mb-1">Total a Pagar</h2>
-            <div class="text-5xl font-black text-slate-900 dark:text-white tracking-tighter">
-                {{ formatCurrency(total) }}
+        <!-- 1. HEADER (Total Summary) -->
+        <header class="flex flex-col items-center justify-center py-4 bg-gray-50 dark:bg-background-dark border-b border-gray-100 dark:border-gray-800 shrink-0">
+            <h3 class="text-gray-500 dark:text-gray-400 text-sm font-semibold tracking-wide uppercase mb-1">Total a Pagar</h3>
+            <div class="flex items-baseline gap-1">
+                <span class="text-3xl font-bold text-gray-800 dark:text-white">$</span>
+                <span class="text-4xl font-black text-gray-900 dark:text-primary tracking-tight">{{ formatCurrency(total) }}</span>
             </div>
-        </div>
+        </header>
 
-        <!-- DYNAMIC TABS -->
-        <div class="flex border-b border-slate-100 dark:border-slate-800 overflow-x-auto shrink-0">
+        <!-- 2. Payment Method Tabs (Dynamic) -->
+        <div class="grid w-full border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-surface-dark shrink-0"
+             :style="{ gridTemplateColumns: `repeat(${activeMethods.length}, 1fr)` }">
             <button 
                 v-for="method in activeMethods" 
                 :key="method.code"
                 @click="currentMethod = method.code"
-                class="flex-1 py-4 flex flex-col items-center justify-center gap-1 relative transition-colors min-w-[80px]"
-                :class="currentMethod === method.code ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                class="relative flex flex-col items-center justify-center py-3 gap-1 group transition-opacity"
+                :class="currentMethod === method.code 
+                    ? '' 
+                    : 'opacity-60 hover:opacity-100'"
             >
-                <component :is="getIconForMethod(method.code)" class="mb-1" />
-                
-                <span class="text-sm font-bold capitalize">{{ method.name }}</span>
-                
-                <div v-if="currentMethod === method.code" class="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500 rounded-t-full mx-8"></div>
+                <component 
+                    :is="getIconForMethod(method.code)" 
+                    :size="28"
+                    :class="currentMethod === method.code 
+                        ? 'text-emerald-600 dark:text-primary' 
+                        : 'text-gray-400 dark:text-gray-500'" 
+                />
+                <span 
+                    class="text-xs font-bold tracking-wide capitalize"
+                    :class="currentMethod === method.code 
+                        ? 'text-emerald-800 dark:text-emerald-100' 
+                        : 'text-gray-500 dark:text-gray-400'"
+                >{{ method.name }}</span>
+                <!-- Active Indicator -->
+                <div v-if="currentMethod === method.code" class="absolute bottom-0 w-full h-[4px] bg-emerald-500 dark:bg-primary rounded-t-full"></div>
+                <div v-if="currentMethod === method.code" class="absolute inset-0 bg-emerald-50/50 dark:bg-primary/5"></div>
             </button>
         </div>
 
-        <!-- MAIN LAYOUT -->
-        <div class="flex-1 flex flex-col md:flex-row bg-white dark:bg-slate-900 min-h-0">
+        <!-- 3. Dynamic Body Content -->
+        <main class="flex-1 overflow-y-auto p-4 flex flex-col">
             
-            <!-- LEFT: INPUT & INFO -->
-            <div class="flex-1 p-6 flex flex-col gap-4 border-r border-slate-100 dark:border-slate-800 overflow-y-auto">
-                
-                <!-- SCENARIO A: Cash-Like (Allows Change) -->
-                <div v-if="allowsChange">
-                   <label class="text-sm font-bold text-slate-500 mb-1 block">Dinero Recibido</label>
-                   <div class="relative group cursor-default">
-                       <div class="text-4xl font-bold text-slate-900 dark:text-white p-4 border-2 rounded-2xl border-blue-400 bg-blue-50/50 dark:bg-blue-900/10 flex items-center justify-center">
-                           <span v-if="!inputAmount && payments.length === 0" class="text-slate-300">$ 0</span>
-                           <span v-else>{{ formatCurrency(totalMoneyOnTable) }}</span>
-                           <div class="w-1 h-8 bg-blue-500 animate-pulse ml-1"></div>
-                       </div>
-                   </div>
-                </div>
-
-                <!-- SCENARIO B: Reference-Based (Nequi, Cards) -->
-                <div v-else-if="!isFiado">
-                   <label class="text-sm font-bold text-slate-500 mb-1 block">Monto a Transferir</label>
-                   <div class="relative">
-                       <div class="text-4xl font-bold text-pink-600 dark:text-pink-400 p-4 border-2 rounded-2xl border-pink-200 dark:border-pink-900 bg-pink-50 dark:bg-pink-900/10 flex items-center justify-center">
-                           {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : totalMoneyOnTable) }}
-                       </div>
-                   </div>
-                   <p class="text-xs text-center text-slate-400 mt-2">Pago exacto requerido.</p>
-                </div>
-
-                <!-- SCENARIO C: Fiado w/ Client -->
-                <div v-else class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                    <label class="text-xs font-bold text-indigo-500 uppercase mb-2 block">Cliente Seleccionado</label>
-                    <div v-if="selectedFiadoClient" class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-indigo-200 dark:bg-indigo-700 flex items-center justify-center text-indigo-700 dark:text-white font-bold">
-                            {{ selectedFiadoClient.name.substring(0,2).toUpperCase() }}
+            <!-- Scenario A: Efectivo (Cash-Like) -->
+            <div v-if="allowsChange" class="flex flex-1 flex-col gap-4 h-full">
+                <div class="flex flex-col md:grid md:grid-cols-12 gap-4 flex-1 h-full">
+                    
+                    <!-- Left Column: Input & Feedback (Mobile: Row 1 Side-by-Side | Desktop: Col 1 Stacked) -->
+                    <div class="w-full md:col-span-5 flex flex-row md:flex-col gap-3 md:justify-center items-start bg-white dark:bg-transparent rounded-xl md:rounded-none p-1 md:p-0">
+                        <!-- Input Display Box -->
+                        <div class="flex-1 w-full">
+                            <span class="text-gray-500 dark:text-gray-400 text-[10px] md:text-sm font-bold mb-1.5 block ml-1 uppercase tracking-wide truncate">Dinero Recibido</span>
+                            <div class="relative flex items-center w-full h-14 md:h-16 px-3 bg-white dark:bg-background-dark border-[3px] border-sky-500 rounded-xl shadow-sm ring-2 md:ring-4 ring-sky-100 dark:ring-sky-900/20 transition-all">
+                                <span class="text-gray-400 text-lg md:text-xl font-bold mr-1">$</span>
+                                <span v-if="!inputAmount && payments.length === 0" class="text-xl md:text-2xl font-bold text-gray-300 truncate">0</span>
+                                <span v-else class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white truncate">{{ formatCurrency(totalMoneyOnTable) }}</span>
+                                <span class="absolute right-3 w-1.5 h-5 md:w-2 md:h-6 bg-sky-500 animate-pulse rounded-full"></span>
+                            </div>
                         </div>
-                        <div>
-                            <div class="font-bold text-slate-900 dark:text-white text-lg">{{ selectedFiadoClient.name }}</div>
-                            <div class="text-xs text-slate-500">Cupo: {{ formatCurrency(selectedFiadoClient.creditLimit) }}</div>
+
+                        <!-- Feedback Box (Calculated Change) -->
+                        <div class="flex-1 w-full flex flex-col">
+                            <span class="text-emerald-600 dark:text-emerald-400 text-[10px] md:text-sm font-bold mb-1.5 block ml-1 uppercase tracking-wide truncate">Vueltos a dar</span>
+                            <div class="h-14 md:h-16 w-full bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 flex items-center shadow-sm">
+                                <span class="text-emerald-700/50 dark:text-emerald-500/50 text-lg md:text-xl font-bold mr-2">$</span>
+                                <span class="text-xl md:text-2xl font-black text-emerald-800 dark:text-emerald-300 truncate">{{ formatCurrency(change) }}</span>
+                            </div>
                         </div>
-                        <button @click="selectedFiadoClient = null" class="ml-auto text-slate-400 hover:text-red-500">
-                            <X :size="20" />
+
+                        <!-- DESKTOP ONLY: Quick Action for exact cash -->
+                        <button @click="setExactAmount" class="hidden md:block mt-auto py-3 px-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-400 transition-all text-center">
+                            Usar monto exacto
                         </button>
                     </div>
-                    <div v-else class="text-center py-4 text-slate-400 italic text-sm">
-                        Selecciona un cliente de la lista
+
+                    <!-- Right Column: Numpad (Mobile: Row 2 Full Width | Desktop: Col 2) -->
+                    <div class="w-full md:col-span-7 md:pl-2 flex flex-col justify-end md:justify-center">
+                        <div class="grid grid-cols-3 gap-3 md:gap-2.5 h-auto md:h-full md:max-h-[320px]">
+                            <!-- Row 1-3 -->
+                            <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click="handleNum(n.toString())"
+                                class="flex items-center justify-center rounded-xl md:rounded-lg bg-white md:bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-3xl md:text-xl font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-16 md:h-auto">
+                                {{ n }}
+                            </button>
+                            <!-- Row 4 -->
+                            <button @click="handleNum('000')" class="flex items-center justify-center rounded-xl md:rounded-lg bg-gray-50 md:bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-xl md:text-lg font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation tracking-tighter h-16 md:h-auto">000</button>
+                            <button @click="handleNum('0')" class="flex items-center justify-center rounded-xl md:rounded-lg bg-white md:bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white dark:text-gray-100 text-3xl md:text-xl font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-16 md:h-auto">0</button>
+                            <button @click="handleBackspace" class="flex items-center justify-center rounded-xl md:rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-16 md:h-auto">
+                                <Delete :size="28" />
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <!-- REFERENCE INPUT (Dynamic) -->
-                <div v-if="requiresReference || isFiado" class="animate-fade-in mt-1">
-                    <label class="text-xs font-bold text-slate-400 uppercase mb-1 block">
-                        {{ isFiado ? 'Nota de Fiado' : 'Referencia / Comprobante (Opcional)' }}
-                    </label>
-                    <input 
-                        v-model="reference"
-                        :type="isNequi ? 'number' : 'text'"
-                        :placeholder="isFiado ? 'Ej: Paga quincena...' : 'Últimos 4 dígitos'"
-                        class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                    />
-                </div>
+                    <!-- MOBILE ONLY: Quick Action for exact cash (Row 3) -->
+                    <button @click="setExactAmount" class="md:hidden w-full py-3.5 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-wide active:bg-gray-50 dark:active:bg-gray-800 transition-colors">
+                        Usar monto exacto
+                    </button>
 
-                <!-- VUELTOS (Dynamic) -->
-                <div v-if="allowsChange" class="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 flex flex-col items-center justify-center mt-2">
-                    <span class="text-emerald-600 dark:text-emerald-400 font-bold text-xs uppercase tracking-widest">Vueltos a Dar</span>
-                    <span class="text-3xl font-black text-emerald-600 dark:text-emerald-400">{{ formatCurrency(change) }}</span>
                 </div>
-
-                <!-- PAYMENTS LIST -->
+            
+                <!-- PAYMENTS LIST (inside cash view) -->
                 <div v-if="payments.length > 0" class="mt-2 space-y-2">
-                    <p class="text-xs font-bold text-slate-400 uppercase">Pagos Parciales</p>
-                    <div v-for="(p, i) in payments" :key="i" class="flex justify-between items-center text-sm p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                        <span class="capitalize font-medium text-slate-700 dark:text-slate-300">{{ p.method }}</span>
+                    <p class="text-xs font-bold text-gray-400 uppercase">Pagos Parciales</p>
+                    <div v-for="(p, i) in payments" :key="i" class="flex justify-between items-center text-sm p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <span class="capitalize font-medium text-gray-700 dark:text-gray-300">{{ p.method }}</span>
                         <div class="flex items-center gap-2">
                             <span>{{ formatCurrency(p.amount) }}</span>
                             <button @click="removePayment(i)" class="text-red-400"><X :size="14" /></button>
                         </div>
                     </div>
                 </div>
-
             </div>
 
-            <!-- RIGHT PANELS -->
-            <div class="w-full md:w-[400px] bg-slate-50 dark:bg-slate-900 p-6 shrink-0 flex flex-col">
-                
-                <!-- SCENARIO A: NUMPAD (If Method Allows Change or Input) -->
-                <div v-if="allowsChange" class="grid grid-cols-3 gap-3 h-full">
-                    <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click="handleNum(n.toString())"
-                        class="h-16 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-2xl font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 active:scale-95 transition-all">
-                        {{ n }}
-                    </button>
-                    <button @click="handleNum('000')" class="h-16 rounded-2xl bg-slate-200 dark:bg-slate-700 text-xl font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-300">000</button>
-                    <button @click="handleNum('0')" class="h-16 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-2xl font-bold text-slate-700 dark:text-slate-200">0</button>
-                    <button @click="handleBackspace" class="h-16 rounded-2xl bg-red-100 dark:bg-red-900/30 text-red-500 hover:bg-red-200 flex items-center justify-center">
-                        <Delete :size="28" />
-                    </button>
+            <!-- Scenario B: Nequi/Digital -->
+            <div v-else-if="isNequi" class="flex flex-col items-center justify-center gap-6 h-full py-8 text-center">
+                <div class="w-24 h-24 bg-pink-100 dark:bg-pink-900/20 rounded-full flex items-center justify-center mb-2">
+                    <QrCode :size="48" class="text-pink-600 dark:text-pink-400" />
                 </div>
-
-                <!-- SCENARIO B: NEQUI/DIGITAL Specific UI -->
-                <div v-else-if="isNequi" class="flex flex-col h-full items-center justify-center text-center p-4">
-                    <div class="w-32 h-32 bg-pink-100 dark:bg-pink-900/20 rounded-3xl flex items-center justify-center mb-6 animate-bounce-in">
-                        <QrCode :size="64" class="text-pink-600 dark:text-pink-400" />
-                    </div>
-                    <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-2">Pago Digital</h3>
-                    <p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed max-w-[240px]">
-                        Nequi o Daviplata. Verifica el comprobante.
+                <div>
+                    <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Pago con Nequi / Daviplata</h4>
+                    <p class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed">
+                        Solicita al cliente el pago exacto de <strong class="text-gray-900 dark:text-white">$ {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : total) }}</strong>.
                     </p>
-                    <div class="mt-6 p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm w-full">
-                         <div class="text-xs uppercase text-slate-400 font-bold mb-1">Monto Exacto</div>
-                         <div class="text-2xl font-black text-slate-900 dark:text-white">
-                             {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : totalMoneyOnTable) }}
-                         </div>
+                </div>
+                <div class="w-full max-w-xs mt-4">
+                    <label class="block text-left mb-1 text-xs font-semibold text-gray-500 uppercase">Referencia (Opcional)</label>
+                    <input 
+                        v-model="reference"
+                        type="number"
+                        class="w-full h-12 rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-center text-lg font-medium focus:ring-pink-500 focus:border-pink-500" 
+                        placeholder="Últimos 4 dígitos"
+                    />
+                </div>
+            </div>
+
+            <!-- Scenario C: Fiado w/ Client Selection -->
+            <div v-else-if="isFiado" class="flex flex-col h-full gap-4">
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                    <label class="text-xs font-bold text-indigo-500 uppercase mb-2 block">Cliente Seleccionado</label>
+                    <div v-if="selectedFiadoClient" class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-indigo-200 dark:bg-indigo-700 flex items-center justify-center text-indigo-700 dark:text-white font-bold">
+                            {{ selectedFiadoClient.name.substring(0,2).toUpperCase() }}
+                        </div>
+                        <div>
+                            <div class="font-bold text-gray-900 dark:text-white text-lg">{{ selectedFiadoClient.name }}</div>
+                            <div class="text-xs text-gray-500">Cupo: {{ formatCurrency(selectedFiadoClient.creditLimit) }}</div>
+                        </div>
+                        <button @click="selectedFiadoClient = null" class="ml-auto text-gray-400 hover:text-red-500">
+                            <X :size="20" />
+                        </button>
+                    </div>
+                    <div v-else class="text-center py-4 text-gray-400 italic text-sm">
+                        Selecciona un cliente de la lista
                     </div>
                 </div>
 
-                <!-- SCENARIO C: CLIENT SEARCH (Fiado) -->
-                <div v-else-if="isFiado" class="flex flex-col h-full gap-3">
+                <!-- Reference / Note -->
+                <div class="animate-fade-in">
+                    <label class="text-xs font-bold text-gray-400 uppercase mb-1 block">Nota de Fiado</label>
+                    <input 
+                        v-model="reference"
+                        type="text"
+                        placeholder="Ej: Paga quincena..."
+                        class="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    />
+                </div>
+
+                <!-- Client Search -->
+                <div class="flex flex-col flex-1 gap-3 min-h-0">
                     <div class="relative">
-                        <Search :size="20" class="absolute left-3 top-3 text-slate-400" />
+                        <Search :size="20" class="absolute left-3 top-3 text-gray-400" />
                         <input 
                             v-model="clientSearch"
                             type="text" 
                             placeholder="Buscar cliente..."
-                            class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                            class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
                     <div class="flex-1 overflow-y-auto min-h-0 space-y-2 pr-1">
@@ -397,9 +419,9 @@ watch(currentMethod, (newMethod) => {
                             :key="client.id"
                             @click="selectedFiadoClient = client"
                             class="w-full p-3 rounded-xl border flex items-center gap-3 transition-all text-left"
-                            :class="selectedFiadoClient?.id === client.id ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-slate-800 border-slate-100 hover:border-indigo-300'"
+                            :class="selectedFiadoClient?.id === client.id ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-gray-800 border-gray-100 hover:border-indigo-300'"
                         >
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 bg-slate-100 text-slate-600">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 bg-gray-100 text-gray-600">
                                 {{ client.name.substring(0,2).toUpperCase() }}
                             </div>
                             <div class="min-w-0">
@@ -408,55 +430,58 @@ watch(currentMethod, (newMethod) => {
                         </button>
                     </div>
                 </div>
-                
-                 <!-- SCENARIO D: Generic Info (Card, etc) -->
-                 <div v-else class="flex flex-col h-full items-center justify-center text-center p-4">
-                    <CreditCard :size="64" class="text-slate-300 mb-4" />
-                    <p class="text-slate-500">Procesar pago por {{ currentPaymentMethod?.name }}</p>
-                    <div class="mt-6 p-3 bg-white dark:bg-slate-800 rounded-xl border shadow-sm w-full">
-                         <div class="text-xs uppercase text-slate-400 font-bold mb-1">Monto Exacto</div>
-                         <div class="text-2xl font-black text-slate-900 dark:text-white">
-                             {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : totalMoneyOnTable) }}
-                         </div>
+            </div>
+
+            <!-- Scenario D: Generic (Card, etc) -->
+            <div v-else class="flex flex-col items-center justify-center gap-4 h-full py-8 text-center">
+                <component :is="getIconForMethod(currentMethod)" :size="64" class="text-gray-300 dark:text-gray-600 mb-2" />
+                <p class="text-gray-500 dark:text-gray-400">Procesar pago por {{ currentPaymentMethod?.name }}</p>
+                <div class="w-full max-w-xs mt-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div class="text-xs uppercase text-gray-400 font-bold mb-1">Monto Exacto</div>
+                    <div class="text-2xl font-black text-gray-900 dark:text-white">
+                        $ {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : totalMoneyOnTable) }}
                     </div>
-                 </div>
-
+                </div>
+                <!-- Reference for cards -->
+                <div v-if="requiresReference" class="w-full max-w-xs">
+                    <label class="text-xs font-bold text-gray-400 uppercase mb-1 block text-left">Referencia (Opcional)</label>
+                    <input 
+                        v-model="reference"
+                        type="text"
+                        placeholder="Últimos 4 dígitos"
+                        class="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    />
+                </div>
             </div>
-        </div>
 
-        <!-- FOOTER -->
-        <div class="p-6 pt-2 bg-white dark:bg-slate-900 flex flex-col gap-4 border-t border-slate-100 dark:border-slate-800">
-            <div class="flex justify-center" v-if="allowsChange">
-                <button @click="setExactAmount" class="px-6 py-2 rounded-full border border-dashed text-slate-500 text-sm hover:bg-slate-50">
-                    Usar monto exacto
-                </button>
-            </div>
+        </main>
 
+        <!-- 4. Footer (Action) -->
+        <footer class="p-4 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800 shrink-0">
             <button 
                 @click="confirmTransaction"
                 :disabled="!canComplete && !isFiado"
-                class="w-full h-16 bg-emerald-600 hover:bg-emerald-50 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-2xl flex items-center justify-between px-8 shadow-xl shadow-emerald-500/20 active:scale-[0.98] transition-all"
+                class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:dark:bg-gray-800 disabled:dark:text-gray-600 rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none flex flex-col items-center justify-center transition-all duration-200"
             >
-                <span class="text-lg font-medium">Completar Venta</span>
-                <div class="flex items-center gap-3">
-                    <div class="text-right">
-                        <div class="text-xs uppercase opacity-80">Confirmar</div>
-                        <div class="text-xl font-black leading-none" v-if="isFiado">Fiado</div>
-                        <div class="text-xl font-black leading-none" v-else-if="change.gt(0)">Vueltos: {{ formatCurrency(change) }}</div>
-                        <div class="text-xl font-black leading-none" v-else>Exacto</div>
+                <div class="flex flex-col items-center leading-none">
+                    <span class="text-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-0.5">Completar Venta</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-white text-xl font-black tracking-wide">CONFIRMAR</span>
+                        <span v-if="change.gt(0)" class="bg-emerald-800/40 text-emerald-50 text-[10px] px-1.5 py-0.5 rounded font-bold ml-1">
+                            ${{ formatCurrency(change) }}
+                        </span>
                     </div>
-                    <CheckCircle2 :size="24" />
                 </div>
             </button>
-        </div>
+        </footer>
 
     </div>
   </UIBaseModal>
 </template>
+
 <style scoped>
-/* Override BaseModal padding if needed via class */
+/* Override BaseModal content overflow for checkout layout */
 .checkout-modal :deep(.relative) {
-    /* Ensure modal content fits screen in mobile */
     max-height: 100dvh;
 }
 </style>

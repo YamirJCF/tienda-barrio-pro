@@ -43,9 +43,6 @@ export const useCartStore = defineStore(
 
     // Helper: Validar stock disponible
     const checkStockAvailability = (productId: string, quantityToAdd: Decimal | number): boolean => {
-      // Force Sale (FRD-014): Admins can bypass stock checks
-      if (authStore.isAdmin) return true;
-
       const product = inventoryStore.products.find(p => p.id === productId);
       if (!product) return false; // Producto no encontrado en inventario local
 
@@ -58,6 +55,10 @@ export const useCartStore = defineStore(
 
       // Stock actual en repositorio
       const currentStock = product.stock instanceof Decimal ? product.stock : new Decimal(product.stock);
+
+      // Force Sale (FRD-014): Admins can bypass stock checks ONLY if Online
+      // Offline mode requires strict stock validation to preserve data integrity
+      if (authStore.isAdmin && navigator.onLine) return true;
 
       // Si el stock es infinito (servicio?) o configuración permite negativos:
       // Por ahora, asumimos bloqueo estricto si stock < solicitado

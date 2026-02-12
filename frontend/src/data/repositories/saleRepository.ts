@@ -205,9 +205,13 @@ export const saleRepository: SaleRepository = {
                 }
                 const qty = new Decimal(item.quantity);
                 if (product.stock.lt(qty)) {
+                    // SPEC-011: Format decimal stock for UX consistency
+                    const { formatStock } = (await import('../../composables/useQuantityFormat')).useQuantityFormat();
+                    const available = formatStock(product.stock, product.measurementUnit);
+
                     return {
                         success: false,
-                        error: `Stock insuficiente para ${item.productName}. Disponible: ${product.stock.toFixed(0)}`
+                        error: `Stock insuficiente para ${item.productName}. Disponible: ${available} ${product.measurementUnit || ''}`
                     };
                 }
             }
@@ -229,8 +233,16 @@ export const saleRepository: SaleRepository = {
 
             // 2.3 Queue Sale
             const newId = crypto.randomUUID();
+
+            // FIX: Map payment method to DB constraint values BEFORE queueing
+            // DB Constraint: payment_method = ANY (ARRAY['efectivo', 'nequi', 'daviplata', 'fiado'])
+            const dbPaymentMethod = (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash')
+                ? 'efectivo'
+                : saleData.paymentMethod;
+
             const enrichedPayload = {
                 ...saleData,
+                paymentMethod: dbPaymentMethod, // Override with DB-compatible value
                 total: new Decimal(saleData.total).toNumber(),
                 amountReceived: saleData.amountReceived ? new Decimal(saleData.amountReceived).toNumber() : undefined,
                 items: saleData.items.map(item => ({

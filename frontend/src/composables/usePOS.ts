@@ -1,7 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { useCartStore } from '../stores/cart';
 import { useInventoryStore } from '../stores/inventory';
-import { useAuthStore } from '../stores/auth';
 import type { Product } from '../types';
 import { useNotifications } from './useNotifications';
 import { logger } from '../utils/logger';
@@ -16,7 +15,6 @@ interface UsePOSConfig {
 export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOSConfig) {
     const cartStore = useCartStore();
     const inventoryStore = useInventoryStore();
-    const authStore = useAuthStore();
     const { showSuccess, showError } = useNotifications();
 
     // State
@@ -49,18 +47,14 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
             const rawQty = parseInt(pluInput.value);
             const qty = isNaN(rawQty) || rawQty <= 0 ? 1 : rawQty;
 
-            if (pendingProduct.value.stock.lt(qty)) {
-                if (!authStore.isAdmin) {
-                    showError(`Stock insuficiente. Disponible: ${pendingProduct.value.stock.toFixed(0)} un`);
-                    clearPluInput();
-                    resetModes();
-                    return;
-                }
-                // Admin override: Allow adding to trigger Force Sale at checkout
+            // Stock validation delegated to cart.ts (single source of truth)
+            const added = cartStore.addItem({ ...pendingProduct.value, quantity: qty });
+            if (!added) {
+                showError(`Stock insuficiente para ${pendingProduct.value.name}`);
+                clearPluInput();
+                resetModes();
+                return;
             }
-
-            // Validation only - Stock is deducted at checkout
-            cartStore.addItem({ ...pendingProduct.value, quantity: qty });
             showSuccess(`${qty}x ${pendingProduct.value.name} agregado`);
             clearPluInput();
             resetModes();
@@ -119,18 +113,14 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
                     return;
                 }
 
-                if (pendingProduct.value.stock.lt(quantity)) {
-                    if (!authStore.isAdmin) {
-                        showError(`Stock insuficiente. Disponible: ${pendingProduct.value.stock.toFixed(0)} un`);
-                        clearPluInput();
-                        resetModes();
-                        return;
-                    }
-                    // Admin override: Allow adding
+                // Stock validation delegated to cart.ts (single source of truth)
+                const added = cartStore.addItem({ ...pendingProduct.value, quantity });
+                if (!added) {
+                    showError(`Stock insuficiente para ${pendingProduct.value.name}`);
+                    clearPluInput();
+                    resetModes();
+                    return;
                 }
-
-                // Validation only
-                cartStore.addItem({ ...pendingProduct.value, quantity });
                 showSuccess(`${quantity}x ${pendingProduct.value.name} agregado`);
                 clearPluInput();
                 resetModes();
@@ -156,18 +146,14 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
 
             const quantity = pendingQuantity.value;
 
-            if (product.stock.lt(quantity)) {
-                if (!authStore.isAdmin) {
-                    showError(`Stock insuficiente. Disponible: ${product.stock.toFixed(0)} un`);
-                    clearPluInput();
-                    resetModes();
-                    return;
-                }
-                // Admin override: Allow adding
+            // Stock validation delegated to cart.ts (single source of truth)
+            const added = cartStore.addItem({ ...product, quantity });
+            if (!added) {
+                showError(`Stock insuficiente para ${product.name}`);
+                clearPluInput();
+                resetModes();
+                return;
             }
-
-            // Validation only
-            cartStore.addItem({ ...product, quantity });
             showSuccess(`${quantity}x ${product.name} agregado`);
             clearPluInput();
             resetModes();

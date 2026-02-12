@@ -157,7 +157,10 @@ const goToDashboard = () => {
 // Add product from search modal
 const addProductFromSearch = (product: Product) => {
   const quantity = pendingQuantity.value;
-  cartStore.addItem({ ...product, quantity });
+  const added = cartStore.addItem({ ...product, quantity });
+  if (!added) {
+    showError(`Stock insuficiente para ${product.name}`);
+  }
 // inventoryStore.updateStock(product.id, -quantity); // REMOVED: Stock deduction happens at Sale Complete
   resetModes();
 };
@@ -193,7 +196,7 @@ const handleWeightCalculatorConfirm = (data: {
   quantity: Decimal;
   subtotal: Decimal;
 }) => {
-  cartStore.addWeighableItem({
+  const added = cartStore.addWeighableItem({
     id: data.product.id,
     name: data.product.name,
     price: data.product.price,
@@ -201,6 +204,9 @@ const handleWeightCalculatorConfirm = (data: {
     unit: data.product.measurementUnit,
     subtotal: data.subtotal,
   });
+  if (!added) {
+    showError(`Stock insuficiente para ${data.product.name}`);
+  }
 // inventoryStore.updateStock(data.product.id, data.quantity.neg()); // REMOVED
 };
 
