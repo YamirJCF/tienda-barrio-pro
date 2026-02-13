@@ -1,24 +1,44 @@
 <template>
-  <div>
-    <div @click="handleIndicatorClick" 
-         class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-300 cursor-pointer hover:opacity-90 active:scale-95 select-none"
-         :class="statusClasses">
-      
-      <!-- Icon with pulse animation -->
-      <div class="relative">
-        <i class="material-icons text-lg">{{ statusIcon }}</i>
-        <div v-if="isSyncing" class="absolute inset-0 rounded-full bg-current opacity-75 animate-ping"></div>
-        <div v-if="hasConflicts" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white"></div>
+  <div class="relative group">
+    <!-- Traffic Light Dot -->
+    <div 
+      @click="handleIndicatorClick"
+      class="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 cursor-pointer hover:bg-black/5 dark:hover:bg-white/10"
+      :title="statusFormatted"
+    >
+      <div class="relative flex h-3 w-3">
+        <!-- Ping animation for active states -->
+        <span 
+          v-if="isSyncing || !supabaseConnected" 
+          class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+          :class="dotColor"
+        ></span>
+        
+        <!-- Main Dot -->
+        <span 
+          class="relative inline-flex rounded-full h-3 w-3 transition-colors duration-300"
+          :class="dotColor"
+        ></span>
+
+        <!-- Conflict Badge (Tiny Red Dot) -->
+        <span v-if="hasConflicts" class="absolute -top-1 -right-1 flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+        </span>
       </div>
+    </div>
 
-      <!-- Status Text -->
-      <span class="hidden sm:inline">{{ statusFormatted }}</span>
-
-      <!-- Queue Counter -->
-      <span v-if="queueSize > 0 || dlqSize > 0" 
-            class="ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-white/20">
-        {{ hasConflicts ? dlqSize : queueSize }}
-      </span>
+    <!-- Status Tooltip (Hover) -->
+    <div class="absolute right-0 top-full mt-2 w-max max-w-xs px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg shadow-xl opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 pointer-events-none z-50">
+      <div class="flex flex-col gap-0.5">
+        <span class="font-bold">{{ statusFormatted }}</span>
+        <span v-if="queueSize > 0" class="text-gray-300 text-[10px]">
+          {{ queueSize }} cambios pendientes
+        </span>
+        <span v-if="hasConflicts" class="text-red-300 text-[10px]">
+          {{ dlqSize }} errores requieren atención
+        </span>
+      </div>
     </div>
 
     <!-- Conflict Modal -->
@@ -44,28 +64,20 @@ let interval: ReturnType<typeof setInterval> | null = null;
 const isSyncing = computed(() => isOnline.value && queueSize.value > 0);
 const hasConflicts = computed(() => dlqSize.value > 0);
 
-const statusClasses = computed(() => {
-  if (hasConflicts.value) return 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200';
-  if (!isOnline.value) return 'bg-gray-100 text-gray-600 border border-gray-300';
-  if (!supabaseConnected.value) return 'bg-amber-100 text-amber-700 border border-amber-300';
-  if (queueSize.value > 0) return 'bg-blue-100 text-blue-700 border border-blue-300';
-  return 'bg-green-100 text-green-700 border border-green-300';
-});
-
-const statusIcon = computed(() => {
-  if (hasConflicts.value) return 'error';
-  if (!isOnline.value) return 'cloud_off';
-  if (!supabaseConnected.value) return 'cloud_queue';
-  if (queueSize.value > 0) return 'sync';
-  return 'cloud_done';
+const dotColor = computed(() => {
+  if (hasConflicts.value) return 'bg-red-500';
+  if (!isOnline.value) return 'bg-gray-400';
+  if (!supabaseConnected.value) return 'bg-amber-400';
+  if (queueSize.value > 0) return 'bg-blue-500';
+  return 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]'; // Glowing green
 });
 
 const statusFormatted = computed(() => {
-  if (hasConflicts.value) return 'Conflictos';
-  if (!isOnline.value) return 'Offline';
+  if (hasConflicts.value) return 'Atención requerida';
+  if (!isOnline.value) return 'Modo Offline';
   if (!supabaseConnected.value) return 'Reconectando...';
   if (queueSize.value > 0) return 'Sincronizando...';
-  return 'En línea';
+  return 'Sistema Operativo';
 });
 
 // Poll queue size

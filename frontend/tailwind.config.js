@@ -28,6 +28,11 @@ export default {
             fontFamily: {
                 'display': ['Work Sans', 'sans-serif'],
                 'body': ['Work Sans', 'sans-serif'],
+                'mono': ['JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', 'monospace'],
+            },
+            boxShadow: {
+                'soft': '0 2px 8px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02)',
+                'soft-md': '0 4px 16px 0 rgba(0, 0, 0, 0.08), 0 2px 4px 0 rgba(0, 0, 0, 0.04)',
             },
             borderRadius: {
                 'DEFAULT': '0.5rem',

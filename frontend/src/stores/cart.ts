@@ -8,6 +8,21 @@ import { useInventoryStore } from './inventory';
 import { useAuthStore } from './auth';
 import type { CartItem, MeasurementUnit } from '../types';
 
+// ============================================
+// PUBLIC TYPES
+// ============================================
+export type AddItemResult = {
+  success: boolean;
+  warning?: string;    // Non-blocking: item entered cart but exceeds stock
+  stockError?: string; // Blocking: item rejected
+};
+
+type StockCheckResult = {
+  status: 'ok' | 'blocked' | 'force_allowed';
+  availableStock?: string; // Formatted for UI display
+  unit?: string;
+};
+
 export const useCartStore = defineStore(
   'cart',
   () => {
@@ -41,10 +56,35 @@ export const useCartStore = defineStore(
         .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
     });
 
-    // Helper: Validar stock disponible
-    const checkStockAvailability = (productId: string, quantityToAdd: Decimal | number): boolean => {
+    // ============================================
+    // DOUBLE-INTENT TRACKING (Force Sale Pattern)
+    // ============================================
+    // Tracks productIds where admin was blocked once (1st attempt)
+    // On 2nd attempt with SAME productId, allow with Force Sale warning
+    const forcedProducts = ref<Set<string>>(new Set());
+
+    // Format stock for human display (inline helper, no composable dependency)
+    const formatAvailable = (stock: Decimal, unit: string = 'un'): string => {
+      const num = stock.toNumber();
+      switch (unit) {
+        case 'un':
+        case 'g':
+          return Math.round(num).toString();
+        case 'kg':
+        case 'lb': {
+          const rounded = Math.round(num * 100) / 100;
+          return Number.isInteger(rounded) ? rounded.toString() : rounded.toFixed(2);
+        }
+        default:
+          return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+      }
+    };
+
+    // Helper: Validar stock disponible (IGUALITARIO — sin bypass de rol)
+    const checkStockAvailability = (productId: string, quantityToAdd: Decimal | number): StockCheckResult => {
       const product = inventoryStore.products.find(p => p.id === productId);
-      if (!product) return false; // Producto no encontrado en inventario local
+      // Items sin inventario (notas rápidas con UUID generado) → siempre OK
+      if (!product) return { status: 'ok' };
 
       const currentInCart = items.value.find(i => i.id === productId);
       const cartQty = currentInCart
@@ -52,17 +92,22 @@ export const useCartStore = defineStore(
         : new Decimal(0);
 
       const totalRequested = cartQty.plus(quantityToAdd);
-
-      // Stock actual en repositorio
       const currentStock = product.stock instanceof Decimal ? product.stock : new Decimal(product.stock);
+      const unit = product.measurementUnit || 'un';
+      const availableFormatted = formatAvailable(currentStock, unit);
 
-      // Force Sale (FRD-014): Admins can bypass stock checks ONLY if Online
-      // Offline mode requires strict stock validation to preserve data integrity
-      if (authStore.isAdmin && navigator.onLine) return true;
+      // Stock suficiente → OK
+      if (totalRequested.lte(currentStock)) {
+        return { status: 'ok' };
+      }
 
-      // Si el stock es infinito (servicio?) o configuración permite negativos:
-      // Por ahora, asumimos bloqueo estricto si stock < solicitado
-      return totalRequested.lte(currentStock);
+      // Stock excedido — ¿Admin ya intentó con ESTE producto? (2do intento)
+      if (authStore.isAdmin && navigator.onLine && forcedProducts.value.has(productId)) {
+        return { status: 'force_allowed', availableStock: availableFormatted, unit };
+      }
+
+      // Bloqueado (1er intento para todos, o empleado siempre)
+      return { status: 'blocked', availableStock: availableFormatted, unit };
     };
 
     // Add regular item (integer quantity) with defensive validation
@@ -73,7 +118,7 @@ export const useCartStore = defineStore(
       quantity: number;
       measurementUnit?: MeasurementUnit;
       isWeighable?: boolean;
-    }): boolean => {
+    }): AddItemResult => {
       // ============================================
       // DEFENSIVE VALIDATION: Prevent NaN/Infinity
       // ============================================
@@ -81,15 +126,25 @@ export const useCartStore = defineStore(
 
       if (typeof qty !== 'number' || !Number.isFinite(qty) || qty <= 0) {
         console.warn('[Cart] ⚠️ addItem rejected: Invalid quantity');
-        return false;
+        return { success: false, stockError: 'Cantidad inválida' };
       }
 
-      // 🛑 Validar Stock
-      if (!checkStockAvailability(product.id, qty)) {
+      // 🛑 Validar Stock (IGUALITARIO)
+      const check = checkStockAvailability(product.id, qty);
+
+      if (check.status === 'blocked') {
+        // Register attempt for admin double-intent tracking
+        if (authStore.isAdmin && navigator.onLine) {
+          forcedProducts.value.add(product.id);
+        }
         console.warn('[Cart] ⚠️ addItem rejected: Insufficient stock');
-        return false;
+        return {
+          success: false,
+          stockError: `Stock insuficiente. Disponible: ${check.availableStock} ${check.unit || ''}`.trim()
+        };
       }
 
+      // Add to cart
       const existing = items.value.find((i) => i.id === product.id);
       if (existing) {
         const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
@@ -107,7 +162,16 @@ export const useCartStore = defineStore(
           isWeighable: product.isWeighable || false,
         });
       }
-      return true;
+
+      // Return with warning if force-allowed
+      if (check.status === 'force_allowed') {
+        return {
+          success: true,
+          warning: `⚠️ Excede stock (disponible: ${check.availableStock} ${check.unit || ''}). Se requerirá Venta Forzada al cobrar.`.trim()
+        };
+      }
+
+      return { success: true };
     };
 
     // Add weighable item
@@ -118,7 +182,7 @@ export const useCartStore = defineStore(
       quantity: Decimal;
       unit: MeasurementUnit;
       subtotal: Decimal;
-    }): boolean => {
+    }): AddItemResult => {
       // Validation helpers...
       const isValidDecimal = (val: unknown): val is Decimal => {
         if (!(val instanceof Decimal)) return false;
@@ -128,20 +192,27 @@ export const useCartStore = defineStore(
 
       if (!isValidDecimal(item.quantity) || !isValidDecimal(item.subtotal)) {
         console.warn('[Cart] ⚠️ addWeighableItem rejected: Invalid Decimal values');
-        return false;
+        return { success: false, stockError: 'Valores de peso inválidos' };
       }
 
-      // 🛑 Validar Stock
-      if (!checkStockAvailability(item.id, item.quantity)) {
+      // 🛑 Validar Stock (IGUALITARIO)
+      const check = checkStockAvailability(item.id, item.quantity);
+
+      if (check.status === 'blocked') {
+        if (authStore.isAdmin && navigator.onLine) {
+          forcedProducts.value.add(item.id);
+        }
         console.warn('[Cart] ⚠️ addWeighableItem rejected: Insufficient stock');
-        return false;
+        return {
+          success: false,
+          stockError: `Stock insuficiente. Disponible: ${check.availableStock} ${check.unit || ''}`.trim()
+        };
       }
 
       // 🛡️ SPEC-010: Redondeo híbrido
       const roundedSubtotal = roundToNearest50(item.subtotal);
 
       const existing = items.value.find((i) => i.id === item.id);
-      // ... same logic
       if (existing) {
         const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
         existing.quantity = currentQty.plus(item.quantity);
@@ -157,7 +228,16 @@ export const useCartStore = defineStore(
           subtotal: roundedSubtotal,
         });
       }
-      return true;
+
+      // Return with warning if force-allowed
+      if (check.status === 'force_allowed') {
+        return {
+          success: true,
+          warning: `⚠️ Excede stock (disponible: ${check.availableStock} ${check.unit || ''}). Se requerirá Venta Forzada al cobrar.`.trim()
+        };
+      }
+
+      return { success: true };
     };
 
     const removeItem = (id: string) => {
@@ -169,6 +249,20 @@ export const useCartStore = defineStore(
 
     const clearCart = () => {
       items.value = [];
+      forcedProducts.value.clear(); // Reset double-intent tracking
+    };
+
+    // ============================================
+    // FORCE SALE HELPERS
+    // ============================================
+    /** True if cart contains items that were added via Force Sale override */
+    const hasForcedItems = computed(() => {
+      return items.value.some(item => forcedProducts.value.has(item.id));
+    });
+
+    /** Check if a specific item in cart was force-added */
+    const isForcedItem = (productId: string): boolean => {
+      return forcedProducts.value.has(productId);
     };
 
     return {
@@ -181,6 +275,9 @@ export const useCartStore = defineStore(
       addWeighableItem,
       removeItem,
       clearCart,
+      hasForcedItems,
+      isForcedItem,
+      forcedProducts,
     };
   },
   {

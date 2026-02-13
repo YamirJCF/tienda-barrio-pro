@@ -224,66 +224,70 @@ const cancelDelete = () => {
       <RecycleScroller v-else class="flex-1" :items="filteredProducts" :item-size="140"
         key-field="id" v-slot="{ item: product }">
         <article
-          class="bg-white dark:bg-surface-dark rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col gap-3 transition-transform mb-3 mx-4"
+          class="bg-white dark:bg-surface-dark rounded-2xl px-4 py-3 shadow-soft hover:shadow-soft-md border border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-200 mx-4 mb-2 h-[128px] overflow-hidden"
           :class="{
             'active:scale-[0.99] cursor-pointer': canManageInventory,
             'cursor-default': !canManageInventory,
           }" @click="canManageInventory ? openEditProduct(product.id) : null">
-          <div class="flex justify-between items-start gap-4">
-            <div class="flex-1">
-              <h3 class="text-slate-900 dark:text-white text-base font-bold leading-tight">
+          <!-- Row 1: Product Info + Price -->
+          <div class="flex justify-between items-start gap-3 min-h-0">
+            <div class="flex-1 min-w-0">
+              <h3 class="text-slate-900 dark:text-white text-sm font-bold leading-tight truncate">
                 {{ product.name }}
               </h3>
-              <div class="flex items-center gap-2 mt-1">
-                <span v-if="product.brand" class="text-slate-500 text-xs font-medium">{{
+              <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span v-if="product.brand" class="text-slate-500 text-[11px] font-medium truncate max-w-[100px]">{{
                   product.brand
                 }}</span>
-                <span v-if="product.brand && product.plu" class="text-slate-300">|</span>
-                <span v-if="product.plu" class="text-slate-400 text-xs font-mono">PLU: {{ product.plu }}</span>
+                <span v-if="product.brand && product.plu" class="text-slate-300 text-[10px]">|</span>
+                <span v-if="product.plu" class="text-slate-400 text-[11px] font-mono tracking-tight">
+                  {{ product.plu }}
+                </span>
+                <span v-if="product.category"
+                  class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-slate-500 dark:text-slate-400 text-[9px] font-bold rounded uppercase tracking-wide">
+                  {{ product.category }}
+                </span>
               </div>
-              <span v-if="product.category"
-                class="inline-block mt-1 px-2 py-0.5 bg-gray-50 dark:bg-gray-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded-lg uppercase tracking-wide">
-                {{ product.category }}
-              </span>
             </div>
-            <div class="text-right">
+            <div class="shrink-0">
               <span
-                class="text-slate-900 dark:text-white font-bold text-sm bg-gray-50 dark:bg-slate-700 px-2.5 py-1 rounded-lg block w-fit ml-auto">
+                class="text-slate-900 dark:text-white font-mono font-bold text-base bg-gray-50 dark:bg-slate-700/50 px-2.5 py-1 rounded-xl border border-gray-100 dark:border-gray-600 block">
                 ${{ formatCurrency(product.price) }}
               </span>
             </div>
           </div>
-          <div class="flex items-center justify-between pt-2 border-t border-gray-50 dark:border-gray-800">
+          <!-- Row 2: Stock + Actions (pinned to bottom) -->
+          <div class="flex items-center justify-between pt-2 mt-auto border-t border-gray-100 dark:border-gray-700/50">
             <span :class="product.stock.lte
               ? product.stock.lte(product.minStock)
                 ? 'text-red-500'
-                : 'text-primary'
+                : 'text-emerald-600'
               : product.stock <= product.minStock
                 ? 'text-red-500'
-                : 'text-primary'
-              " class="font-bold text-lg leading-none tracking-tight">
+                : 'text-emerald-600'
+              " class="font-mono font-bold text-base leading-none tracking-tight flex items-baseline gap-1">
               {{ formatStock(product.stock, product.measurementUnit) }}
-              <span class="text-xs font-medium opacity-70 ml-0.5">{{
+              <span class="text-[10px] font-sans font-medium text-slate-400 uppercase">{{
                 product.measurementUnit || 'un'
               }}</span>
             </span>
             <div class="flex gap-1">
               <button
-                class="text-slate-400 hover:text-indigo-600 p-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                class="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
                 @click.stop="openKardex(product)"
                 title="Ver historial">
-                <History :size="20" :stroke-width="1.5" />
+                <History :size="16" :stroke-width="2" />
               </button>
               <button
-                class="text-slate-400 hover:text-emerald-600 p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                class="text-slate-400 hover:text-emerald-600 p-1.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
                 @click.stop="openBatchHistory(product)"
                 title="Ver Lotes (FIFO)">
-                <Layers :size="20" :stroke-width="1.5" />
+                <Layers :size="16" :stroke-width="2" />
               </button>
               <button v-if="canManageInventory"
-                class="text-slate-400 hover:text-red-500 p-2 -mr-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                class="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 @click.stop="deleteProduct(product.id)">
-                <Trash2 :size="20" :stroke-width="1.5" />
+                <Trash2 :size="16" :stroke-width="2" />
               </button>
             </div>
           </div>

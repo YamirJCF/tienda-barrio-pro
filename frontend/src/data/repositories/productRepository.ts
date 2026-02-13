@@ -15,6 +15,11 @@ import { Decimal } from 'decimal.js';
 import { createSupabaseRepository, EntityRepository, RepositoryMappers } from './supabaseAdapter';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
+import { createIndexedDBDataSource } from '../sources/IndexedDBDataSource';
+import type { LocalDataSource } from '../interfaces/DataSource';
+
+// IDB Cache Layer — replaces localStorage for product data
+const productCache: LocalDataSource<Product> = createIndexedDBDataSource<Product>('products');
 
 // Constants
 const TABLE_NAME = 'products';
@@ -187,11 +192,64 @@ export const productRepository: ProductRepository = {
     ...baseRepository,
 
     /**
-     * Get product by PLU
+     * Get all products — Cache-Ahead Strategy
+     * 1. Return from IDB cache instantly (if populated)
+     * 2. Refresh from Supabase in background, update IDB cache
+     * 3. Fallback to legacy localStorage if IDB is empty AND offline
+     */
+    async getAll(storeId?: string): Promise<Product[]> {
+        // 1. Try IDB cache first (fast, async, non-blocking)
+        const cached = await productCache.getAll();
+        if (cached.length > 0) {
+            // Cache hit — serve immediately, refresh in background if online
+            if (navigator.onLine && isSupabaseConfigured()) {
+                // Fire-and-forget: refresh cache from Supabase
+                baseRepository.getAll(storeId).then(fresh => {
+                    if (fresh.length > 0) {
+                        productCache.saveBulk(fresh).catch(e =>
+                            logger.warn('[ProductRepo] Background IDB refresh failed:', e)
+                        );
+                    }
+                }).catch(() => { /* silent — we already have cache */ });
+            }
+            return cached;
+        }
+
+        // 2. IDB empty — fetch from Supabase (or legacy localStorage fallback)
+        const products = await baseRepository.getAll(storeId);
+
+        // 3. Populate IDB cache for next time
+        if (products.length > 0) {
+            productCache.saveBulk(products).catch(e =>
+                logger.warn('[ProductRepo] IDB cache population failed:', e)
+            );
+        }
+
+        return products;
+    },
+
+    /**
+     * Get product by ID — IDB first, then Supabase
+     */
+    async getById(id: string): Promise<Product | null> {
+        // 1. Check IDB
+        const cached = await productCache.getById(id);
+        if (cached) return cached;
+
+        // 2. Fall through to Supabase/localStorage
+        return baseRepository.getById(id);
+    },
+
+    /**
+     * Get product by PLU — Uses IDB index for O(1) lookup
      */
     async getByPlu(plu: string, storeId?: string): Promise<Product | null> {
-        // Since we are using mappers, getAll returns Product[] (Domain objects)
-        const all = await baseRepository.getAll(storeId);
+        // 1. Fast indexed lookup in IDB
+        const results = await productCache.getByIndex('by_plu', plu);
+        if (results.length > 0) return results[0];
+
+        // 2. Fallback: full scan (legacy path)
+        const all = await this.getAll(storeId);
         return all.find(p => p.plu === plu) || null;
     },
 
@@ -199,7 +257,7 @@ export const productRepository: ProductRepository = {
      * Search products by name (case insensitive)
      */
     async searchByName(query: string, storeId?: string): Promise<Product[]> {
-        const all = await baseRepository.getAll(storeId);
+        const all = await this.getAll(storeId);
         const lowerQuery = query.toLowerCase();
         return all.filter(p => p.name.toLowerCase().includes(lowerQuery));
     },

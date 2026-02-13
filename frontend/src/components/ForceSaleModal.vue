@@ -11,14 +11,17 @@
       <div class="modal-body">
         <div class="warning-banner">
           <p><strong>Stock insuficiente detectado.</strong></p>
-          <p>Se necesitan <strong>{{ totalDeficit }}</strong> unidades adicionales.</p>
+          <p>Faltan <strong>{{ totalDeficit }}</strong> unidades en total.</p>
         </div>
 
         <div class="affected-items">
           <h3>Productos afectados:</h3>
           <ul>
-            <li v-for="item in items" :key="item.product_id">
-              {{ item.name }} - Faltan <strong>{{ item.deficit }}</strong> unidades
+            <li v-for="item in items" :key="item.productId">
+              <strong>{{ item.name }}</strong>
+              — Solicitado: {{ item.requested }} {{ item.unit }}
+              | Disponible: {{ item.available }} {{ item.unit }}
+              | Faltan: <strong>{{ item.deficit }}</strong>
             </li>
           </ul>
         </div>
@@ -57,17 +60,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-
-interface ForceSaleItem {
-  product_id: string
-  name: string
-  deficit: number
-  quantity: number
-}
+import type { ForceSaleItemInfo } from '../composables/useSaleProcessor'
 
 interface Props {
   isOpen: boolean
-  items: ForceSaleItem[]
+  items: ForceSaleItemInfo[]
 }
 
 const props = defineProps<Props>()

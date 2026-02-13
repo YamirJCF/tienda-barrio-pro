@@ -4,7 +4,7 @@ import { useInventoryStore } from '../stores/inventory';
 import type { Product } from '../types';
 import { useNotifications } from './useNotifications';
 import { logger } from '../utils/logger';
-import { Decimal } from 'decimal.js';
+import type { AddItemResult } from '../stores/cart';
 
 interface UsePOSConfig {
     pluInput: Ref<string>;
@@ -15,7 +15,7 @@ interface UsePOSConfig {
 export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOSConfig) {
     const cartStore = useCartStore();
     const inventoryStore = useInventoryStore();
-    const { showSuccess, showError } = useNotifications();
+    const { showSuccess, showError, showWarning } = useNotifications();
 
     // State
     const pendingQuantity = ref(1);
@@ -32,6 +32,24 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
         isProductMode.value = false;
     };
 
+    // ============================================
+    // DRY HELPER: Add item + handle feedback
+    // Replaces 3 duplicated blocks of ~12 lines each
+    // ============================================
+    const addWithFeedback = (product: Product, quantity: number): boolean => {
+        const result: AddItemResult = cartStore.addItem({ ...product, quantity });
+        if (!result.success) {
+            showError(result.stockError || `No se pudo agregar ${product.name}`);
+            return false;
+        }
+        if (result.warning) {
+            showWarning(result.warning);
+        } else {
+            showSuccess(`${quantity}x ${product.name} agregado`);
+        }
+        return true;
+    };
+
     // Handle CANT. × button
     const handleQuantity = () => {
         logger.log('[CANT.×] Pressed. pluInput:', pluInput.value);
@@ -42,27 +60,17 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
         }
 
         // CASE 1: Product already selected (Waiting for Quantity in input)
-        // User workflow: [PLU] -> [CANT] -> [QUANTITY] -> [CANT]
         if (isProductMode.value && pendingProduct.value) {
             const rawQty = parseInt(pluInput.value);
             const qty = isNaN(rawQty) || rawQty <= 0 ? 1 : rawQty;
 
-            // Stock validation delegated to cart.ts (single source of truth)
-            const added = cartStore.addItem({ ...pendingProduct.value, quantity: qty });
-            if (!added) {
-                showError(`Stock insuficiente para ${pendingProduct.value.name}`);
-                clearPluInput();
-                resetModes();
-                return;
-            }
-            showSuccess(`${qty}x ${pendingProduct.value.name} agregado`);
+            addWithFeedback(pendingProduct.value, qty);
             clearPluInput();
             resetModes();
             return;
         }
 
-        // NEW CASE: Check if input is a PLU (Flow: PLU -> CANT -> QUANTITY)
-        // If user typed "122" (Aceite) and hit CANT, they likely want to set quantity for Aceite.
+        // NEW CASE: Check if input is a PLU
         const potentialProduct = inventoryStore.getProductByPLU(pluInput.value);
         if (potentialProduct) {
             pendingProduct.value = potentialProduct;
@@ -73,14 +81,11 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
         }
 
         // CASE 2: No product selected yet (Pre-setting quantity for NEXT product)
-        // User typed "2" then pressed "CANT. x" -> They want next item to be added 2 times
-        // Flow: [QUANTITY] -> [CANT] -> [PLU]
         const rawQty = parseInt(pluInput.value);
         if (!isNaN(rawQty) && rawQty > 0) {
             pendingQuantity.value = rawQty;
             isQuantityMode.value = true;
             logger.log('[CANT.×] Set pendingQuantity:', rawQty);
-            // showSuccess(`Cantidad fijada: ${rawQty}x`); // Optional feedback
             clearPluInput();
         } else {
             showError('Cantidad inválida');
@@ -113,15 +118,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
                     return;
                 }
 
-                // Stock validation delegated to cart.ts (single source of truth)
-                const added = cartStore.addItem({ ...pendingProduct.value, quantity });
-                if (!added) {
-                    showError(`Stock insuficiente para ${pendingProduct.value.name}`);
-                    clearPluInput();
-                    resetModes();
-                    return;
-                }
-                showSuccess(`${quantity}x ${pendingProduct.value.name} agregado`);
+                addWithFeedback(pendingProduct.value, quantity);
                 clearPluInput();
                 resetModes();
                 return;
@@ -145,16 +142,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
             }
 
             const quantity = pendingQuantity.value;
-
-            // Stock validation delegated to cart.ts (single source of truth)
-            const added = cartStore.addItem({ ...product, quantity });
-            if (!added) {
-                showError(`Stock insuficiente para ${product.name}`);
-                clearPluInput();
-                resetModes();
-                return;
-            }
-            showSuccess(`${quantity}x ${product.name} agregado`);
+            addWithFeedback(product, quantity);
             clearPluInput();
             resetModes();
         } else {
@@ -174,3 +162,4 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
         addProductByPLU
     };
 }
+

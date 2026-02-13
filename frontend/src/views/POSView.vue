@@ -3,19 +3,18 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCartStore } from '../stores/cart';
 import { useInventoryStore } from '../stores/inventory';
-import type { Product, PaymentTransaction } from '../types';
+import type { Product } from '../types';
 import { useSalesStore } from '../stores/sales';
-import { useClientsStore } from '../stores/clients';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
-import { useNotificationsStore } from '../stores/notificationsStore';
 import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNumpad } from '../composables/useNumpad';
 import { usePOS } from '../composables/usePOS';
-import { useAsyncAction } from '../composables/useAsyncAction'; // Request Management
+import { useSaleProcessor } from '../composables/useSaleProcessor';
 import { useHeartbeat } from '../composables/useHeartbeat'; // Presence & Pause logic
 import { logger } from '../utils/logger';
+import { generateUUID } from '../utils/uuid';
 import { Decimal } from 'decimal.js';
 import CheckoutModal from '../components/sales/CheckoutModal.vue';
 import ProductSearchModal from '../components/ProductSearchModal.vue';
@@ -35,22 +34,19 @@ import {
   Search, 
   StickyNote, 
   Banknote,
-  Timer
+  Timer,
+  Check
 } from 'lucide-vue-next';
 
 const router = useRouter();
 const cartStore = useCartStore();
 const inventoryStore = useInventoryStore();
 const salesStore = useSalesStore();
-const clientsStore = useClientsStore();
 const cashRegisterStore = useCashRegisterStore();
 const authStore = useAuthStore();
-const { showSaleSuccess, showSaleOffline, showSuccess, showError } = useNotifications();
+const { showSuccess, showError, showWarning } = useNotifications();
 const { formatWithSign: formatCurrency } = useCurrencyFormat();
-const { isPaused, setPause } = useHeartbeat(); // Heartbeat control
-
-// Composable: Request Management
-const { execute: executeSale, isLoading: isProcessing } = useAsyncAction();
+const { isPaused, setPause } = useHeartbeat();
 
 // OBS-02: Formatear cantidad a máximo 2 decimales
 const formatQuantity = (qty: number | Decimal): string => {
@@ -61,11 +57,9 @@ const formatQuantity = (qty: number | Decimal): string => {
 // ============================================
 // UI STATE
 // ============================================
-// isProcessing handled by useAsyncAction
+// isProcessing handled by useSaleProcessor
 
 // Estado operativo de la tienda
-// (Legacy: isAdminLocked Removed - Now relies on Offline Accountability)
-// const isCashRegisterClosed = computed(() => !cashRegisterStore.isOpen); // Handled directly in blockingState
 const isInventoryEmpty = computed(() => inventoryStore.totalProducts === 0);
 
 // Permisos del usuario
@@ -82,9 +76,7 @@ const blockingState = computed(() => {
       action: goToDashboard,
     };
   }
-  // isAdminLocked check REMOVED
   if (!cashRegisterStore.isOpen) {
-    // Bloqueo por Caja (CashControl)
     return {
       title: 'Caja Cerrada',
       message: 'Para realizar ventas, primero debes iniciar el turno y abrir la caja.',
@@ -93,7 +85,6 @@ const blockingState = computed(() => {
     };
   }
   if (isInventoryEmpty.value) {
-    // Bloqueo por Inventario
     return {
       title: 'Sin Inventario',
       message: 'Tu inventario está vacío. Agrega tus primeros productos para comenzar.',
@@ -104,8 +95,6 @@ const blockingState = computed(() => {
   return null;
 });
 
-// WO: initializeSampleData eliminada - SPEC-007
-
 // State
 const showCheckout = ref(false);
 const showSearch = ref(false);
@@ -113,14 +102,24 @@ const showNote = ref(false);
 const showWeightCalculator = ref(false);
 const selectedWeighableProduct = ref<Product | null>(null);
 
-// Force Sale State (FRD-014)
-const showForceSaleModal = ref(false);
-const forceSaleItems = ref<any[]>([]);
-const pendingSaleData = ref<{ payments: PaymentTransaction[], totalPaid: Decimal, clientId?: string } | null>(null);
+// Composable: Sale Processor (completeSale, forceSale, state)
+const {
+  isSuccess,
+  isProcessing,
+  showForceSaleModal,
+  forceSaleItems,
+  completeSale,
+  handleForceSale,
+  handleForceSaleCancel,
+} = useSaleProcessor({
+  getTicketLabel: () => ticketNumber.value,
+  clearInput: () => clearPluInput(),
+  closeCheckout: () => { showCheckout.value = false; },
+});
 
 // Composable: Numpad logic
 const { input: pluInput, handleNumpad, clear: clearPluInput } = useNumpad({
-  onReset: () => resetModes() // Will be hoisted or we define usePOS first
+  onReset: () => resetModes()
 });
 
 // Helper for weight calc - hoisted to be passed to usePOS
@@ -157,11 +156,12 @@ const goToDashboard = () => {
 // Add product from search modal
 const addProductFromSearch = (product: Product) => {
   const quantity = pendingQuantity.value;
-  const added = cartStore.addItem({ ...product, quantity });
-  if (!added) {
-    showError(`Stock insuficiente para ${product.name}`);
+  const result = cartStore.addItem({ ...product, quantity });
+  if (!result.success) {
+    showError(result.stockError || `No se pudo agregar ${product.name}`);
+  } else if (result.warning) {
+    showWarning(result.warning);
   }
-// inventoryStore.updateStock(product.id, -quantity); // REMOVED: Stock deduction happens at Sale Complete
   resetModes();
 };
 
@@ -173,14 +173,10 @@ const ticketNumber = computed(() => {
   return `#${salesStore.nextTicketNumber.toString().padStart(3, '0')}`;
 });
 
-// Add note/custom item
-// WO-001: Using generateUUID for custom items
-import { generateUUID } from '../utils/uuid';
-
 const addNoteItem = (item: { name: string; price: number }) => {
   const quantity = pendingQuantity.value;
   cartStore.addItem({
-    id: generateUUID(), // WO-001: Use UUID
+    id: generateUUID(),
     name: item.name,
     price: new Decimal(item.price),
     quantity,
@@ -196,7 +192,7 @@ const handleWeightCalculatorConfirm = (data: {
   quantity: Decimal;
   subtotal: Decimal;
 }) => {
-  const added = cartStore.addWeighableItem({
+  const result = cartStore.addWeighableItem({
     id: data.product.id,
     name: data.product.name,
     price: data.product.price,
@@ -204,13 +200,12 @@ const handleWeightCalculatorConfirm = (data: {
     unit: data.product.measurementUnit,
     subtotal: data.subtotal,
   });
-  if (!added) {
-    showError(`Stock insuficiente para ${data.product.name}`);
+  if (!result.success) {
+    showError(result.stockError || `Stock insuficiente para ${data.product.name}`);
+  } else if (result.warning) {
+    showWarning(result.warning);
   }
-// inventoryStore.updateStock(data.product.id, data.quantity.neg()); // REMOVED
 };
-
-// formatCurrency now provided by useCurrencyFormat composable
 
 const handleCheckout = () => {
   if (cartStore.items.length === 0) return;
@@ -230,8 +225,7 @@ onMounted(() => {
   // Ensure inventory is loaded
   inventoryStore.initialize();
 
-  // FIX: Force sync of Cash Register status. 
-  // RLS fix allows reading, but we must fetch to see 'isOpen'.
+  // FIX: Force sync of Cash Register status.
   if (authStore.currentStore?.id) {
     cashRegisterStore.syncFromBackend(authStore.currentStore.id);
   }
@@ -241,211 +235,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handlePOSKeydown);
 });
 
-// WO-001: Changed clientId from number to string
-
-// ... (other imports remain)
-
-// WO-001: Changed clientId from number to string
-const completeSale = async (payments: PaymentTransaction[], totalPaid: Decimal, clientId?: string) => {
-  const currentTicket = ticketNumber.value;
-  // Determine dominant method for the sale record (simplification)
-  // FIX: Audit detected that multiple chunks of same method (e.g. 2 cash bills) were treated as 'mixed'
-  const uniqueMethods = new Set(payments.map(p => p.method));
-  const isMixed = uniqueMethods.size > 1;
-  const primaryMethod = isMixed ? 'mixed' : payments[0].method;
-  
-  // Calculate total cash received for change calculation (only relevant if cash is involved)
-  const cashPayment = payments.find(p => p.method === 'cash');
-  const amountReceived = cashPayment ? cashPayment.amount : undefined;
-
-  const success = await executeSale(async () => {
-    // ============================================
-    // SAFEGUARD: Check Register Status (JIT)
-    // ============================================
-    if (!cashRegisterStore.isOpen) {
-        throw new Error('La caja está cerrada. No se puede procesar la venta.');
-    }
-
-    // ============================================
-    // SIMULATED PROCESSING DELAY
-    // ============================================
-    await new Promise((resolve) => setTimeout(resolve, 600));
-
-    const saleItems = cartStore.items.map((item) => {
-      const qty =
-        typeof item.quantity === 'object' && 'toNumber' in item.quantity
-          ? (item.quantity as Decimal).toNumber()
-          : Number(item.quantity);
-
-      return {
-        productId: item.id,
-        productName: item.name,
-        quantity: qty,
-        price: item.price,
-        subtotal: item.subtotal || item.price.times(item.quantity),
-      };
-    });
-
-    // Register Sale Record (Source of Truth for Inventory & Business Logic)
-    await salesStore.addSale({
-      items: saleItems,
-      total: cartStore.total,
-      roundingDifference: new Decimal(0), // Simplified for mixed
-      effectiveTotal: cartStore.total,
-      paymentMethod: primaryMethod, // 'mixed' or single
-      payments: payments, // Pass full details
-      amountReceived,
-      change: undefined, // Change is visual, logic is in balances
-      clientId: clientId, // Passed from CheckoutModal
-      employeeId: authStore.currentUser?.employeeId || authStore.currentUser?.id // Resilient: Valid for both Employees (UUID in employeeId) and Admins (UUID in id)
-    });
-
-    const saleId = salesStore.sales[salesStore.sales.length - 1]?.id;
-
-    // Distribute Payments to Registers / Ledgers
-    for (const payment of payments) {
-        if (payment.method === 'cash') {
-            // ⚠️ CRITICAL: DO NOT MANUALLY ADD CASH MOVEMENT FOR SALES HERE.
-            // The DB Trigger 'sync_sale_to_cash' handles the financial record.
-            // This call only updates the local UI state.
-            cashRegisterStore.addIncome(payment.amount, `Venta ${currentTicket} (Efectivo)`, saleId);
-        } 
-        // Other methods handled by backend/RPC usually, or separate stores if needed
-    }
-
-    return true; 
-  }, {
-    checkConnectivity: false,
-    errorMessage: 'Error al procesar la venta.',
-    showSuccessToast: false,
-  });
-
-  // Handle Failure: Check if Stock Error + Admin -> Force Sale Flow
-  if (!success) {
-    // Note: salesStore doesn't expose lastError, so we check the service error or re-try parsing
-    // For now, we'll re-validate stock locally to determine if Force Sale is applicable
-    let hasStockIssue = false;
-    forceSaleItems.value = cartStore.items.map((item) => {
-      const product = inventoryStore.getProductById(item.id);
-      const requested = typeof item.quantity === 'object' ? (item.quantity as Decimal).toNumber() : Number(item.quantity);
-      const available = product?.stock.toNumber() || 0;
-      const deficit = Math.max(0, requested - available);
-      
-      if (deficit > 0) hasStockIssue = true;
-      
-      return {
-        product_id: item.id,
-        name: item.name,
-        quantity: requested,
-        deficit: deficit
-      };
-    }).filter(item => item.deficit > 0);
-
-    // ARCH DECISION: Force Sale only allowed ONLINE
-    if (authStore.isAdmin && hasStockIssue && forceSaleItems.value.length > 0 && navigator.onLine) {
-      pendingSaleData.value = { payments, totalPaid, clientId };
-      showForceSaleModal.value = true;
-      return; // Don't clear cart yet
-    }
-  }
-
-  if (success) {
-    cartStore.clearCart();
-    showCheckout.value = false;
-    if (navigator.onLine) {
-      showSaleSuccess(currentTicket);
-    } else {
-      showSaleOffline(currentTicket);
-    }
-  }
-};
-
-// Force Sale Handlers (FRD-014)
-const handleForceSale = async (justification: string) => {
-  if (!pendingSaleData.value) return;
-
-  const { payments, totalPaid, clientId } = pendingSaleData.value;
-  const currentTicket = ticketNumber.value;
-  let saleId: string | null = null; // Capture for notification
-
-  // Call Force Sale RPC
-  const success = await executeSale(async () => {
-    if (!cashRegisterStore.isOpen) {
-      throw new Error('La caja está cerrada. No se puede procesar la venta.');
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 600));
-
-    const saleItems = cartStore.items.map((item) => {
-      const qty =
-        typeof item.quantity === 'object' && 'toNumber' in item.quantity
-          ? (item.quantity as Decimal).toNumber()
-          : Number(item.quantity);
-
-      return {
-        productId: item.id,
-        productName: item.name,
-        quantity: qty,
-        price: item.price,
-        subtotal: item.subtotal || item.price.times(item.quantity),
-      };
-    });
-
-    // Call the Force Sale repository method
-    const result = await salesStore.forceSale({
-      items: saleItems,
-      total: cartStore.total,
-      paymentMethod: payments.length > 1 ? 'mixed' : payments[0].method,
-      clientId,
-    }, authStore.currentStore!.id, justification);
-
-    if (!result.success) {
-      throw new Error(result.error || 'Force sale failed');
-    }
-
-    // Update cash register for cash payments
-    const cashPayment = payments.find(p => p.method === 'cash');
-    if (cashPayment) {
-      cashRegisterStore.addIncome(cashPayment.amount, `Venta Forzada ${currentTicket}`, result.id);
-    }
-    
-    saleId = result.id; // Correctly capturing ID
-
-    return true;
-  }, {
-    checkConnectivity: false,
-    errorMessage: 'Error al procesar la venta forzada.',
-    showSuccessToast: false,
-  });
-
-  if (success) {
-    cartStore.clearCart();
-    showCheckout.value = false;
-    showForceSaleModal.value = false;
-    pendingSaleData.value = null;
-    forceSaleItems.value = [];
-    showSaleSuccess(currentTicket);
-    
-    // NOTIFICATION INTEGRATION (Level 2: Force Sale Audit)
-    if (saleId) {
-      const notifStore = useNotificationsStore();
-      notifStore.addNotification({
-        type: 'finance', // Audit event
-        title: 'Venta Forzada',
-        message: `Venta forzada autorizada. Justificación: ${justification}`,
-        icon: 'alert-triangle',
-        isRead: false,
-        metadata: { saleId: saleId }
-      });
-    }
-  }
-};
-
-const handleForceSaleCancel = () => {
-  showForceSaleModal.value = false;
-  pendingSaleData.value = null;
-  forceSaleItems.value = [];
-};
 </script>
 
 <template>
@@ -631,16 +420,34 @@ const handleForceSaleCancel = () => {
 
         <!-- Master Action Button (COBRAR) -->
         <BaseButton
-          class="w-full h-14 mt-2 text-xl font-black rounded-xl shadow-lg border-b-4 disabled:opacity-50"
-          :class="isProcessing ? 'cursor-not-allowed' : ''"
-          variant="success"
-          :disabled="cartStore.items.length === 0 || isProcessing"
+          class="w-full h-14 mt-2 text-xl font-black rounded-xl shadow-lg border-b-4 disabled:opacity-50 transition-all duration-300"
+          :class="[
+             isProcessing ? 'cursor-not-allowed scale-[0.98] brightness-95' : '',
+             isSuccess ? '!bg-emerald-600 !border-emerald-700 !shadow-none scale-95' : ''
+          ]"
+          :variant="isSuccess ? 'success' : 'success'"
+          :disabled="cartStore.items.length === 0 || isProcessing || isSuccess"
           :loading="isProcessing"
           @click="handleCheckout"
         >
-             <div class="flex items-center justify-center gap-3">
-                 <Banknote :size="24" :stroke-width="1.5" />
-                 COBRAR {{ formattedTotal }}
+             <div class="flex items-center justify-center gap-3 transition-all duration-300" :class="{ 'opacity-0 absolute': isProcessing }">
+                 <template v-if="!isSuccess">
+                     <Banknote :size="24" :stroke-width="1.5" />
+                     COBRAR {{ formattedTotal }}
+                 </template>
+                 <template v-else>
+                     <Check :size="28" :stroke-width="3" class="animate-bounce" />
+                     <span class="tracking-widest">¡LISTO!</span>
+                 </template>
+             </div>
+             
+             <!-- Custom Loading Text override if BaseButton doesn't support slot while loading -->
+             <!-- BaseButton shows loader but hides slot content when loading. We want specific text? -->
+             <!-- Actually BaseButton implementation: <Loader2 v-if="loading"/> <slot />. 
+                  So slot IS rendered but icon is hidden. 
+                  We can put a condition in slot. -->
+             <div v-if="isProcessing" class="ml-2 text-base font-bold tracking-wide animate-pulse">
+                PROCESANDO...
              </div>
         </BaseButton>
       </div>

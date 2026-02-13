@@ -81,7 +81,7 @@ export function useAsyncAction() {
         showError('Error de conexión con el servidor', 'wifi_off');
       } else {
         // Business logic or validation error
-        showError(errorMessage || error.message || 'Error desconocido');
+        showError(error.message || errorMessage || 'Error desconocido');
       }
       return null;
     } finally {
