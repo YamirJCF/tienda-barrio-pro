@@ -241,6 +241,75 @@ export const authRepository = {
     },
 
     /**
+     * Obtiene el perfil admin y datos de tienda dado un user.id de Supabase.
+     * Replica la lógica de loginStore() sin signInWithPassword.
+     * Usado por el interceptor de tokens post-confirmación de email.
+     */
+    async getAdminProfile(userId: string): Promise<LoginResponse> {
+        try {
+            // Get current user data from Supabase session
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+            if (userError || !user) {
+                logger.error('[AuthRepository] getUser failed:', userError);
+                return { success: false, error: 'No se pudo obtener el usuario actual.' };
+            }
+
+            // Same query as loginStore() L191-195
+            const { data: profileData, error: profileError } = await supabase
+                .from('admin_profiles')
+                .select('store_id, role, stores(id, name, slug)')
+                .eq('id', userId)
+                .single();
+
+            if (profileError || !profileData || !profileData.stores) {
+                logger.error('[AuthRepository] Admin profile not found:', profileError);
+                return {
+                    success: false,
+                    error: 'No se encontró la tienda asociada a este usuario.'
+                };
+            }
+
+            const storeData = profileData.stores as any;
+            const metadata = user.user_metadata;
+
+            return {
+                success: true,
+                employee: {
+                    id: user.id,
+                    name: metadata.owner_name || 'Admin',
+                    email: user.email!,
+                    type: 'admin',
+                    storeId: storeData.id,
+                    permissions: {
+                        canSell: true,
+                        canViewInventory: true,
+                        canViewReports: true,
+                        canFiar: true,
+                        canOpenCloseCash: true,
+                        canManageInventory: true,
+                        canManageClients: true
+                    }
+                },
+                store_state: { is_open: true },
+                store_details: {
+                    id: storeData.id,
+                    name: storeData.name,
+                    owner: metadata.owner_name || 'Admin',
+                    email: user.email!
+                }
+            };
+
+        } catch (err) {
+            logger.error('[AuthRepository] Unexpected getAdminProfile error:', err);
+            return {
+                success: false,
+                error: 'Error inesperado al obtener perfil del administrador'
+            };
+        }
+    },
+
+    /**
      * Envia correo de recuperación de contraseña
      */
     async recoverPassword(email: string): Promise<{ success: boolean; error?: string }> {

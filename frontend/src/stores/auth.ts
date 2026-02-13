@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 import { getStorageKey } from '../utils/storage';
 import { authRepository, type RegisterResponse } from '../data/repositories/authRepository';
 import { useNotificationsStore } from './notificationsStore';
+import { requireSupabase } from '../data/supabaseClient';
 
 export type UserType = 'admin' | 'employee';
 
@@ -205,6 +206,70 @@ export const useAuthStore = defineStore(
         return false;
       } catch (error) {
         console.error('Login Store Error', error);
+        return false;
+      }
+    };
+
+    /**
+     * Initializes auth store from an existing Supabase session.
+     * Used after email confirmation redirect (token interceptor has already
+     * established the session via setSession()).
+     * Does NOT require credentials — the session already exists.
+     */
+    const initializeFromSession = async (): Promise<boolean> => {
+      try {
+        // 1. Check if the interceptor cached a profile in sessionStorage
+        const cachedProfile = sessionStorage.getItem('__auth_callback_profile__');
+        let response;
+
+        if (cachedProfile) {
+          response = JSON.parse(cachedProfile);
+          sessionStorage.removeItem('__auth_callback_profile__');
+          logger.log('[Auth Store] Initialized from cached callback profile');
+        } else {
+          // 2. Fallback: fetch profile from Supabase directly
+          const supabase = requireSupabase();
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.user) {
+            logger.warn('[Auth Store] No active session for initializeFromSession');
+            return false;
+          }
+          response = await authRepository.getAdminProfile(session.user.id);
+        }
+
+        if (response.success && response.employee) {
+          currentUser.value = response.employee;
+          isAuthenticated.value = true;
+
+          // Admin auto-approval for daily pass
+          dailyAccessState.value.status = 'approved';
+          dailyAccessState.value.lastApprovedAt = new Date().toISOString();
+
+          // Populate cached store
+          if (response.store_details) {
+            const existingIndex = stores.value.findIndex(s => s.id === response.store_details!.id);
+            const storeData: StoreAccount = {
+              id: response.store_details.id,
+              storeName: response.store_details.name,
+              ownerName: response.store_details.owner,
+              email: response.store_details.email,
+              password: '',
+              createdAt: new Date().toISOString()
+            };
+
+            if (existingIndex >= 0) {
+              stores.value[existingIndex] = storeData;
+            } else {
+              stores.value.push(storeData);
+            }
+          }
+
+          logger.log('[Auth Store] ✅ Session initialized successfully');
+          return true;
+        }
+        return false;
+      } catch (error) {
+        logger.error('[Auth Store] initializeFromSession error:', error);
         return false;
       }
     };
@@ -437,6 +502,7 @@ export const useAuthStore = defineStore(
       // Methods
       registerStore,
       login,
+      initializeFromSession,
       loginAsAdmin,
       loginAsEmployee,
       recoverPassword,

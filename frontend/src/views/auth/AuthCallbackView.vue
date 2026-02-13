@@ -21,14 +21,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/auth';
+import { logger } from '../../utils/logger';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const errorMessage = ref('');
+
+// Store subscription for cleanup on unmount (fixes memory leak)
+let authSubscription: { unsubscribe: () => void } | null = null;
+
+/**
+ * Validates that a string looks like a JWT token.
+ */
+function isValidJWTFormat(token: string): boolean {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    return parts.every(part => part.length >= 4);
+}
 
 /**
  * Parse URL hash fragment to extract Supabase auth tokens
@@ -56,6 +69,25 @@ function parseHashParams(): Record<string, string> {
 onMounted(async () => {
   const hash = window.location.hash;
   
+  // Check if the interceptor already handled this (recovery type stored)
+  const callbackType = sessionStorage.getItem('__auth_callback_type__');
+  if (callbackType === 'recovery') {
+    sessionStorage.removeItem('__auth_callback_type__');
+    router.replace('/update-password');
+    return;
+  }
+
+  // Check if the interceptor cached a profile (signup already handled)
+  const cachedProfile = sessionStorage.getItem('__auth_callback_profile__');
+  if (cachedProfile) {
+    // Interceptor already set session — just init the store and redirect
+    const initialized = await authStore.initializeFromSession();
+    if (initialized) {
+      router.replace('/dashboard');
+      return;
+    }
+  }
+
   // Check for errors in hash (Supabase returns /#error=...)
   if (hash.includes('error=')) {
       if (hash.includes('otp_expired')) {
@@ -72,16 +104,23 @@ onMounted(async () => {
       return; // Stop processing
   }
 
-  // Parse tokens from hash (handles Hash Router conflict)
+  // Parse tokens from hash (fallback: handles case where interceptor didn't run)
   const params = parseHashParams();
   const accessToken = params['access_token'];
   const refreshToken = params['refresh_token'];
   const type = params['type']; // 'recovery', 'signup', 'magiclink'
 
-  console.log('[AuthCallback] Detected type:', type, '| Has tokens:', !!accessToken);
+  logger.log('[AuthCallback] Detected type:', type, '| Has tokens:', !!accessToken);
 
   // If we have tokens, manually set the session
   if (accessToken && refreshToken) {
+    // Security: validate JWT format before sending to setSession
+    if (!isValidJWTFormat(accessToken)) {
+      logger.warn('[AuthCallback] Invalid JWT format detected');
+      errorMessage.value = 'El enlace no es válido.';
+      return;
+    }
+
     try {
       const { data, error } = await supabase.auth.setSession({
         access_token: accessToken,
@@ -89,26 +128,33 @@ onMounted(async () => {
       });
 
       if (error) {
-        console.error('[AuthCallback] Error setting session:', error);
+        logger.error('[AuthCallback] Error setting session:', error.message);
         errorMessage.value = 'Error al verificar la sesión. El enlace puede haber expirado.';
         return;
       }
 
       // Handle based on type
       if (type === 'recovery') {
-        console.log('[AuthCallback] Recovery flow detected, redirecting to update-password');
+        logger.log('[AuthCallback] Recovery flow detected, redirecting to update-password');
         router.replace('/update-password');
         return;
       }
 
-      // For signup or magiclink, go to dashboard
+      // For signup or magiclink: initialize auth store and go to dashboard
       if (data.session) {
-        console.log('[AuthCallback] Session established, redirecting to dashboard');
-        router.replace('/dashboard');
+        logger.log('[AuthCallback] Session established, initializing auth store...');
+        const initialized = await authStore.initializeFromSession();
+        if (initialized) {
+          router.replace('/dashboard');
+        } else {
+          // Session exists but store init failed — redirect to login
+          logger.warn('[AuthCallback] Store init failed, redirecting to login');
+          router.replace('/login');
+        }
         return;
       }
     } catch (err) {
-      console.error('[AuthCallback] Unexpected error:', err);
+      logger.error('[AuthCallback] Unexpected error:', err);
       errorMessage.value = 'Error inesperado al procesar el enlace.';
       return;
     }
@@ -116,7 +162,7 @@ onMounted(async () => {
 
   // Fallback: Listen for Supabase events (for non-hash-router scenarios)
   const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    console.log('[AuthCallback] Auth event:', event);
+    logger.log('[AuthCallback] Auth event:', event);
     
     if (event === 'PASSWORD_RECOVERY') {
        router.replace('/update-password');
@@ -124,15 +170,32 @@ onMounted(async () => {
     }
 
     if (event === 'SIGNED_IN' || session) {
-      router.replace('/dashboard');
+      const initialized = await authStore.initializeFromSession();
+      if (initialized) {
+        router.replace('/dashboard');
+      } else {
+        router.replace('/login');
+      }
     }
   });
 
-  // Timeout fallback: if nothing happens in 5 seconds, show error
+  // Store subscription for cleanup
+  authSubscription = subscription;
+
+  // Timeout fallback: if nothing happens in 15 seconds, show error
+  // (increased from 5s to handle slow networks gracefully)
   setTimeout(() => {
     if (!errorMessage.value) {
       errorMessage.value = 'No se pudo verificar la sesión. Intenta solicitar un nuevo enlace.';
     }
-  }, 5000);
+  }, 15000);
+});
+
+// Cleanup: unsubscribe from auth events on component unmount (fixes memory leak)
+onUnmounted(() => {
+  if (authSubscription) {
+    authSubscription.unsubscribe();
+    authSubscription = null;
+  }
 });
 </script>
