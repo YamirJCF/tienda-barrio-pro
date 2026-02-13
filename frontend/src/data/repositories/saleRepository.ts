@@ -160,7 +160,7 @@ export const saleRepository: SaleRepository = {
                         p_client_id: saleData.clientId || null,
                         // Fix: Map 'mixed' to 'cash' for backend compatibility (as V2 doesn't explicitly handle mixed yet)
                         // Pass other methods (nequi, fiado, etc) through as they are in the DB.
-                        p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'cash' : saleData.paymentMethod,
+                        p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod,
                         p_amount_received: p_amount_received,
                         p_items: p_items
                     };
