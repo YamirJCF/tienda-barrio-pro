@@ -66,11 +66,12 @@ Ya lo tienes listo, pero asegúrate de:
 2.  **Importar Proyecto:** Vercel verá tus repositorios. Selecciona `tienda-barrio-pro`.
 3.  **Configurar Build:**
     *   Framework Preset: `Vite` (lo detecta solo).
-    *   Root Directory: `SRC` (⚠️ Importante: tu código está en la subcarpeta `SRC`, no en la raíz).
+    *   Root Directory: `frontend` (⚠️ Importante: tu código está en la subcarpeta `frontend`, no en la raíz).
 4.  **Variables de Entorno (Environment Variables):**
     *   Aquí copias los valores de tu `.env` local.
     *   `VITE_SUPABASE_URL`: `https://...`
     *   `VITE_SUPABASE_ANON_KEY`: `eyJ...`
+    *   `VITE_SUPABASE_ENABLED`: `true` (⚠️ Sin esto, la app opera en modo localStorage)
 
 ### Fase C: El Primer Despliegue
 Al dar clic en "Deploy", Vercel ejecutará `npm install` y `npm run build`. Si todo sale verde, te dará una URL: `https://tienda-barrio-pro.vercel.app`.
