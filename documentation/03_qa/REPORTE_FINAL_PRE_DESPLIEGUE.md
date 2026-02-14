@@ -1,49 +1,62 @@
-# 🏁 Reporte Final de Auditoría Pre-Despliegue (v1.1.0)
+# 🏁 Reporte Final de Auditoría Pre-Despliegue (v1.2.0)
 
-**Fecha:** 11 de Febrero, 2026
-**Versión Auditada:** `release/v1.1.0` (Legal Compliance)
+**Fecha:** 14 de Febrero, 2026
+**Versión Auditada:** `fix/decimal-email-verification`
 **Resultado Global:** 🟢 **APROBADO PARA DESPLIEGUE**
 
 ---
 
-## 1. Resumen de Intervención (Endurecimiento)
-
-Se han mitigado 3 vulnerabilidades críticas y saneado el código base para producción.
+## 1. Resumen de Intervención (v1.2.0)
 
 | ID | Riesgo Detectado | Acción Correctiva | Estado |
 |----|------------------|-------------------|--------|
-| **OT-001** | 🔴 Exposición de `GEMINI_API_KEY` en cliente | Eliminación de inyección en `vite.config.ts`. Creación de politica BFF. | ✅ Resuelto |
-| **OT-002** | 🟡 Logs de depuración en consola | Implementación de `logger` condicional y limpieza de `init.ts`. | ✅ Resuelto |
-| **OT-003** | 🟠 Incertidumbre en RLS | Generación de script de auditoría SQL (`rls_audit_script.sql`). | ✅ Verificado (100% Cobertura) |
-| **LEGAL** | 🔴 Cumplimiento Ley 1581 | Implementación de Política de Privacidad y Consentimiento UI. | ✅ Implementado (v1.1.0) |
+| **OT-001** | 🔴 Exposición de `GEMINI_API_KEY` en cliente | Eliminación de inyección en `vite.config.ts` | ✅ Resuelto (v1.1.0) |
+| **OT-002** | 🟡 Logs de depuración en consola | Logger condicional implementado | ✅ Resuelto (v1.1.0) |
+| **OT-003** | 🟠 Incertidumbre en RLS | Script de auditoría SQL verificado | ✅ Verificado (v1.1.0) |
+| **LEGAL** | 🔴 Cumplimiento Ley 1581 | Política de Privacidad y Consentimiento UI | ✅ Implementado (v1.1.0) |
+| **SEC-004** | 🔴 `.env.staging` tracked en git | Removida del tracking, `.gitignore` actualizado | ✅ Resuelto (v1.2.0) |
+| **SEC-005** | 🟠 `VITE_SUPABASE_ENABLED` faltante | Agregada a `.env.staging` | ✅ Resuelto (v1.2.0) |
+| **FIX-006** | 🟠 Email verification loop | `getUser()` + `refreshSession()` en 3 archivos | ✅ Resuelto (v1.2.0) |
+| **FIX-007** | 🟡 Memory leak en WaitingRoomView | Subscription cleanup en `onUnmounted` | ✅ Resuelto (v1.2.0) |
+| **FIX-008** | 🟡 Inconsistencia decimal en POS | Validación estricta + prevención en input | ✅ Resuelto (v1.2.0) |
 
 ---
 
 ## 2. Métricas de Release Candidate
 
-- **Build Status:** Éxito (`npm run build`)
-- **Carpeta de Salida:** `frontend/dist/`
+- **Build Status:** ✅ Éxito (1840 modules, 5.18s)
+- **Errores TypeScript:** 0
 - **Seguridad:**
     - Secretos en Bundle: **0**
-    - Logs en Producción: **0** (Validado por código)
-    - RLS Scripts: Listos para ejecución en DB.
+    - `.env` files en Git: **0** (verificado)
+    - RLS Scripts: Listos para ejecución
 
 ---
 
-## 3. Recomendaciones Post-Deploy
+## 3. Variables de Entorno Requeridas en Vercel
 
-Aunque el código está listo, el entorno de **Supabase Producción** requiere validación manual final:
+| Variable | Requerida | Descripción |
+|----------|-----------|-------------|
+| `VITE_SUPABASE_URL` | ✅ Sí | URL del proyecto Supabase |
+| `VITE_SUPABASE_ANON_KEY` | ✅ Sí | Clave anónima (pública) de Supabase |
+| `VITE_SUPABASE_ENABLED` | ✅ Sí | `true` — Sin esto la app opera en modo localStorage |
 
-1.  **Ejecutar Script SQL:** Correr `supabase/verifications/rls_audit_script.sql` en el Dashboard.
-2.  **Edge Functions:** Si se requiere IA, desplegar la función proxy inmediatamente.
-3.  **Monitoreo:** Vigilar logs de autenticación durante las primeras 24h.
+**Root Directory en Vercel:** `frontend`
 
 ---
 
-## 4. Firma de Responsabilidad
+## 4. Configuración de Supabase Auth (Verificar)
 
-- **Arquitecto:** Aprobado (Estructura optimizada).
-- **QA/Security:** Aprobado (Vulnerabilidades conocidas cerradas).
-- **Dev Orchestrator:** Código listo para Merge a `main`.
+- **Site URL**: Debe coincidir con dominio Vercel
+- **Redirect URLs**: Debe incluir `https://[tu-app].vercel.app/**`
+- **Email Confirmation**: Habilitado
 
-**Próximo Paso:** Proceder con el ritual de Release (`git tag`, `merge`, `deploy`).
+---
+
+## 5. Firma de Responsabilidad
+
+- **Arquitecto:** Aprobado (Estructura optimizada, docs actualizados)
+- **QA/Security:** Aprobado (Vulnerabilidades conocidas cerradas)
+- **Dev Orchestrator:** Código listo para Merge a `main`
+
+**Próximo Paso:** Merge del PR `fix/decimal-email-verification` → `master`, luego verificar Vercel env vars.

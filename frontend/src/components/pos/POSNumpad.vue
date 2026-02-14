@@ -88,11 +88,11 @@ const emit = defineEmits<{
          00
       </BaseButton>
       <BaseButton
-        @click="emit('click', '.')"
+        @click="emit('click', '000')"
         variant="secondary"
         class="h-14 text-2xl font-medium !bg-white dark:!bg-gray-800 !border-gray-200 dark:!border-gray-600 shadow-sm active:!bg-gray-100 dark:active:!bg-gray-700 hover:scale-100"
       >
-        .
+        000
       </BaseButton>
     </div>
 

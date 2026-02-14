@@ -399,6 +399,7 @@ export const useInventoryStore = defineStore(
         const notificationsStore = useNotificationsStore();
         notificationsStore.addNotification({
           type: 'inventory',
+          audience: 'all',
           icon: 'inventory_2',
           title: `Stock Bajo: ${product.name}`,
           message: `Quedan ${product.stock.toFixed(product.measurementUnit === 'un' ? 0 : 2)} ${product.measurementUnit}`,

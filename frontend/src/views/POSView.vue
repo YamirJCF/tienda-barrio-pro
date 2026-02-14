@@ -9,6 +9,7 @@ import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
 import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { useQuantityFormat } from '../composables/useQuantityFormat';
 import { useNumpad } from '../composables/useNumpad';
 import { usePOS } from '../composables/usePOS';
 import { useSaleProcessor } from '../composables/useSaleProcessor';
@@ -48,11 +49,7 @@ const { showSuccess, showError, showWarning } = useNotifications();
 const { formatWithSign: formatCurrency } = useCurrencyFormat();
 const { isPaused, setPause } = useHeartbeat();
 
-// OBS-02: Formatear cantidad a máximo 2 decimales
-const formatQuantity = (qty: number | Decimal): string => {
-  const num = qty instanceof Decimal ? qty.toNumber() : Number(qty);
-  return Number.isInteger(num) ? num.toString() : num.toFixed(2);
-};
+const { formatStock, formatQuantity } = useQuantityFormat();
 
 // ============================================
 // UI STATE
@@ -318,8 +315,7 @@ onUnmounted(() => {
         <div v-for="item in cartStore.items" :key="item.id"
           class="flex items-center gap-3 bg-white dark:bg-gray-800 p-3 rounded-lg mb-2 shadow-sm border border-gray-100 dark:border-gray-700 animate-fade-in">
           <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded h-8 min-w-8 px-1 shrink-0">
-            <!-- OBS-02: Cantidad formateada -->
-            <span class="text-xs font-bold text-gray-600 dark:text-gray-300">x{{ formatQuantity(item.quantity) }}</span>
+            <span class="text-xs font-bold text-gray-600 dark:text-gray-300">x{{ formatStock(item.quantity, item.measurementUnit) }}</span>
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-gray-900 dark:text-white text-sm font-medium leading-tight truncate">

@@ -1,7 +1,7 @@
-# Checklist de Despliegue y Handover (v1.0-RC1)
+# Checklist de Despliegue y Handover (v1.2.0)
 
-> **Fecha**: 2026-01-21  
-> **Versión**: v1.0.0-RC1 (Release Candidate)  
+> **Fecha**: 2026-02-14  
+> **Versión**: v1.2.0 (Decimal Consistency + Email Verification Fix)  
 > **Estado**: Listo para Producción
 
 ---
@@ -29,8 +29,12 @@
 ## 4. Handover al Equipo de Infraestructura
 - [ ] Subir contenido de `dist/` a CDN (Netlify, Vercel, AWS S3).
 - [ ] **HTTPS Habilitado**: Obligatorio para funcionamiento de PWA/Service Workers.
-- [ ] Configurar variables de entorno (Crear `.env` en servidor si es necesario).
-- [ ] Configurar reglas de SPA (Redirigir 404 a index.html).
+- [ ] Configurar variables de entorno en Vercel:
+  - [ ] `VITE_SUPABASE_URL`
+  - [ ] `VITE_SUPABASE_ANON_KEY`
+  - [ ] `VITE_SUPABASE_ENABLED=true` (**Crítico**: sin esto la app opera offline)
+- [ ] **Root Directory en Vercel**: `frontend` (NO `SRC`).
+- [ ] Configurar reglas de SPA (Redirigir 404 a index.html) — no necesario con hash router.
 - [ ] Habilitar compresión Brotli/Gzip en servidor.
 
 ---

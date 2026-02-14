@@ -129,7 +129,12 @@ export const useCartStore = defineStore(
         return { success: false, stockError: 'Cantidad inválida' };
       }
 
-      // 🛑 Validar Stock (IGUALITARIO)
+      // SPEC-011: Reject decimals for integer-only units (un, g)
+      const unit = product.measurementUnit || 'un';
+      if ((unit === 'un' || unit === 'g') && !Number.isInteger(qty)) {
+        console.warn(`[Cart] ⚠️ addItem rejected: Decimal quantity for unit '${unit}'`);
+        return { success: false, stockError: 'No admite decimales' };
+      }
       const check = checkStockAvailability(product.id, qty);
 
       if (check.status === 'blocked') {

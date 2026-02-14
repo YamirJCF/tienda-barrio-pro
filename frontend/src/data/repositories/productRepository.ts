@@ -28,37 +28,8 @@ const STORAGE_KEY = 'tienda-inventory'; // Legacy key for compatibility
 // Type Alias for DB Row
 type ProductDB = Database['public']['Tables']['products']['Row'];
 
-/**
- * Measurement Unit Translation
- * Frontend uses short codes, DB uses full names
- */
-const MEASUREMENT_UNIT_TO_DB: Record<string, string> = {
-    'un': 'unidad',
-    'kg': 'kg',
-    'lb': 'lb',
-    'g': 'g'
-};
-
-const MEASUREMENT_UNIT_FROM_DB: Record<string, string> = {
-    'unidad': 'un',
-    'kg': 'kg',
-    'lb': 'lb',
-    'g': 'g'
-};
-
-/**
- * Translate measurementUnit from Frontend to DB format
- */
-function translateMeasurementUnitToDB(unit: string): string {
-    return MEASUREMENT_UNIT_TO_DB[unit] || unit;
-}
-
-/**
- * Translate measurementUnit from DB to Frontend format
- */
-function translateMeasurementUnitFromDB(unit: string): string {
-    return MEASUREMENT_UNIT_FROM_DB[unit] || unit;
-}
+// Measurement Units: DB and Frontend use the same codes ('un' | 'kg' | 'lb' | 'g')
+// No translation needed — unified standard per SPEC-011
 
 /**
  * ProductMapper: Bidirectional transformer
@@ -68,7 +39,7 @@ function translateMeasurementUnitFromDB(unit: string): string {
  * 1. price (Decimal) <-> price (numeric)
  * 2. stock (Domain) <-> current_stock (DB)
  * 3. cost (Domain) <-> cost_price (DB)
- * 4. measurementUnit ('un') <-> measurement_unit ('unidad')
+ * 4. measurementUnit ('un') <-> measurement_unit ('un') [unified standard]
  */
 export const productMapper: RepositoryMappers<ProductDB, Product> = {
     toDomain: (row: ProductDB): Product => {
@@ -79,8 +50,8 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             price: new Decimal(row.price),
             // Map current_stock (DB) to stock (Domain)
             stock: new Decimal(row.current_stock),
-            // Translate DB unit to Frontend unit
-            measurementUnit: translateMeasurementUnitFromDB(row.measurement_unit) as any, // Cast specific enum if needed
+            // DB and Frontend use same unit codes (no translation needed)
+            measurementUnit: (row.measurement_unit || 'un') as Product['measurementUnit'],
             // Handle Category: Now properly mapped to text column
             category: row.category || undefined,
             brand: row.brand || undefined,
@@ -88,7 +59,7 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             // Map cost_price (DB) to cost (Domain)
             cost: row.cost_price ? new Decimal(row.cost_price) : undefined,
             // Extra fields
-            isWeighable: row.is_weighable ?? (row.measurement_unit !== 'unidad'),
+            isWeighable: row.is_weighable ?? (row.measurement_unit !== 'un'),
             createdAt: row.created_at,
             updatedAt: row.updated_at,
             storeId: row.store_id,
@@ -121,8 +92,8 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             price: entity.price.toNumber(),
             // Map stock (Domain) to current_stock (DB)
             current_stock: entity.stock.toNumber(),
-            // Translate Frontend unit to DB unit
-            measurement_unit: translateMeasurementUnitToDB(entity.measurementUnit),
+            // DB and Frontend use same unit codes (no translation needed)
+            measurement_unit: entity.measurementUnit,
             // Correct mapping for Schema V2 (Text category)
             category: entity.category || null,
             brand: entity.brand || null,

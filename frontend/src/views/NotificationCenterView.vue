@@ -6,6 +6,7 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useNotificationsStore, type SystemNotification } from '../stores/notificationsStore';
+import { useAuthStore } from '../stores/auth';
 
 import { formatRelativeTime } from '../composables/useRelativeTime';
 import { logger } from '../utils/logger';
@@ -23,15 +24,19 @@ import {
 
 const router = useRouter();
 const notificationsStore = useNotificationsStore();
+const authStore = useAuthStore();
 
+const isAdmin = computed(() => authStore.isAdmin);
+const userType = computed<'admin' | 'employee'>(() => authStore.isAdmin ? 'admin' : 'employee');
 
 // Computed
 const notifications = computed(() => {
-  // Filter out access requests as they are shown in the Security Widget
-  return notificationsStore.sortedByDate.filter(n => !n.metadata?.requestId);
+  // Filter by role audience, then exclude access requests shown in SecurityWidget
+  return notificationsStore.getVisibleNotifications(userType.value)
+    .filter(n => !n.metadata?.requestId);
 });
 
-const hasUnreadNotifications = computed(() => notificationsStore.hasUnread);
+const hasUnreadNotifications = computed(() => notificationsStore.getVisibleUnreadCount(userType.value) > 0);
 const isEmpty = computed(() => notifications.value.length === 0);
 
 // Methods
@@ -121,8 +126,8 @@ const getRelativeTime = (createdAt: string) => {
     <!-- Notification List Container -->
     <main class="flex-1 overflow-y-auto p-4 space-y-3 scroll-smooth">
       
-      <!-- Security Widget (Always Top Priority) -->
-      <NotificationSecurityWidget />
+      <!-- Security Widget (Admin Only) -->
+      <NotificationSecurityWidget v-if="isAdmin" />
 
       <!-- Empty State -->
       <div

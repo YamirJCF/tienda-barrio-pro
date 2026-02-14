@@ -8,6 +8,7 @@ import { ref, computed } from 'vue';
 
 // Types
 export type NotificationType = 'security' | 'inventory' | 'finance' | 'general';
+export type NotificationAudience = 'all' | 'admin';
 export type NotificationActionType = 'approve' | 'reject' | 'view';
 
 export interface NotificationAction {
@@ -20,6 +21,7 @@ export interface NotificationAction {
 export interface SystemNotification {
   id: string;
   type: NotificationType;
+  audience: NotificationAudience;
   icon: string;
   title: string;
   message: string;
@@ -151,6 +153,18 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }),
   );
 
+  // Role-based filtered getters
+  const getVisibleNotifications = (userType: 'admin' | 'employee') => {
+    const sorted = sortedByDate.value;
+    if (userType === 'admin') return sorted;
+    return sorted.filter(n => (n.audience ?? 'all') !== 'admin');
+  };
+
+  const getVisibleUnreadCount = (userType: 'admin' | 'employee') => {
+    if (userType === 'admin') return unreadCount.value;
+    return notifications.value.filter(n => !n.isRead && (n.audience ?? 'all') !== 'admin').length;
+  };
+
   // Actions
   const addNotification = (
     data: Omit<SystemNotification, 'id' | 'createdAt'>,
@@ -169,6 +183,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
     const notification: SystemNotification = {
       ...data,
+      audience: data.audience ?? 'all',
       id: generateUUID(),
       createdAt: new Date().toISOString(),
     };
@@ -230,6 +245,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     unreadCount,
     hasUnread,
     sortedByDate,
+    getVisibleNotifications,
+    getVisibleUnreadCount,
     addNotification,
     markAsRead,
     markAllAsRead,

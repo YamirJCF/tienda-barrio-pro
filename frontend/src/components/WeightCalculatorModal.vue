@@ -168,8 +168,12 @@ const confirm = () => {
 const handleNumpad = (value: string) => {
   if (value === 'backspace') {
     inputValue.value = inputValue.value.slice(0, -1);
-  } else if (value === '.' && inputValue.value.includes('.')) {
-    return;
+  } else if (value === '.') {
+    // Block decimals in 'value' mode (COP is integer)
+    if (inputMode.value === 'value') return;
+    // Prevent double dot in 'weight' mode
+    if (inputValue.value.includes('.')) return;
+    inputValue.value += value;
   } else {
     inputValue.value += value;
   }
@@ -284,8 +288,10 @@ const clear = () => {
               v-for="num in ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00']"
               :key="num"
               @click="handleNumpad(num)"
+              :disabled="num === '.' && inputMode === 'value'"
               variant="secondary"
               class="h-12 text-xl font-bold bg-white dark:bg-gray-800"
+              :class="{ 'opacity-30 cursor-not-allowed': num === '.' && inputMode === 'value' }"
             >
               {{ num }}
             </BaseButton>
