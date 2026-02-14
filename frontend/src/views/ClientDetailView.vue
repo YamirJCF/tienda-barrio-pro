@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useClientsStore } from '../stores/clients';
+import { useAuthStore } from '../stores/auth';
 import { type Client, type ClientTransaction } from '../types';
 import { Decimal } from 'decimal.js';
 import BaseModal from '../components/ui/BaseModal.vue';
@@ -22,6 +23,8 @@ import {
 const router = useRouter();
 const route = useRoute();
 const clientsStore = useClientsStore();
+const authStore = useAuthStore();
+const isAdmin = computed(() => authStore.isAdmin);
 
 // State
 const paymentAmount = ref('');
@@ -167,6 +170,7 @@ const registerPayment = () => {
           </button>
           <div class="flex gap-4 relative">
             <button
+              v-if="isAdmin"
               @click="toggleOptionsMenu"
               aria-label="Opciones"
               class="flex items-center justify-center size-10 text-slate-300 rounded-full hover:bg-white/10 active:bg-white/20 transition-colors"

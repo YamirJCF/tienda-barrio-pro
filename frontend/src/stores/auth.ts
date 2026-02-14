@@ -228,13 +228,15 @@ export const useAuthStore = defineStore(
           logger.log('[Auth Store] Initialized from cached callback profile');
         } else {
           // 2. Fallback: fetch profile from Supabase directly
+          // FIX: Use getUser() (server call) instead of getSession() (local cache)
+          // This ensures email_confirmed_at and other flags are fresh
           const supabase = requireSupabase();
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session?.user) {
-            logger.warn('[Auth Store] No active session for initializeFromSession');
+          const { data: { user }, error } = await supabase.auth.getUser();
+          if (!user || error) {
+            logger.warn('[Auth Store] No active user for initializeFromSession');
             return false;
           }
-          response = await authRepository.getAdminProfile(session.user.id);
+          response = await authRepository.getAdminProfile(user.id);
         }
 
         if (response.success && response.employee) {
@@ -298,8 +300,8 @@ export const useAuthStore = defineStore(
         employeeId: employee.id,
         permissions: {
           ...employee.permissions,
-          // Default to true if not present but required for basic operation
-          canManageClients: (employee.permissions as any).canManageClients ?? true,
+          // Default to false — client management is admin-only
+          canManageClients: (employee.permissions as any).canManageClients ?? false,
           canManageInventory: (employee.permissions as any).canManageInventory ?? false
         },
       };

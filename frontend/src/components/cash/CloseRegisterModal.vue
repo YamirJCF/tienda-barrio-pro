@@ -81,6 +81,7 @@ const handleClose = () => {
     const notifStore = useNotificationsStore();
     notifStore.addNotification({
       type: 'finance',
+      audience: 'all',
       title: 'Cierre de Caja',
       message: `Cierre exitoso. Total reportado: ${formatCurrency(new Decimal(physicalCount.value))}`,
       icon: 'banknote',

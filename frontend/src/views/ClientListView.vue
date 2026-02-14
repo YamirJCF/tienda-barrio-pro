@@ -46,9 +46,8 @@ const totalDebt = computed(() => {
   return clientsStore.totalDebt;
 });
 
-const canManageClients = computed(
-  () => authStore.isAdmin || authStore.currentUser?.permissions?.canManageClients,
-);
+// Client creation/editing is admin-only; employees can only view & register payments
+const canManageClients = computed(() => authStore.isAdmin);
 
 // Generate initials and color from name
 const getInitials = (name: string) => {

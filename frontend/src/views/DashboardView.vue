@@ -138,10 +138,10 @@ const navigateToNotifications = () => {
         >
           <Bell :size="24" :stroke-width="1.5" />
           <span
-            v-if="notificationsStore.hasUnread"
+            v-if="notificationsStore.getVisibleUnreadCount(isAdmin ? 'admin' : 'employee') > 0"
             class="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded-full bg-red-500 text-white ring-2 ring-white dark:ring-surface-dark"
           >
-            {{ notificationsStore.unreadCount > 9 ? '9+' : notificationsStore.unreadCount }}
+            {{ notificationsStore.getVisibleUnreadCount(isAdmin ? 'admin' : 'employee') > 9 ? '9+' : notificationsStore.getVisibleUnreadCount(isAdmin ? 'admin' : 'employee') }}
           </span>
         </button>
         <button

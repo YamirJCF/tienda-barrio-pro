@@ -42,6 +42,7 @@ export const useDevicesStore = defineStore('devices', () => {
                     const employeeName = req.employeeName || 'Empleado';
                     notifStore.addNotification({
                         type: 'security',
+                        audience: 'admin',
                         title: 'Solicitud de Acceso',
                         message: `${employeeName} solicita acceso al sistema`,
                         icon: 'shield-check',

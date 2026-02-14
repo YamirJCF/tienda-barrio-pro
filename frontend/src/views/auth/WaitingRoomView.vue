@@ -75,6 +75,7 @@ const email = ref<string>('');
 const isResending = ref(false);
 const cooldown = ref(0);
 let intervalId: any = null;
+let authSubscription: { unsubscribe: () => void } | null = null;
 
 const isGmail = computed(() => email.value.includes('@gmail.com'));
 
@@ -111,10 +112,15 @@ const handleLogout = async () => {
 };
 
 const checkStatus = async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user?.email_confirmed_at) {
-    // User verified!
-    router.push('/dashboard');
+  // FIX: Use getUser() (server call) instead of getSession() (local cache)
+  // getSession() returns stale data that doesn't reflect server-side verification
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) return; // Network error, skip this cycle
+  
+  if (user?.email_confirmed_at) {
+    // User verified! Refresh local session so Router Guard sees updated state
+    await supabase.auth.refreshSession();
+    router.replace('/dashboard');
   }
 };
 
@@ -136,15 +142,21 @@ onMounted(async () => {
   // Polling for verification
   intervalId = setInterval(checkStatus, 3000);
   
-  // Also listen to auth state changes
-  supabase.auth.onAuthStateChange((event, session) => {
+  // Also listen to auth state changes (cross-tab detection)
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' || (session?.user?.email_confirmed_at)) {
-      router.push('/dashboard');
+      await supabase.auth.refreshSession();
+      router.replace('/dashboard');
     }
   });
+  authSubscription = subscription;
 });
 
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId);
+  if (authSubscription) {
+    authSubscription.unsubscribe();
+    authSubscription = null;
+  }
 });
 </script>

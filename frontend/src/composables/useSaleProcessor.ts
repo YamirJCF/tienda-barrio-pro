@@ -256,6 +256,7 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
             if (saleId) {
                 notifStore.addNotification({
                     type: 'finance',
+                    audience: 'admin',
                     title: 'Venta Forzada',
                     message: `Venta forzada autorizada. Justificación: ${justification}`,
                     icon: 'alert-triangle',

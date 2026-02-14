@@ -133,6 +133,10 @@ onMounted(async () => {
         return;
       }
 
+      // FIX: Force session refresh to ensure local token reflects
+      // updated user state (email_confirmed_at) after verification
+      await supabase.auth.refreshSession();
+
       // Handle based on type
       if (type === 'recovery') {
         logger.log('[AuthCallback] Recovery flow detected, redirecting to update-password');
