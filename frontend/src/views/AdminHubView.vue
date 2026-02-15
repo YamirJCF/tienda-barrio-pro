@@ -461,6 +461,22 @@ watch(activeTab, (newTab) => {
 
       <!-- Reportes Tab Content -->
       <section v-if="activeTab === 'reportes'">
+
+        <!-- Financial Dashboard Quick Access -->
+        <div
+          @click="navigateTo('/admin/financial-dashboard')"
+          class="relative flex items-center gap-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 p-5 shadow-lg shadow-indigo-500/20 cursor-pointer active:scale-[0.98] transition-transform mb-6"
+        >
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
+            <span class="text-2xl">📊</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h4 class="text-base font-bold text-white leading-tight">Dashboard Financiero</h4>
+            <p class="text-xs text-indigo-100 mt-0.5">Ganancia Neta · Top Ventas · Productos Estancados</p>
+          </div>
+          <ChevronRight :size="20" class="text-white/60 shrink-0" />
+        </div>
+
         <SmartDailySummary />
         
         <!-- Smart Supply Section (FRD-008 Fase 2) -->

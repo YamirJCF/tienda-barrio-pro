@@ -78,6 +78,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/admin/financial-dashboard',
+    name: 'financial-dashboard',
+    component: () => import('../views/FinancialDashboardView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/pos',
     name: 'pos',
     component: POSView,
@@ -274,6 +280,13 @@ router.beforeEach(async (to, from, next) => {
     // Block "Gestión" tab for non-admins
     if (to.query.tab === 'gestion' && !authStore.isAdmin) {
       return next({ name: 'admin', query: { tab: 'reportes' } });
+    }
+  }
+
+  // 2b. Financial Dashboard: Admin OR Reports Viewer
+  if (to.name === 'financial-dashboard') {
+    if (!authStore.isAdmin && !authStore.canViewReports) {
+      return next({ name: 'dashboard' });
     }
   }
 
