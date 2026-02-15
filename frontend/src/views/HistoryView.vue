@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useHistory, type HistoryType, type DatePreset } from '../composables/useHistory';
 import { useAuthStore } from '../stores/auth';
 import HistoryItemCard from '../components/history/HistoryItemCard.vue';
+import SaleDetailModal from '../components/history/SaleDetailModal.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { 
@@ -15,14 +16,22 @@ import {
   Banknote, 
   Tags,
   SearchX,
+  Search,
   Calendar,
-  Users
+  CalendarRange,
+  Users,
+  X
 } from 'lucide-vue-next';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const { formatCurrency } = useCurrencyFormat();
-const { items, isLoading, error, currentType, dateFilter, employeeFilter, summary, fetchHistory } = useHistory();
+const {
+  items, filteredItems, isLoading, error,
+  currentType, dateFilter, employeeFilter,
+  searchQuery, customStartDate, customEndDate,
+  summary, fetchHistory, setCustomDateRange
+} = useHistory();
 
 // Tab definitions
 const filters: { label: string; value: HistoryType; component: any }[] = [
@@ -41,6 +50,25 @@ const datePresets: { label: string; value: DatePreset }[] = [
   { label: 'Semana', value: 'week' },
   { label: 'Mes', value: 'month' },
 ];
+
+// Custom date range panel (T3)
+const showDateRangePanel = ref(false);
+const tempStartDate = ref('');
+const tempEndDate = ref('');
+
+const applyCustomRange = () => {
+  if (!tempStartDate.value || !tempEndDate.value) return;
+  if (tempStartDate.value > tempEndDate.value) return;
+  showDateRangePanel.value = false;
+  setCustomDateRange(tempStartDate.value, tempEndDate.value);
+};
+
+const clearCustomRange = () => {
+  showDateRangePanel.value = false;
+  tempStartDate.value = '';
+  tempEndDate.value = '';
+  fetchHistory(undefined, 'today');
+};
 
 // Employee filter
 const showEmployeeFilter = ref(false);
@@ -66,13 +94,39 @@ const loadEmployees = async () => {
   }
 };
 
+// Sale Detail Modal (T4)
+const showSaleDetail = ref(false);
+const selectedSaleId = ref<string | null>(null);
+
+const handleCardClick = (id: string) => {
+  if (currentType.value === 'sales') {
+    selectedSaleId.value = id;
+    showSaleDetail.value = true;
+  }
+};
+
+// Search debounce (T2)
+const localSearch = ref('');
+let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const onSearchInput = (value: string) => {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    searchQuery.value = value;
+  }, 300);
+};
+
 const goBack = () => router.back();
 
 const selectFilter = (type: HistoryType) => {
+  showDateRangePanel.value = false;
+  localSearch.value = '';
+  searchQuery.value = '';
   fetchHistory(type);
 };
 
 const selectDate = (preset: DatePreset) => {
+  showDateRangePanel.value = false;
   fetchHistory(undefined, preset);
 };
 
@@ -89,6 +143,10 @@ onMounted(async () => {
   await fetchHistory();
   loadEmployees();
 });
+
+onUnmounted(() => {
+  if (searchTimeout) clearTimeout(searchTimeout);
+});
 </script>
 
 <template>
@@ -102,6 +160,27 @@ onMounted(async () => {
         <h1 class="text-lg font-bold text-slate-900 dark:text-white">
           Historial y Auditoría
         </h1>
+      </div>
+
+      <!-- Search Bar (T2) -->
+      <div class="px-4 pb-2">
+        <div class="relative">
+          <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            v-model="localSearch"
+            @input="onSearchInput(localSearch)"
+            type="text"
+            :placeholder="currentType === 'sales' ? 'Buscar ticket, producto o cliente...' : 'Buscar en historial...'"
+            class="w-full pl-9 pr-8 py-2 text-sm bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
+          <button
+            v-if="localSearch"
+            @click="localSearch = ''; searchQuery = ''"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+          >
+            <X :size="14" class="text-slate-400" />
+          </button>
+        </div>
       </div>
 
       <!-- Category Tabs -->
@@ -136,6 +215,18 @@ onMounted(async () => {
           >
             {{ preset.label }}
           </button>
+
+          <!-- Custom Range Button (T3) -->
+          <button
+            @click="showDateRangePanel = !showDateRangePanel"
+            class="px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap transition-colors flex items-center gap-1"
+            :class="dateFilter === 'custom'
+              ? 'bg-blue-600 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+          >
+            <CalendarRange :size="12" />
+            Rango
+          </button>
         </div>
 
         <!-- Employee Filter (only for sales) -->
@@ -150,6 +241,54 @@ onMounted(async () => {
           <Users :size="14" />
           {{ employeeFilter ? 'Filtrando' : 'Empleado' }}
         </button>
+      </div>
+
+      <!-- Custom Date Range Panel (T3) -->
+      <div v-if="showDateRangePanel" class="px-4 pb-3">
+        <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700 space-y-3">
+          <div class="flex gap-3">
+            <div class="flex-1">
+              <label class="block text-xs font-medium text-slate-500 mb-1">Desde</label>
+              <input
+                v-model="tempStartDate"
+                type="date"
+                max="9999-12-31"
+                class="w-full px-3 py-2 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div class="flex-1">
+              <label class="block text-xs font-medium text-slate-500 mb-1">Hasta</label>
+              <input
+                v-model="tempEndDate"
+                type="date"
+                max="9999-12-31"
+                class="w-full px-3 py-2 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <BaseButton
+              @click="applyCustomRange"
+              variant="primary"
+              size="sm"
+              class="flex-1"
+              :disabled="!tempStartDate || !tempEndDate || tempStartDate > tempEndDate"
+            >
+              Aplicar
+            </BaseButton>
+            <BaseButton
+              v-if="dateFilter === 'custom'"
+              @click="clearCustomRange"
+              variant="outline"
+              size="sm"
+            >
+              Limpiar
+            </BaseButton>
+          </div>
+          <p v-if="tempStartDate && tempEndDate && tempStartDate > tempEndDate" class="text-xs text-red-500">
+            La fecha "Desde" no puede ser mayor que "Hasta"
+          </p>
+        </div>
       </div>
 
       <!-- Employee Dropdown -->
@@ -179,13 +318,16 @@ onMounted(async () => {
       </div>
     </header>
 
-    <!-- Summary Bar -->
-    <div v-if="!isLoading && items.length > 0" class="px-4 pt-3">
+    <!-- Summary Bar (T5) -->
+    <div v-if="!isLoading && filteredItems.length > 0" class="px-4 pt-3">
       <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div>
           <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">{{ summary.label }}</p>
           <p class="text-sm text-slate-600 dark:text-slate-300">
-            {{ summary.count }} registro{{ summary.count !== 1 ? 's' : '' }}
+            {{ filteredItems.length }} registro{{ filteredItems.length !== 1 ? 's' : '' }}
+            <span v-if="searchQuery && filteredItems.length !== items.length" class="text-blue-500">
+              (de {{ items.length }})
+            </span>
           </p>
         </div>
         <div v-if="summary.totalAmount > 0" class="text-right">
@@ -219,36 +361,52 @@ onMounted(async () => {
 
       <!-- Empty State -->
       <div
-        v-else-if="items.length === 0"
+        v-else-if="filteredItems.length === 0"
         class="flex flex-col items-center justify-center py-20 text-center opacity-60"
       >
         <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
           <SearchX :size="40" :stroke-width="1.5" class="text-slate-400" />
         </div>
         <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">
-          Sin registros
+          {{ searchQuery ? 'Sin resultados' : 'Sin registros' }}
         </h3>
         <p class="text-sm text-slate-500">
-          No hay movimientos en este período.
+          {{ searchQuery ? `No se encontraron resultados para "${searchQuery}"` : 'No hay movimientos en este período.' }}
         </p>
+        <BaseButton
+          v-if="searchQuery"
+          @click="localSearch = ''; searchQuery = ''"
+          variant="ghost"
+          size="sm"
+          class="mt-3 text-primary font-semibold"
+        >
+          Limpiar búsqueda
+        </BaseButton>
       </div>
 
       <!-- List -->
       <div v-else class="space-y-3 max-w-3xl mx-auto">
         <HistoryItemCard
-          v-for="item in items"
+          v-for="item in filteredItems"
           :key="item.id"
           :item="item"
+          @click="handleCardClick"
         />
         
         <!-- Pagination / Load More Hint -->
         <div class="pt-4 text-center">
           <p class="text-xs text-slate-400">
-            Mostrando {{ items.length }} registros
+            Mostrando {{ filteredItems.length }} registros
           </p>
         </div>
       </div>
     </main>
+
+    <!-- Sale Detail Modal (T4) -->
+    <SaleDetailModal
+      v-model="showSaleDetail"
+      :saleId="selectedSaleId"
+    />
   </div>
 </template>
 

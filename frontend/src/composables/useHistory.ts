@@ -6,7 +6,7 @@ import { logger } from '../utils/logger';
 import { formatCurrency } from '../utils/currency';
 
 export type HistoryType = 'sales' | 'cash' | 'audit' | 'inventory' | 'expenses' | 'prices';
-export type DatePreset = 'today' | 'yesterday' | 'week' | 'month';
+export type DatePreset = 'today' | 'yesterday' | 'week' | 'month' | 'custom';
 
 export interface HistoryItem {
     id: string;
@@ -30,9 +30,10 @@ export interface HistorySummary {
 }
 
 /**
- * Returns {start, end} date strings for a given preset
+ * Returns {start, end} date strings for a given preset.
+ * For 'custom', uses externally provided dates.
  */
-function getDateRange(preset: DatePreset): { start: string; end: string } {
+function getDateRange(preset: DatePreset, customStart?: string, customEnd?: string): { start: string; end: string } {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
@@ -54,6 +55,12 @@ function getDateRange(preset: DatePreset): { start: string; end: string } {
             monthAgo.setDate(monthAgo.getDate() - 30);
             return { start: monthAgo.toISOString().split('T')[0], end: todayStr };
         }
+        case 'custom': {
+            return {
+                start: customStart || todayStr,
+                end: customEnd || todayStr
+            };
+        }
     }
 }
 
@@ -67,6 +74,38 @@ export function useHistory() {
     const currentType = ref<HistoryType>('sales');
     const dateFilter = ref<DatePreset>('today');
     const employeeFilter = ref<string | null>(null); // UUID or null for all
+
+    // Custom date range (T3)
+    const customStartDate = ref<string>('');
+    const customEndDate = ref<string>('');
+
+    // Search (T2)
+    const searchQuery = ref<string>('');
+
+    // Filtered items — client-side search over loaded data
+    const filteredItems = computed<HistoryItem[]>(() => {
+        const q = searchQuery.value.trim().toLowerCase();
+        if (!q) return items.value;
+
+        return items.value.filter(item => {
+            // Search in title, subtitle, user
+            if (item.title.toLowerCase().includes(q)) return true;
+            if (item.subtitle.toLowerCase().includes(q)) return true;
+            if (item.user.toLowerCase().includes(q)) return true;
+
+            // Search in metadata fields (type-specific)
+            const m = item.metadata;
+            if (!m) return false;
+
+            if (m.client_name && String(m.client_name).toLowerCase().includes(q)) return true;
+            if (m.product_name && String(m.product_name).toLowerCase().includes(q)) return true;
+            if (m.supplier_name && String(m.supplier_name).toLowerCase().includes(q)) return true;
+            if (m.ticket_number && String(m.ticket_number).includes(q)) return true;
+            if (m.payment_method && String(m.payment_method).toLowerCase().includes(q)) return true;
+
+            return false;
+        });
+    });
 
     // Summary
     const summary = computed<HistorySummary>(() => {
@@ -86,11 +125,21 @@ export function useHistory() {
         };
     });
 
+    const setCustomDateRange = async (start: string, end: string) => {
+        customStartDate.value = start;
+        customEndDate.value = end;
+        dateFilter.value = 'custom';
+        await fetchHistory();
+    };
+
     const fetchHistory = async (type?: HistoryType, preset?: DatePreset) => {
         if (!authStore.currentStore) return;
 
         if (type) currentType.value = type;
         if (preset) dateFilter.value = preset;
+
+        // Clear search when switching type/period
+        searchQuery.value = '';
 
         isLoading.value = true;
         error.value = null;
@@ -136,7 +185,7 @@ export function useHistory() {
         const supabase = getSupabaseClient();
         if (!supabase) { error.value = 'Sin conexión'; return; }
 
-        const { start, end } = getDateRange(dateFilter.value);
+        const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
 
         const params: any = {
             p_store_id: storeId,
@@ -189,7 +238,7 @@ export function useHistory() {
         const supabase = getSupabaseClient();
         if (!supabase) { error.value = 'Sin conexión'; return; }
 
-        const { start, end } = getDateRange(dateFilter.value);
+        const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
 
         const { data, error: rpcError } = await supabase.rpc('get_history_caja' as any, {
             p_store_id: storeId,
@@ -239,7 +288,7 @@ export function useHistory() {
         const supabase = getSupabaseClient();
         if (!supabase) { error.value = 'Sin conexión'; return; }
 
-        const { start, end } = getDateRange(dateFilter.value);
+        const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
 
         const { data, error: rpcError } = await supabase.rpc('get_history_compras' as any, {
             p_store_id: storeId,
@@ -355,13 +404,18 @@ export function useHistory() {
 
     return {
         items,
+        filteredItems,
         isLoading,
         error,
         currentType,
         dateFilter,
         employeeFilter,
+        searchQuery,
+        customStartDate,
+        customEndDate,
         summary,
         fetchHistory,
+        setCustomDateRange,
         getDateRange
     };
 }

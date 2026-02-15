@@ -14,6 +14,10 @@ const props = defineProps({
   },
 });
 
+const emit = defineEmits<{
+  'click': [id: string];
+}>();
+
 const iconComponent = computed(() => {
   const map: Record<string, any> = {
     'price_change': Tag,
@@ -32,6 +36,7 @@ const iconComponent = computed(() => {
 <template>
   <article
     class="relative flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-800 transition-colors cursor-pointer group"
+    @click="emit('click', item.id)"
   >
     <!-- Icon Box -->
     <div
