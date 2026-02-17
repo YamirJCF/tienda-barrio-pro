@@ -135,3 +135,28 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ==============================================
+   Transiciones de Lista (FLIP)
+   Uso: <TransitionGroup name="list" tag="div">
+   ============================================== */
+.list-move,
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.list-enter-from {
+  opacity: 0;
+  transform: scale(0.95) translateY(-8px);
+}
+
+.list-leave-to {
+  opacity: 0;
+  transform: scale(0.95) translateY(8px);
+}
+
+.list-leave-active {
+  position: absolute;
+  width: 100%;
+}

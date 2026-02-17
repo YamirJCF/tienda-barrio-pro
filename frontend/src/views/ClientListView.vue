@@ -8,7 +8,8 @@ import ClientFormModal from '../components/ClientFormModal.vue';
 import { Decimal } from 'decimal.js';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
-import Skeleton from '@/components/ui/Skeleton.vue';
+import BaseListSkeleton from '@/components/ui/BaseListSkeleton.vue';
+import BaseEmptyState from '@/components/ui/BaseEmptyState.vue';
 import { 
   ArrowLeft, 
   Search, 
@@ -146,18 +147,8 @@ const handleClientSaved = () => {
 
 
     <!-- Loading State -->
-    <div v-if="clientsStore.isLoading" class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-        <div v-for="i in 6" :key="i" class="flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-3 border-l-[6px] border-slate-200 dark:border-slate-700">
-             <Skeleton width="48px" height="48px" border-radius="18px" />
-             <div class="flex flex-1 flex-col justify-center min-w-0 gap-2">
-                <Skeleton width="60%" height="1rem" />
-                <Skeleton width="40%" height="0.75rem" />
-             </div>
-             <div class="flex flex-col items-end gap-1">
-                <Skeleton width="80px" height="1.25rem" />
-                <Skeleton width="40px" height="0.75rem" />
-             </div>
-        </div>
+    <div v-if="clientsStore.isLoading" class="flex-1 overflow-y-auto px-4 py-4">
+      <BaseListSkeleton :count="6" type="detail" />
     </div>
 
     <!-- Client List -->
@@ -204,30 +195,14 @@ const handleClientSaved = () => {
     </main>
 
     <!-- Empty State -->
-    <div
+    <BaseEmptyState
       v-else
-      class="flex-1 flex flex-col items-center justify-center px-4 text-center"
-    >
-      <Users :size="64" :stroke-width="1" class="text-slate-300 mb-4" />
-      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
-        {{ searchQuery ? 'No se encontraron clientes' : 'Sin clientes registrados' }}
-      </h3>
-      <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-        {{
-          searchQuery
-            ? 'Intenta con otro término de búsqueda'
-            : 'Agrega tu primer cliente para comenzar'
-        }}
-      </p>
-      <BaseButton
-        v-if="!searchQuery && canManageClients"
-        @click="openNewClient"
-        class="mt-6"
-      >
-        <UserPlus :size="18" class="mr-2" />
-        Agregar Cliente
-      </BaseButton>
-    </div>
+      :title="searchQuery ? 'No se encontraron clientes' : 'Sin clientes registrados'"
+      :description="searchQuery ? 'Intenta con otro término de búsqueda' : 'Agrega tu primer cliente para comenzar'"
+      :icon="Users"
+      :action-label="!searchQuery && canManageClients ? 'Agregar Cliente' : undefined"
+      @action="openNewClient"
+    />
 
     <!-- FAB -->
     <div class="absolute bottom-24 right-4 z-40">
