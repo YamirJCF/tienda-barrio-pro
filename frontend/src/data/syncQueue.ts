@@ -393,11 +393,10 @@ async function processItem(item: QueueItem): Promise<boolean> {
         }
 
         case 'CREATE_MOVEMENT': {
-            // Direct Insert to inventory_movements
-            // Trigger trg_inventory_movement will update stock automatically
-            const { error: moveError } = await supabase.from('inventory_movements').insert(item.payload);
-            if (moveError) throw moveError;
-            return true;
+            // FRD-012: "Operaciones offline: Solo ventas POS"
+            // CREATE_MOVEMENT nunca debió encolarse. Drenar items legacy atascados.
+            logger.warn(`[SyncQueue] ⚠️ Dropping illegal CREATE_MOVEMENT (${item.id}) — FRD-012 violation. Inventory movements are online-only.`);
+            return true; // Return true to remove from queue without executing
         }
 
         default:

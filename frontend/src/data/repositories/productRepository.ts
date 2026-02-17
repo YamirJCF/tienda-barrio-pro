@@ -322,70 +322,36 @@ export const productRepository: ProductRepository = {
     ): Promise<boolean> {
         const isOnline = isSupabaseConfigured() && navigator.onLine;
 
-        // 1. Online: Insert into inventory_movements (Trigger updates stock)
-        if (isOnline) {
-            const supabase = getSupabaseClient();
-            if (supabase) {
-                const { error } = await supabase.from('inventory_movements').insert({
-                    product_id: movement.productId,
-                    movement_type: movement.type,
-                    quantity: movement.quantity,
-                    reason: movement.reason,
-                    created_by: movement.employeeId || null,
-                    supplier_id: movement.supplierId || null,
-                    invoice_reference: movement.invoiceRef || null,
-                    payment_type: movement.paymentType || null
-                });
-
-                if (!error) return true;
-                logger.error('[ProductRepo] Failed to register movement online', error);
-                // Fallback to offline if online fails? Maybe.
-            }
+        // FRD-012 Línea 24: "Operaciones offline: Solo ventas POS"
+        // Movimientos de inventario REQUIEREN conexión activa.
+        if (!isOnline) {
+            logger.error('[ProductRepo] ❌ OFFLINE_NOT_ALLOWED: Inventory movements require active connection (FRD-012)');
+            throw new Error('OFFLINE_NOT_ALLOWED: Los movimientos de inventario requieren conexión a internet.');
         }
 
-        // 2. Offline / Fallback: Add to Sync Queue AND Update Local Product
-        try {
-            // Import addToSyncQueue dynamically to avoid circular deps if any (though here it's fine)
-            const { addToSyncQueue } = await import('../syncQueue');
-
-            // Queue movement
-            await addToSyncQueue('CREATE_MOVEMENT', {
-                product_id: movement.productId,
-                movement_type: movement.type,
-                quantity: movement.quantity,
-                reason: movement.reason,
-                created_by: movement.employeeId || null,
-                supplier_id: movement.supplierId || null,
-                invoice_reference: movement.invoiceRef || null,
-                payment_type: movement.paymentType || null
-            });
-
-            // Update local product stock manually since trigger won't run
-            const product = await baseRepository.getById(movement.productId);
-            if (product) {
-                // Ensure Decimal using Domain type
-                const currentStock = new Decimal(product.stock);
-                let newStock = currentStock.toNumber();
-
-                // Logic must match DB trigger
-                if (['entrada', 'devolucion', 'ajuste'].includes(movement.type)) {
-                    // For 'ajuste', DB trigger adds quantity (assuming quantity is delta or signed?)
-                    newStock += movement.quantity;
-                } else if (['salida', 'venta'].includes(movement.type)) {
-                    newStock -= movement.quantity;
-                }
-
-                // Update using Domain Object Partial (Adapter maps to Persistence)
-                await baseRepository.update(product.id, {
-                    stock: new Decimal(newStock)
-                } as Partial<Product>);
-            }
-
-            return true;
-        } catch (e) {
-            logger.error('[ProductRepo] Exception in registerMovement fallback', e);
-            throw e; // Re-throw to let caller know
+        // Online: Insert into inventory_movements (Trigger updates stock)
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+            throw new Error('Supabase client not available');
         }
+
+        const { error } = await supabase.from('inventory_movements').insert({
+            product_id: movement.productId,
+            movement_type: movement.type,
+            quantity: movement.quantity,
+            reason: movement.reason,
+            created_by: movement.employeeId || null,
+            supplier_id: movement.supplierId || null,
+            invoice_reference: movement.invoiceRef || null,
+            payment_type: movement.paymentType || null
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to register movement', error);
+            throw error;
+        }
+
+        return true;
     }
 };
 
