@@ -192,6 +192,20 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         }
 
         currentSession.value = newSession;
+
+        // 📢 Notification Center: Jornada Iniciada (notifications.md L66)
+        try {
+            const { useNotificationsStore } = await import('./notificationsStore');
+            const notifStore = useNotificationsStore();
+            notifStore.addNotification({
+                type: 'general',
+                audience: 'all',
+                icon: 'store',
+                title: 'Jornada Iniciada',
+                message: `Tienda abierta con base de $${new Decimal(amount).toFixed(0)}`,
+                isRead: false,
+            });
+        } catch (e) { /* Non-critical */ }
     };
 
     const closeRegister = async (physicalCount: Decimal | number, notes?: string) => {
@@ -235,6 +249,21 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         // Archive session
         sessionHistory.value.push({ ...session });
         currentSession.value = null;
+
+        // 📢 Notification Center: Cierre de Caja (notifications.md L64)
+        try {
+            const { useNotificationsStore } = await import('./notificationsStore');
+            const notifStore = useNotificationsStore();
+            notifStore.addNotification({
+                type: 'finance',
+                audience: 'admin',
+                icon: 'payments',
+                title: 'Cierre de Caja',
+                message: `Arqueo completado. Balance: $${physical.toFixed(0)}. Diferencia: $${session.discrepancy!.toFixed(0)}`,
+                isRead: false,
+                metadata: { amount: Number(physical) },
+            });
+        } catch (e) { /* Non-critical */ }
 
         return session;
     };

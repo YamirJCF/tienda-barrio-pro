@@ -335,6 +335,22 @@ export const useSalesStore = defineStore(
             `Compra Ticket #${newSale.ticketNumber}`,
             newSale.id
           );
+
+          // 📢 Notification Center: Venta a Crédito (notifications.md L65)
+          try {
+            const { useNotificationsStore } = await import('./notificationsStore');
+            const notifStore = useNotificationsStore();
+            const totalStr = newSale.total instanceof Decimal ? newSale.total.toFixed(0) : String(newSale.total);
+            notifStore.addNotification({
+              type: 'finance',
+              audience: 'admin',
+              icon: 'payments',
+              title: 'Venta a Crédito',
+              message: `Nueva deuda de $${totalStr} - Ticket #${newSale.ticketNumber}`,
+              isRead: false,
+              metadata: { saleId: newSale.id, clientId: newSale.clientId },
+            });
+          } catch (e) { /* Non-critical */ }
         } catch (debtError: any) {
           console.warn('[SalesStore] Error registering client debt transaction:', debtError);
           // FRD-011: Show comprehensible message to user

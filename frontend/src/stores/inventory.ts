@@ -106,7 +106,28 @@ export const useInventoryStore = defineStore(
       } else if (eventType === 'UPDATE') {
         const index = products.value.findIndex(p => p.id === newRecord.id);
         if (index !== -1) {
-          products.value[index] = mapRecord(newRecord);
+          const oldProduct = products.value[index];
+          const updated = mapRecord(newRecord);
+          products.value[index] = updated;
+
+          // 📢 Stock bajo vía Realtime (notifications.md L63)
+          if (updated.stock.lt(updated.minStock) && !oldProduct.notifiedLowStock) {
+            const notificationsStore = useNotificationsStore();
+            notificationsStore.addNotification({
+              type: 'inventory',
+              audience: 'all',
+              icon: 'inventory_2',
+              title: `Stock Bajo: ${updated.name}`,
+              message: `Quedan ${updated.stock.toFixed(updated.measurementUnit === 'un' ? 0 : 2)} ${updated.measurementUnit}`,
+              isRead: false,
+              metadata: { productId: String(updated.id) },
+            });
+            updated.notifiedLowStock = true;
+          }
+          // Reset flag when stock recovers
+          if (updated.stock.gte(updated.minStock) && oldProduct.notifiedLowStock) {
+            updated.notifiedLowStock = false;
+          }
         }
       } else if (eventType === 'DELETE') {
         const index = products.value.findIndex(p => p.id === oldRecord.id);
