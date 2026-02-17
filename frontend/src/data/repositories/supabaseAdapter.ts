@@ -45,6 +45,26 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
     localStorageKey: string,
     mappers?: RepositoryMappers<TPersistence, TDomain>
 ): EntityRepository<TDomain> {
+
+    /**
+     * QA-FIX-007: Safely read array data from localStorage.
+     * Handles two formats:
+     *   - Raw array (written by supabaseAdapter): [item1, item2, ...]
+     *   - Pinia-wrapped (written by pinia-plugin-persistedstate): { products: [...] }
+     * Returns empty array if data is missing or unrecognizable.
+     */
+    const getLocalArray = (): TPersistence[] => {
+        const raw = localStorageAdapter.get<any>(localStorageKey);
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw;
+        // Pinia persist wraps store state in an object — extract the main array
+        if (typeof raw === 'object' && raw !== null) {
+            // Try common Pinia state keys (products, items, etc.)
+            const arrayKey = Object.keys(raw).find(k => Array.isArray(raw[k]));
+            if (arrayKey) return raw[arrayKey] as TPersistence[];
+        }
+        return [];
+    };
     /**
      * Check if Supabase is available
      */
@@ -70,7 +90,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
         if (!isAvailable()) {
             // Fallback to localStorage
             // Data in LS is TPersistence (if mappers exist) or TDomain (if not)
-            const data = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+            const data = getLocalArray();
             if (mappers) {
                 return data.map(mappers.toDomain);
             }
@@ -88,7 +108,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
             if (error) {
                 logger.log(`[SupabaseRepo:${tableName}] getAll error:`, error.message);
                 // Fallback to localStorage
-                const localData = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+                const localData = getLocalArray();
                 if (mappers) {
                     return localData.map(mappers.toDomain);
                 }
@@ -129,7 +149,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
             return mapToDomain(data as unknown as TPersistence[]) as TDomain[];
         } catch (error) {
             logger.log(`[SupabaseRepo:${tableName}] getAll exception:`, error);
-            const localData = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+            const localData = getLocalArray();
             if (mappers) {
                 return localData.map(mappers.toDomain);
             }
@@ -161,9 +181,8 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
         }
 
         // Fallback or if not available
-        const localData = localStorageAdapter.get<TPersistence[]>(localStorageKey);
-        // Fix: Ensure localData is an array before using .find
-        const item = Array.isArray(localData) ? localData.find(item => item.id === id) : null;
+        const localData = getLocalArray();
+        const item = localData.find(item => item.id === id) || null;
 
         if (item) {
             return mappers ? mappers.toDomain(item) : (item as unknown as TDomain);
@@ -211,11 +230,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
         }
 
         // 1. Optimistic / Offline Save (Always save to LS)
-        let existing = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
-        if (!Array.isArray(existing)) {
-            logger.warn(`[SupabaseAdapter:${tableName}] localStorage data corrupted in create, resetting`);
-            existing = [];
-        }
+        let existing = getLocalArray();
         existing.push(enrichedPayload);
         localStorageAdapter.set(localStorageKey, existing);
 
@@ -281,13 +296,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
 
         // 1. Get current state (Local prefered for speed/merging?)
         // Let's get from LS first to merge.
-        let existingList = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
-
-        // Defensive: Ensure it's actually an array (could be corrupted data)
-        if (!Array.isArray(existingList)) {
-            logger.warn(`[SupabaseAdapter:${tableName}] localStorage data corrupted, resetting to empty array`);
-            existingList = [];
-        }
+        let existingList = getLocalArray();
 
         const index = existingList.findIndex(item => item.id === id);
 
@@ -369,7 +378,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
                 const updatedPersistence = updated as unknown as TPersistence;
                 // Update LS with authoritative
                 // (Re-read list in case it changed)
-                const freshList = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
+                const freshList = getLocalArray();
                 const freshIndex = freshList.findIndex(e => e.id === id);
                 if (freshIndex !== -1) {
                     freshList[freshIndex] = updatedPersistence;
@@ -392,11 +401,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
      */
     const deleteRecord = async (id: string): Promise<boolean> => {
         // 1. Delete Local
-        let existing = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
-        if (!Array.isArray(existing)) {
-            logger.warn(`[SupabaseAdapter:${tableName}] localStorage data corrupted in delete, resetting`);
-            existing = [];
-        }
+        let existing = getLocalArray();
         const filtered = existing.filter(item => item.id !== id);
 
         if (filtered.length !== existing.length) {

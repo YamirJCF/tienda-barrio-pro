@@ -28,8 +28,8 @@ const STORAGE_KEY = 'tienda-inventory'; // Legacy key for compatibility
 // Type Alias for DB Row
 type ProductDB = Database['public']['Tables']['products']['Row'];
 
-// Measurement Units: DB uses 'unidad', Frontend domain uses 'un'
-// Translation happens in mapper (toDomain/toPersistence) — QA-FIX-001
+// Measurement Units: DB and Frontend use the same codes ('un' | 'kg' | 'lb' | 'g')
+// No translation needed — unified standard per SPEC-011
 
 /**
  * ProductMapper: Bidirectional transformer
@@ -39,7 +39,7 @@ type ProductDB = Database['public']['Tables']['products']['Row'];
  * 1. price (Decimal) <-> price (numeric)
  * 2. stock (Domain) <-> current_stock (DB)
  * 3. cost (Domain) <-> cost_price (DB)
- * 4. measurementUnit ('un') <-> measurement_unit ('unidad') [translated in mapper]
+ * 4. measurementUnit ('un') <-> measurement_unit ('un') [unified standard]
  */
 export const productMapper: RepositoryMappers<ProductDB, Product> = {
     toDomain: (row: ProductDB): Product => {
@@ -50,8 +50,8 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             price: new Decimal(row.price),
             // Map current_stock (DB) to stock (Domain)
             stock: new Decimal(row.current_stock),
-            // QA-FIX-001: Translate DB 'unidad' -> Domain 'un'
-            measurementUnit: (row.measurement_unit === 'unidad' ? 'un' : (row.measurement_unit || 'un')) as Product['measurementUnit'],
+            // DB and Frontend use same unit codes (no translation needed)
+            measurementUnit: (row.measurement_unit || 'un') as Product['measurementUnit'],
             // Handle Category: Now properly mapped to text column
             category: row.category || undefined,
             brand: row.brand || undefined,
@@ -59,7 +59,7 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             // Map cost_price (DB) to cost (Domain)
             cost: row.cost_price ? new Decimal(row.cost_price) : undefined,
             // Extra fields
-            isWeighable: row.is_weighable ?? (row.measurement_unit !== 'unidad'),
+            isWeighable: row.is_weighable ?? (row.measurement_unit !== 'un'),
             createdAt: row.created_at,
             updatedAt: row.updated_at,
             storeId: row.store_id,
@@ -92,8 +92,8 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             price: entity.price.toNumber(),
             // Map stock (Domain) to current_stock (DB)
             current_stock: entity.stock.toNumber(),
-            // QA-FIX-001: Translate Domain 'un' -> DB 'unidad'
-            measurement_unit: entity.measurementUnit === 'un' ? 'unidad' : entity.measurementUnit,
+            // DB and Frontend use same unit codes (no translation needed)
+            measurement_unit: entity.measurementUnit,
             // Correct mapping for Schema V2 (Text category)
             category: entity.category || null,
             brand: entity.brand || null,
@@ -163,37 +163,40 @@ export const productRepository: ProductRepository = {
     ...baseRepository,
 
     /**
-     * Get all products — Network-First Strategy
-     * QA-FIX-006: Changed from Cache-Ahead to Network-First
-     * 1. ONLINE: Fetch from Supabase (source of truth), update IDB cache
-     * 2. OFFLINE: Return from IDB cache (or legacy localStorage fallback)
+     * Get all products — Cache-Ahead Strategy
+     * 1. Return from IDB cache instantly (if populated)
+     * 2. Refresh from Supabase in background, update IDB cache
+     * 3. Fallback to legacy localStorage if IDB is empty AND offline
      */
     async getAll(storeId?: string): Promise<Product[]> {
-        // 1. ONLINE: Always fetch fresh from Supabase
-        if (navigator.onLine && isSupabaseConfigured()) {
-            try {
-                const fresh = await baseRepository.getAll(storeId);
-                if (fresh.length > 0) {
-                    // Update IDB cache with fresh data
-                    productCache.saveBulk(fresh).catch(e =>
-                        logger.warn('[ProductRepo] IDB cache update failed:', e)
-                    );
-                }
-                return fresh;
-            } catch (e) {
-                logger.warn('[ProductRepo] Supabase fetch failed, falling back to cache', e);
-                // Fall through to IDB cache on network error
-            }
-        }
-
-        // 2. OFFLINE or network error: Try IDB cache
+        // 1. Try IDB cache first (fast, async, non-blocking)
         const cached = await productCache.getAll();
         if (cached.length > 0) {
+            // Cache hit — serve immediately, refresh in background if online
+            if (navigator.onLine && isSupabaseConfigured()) {
+                // Fire-and-forget: refresh cache from Supabase
+                baseRepository.getAll(storeId).then(fresh => {
+                    if (fresh.length > 0) {
+                        productCache.saveBulk(fresh).catch(e =>
+                            logger.warn('[ProductRepo] Background IDB refresh failed:', e)
+                        );
+                    }
+                }).catch(() => { /* silent — we already have cache */ });
+            }
             return cached;
         }
 
-        // 3. Last resort: legacy localStorage fallback via baseRepository
-        return baseRepository.getAll(storeId);
+        // 2. IDB empty — fetch from Supabase (or legacy localStorage fallback)
+        const products = await baseRepository.getAll(storeId);
+
+        // 3. Populate IDB cache for next time
+        if (products.length > 0) {
+            productCache.saveBulk(products).catch(e =>
+                logger.warn('[ProductRepo] IDB cache population failed:', e)
+            );
+        }
+
+        return products;
     },
 
     /**
@@ -331,7 +334,7 @@ export const productRepository: ProductRepository = {
                     movement_type: movement.type,
                     quantity: movement.quantity,
                     reason: movement.reason,
-                    created_by: movement.employeeId || null,
+                    created_by: movement.employeeId,
                     supplier_id: movement.supplierId || null,
                     invoice_reference: movement.invoiceRef || null,
                     payment_type: movement.paymentType || null
@@ -354,7 +357,7 @@ export const productRepository: ProductRepository = {
                 movement_type: movement.type,
                 quantity: movement.quantity,
                 reason: movement.reason,
-                created_by: movement.employeeId || null,
+                created_by: movement.employeeId,
                 supplier_id: movement.supplierId || null,
                 invoice_reference: movement.invoiceRef || null,
                 payment_type: movement.paymentType || null

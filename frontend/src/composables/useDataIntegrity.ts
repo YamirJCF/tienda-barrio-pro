@@ -43,8 +43,10 @@ const CRITICAL_STORAGE_KEYS: StorageKeyConfig[] = [
     key: 'tienda-inventory',
     description: 'Inventario de productos',
     validator: (data: unknown): boolean => {
-      // Repository pattern saves directly as T[]
-      return Array.isArray(data);
+      // Pinia persist + inventorySerializer saves as { products: [...] }
+      if (typeof data !== 'object' || data === null) return false;
+      const obj = data as Record<string, unknown>;
+      return Array.isArray(obj.products);
     },
   },
   {

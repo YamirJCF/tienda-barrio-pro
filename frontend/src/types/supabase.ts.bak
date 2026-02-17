@@ -18,7 +18,7 @@ export interface Database {
                     cost_price: number | null // Hidden for non-admins via RLS
                     current_stock: number
                     min_stock: number
-                    measurement_unit: 'unidad' | 'kg' | 'lb' | 'g'
+                    measurement_unit: 'un' | 'kg' | 'lb' | 'g'
                     is_weighable: boolean
                     category: string | null
                     brand: string | null
@@ -34,7 +34,7 @@ export interface Database {
                     cost_price?: number | null
                     current_stock?: number
                     min_stock?: number
-                    measurement_unit?: 'unidad' | 'kg' | 'lb' | 'g'
+                    measurement_unit?: 'un' | 'kg' | 'lb' | 'g'
                     is_weighable?: boolean
                     category?: string | null
                     brand?: string | null
@@ -50,7 +50,7 @@ export interface Database {
                     cost_price?: number | null
                     current_stock?: number
                     min_stock?: number
-                    measurement_unit?: 'unidad' | 'kg' | 'lb' | 'g'
+                    measurement_unit?: 'un' | 'kg' | 'lb' | 'g'
                     is_weighable?: boolean
                     category?: string | null
                     brand?: string | null

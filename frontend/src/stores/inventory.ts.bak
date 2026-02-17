@@ -344,14 +344,11 @@ export const useInventoryStore = defineStore(
           finalReason = `${finalReason || ''} [Vence: ${movement.expirationDate}]`.trim();
         }
 
-        const authStore = useAuthStore();
         const success = await productRepository.registerMovement({
           productId: movement.productId,
           type: movement.type,
           quantity: qty.toNumber(),
           reason: finalReason,
-          // QA-FIX-005: Pass user ID for movement traceability
-          employeeId: authStore.currentUser?.id || undefined,
           supplierId: movement.supplierId,
           invoiceRef: movement.invoiceRef,
           paymentType: movement.paymentType

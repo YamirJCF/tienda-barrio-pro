@@ -46,7 +46,7 @@ const TABLE_SCHEMAS: Record<string, {
         optionalFields: [
             'id', 'plu', 'brand', 'category', 'cost_price', 'created_at',
             'current_stock', 'is_weighable', 'low_stock_alerted',
-            'measurement_unit', 'min_stock', 'updated_at', 'supplier_id'
+            'measurement_unit', 'min_stock', 'updated_at'
         ],
         get allFields() { return [...this.requiredFields, ...this.optionalFields]; }
     },
