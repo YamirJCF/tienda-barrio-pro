@@ -247,28 +247,40 @@ const handlePinComplete = async (pin: string) => {
   pinError.value = null;
 
   try {
-    let result;
-    if (props.mode === 'open') {
-      result = await cashControlStore.openCash(amount.value, pin, authorizedByName.value);
-    } else {
-      result = await cashControlStore.closeCash(amount.value, pin, authorizedByName.value);
-      if (result.difference !== undefined) {
-        difference.value = result.difference;
-      }
-    }
-
-    if (result.success) {
-      currentStep.value = 'success';
-    } else {
-      pinError.value = result.error ?? 'Error desconocido';
-
-      // Check if locked
+    // 1. PIN Validation (Security Store)
+    const pinResult = await cashControlStore.validatePin(pin);
+    if (!pinResult.success) {
+      pinError.value = pinResult.error ?? 'PIN incorrecto';
       if (cashControlStore.isLocked) {
         startLockCountdown();
       }
+      return;
     }
-  } catch (err) {
-    pinError.value = 'Error de conexión';
+
+    // 2. Operations (Cash Register Store)
+    const { useCashRegisterStore } = await import('@/stores/cashRegister');
+    const cashRegisterStore = useCashRegisterStore();
+
+    if (props.mode === 'open') {
+        if (!authStore.currentUser || !authStore.currentUser.storeId) {
+             throw new Error("Usuario no autenticado o sin tienda");
+        }
+        await cashRegisterStore.openRegister(
+            authStore.currentUser.id,
+            authStore.currentUser.storeId,
+            amount.value
+        );
+        currentStep.value = 'success';
+    } else {
+        const session = await cashRegisterStore.closeRegister(amount.value);
+        if (session && session.discrepancy) {
+            difference.value = Number(session.discrepancy);
+        }
+        currentStep.value = 'success';
+    }
+
+  } catch (err: any) {
+    pinError.value = err.message || 'Error de conexión';
   } finally {
     loading.value = false;
   }

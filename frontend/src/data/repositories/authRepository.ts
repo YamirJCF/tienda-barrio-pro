@@ -446,18 +446,7 @@ export const authRepository = {
         }
     },
 
-    /**
-     * DEPRECATED: Old Login Method (Kept for compatibility if needed temporarily)
-     */
-    async loginEmpleado(
-        username: string,
-        pin: string,
-        fingerprint: string,
-        userAgent: string
-    ): Promise<LoginResponse> {
-        logger.warn('[AuthRepo] Deprecated loginEmpleado called. Use requestEmployeeAccess instead.');
-        return { success: false, error: 'Método obsoleto. Actualice la aplicación.' };
-    },
+
 
     /**
      * Obtener solicitudes de acceso pendientes para el admin

@@ -1,10 +1,9 @@
-import type { CartItem } from '../../stores/cart';
-import type { MeasurementUnit } from '../../stores/inventory';
+import type { CartItem, MeasurementUnit } from '../../types';
 import { toDecimal, fromDecimal } from './decimalSerializer';
 import { Decimal } from 'decimal.js';
 
 interface SerializedCartItem {
-  id: number;
+  id: string;
   name: string;
   price: string;
   quantity: string;
@@ -26,7 +25,7 @@ export const serializeCartItem = (item: CartItem): SerializedCartItem => ({
   name: item.name,
   price: item.price.toString(),
   quantity: item.quantity.toString(),
-  unit: item.unit,
+  unit: item.measurementUnit,
   isWeighable: item.isWeighable,
   subtotal: fromDecimal(item.subtotal),
 });
@@ -36,7 +35,7 @@ export const deserializeCartItem = (data: SerializedCartItem): CartItem => ({
   name: data.name,
   price: toDecimal(data.price),
   quantity: toDecimal(data.quantity),
-  unit: data.unit,
+  measurementUnit: data.unit,
   isWeighable: data.isWeighable,
   subtotal: data.subtotal ? toDecimal(data.subtotal) : undefined,
 });

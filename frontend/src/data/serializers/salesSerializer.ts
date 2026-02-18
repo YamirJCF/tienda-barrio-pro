@@ -16,7 +16,7 @@ interface SerializedSale {
   total: string;
   roundingDifference?: string;
   effectiveTotal: string;
-  paymentMethod: 'cash' | 'nequi' | 'fiado' | 'mixed';
+  paymentMethod: string;
   amountReceived?: string;
   change?: string;
   clientId?: string; // Updated to string (UUID)
@@ -120,7 +120,7 @@ export const salesSerializer = {
     const data: SerializedSalesState = JSON.parse(value);
     return {
       sales: data.sales.map(deserializeSale),
-      nextId: data.nextId,
+      // nextId: data.nextId, // Deprecated
       isStoreOpen: data.isStoreOpen,
       openingCash: toDecimal(data.openingCash),
       currentCash: toDecimal(data.currentCash),

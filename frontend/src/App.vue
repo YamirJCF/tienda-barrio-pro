@@ -10,7 +10,7 @@ import CriticalAlertModal from './components/CriticalAlertModal.vue';
 import { useCriticalAlerts } from './composables/useCriticalAlerts';
 import OfflineBanner from './components/common/OfflineBanner.vue';
 import GlobalNetworkHandler from './components/common/GlobalNetworkHandler.vue';
-import AdminInterruptionModal from './components/security/AdminInterruptionModal.vue';
+
 
 // ============================================
 // DATA INTEGRITY CHECK (FIRST THING!)
@@ -149,7 +149,7 @@ const resetApp = () => {
     <!-- Global Network Handler - Always active -->
     <GlobalNetworkHandler />
     <OfflineBanner />
-    <AdminInterruptionModal />
+
     <ToastNotification />
   </div>
 </template>
