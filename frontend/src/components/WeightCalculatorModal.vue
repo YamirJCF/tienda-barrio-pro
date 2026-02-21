@@ -188,7 +188,9 @@ const clear = () => {
   <BaseModal
     :model-value="modelValue"
     @update:model-value="close"
-    content-class="flex flex-col"
+    content-class="flex flex-col overflow-y-auto"
+    max-height="100dvh"
+    :show-drag-handle="false"
   >
     <template #header>
         <div class="bg-gradient-to-r from-primary to-blue-600 text-white p-4 w-full">
@@ -229,8 +231,8 @@ const clear = () => {
           </div>
 
           <!-- Mode Toggle -->
-          <div class="p-4 border-b border-gray-100 dark:border-gray-800">
-            <div class="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex h-10">
+          <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
+            <div class="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex h-9">
               <button
                 type="button"
                 class="flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-bold transition-all"
@@ -244,7 +246,7 @@ const clear = () => {
                   clear();
                 "
               >
-                <Scale :size="16" />
+                <Scale :size="14" />
                 Por Peso
               </button>
               <button
@@ -260,37 +262,37 @@ const clear = () => {
                   clear();
                 "
               >
-                <Banknote :size="16" />
+                <Banknote :size="14" />
                 Por Valor
               </button>
             </div>
           </div>
 
           <!-- Input Display -->
-          <div class="p-5 text-center">
-            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+          <div class="px-4 py-3 text-center">
+            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
               {{ inputMode === 'value' ? 'Valor a cobrar' : `Cantidad (${sellUnit})` }}
             </div>
             <div
-              class="text-4xl font-bold text-gray-900 dark:text-white mb-2 min-h-[48px] tabular-nums"
+              class="text-3xl font-bold text-gray-900 dark:text-white mb-1 min-h-[40px] tabular-nums"
             >
               {{ inputMode === 'value' ? '$ ' : '' }}{{ inputValue || '0'
               }}{{ inputMode === 'weight' ? ` ${sellUnit}` : '' }}
             </div>
-            <div v-if="inputValue" class="text-lg text-primary font-medium">
+            <div v-if="inputValue" class="text-base text-primary font-medium">
               {{ formattedResult }}
             </div>
           </div>
 
           <!-- Numpad -->
-          <div class="grid grid-cols-3 gap-2 p-4 bg-gray-50 dark:bg-gray-900">
+          <div class="grid grid-cols-3 gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-900">
             <BaseButton
               v-for="num in ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00']"
               :key="num"
               @click="handleNumpad(num)"
               :disabled="num === '.' && inputMode === 'value'"
               variant="secondary"
-              class="h-12 text-xl font-bold bg-white dark:bg-gray-800"
+              class="h-11 text-lg font-bold bg-white dark:bg-gray-800"
               :class="{ 'opacity-30 cursor-not-allowed': num === '.' && inputMode === 'value' }"
             >
               {{ num }}
@@ -298,14 +300,14 @@ const clear = () => {
             <BaseButton
                 @click="handleNumpad('backspace')"
                 variant="danger"
-                class="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-none col-span-3 h-12"
+                class="bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border-none col-span-3 h-10"
             >
-                <Delete :size="20" />
+                <Delete :size="18" />
             </BaseButton>
           </div>
 
     <template #footer>
-          <div class="grid grid-cols-2 gap-3 p-4 bg-white dark:bg-background-dark border-t border-gray-100 dark:border-gray-800 pb-8">
+          <div class="grid grid-cols-2 gap-3 px-4 py-3 bg-white dark:bg-background-dark border-t border-gray-100 dark:border-gray-800 pb-safe">
             <BaseButton
               @click="close"
               variant="secondary"
