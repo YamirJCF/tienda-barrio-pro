@@ -56,11 +56,11 @@ const showClients = true;
       <!-- Item: Reportes -->
       <button
         v-if="canViewReports"
-        @click="router.push({ path: '/admin', query: { tab: 'reportes' } })"
+        @click="router.push('/reports')"
         class="flex flex-col items-center justify-center gap-1 transition-colors"
-        :class="isActive('admin') && route.query.tab === 'reportes' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'"
+        :class="isActive('reports') || isActive('financial-dashboard') || isActive('history') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'"
       >
-        <BarChart3 :size="24" :stroke-width="isActive('admin') && route.query.tab === 'reportes' ? 2 : 1.5" />
+        <BarChart3 :size="24" :stroke-width="isActive('reports') ? 2 : 1.5" />
         <span class="text-[10px] font-medium tracking-wide">Reportes</span>
       </button>
 
@@ -80,7 +80,7 @@ const showClients = true;
         v-if="isAdmin"
         @click="router.push('/admin')"
         class="flex flex-col items-center justify-center gap-1 transition-colors"
-        :class="isActive('admin') && route.query.tab !== 'reportes' ? 'text-primary' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'"
+        :class="isActive('admin') ? 'text-primary' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'"
       >
         <LayoutDashboard :size="24" :stroke-width="isActive('admin') ? 2 : 1.5" />
         <span class="text-[10px] font-medium tracking-wide">Admin</span>

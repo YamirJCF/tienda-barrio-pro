@@ -15,14 +15,38 @@ export interface FinancialSummary {
     traffic_light: { status: 'green' | 'red' | 'gray'; message: string };
 }
 
-export interface TopProduct {
+// NUEVAS INTERFACES (Reportes v2.0)
+export interface InventoryHealth {
+    valor_total: number;
+    dias_inventario: number;
+    estado: 'optimo' | 'riesgo' | 'saludable' | 'sobre_inventario' | 'desconocido';
+    distribucion_rotacion: {
+        rapida: { count: number; valor: number; porcentaje: number };
+        normal: { count: number; valor: number; porcentaje: number };
+        lenta: { count: number; valor: number; porcentaje: number };
+    };
+}
+
+export interface ClientLedgerSummary {
+    cartera_total: number;
+    cartera_vencida: number;
+    clientes_con_deuda: number;
+    clientes_morosos: number;
+    top_deudores: Array<{
+        client_id: string;
+        client_name: string;
+        balance: number;
+        dias_sin_pagar: number;
+        ultima_compra: string;
+    }>;
+}
+
+export interface TopProductUnit {
     product_id: string;
     product_name: string;
     units_sold: number;
-    revenue: number;
-    profit: number;
-    stock_remaining: number;
-    stock_status: 'ok' | 'low' | 'critical' | 'out';
+    dias_rotacion: number;
+    stock_actual: number;
 }
 
 export interface StagnantProduct {
@@ -36,11 +60,17 @@ export interface StagnantProduct {
 export type PeriodType = 'today' | 'week' | 'month';
 
 export const useFinancialStore = defineStore('financial', () => {
-    // State
-    const summary = ref<FinancialSummary | null>(null);
-    const topProducts = ref<TopProduct[]>([]);
+    // State - Snapshots (Static for the session)
+    const inventoryHealth = ref<InventoryHealth | null>(null);
+    const clientLedger = ref<ClientLedgerSummary | null>(null);
     const stagnantProducts = ref<StagnantProduct[]>([]);
-    const isLoading = ref(false);
+    
+    // State - Time-Series (Dynamic based on period)
+    const summary = ref<FinancialSummary | null>(null);
+    const topProductsByUnits = ref<TopProductUnit[]>([]);
+    
+    const isLoadingSnapshots = ref(false);
+    const isLoadingTimeSeries = ref(false);
     const error = ref<string | null>(null);
     const activePeriod = ref<PeriodType>('today');
 
@@ -68,118 +98,139 @@ export const useFinancialStore = defineStore('financial', () => {
         }
     }
 
-    // --- Actions ---
-
-    const fetchFinancialSummary = async (startDate: string, endDate: string) => {
+    // --- Actions: SNAPSHOTS (Load Once) ---
+    
+    const fetchInventoryHealth = async () => {
         const supabase = getSupabaseClient();
         if (!supabase || !authStore.currentUser?.storeId) return;
-
-        const { data, error: rpcError } = await supabase.rpc('get_financial_summary', {
-            p_store_id: authStore.currentUser.storeId,
-            p_start_date: startDate,
-            p_end_date: endDate,
+        const { data, error: rpcError } = await supabase.rpc('get_inventory_health', {
+            p_store_id: authStore.currentUser.storeId
         });
-
         if (rpcError) throw rpcError;
-        summary.value = data as FinancialSummary;
+        inventoryHealth.value = data as InventoryHealth;
     };
 
-    const fetchTopProducts = async (startDate: string, endDate: string, limit = 10) => {
+    const fetchClientLedgerSummary = async () => {
         const supabase = getSupabaseClient();
         if (!supabase || !authStore.currentUser?.storeId) return;
-
-        const { data, error: rpcError } = await supabase.rpc('get_top_selling_products', {
-            p_store_id: authStore.currentUser.storeId,
-            p_start_date: startDate,
-            p_end_date: endDate,
-            p_limit: limit,
+        const { data, error: rpcError } = await supabase.rpc('get_client_ledger_summary', {
+            p_store_id: authStore.currentUser.storeId
         });
-
         if (rpcError) throw rpcError;
-        topProducts.value = (data ?? []) as TopProduct[];
+        clientLedger.value = data as ClientLedgerSummary;
     };
 
     const fetchStagnantProducts = async (threshold = 30) => {
         const supabase = getSupabaseClient();
         if (!supabase || !authStore.currentUser?.storeId) return;
-
         const { data, error: rpcError } = await supabase.rpc('get_stagnant_products', {
             p_store_id: authStore.currentUser.storeId,
             p_days_threshold: threshold,
         });
-
         if (rpcError) throw rpcError;
         stagnantProducts.value = (data ?? []) as StagnantProduct[];
     };
+    
+    const loadSnapshots = async () => {
+        if (isLoadingSnapshots.value) return;
+        isLoadingSnapshots.value = true;
+        try {
+            await Promise.allSettled([
+                fetchInventoryHealth(),
+                fetchClientLedgerSummary(),
+                fetchStagnantProducts()
+            ]);
+        } catch (err: any) {
+            console.error('[FinancialStore] Error loading snapshots:', err);
+        } finally {
+            isLoadingSnapshots.value = false;
+        }
+    };
 
-    /** Coordina la carga de los 3 datasets según el período seleccionado */
+    // --- Actions: TIME-SERIES (Load on Period Change) ---
+
+    const fetchFinancialSummary = async (startDate: string, endDate: string) => {
+        const supabase = getSupabaseClient();
+        if (!supabase || !authStore.currentUser?.storeId) return;
+        const { data, error: rpcError } = await supabase.rpc('get_financial_summary', {
+            p_store_id: authStore.currentUser.storeId,
+            p_start_date: startDate,
+            p_end_date: endDate,
+        });
+        if (rpcError) throw rpcError;
+        summary.value = data as FinancialSummary;
+    };
+
+    const fetchTopProductsByUnits = async (startDate: string, endDate: string, limit = 10) => {
+        const supabase = getSupabaseClient();
+        if (!supabase || !authStore.currentUser?.storeId) return;
+        const { data, error: rpcError } = await supabase.rpc('get_top_products_by_units', {
+            p_store_id: authStore.currentUser.storeId,
+            p_start_date: startDate,
+            p_end_date: endDate,
+            p_limit: limit,
+        });
+        if (rpcError) throw rpcError;
+        topProductsByUnits.value = (data ?? []) as TopProductUnit[];
+    };
+
+    /** Carga estricta de la serie de tiempo según el periodo seleccionado */
     const setPeriod = async (period: PeriodType) => {
-        // Guard: prevent concurrent calls (QA #6)
-        if (isLoading.value) return;
-
+        if (isLoadingTimeSeries.value) return;
         activePeriod.value = period;
-        isLoading.value = true;
+        isLoadingTimeSeries.value = true;
         error.value = null;
 
         try {
             const { start, end } = getDateRange(period);
-
-            // Use allSettled to allow partial data display (QA #4)
             const results = await Promise.allSettled([
                 fetchFinancialSummary(start, end),
-                fetchTopProducts(start, end),
-                fetchStagnantProducts(),
+                fetchTopProductsByUnits(start, end)
             ]);
 
-            // Log individual failures but keep partial data
             results.forEach((result, i) => {
                 if (result.status === 'rejected') {
-                    console.warn(`[FinancialStore] Fetch #${i} failed:`, result.reason);
+                    console.warn(`[FinancialStore] Fetch TimeSeries #${i} failed:`, result.reason);
                 }
             });
 
-            // If ALL failed, set error state
             const allFailed = results.every(r => r.status === 'rejected');
-            if (allFailed) {
-                const firstError = (results[0] as PromiseRejectedResult).reason;
-                throw firstError;
-            }
+            if (allFailed) throw (results[0] as PromiseRejectedResult).reason;
+            
         } catch (err: any) {
-            console.error('[FinancialStore] Error loading data:', err);
-            error.value = err.message || 'Error al cargar los datos financieros';
+            console.error('[FinancialStore] Error loading time-series data:', err);
+            error.value = err.message || 'Error al cargar los datos financieros del periodo';
             summary.value = null;
-            topProducts.value = [];
-            stagnantProducts.value = [];
+            topProductsByUnits.value = [];
         } finally {
-            isLoading.value = false;
+            isLoadingTimeSeries.value = false;
         }
     };
 
     // --- Computed ---
-
-    // EXCEPCIÓN DOCUMENTADA (QA #3): Este reduce NO calcula valores de negocio.
-    // Solo suma stock_value ya calculado por el RPC get_stagnant_products.
-    // Reclasificado como agregación de presentación (UX), no lógica financiera.
     const totalStagnantValue = computed(() =>
         stagnantProducts.value.reduce((sum, p) => sum + Number(p.stock_value ?? 0), 0)
     );
 
     return {
-        // State
-        summary,
-        topProducts,
+        // State Arrays/Objects
+        inventoryHealth,
+        clientLedger,
         stagnantProducts,
-        isLoading,
+        summary,
+        topProductsByUnits,
+        
+        // UI State
+        isLoadingSnapshots,
+        isLoadingTimeSeries,
         error,
         activePeriod,
 
         // Computed
         totalStagnantValue,
 
-        // Actions
-        fetchFinancialSummary,
-        fetchTopProducts,
-        fetchStagnantProducts,
+        // Orquestadores de Negocio
+        loadSnapshots,
         setPeriod,
     };
 });

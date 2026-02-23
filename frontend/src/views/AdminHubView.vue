@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useCashControlStore } from '../stores/cashControl';
@@ -8,8 +8,6 @@ import { useAuthStore } from '../stores/auth'; // Import auth store
 import { usePresenceStore } from '../stores/presence'; // New Presence Store import
 import { 
   ArrowLeft, 
-  BarChart3, 
-  Settings, 
   Store, 
   Receipt, 
   Wallet, 
@@ -20,12 +18,9 @@ import {
   ChevronRight, 
   KeyRound,
   AlertTriangle,
-  Truck,
-  ClipboardList
+  Truck
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
-import SmartDailySummary from '../components/SmartDailySummary.vue';
-import SmartSupplySection from '../components/reports/SmartSupplySection.vue';
 
 // WO-004: Modal de PIN para SPEC-006 (consolidado)
 // T-008: Modal de PIN para SPEC-006 (consolidado)
@@ -34,16 +29,13 @@ import PinSetupModal from '../components/PinSetupModal.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 
 const router = useRouter();
-const route = useRoute();
 const salesStore = useSalesStore();
 const cashRegisterStore = useCashRegisterStore();
 const cashControlStore = useCashControlStore();
 const authStore = useAuthStore(); // Use auth store
 const presenceStore = usePresenceStore(); // Initialize
 
-// Inicializar pestaña basada en la URL o permisos
-const initialTab = (route.query.tab as string) || 'gestion';
-const activeTab = ref<'reportes' | 'gestion'>(initialTab as any);
+
 
 
 // WO-004: State para modal de PIN (consolidado)
@@ -61,33 +53,11 @@ const navigateTo = (route: string) => {
 
 // Computed Properties & Refs (Fixing missing definitions)
 const isAdmin = computed(() => authStore.isAdmin);
-const canViewReports = computed(() => authStore.canViewReports);
 const hasPinConfigured = computed(() => cashControlStore.hasPinConfigured);
 const pinSetupMode = computed(() => hasPinConfigured.value ? 'change' : 'setup');
 const showProfileSidebar = ref(false);
 
-// Validar pestaña inicial y permisos al montar
-onMounted(() => {
-    const tabName = route.query.tab as string;
-    
-    // Si la URL pide reportes y tiene permiso, mostrarlo
-    if (tabName === 'reportes' && (authStore.isAdmin || authStore.canViewReports)) {
-        activeTab.value = 'reportes';
-    } 
-    // Si no es admin y solo puede ver reportes, forzar reportes
-    else if (!authStore.isAdmin && authStore.canViewReports) {
-        activeTab.value = 'reportes';
-    }
-    // Si pidió gestion/config pero no es admin, fallback a reportes si puede, o home
-    else if ((tabName === 'gestion') && !authStore.isAdmin) {
-       if (authStore.canViewReports) activeTab.value = 'reportes';
-    }
-});
 
-// Sincronizar URL cuando cambia la pestaña
-watch(activeTab, (newTab) => {
-    router.replace({ query: { ...route.query, tab: newTab } });
-});
 </script>
 
 <template>
@@ -121,51 +91,12 @@ watch(activeTab, (newTab) => {
       </div>
     </header>
 
-    <!-- Tabs -->
-    <div
-      class="sticky top-[65px] z-30 w-full bg-background-light dark:bg-background-dark px-4 pb-4 pt-2 shadow-[0_4px_10px_-10px_rgba(0,0,0,0.1)]"
-    >
-      <div
-        class="flex h-12 w-full items-center justify-center rounded-2xl bg-slate-200 dark:bg-slate-800 p-1"
-      >
-        <label
-          v-if="isAdmin || canViewReports"
-          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-xl px-2 transition-all"
-          :class="
-            activeTab === 'reportes'
-              ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'
-              : 'text-slate-500 dark:text-slate-400 font-semibold hover:bg-white/50 dark:hover:bg-slate-700/50'
-          "
-          @click="activeTab = 'reportes'"
-        >
-          <span class="flex items-center gap-2 truncate text-sm">
-            <BarChart3 :size="18" :stroke-width="1.5" />
-            Reportes
-          </span>
-        </label>
-        <label
-          v-if="isAdmin"
-          class="flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-xl px-2 transition-all"
-          :class="
-            activeTab === 'gestion'
-              ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-primary font-bold ring-1 ring-black/5 dark:ring-white/10'
-              : 'text-slate-500 dark:text-slate-400 font-semibold hover:bg-white/50 dark:hover:bg-slate-700/50'
-          "
-          @click="activeTab = 'gestion'"
-        >
-          <span class="flex items-center gap-2 truncate text-sm">
-            <Settings :size="18" :stroke-width="1.5" />
-            Gestión
-          </span>
-        </label>
-
-      </div>
-    </div>
+    <!-- No Tabs anymore -->
 
     <!-- Main Content -->
     <main class="flex flex-col gap-6 px-4 pt-4">
       <!-- Control de Dinero -->
-      <section v-if="activeTab === 'gestion'">
+      <section>
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">
           Control de Dinero
         </h3>
@@ -242,36 +173,11 @@ watch(activeTab, (newTab) => {
             </button>
           </div>
 
-          <!-- Historial Financiero -->
-          <div
-            class="relative flex flex-col justify-between rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-sm border border-slate-100 dark:border-slate-700"
-          >
-            <div class="flex items-start justify-between mb-4">
-              <div
-                class="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400"
-              >
-                <ClipboardList :size="24" />
-              </div>
-            </div>
-            <div class="mb-5">
-              <h4 class="text-lg font-bold text-slate-900 dark:text-white leading-tight">
-                Historial Financiero
-              </h4>
-              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Ventas, caja, compras y auditoría</p>
-            </div>
-            <button
-              @click="navigateTo('/history')"
-              class="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-200 dark:hover:bg-slate-600 active:bg-slate-300"
-            >
-              <Eye :size="18" :stroke-width="1.5" />
-              Ver Historial
-            </button>
-          </div>
         </div>
       </section>
 
       <!-- Widget: Personal en Vivo (Presence Monitor) -->
-      <section v-if="activeTab === 'gestion'">
+      <section>
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1 flex items-center gap-2">
           <span>📡 Supervisión en Vivo</span>
           <span 
@@ -362,7 +268,7 @@ watch(activeTab, (newTab) => {
       </section>
 
       <!-- Equipo -->
-      <section v-if="activeTab === 'gestion'">
+      <section>
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">👥 Equipo</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
@@ -393,7 +299,7 @@ watch(activeTab, (newTab) => {
       </section>
 
       <!-- Inventario -->
-      <section v-if="activeTab === 'gestion'">
+      <section>
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">📦 Inventario</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
@@ -423,7 +329,7 @@ watch(activeTab, (newTab) => {
         </div>
       </section>
 
-      <section v-if="activeTab === 'gestion'">
+      <section>
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">🔐 Seguridad</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
@@ -459,31 +365,7 @@ watch(activeTab, (newTab) => {
         </div>
       </section>
 
-      <!-- Reportes Tab Content -->
-      <section v-if="activeTab === 'reportes'">
 
-        <!-- Financial Dashboard Quick Access -->
-        <div
-          @click="navigateTo('/admin/financial-dashboard')"
-          class="relative flex items-center gap-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 p-5 shadow-lg shadow-indigo-500/20 cursor-pointer active:scale-[0.98] transition-transform mb-6"
-        >
-          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm">
-            <span class="text-2xl">📊</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <h4 class="text-base font-bold text-white leading-tight">Dashboard Financiero</h4>
-            <p class="text-xs text-indigo-100 mt-0.5">Ganancia Neta · Top Ventas · Productos Estancados</p>
-          </div>
-          <ChevronRight :size="20" class="text-white/60 shrink-0" />
-        </div>
-
-        <SmartDailySummary />
-        
-        <!-- Smart Supply Section (FRD-008 Fase 2) -->
-        <div class="mt-6 border-t border-slate-200 dark:border-slate-800">
-          <SmartSupplySection />
-        </div>
-      </section>
 
       <div class="h-10"></div>
     </main>

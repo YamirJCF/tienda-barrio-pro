@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+
+const props = defineProps<{
+  isEmbedded?: boolean;
+}>();
 import { useHistory, type HistoryType, type DatePreset } from '../composables/useHistory';
 import { useAuthStore } from '../stores/auth';
 import HistoryItemCard from '../components/history/HistoryItemCard.vue';
@@ -153,7 +157,7 @@ onUnmounted(() => {
   <div class="min-h-screen bg-slate-50 dark:bg-[#0f172a] flex flex-col">
     <!-- Header -->
     <header class="sticky top-0 z-30 bg-white dark:bg-[#1e293b] border-b border-slate-100 dark:border-slate-800 shadow-sm">
-      <div class="px-4 py-3 flex items-center gap-3">
+      <div v-if="!isEmbedded" class="px-4 py-3 flex items-center gap-3">
         <BaseButton @click="goBack" variant="ghost" size="icon" class="-ml-2">
           <ArrowLeft :size="24" :stroke-width="1.5" />
         </BaseButton>
@@ -161,6 +165,9 @@ onUnmounted(() => {
           Historial y Auditoría
         </h1>
       </div>
+
+      <!-- Espaciador si está embebido para alinear padding -->
+      <div v-else class="pt-4"></div>
 
       <!-- Search Bar (T2) -->
       <div class="px-4 pb-2">

@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+
+const props = defineProps<{
+  isEmbedded?: boolean;
+}>();
 import { useFinancialStore, type PeriodType } from '../stores/financial';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import InventoryHealthWidget from '../components/reports/InventoryHealthWidget.vue';
+import ClientLedgerWidget from '../components/reports/ClientLedgerWidget.vue';
 import {
   ArrowLeft,
   TrendingUp,
@@ -11,7 +17,6 @@ import {
   Smartphone,
   BookOpen,
   AlertTriangle,
-  Snowflake,
   Package,
   RefreshCcw,
 } from 'lucide-vue-next';
@@ -19,9 +24,6 @@ import {
 const router = useRouter();
 const store = useFinancialStore();
 const { formatCurrency } = useCurrencyFormat();
-
-// Sub-tab state for "Decisiones de Compra"
-const activeProductTab = ref<'top' | 'stagnant'>('top');
 
 // Period tabs
 const periods: { key: PeriodType; label: string }[] = [
@@ -39,6 +41,7 @@ function goBack() {
 }
 
 function retry() {
+  store.loadSnapshots();
   store.setPeriod(store.activePeriod);
 }
 
@@ -73,6 +76,7 @@ function intensityColor(index: number): string {
 }
 
 onMounted(() => {
+  store.loadSnapshots();
   store.setPeriod('today');
 });
 </script>
@@ -81,7 +85,7 @@ onMounted(() => {
   <div class="relative flex min-h-screen w-full flex-col overflow-x-hidden pb-20 bg-background-light dark:bg-background-dark">
 
     <!-- Header -->
-    <header class="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+    <header v-if="!isEmbedded" class="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
       <div class="flex items-center justify-between px-4 h-[65px]">
         <button @click="goBack" class="flex items-center gap-2 text-slate-600 dark:text-slate-400 active:scale-95 transition-transform">
           <ArrowLeft :size="20" :stroke-width="1.5" />
@@ -93,7 +97,10 @@ onMounted(() => {
     </header>
 
     <!-- Period Tabs -->
-    <div class="sticky top-[65px] z-30 w-full bg-background-light dark:bg-background-dark px-4 pb-4 pt-2 shadow-[0_4px_10px_-10px_rgba(0,0,0,0.1)]">
+    <div 
+      class="sticky z-30 w-full bg-background-light dark:bg-background-dark px-4 pb-4 pt-2 shadow-[0_4px_10px_-10px_rgba(0,0,0,0.1)]"
+      :class="isEmbedded ? 'top-0' : 'top-[65px]'"
+    >
       <div class="flex h-12 w-full items-center justify-center rounded-2xl bg-slate-200 dark:bg-slate-800 p-1">
         <button
           v-for="p in periods"
@@ -112,8 +119,8 @@ onMounted(() => {
     <!-- Main Content -->
     <main class="flex flex-col gap-6 px-4 pt-4 max-w-lg mx-auto w-full">
 
-      <!-- Loading Skeletons -->
-      <div v-if="store.isLoading" class="flex flex-col gap-6 animate-pulse">
+      <!-- Loading Skeletons for Time Series -->
+      <div v-if="store.isLoadingTimeSeries" class="flex flex-col gap-6 animate-pulse">
         <div class="h-24 w-full bg-slate-200 dark:bg-slate-800 rounded-2xl"></div>
         <div class="grid grid-cols-3 gap-3">
           <div class="h-20 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
@@ -250,131 +257,59 @@ onMounted(() => {
                 </span>
               </div>
             </div>
-          </div>
 
-          <!-- Fiado Pendiente Banner -->
-          <div
-            v-if="store.summary.fiado_pendiente > 0"
-            class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl flex items-center gap-3"
-          >
-            <span class="text-lg">📋</span>
-            <div class="flex-1">
-              <p class="text-xs font-bold text-amber-700 dark:text-amber-400">Fiado Pendiente Total</p>
-              <p class="text-sm font-bold text-amber-800 dark:text-amber-300">
-                $ {{ formatCurrency(store.summary.fiado_pendiente) }}
-              </p>
+            <!-- Client Ledger Widget (Snapshot) injected into Liquidity Section -->
+            <div class="col-span-3 mt-2">
+              <ClientLedgerWidget :ledger="store.clientLedger" :isLoading="store.isLoadingSnapshots" />
             </div>
-            <span class="text-[10px] px-2 py-0.5 bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 rounded-full font-bold">
-              Por cobrar
-            </span>
           </div>
         </section>
 
-        <!-- 4. Decisiones de Compra -->
+        <!-- 4. Centro de Acción Orgánico -->
         <section>
           <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 pl-1">
-            📦 Decisiones de Compra
+            ⚡ Centro de Mando
           </h3>
 
-          <!-- Sub-tabs -->
-          <div class="flex gap-2 mb-4">
-            <button
-              @click="activeProductTab = 'top'"
-              class="flex-1 py-2 px-3 rounded-xl text-sm font-semibold transition-all"
-              :class="activeProductTab === 'top'
-                ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'"
-            >
-              🔥 Top Ventas
-            </button>
-            <button
-              @click="activeProductTab = 'stagnant'"
-              class="flex-1 py-2 px-3 rounded-xl text-sm font-semibold transition-all"
-              :class="activeProductTab === 'stagnant'
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'"
-            >
-              ❄️ Estancados
-            </button>
-          </div>
+          <div class="flex flex-col gap-4">
+            <!-- Inventory Health Widget (Snapshot) -->
+            <InventoryHealthWidget :health="store.inventoryHealth" :isLoading="store.isLoadingSnapshots" />
+          
+            <!-- Top Ventas List (Time-Series) -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col gap-3">
+              <h4 class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                🔥 Top Ventas del Período
+              </h4>
+              
+              <div v-if="store.topProductsByUnits.length === 0" class="text-center py-6">
+                <Package :size="32" class="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                <p class="text-sm text-slate-400">No hay ventas registradas</p>
+              </div>
 
-          <!-- Top Ventas List -->
-          <div v-if="activeProductTab === 'top'" class="flex flex-col gap-2">
-            <div v-if="store.topProducts.length === 0" class="text-center py-8">
-              <Package :size="40" class="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-              <p class="text-sm text-slate-400">No hay ventas en este período</p>
-            </div>
+              <div
+                v-for="(product, index) in store.topProductsByUnits.slice(0, 5)"
+                :key="product.product_id"
+                class="flex items-center gap-3 py-2 border-b border-slate-50 border-white/5 dark:border-slate-800 last:border-0"
+              >
+                <!-- Ranking -->
+                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-black"
+                  :class="index < 3 ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'">
+                  #{{ index + 1 }}
+                </span>
 
-            <div
-              v-for="(product, index) in store.topProducts"
-              :key="product.product_id"
-              class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-3"
-            >
-              <!-- Ranking -->
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-black"
-                :class="index < 3 ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'">
-                #{{ index + 1 }}
-              </span>
-
-              <!-- Product Info -->
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-bold text-slate-800 dark:text-white truncate">{{ product.product_name }}</p>
-                <div class="flex items-center gap-2 mt-1">
-                  <!-- Intensity Bar -->
-                  <div class="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 flex-1 overflow-hidden">
-                    <div class="h-full rounded-full transition-all" :class="intensityColor(index)" :style="{ width: intensityWidth(index, store.topProducts.length) }"></div>
-                  </div>
-                  <span class="text-[10px] font-bold shrink-0" :class="stockStatusColor(product.stock_status)">
-                    {{ stockStatusLabel(product.stock_status) }}
-                  </span>
+                <!-- Product Info -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{{ product.product_name }}</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Rota c/ {{ product.dias_rotacion }} d.
+                  </p>
                 </div>
-              </div>
 
-              <!-- Stats -->
-              <div class="text-right shrink-0">
-                <p class="text-sm font-bold text-slate-800 dark:text-white">{{ product.units_sold }}</p>
-                <p class="text-[10px] text-slate-400">uds</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Stagnant Products List -->
-          <div v-if="activeProductTab === 'stagnant'" class="flex flex-col gap-2">
-            <div v-if="store.stagnantProducts.length === 0" class="text-center py-8">
-              <Package :size="40" class="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-              <p class="text-sm text-slate-400">¡Sin productos estancados! 🎉</p>
-            </div>
-
-            <!-- Stagnant Summary -->
-            <div
-              v-if="store.stagnantProducts.length > 0"
-              class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-xl text-center mb-2"
-            >
-              <p class="text-xs text-blue-500">Capital inmovilizado total</p>
-              <p class="text-lg font-black text-blue-700 dark:text-blue-300">
-                $ {{ formatCurrency(store.totalStagnantValue) }}
-              </p>
-            </div>
-
-            <div
-              v-for="product in store.stagnantProducts"
-              :key="product.product_id"
-              class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-3"
-            >
-              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
-                <Snowflake :size="20" class="text-blue-500" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-bold text-slate-800 dark:text-white truncate">{{ product.product_name }}</p>
-                <p class="text-[10px] text-slate-400">
-                  {{ product.days_stagnant }} días sin venta
-                  <span v-if="product.last_sale_date"> · Última: {{ product.last_sale_date }}</span>
-                  <span v-else> · Nunca vendido</span>
-                </p>
-              </div>
-              <div class="text-right shrink-0">
-                <p class="text-sm font-bold text-blue-600 dark:text-blue-400">$ {{ formatCurrency(product.stock_value) }}</p>
-                <p class="text-[10px] text-slate-400">inmovilizado</p>
+                <!-- Stats -->
+                <div class="text-right shrink-0">
+                  <p class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ product.units_sold }}</p>
+                  <p class="text-[10px] text-slate-400 uppercase tracking-wider">uds</p>
+                </div>
               </div>
             </div>
           </div>

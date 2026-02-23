@@ -2,8 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.1.0] - 2026-02-15
+## [1.2.0] - 2026-02-22
 
+### Added
+- **Reports (Phase 5):**
+  - **Intelligence Hub (`ReportsHubView`):** New peer-to-peer navigation architecture separating "Dashboard" and "History" into equal-weight tabs.
+  - **Organic Widgets:** `InventoryHealthWidget` and `ClientLedgerWidget` for the Financial Dashboard with interactive deep-linking.
+  - **Time-Series vs Snapshot Data:** Decoupled static DB payloads (Inventory, Clients) from dynamic date-filtered payloads (Sales, Top Products) in `financial.ts`.
+  - **Backend RPCs:** `get_inventory_health`, `get_client_ledger_summary`, and `get_top_products_by_units`.
+
+### Changed
+- **UX:** Removed redundant Reports tab and "Historial Financiero" card from the Administration view to reduce cognitive load.
+- **Store Architecture:** `financial.ts` strictly acts as a payload receiver mapping directly to Backend RPC structures without performing frontend math.
+
+## [1.1.0] - 2026-02-15
 ### Added
 - **History (Phase 4):**
   - Global search by ticket, client, product, or employee.

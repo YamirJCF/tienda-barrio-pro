@@ -140,7 +140,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/reports',
     name: 'reports',
-    component: () => import('../views/ReportsView.vue'),
+    component: () => import('../views/ReportsHubView.vue'),
     meta: { requiresAuth: true },
   },
   // SPEC-009: Ruta de Historiales
