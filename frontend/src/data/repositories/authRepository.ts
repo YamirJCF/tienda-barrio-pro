@@ -507,13 +507,14 @@ export const authRepository = {
 
     /**
      * Aprobar o rechazar solicitud de acceso
-     * Updated: Utiliza la nueva RPC 'approve_daily_pass'
+     * Updated: Utiliza la nueva RPC 'aprobar_pase_diario'
      */
     async updateAccessRequestStatus(requestId: string, status: 'approved' | 'rejected', reviewedBy: string) {
         try {
             if (status === 'approved') {
-                const { data, error } = await supabase.rpc('approve_daily_pass' as any, {
-                    p_pass_id: requestId
+                const { data, error } = await supabase.rpc('aprobar_pase_diario' as any, {
+                    p_pass_id: requestId,
+                    p_admin_id: reviewedBy
                 });
                 if (error) throw error;
                 return data;

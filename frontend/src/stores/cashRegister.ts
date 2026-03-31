@@ -107,17 +107,14 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
                 return true;
             } else {
-                // Backend says closed - but ONLY clear if we don't have existing session
-                // This handles the case where:
-                // 1. User opened cash offline
-                // 2. Backend doesn't know about it yet
-                // 3. We shouldn't close the local session just because backend is out of sync
+                // Backend authoritatively says "no open session"
+                // FIX: Trust the backend when ONLINE. The old logic preserved stale local
+                // sessions even when the backend said "closed", causing cerrar_caja to fail
+                // with "Sesión no encontrada" or "La caja ya está cerrada".
+                // Offline resilience is handled in the catch block (network errors only).
                 if (hasExistingSession) {
-                    console.warn('⚠️ [CashRegisterStore] Backend closed, but preserving existing local session (offline resilience)');
-                    return true;
+                    console.warn('⚠️ [CashRegisterStore] Backend says closed — clearing stale local session');
                 }
-
-                // No existing session and backend is closed - that's fine
                 currentSession.value = null;
                 return false;
             }
@@ -176,6 +173,13 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
                 console.error('🚫 [CashRegisterStore] Repository registration failed:', result.error);
                 throw new Error(result.error || 'Failed to register opening event');
+            }
+
+            // FIX: Use the REAL session ID from the backend, not the local UUID
+            // Without this, cerrar_caja will fail with "Sesión no encontrada"
+            if (result.data?.session_id) {
+                newSession.id = result.data.session_id;
+                console.log('✅ [CashRegisterStore] Session ID synced from backend:', newSession.id);
             }
 
         } catch (e: any) {

@@ -89,7 +89,7 @@ const checkDeviceStatus = async (): Promise<void> => {
        authStore.loginAsEmployee({
           id: employee.id,
           name: employee.name,
-          username: employee.username || employee.alias, // Fallback
+          username: employee.username,
           permissions: employee.permissions || {}
        }, employee.store_id);
        
