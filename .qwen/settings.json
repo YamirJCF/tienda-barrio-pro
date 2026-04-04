@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(dian.com.co)",
+      "WebFetch(blog.alegra.com)",
+      "WebFetch(lesstax.app)",
+      "WebFetch(mytechsolutionsco.com)",
+      "WebFetch(www.factus.com.co)",
+      "WebFetch(loggro.com)",
+      "WebFetch(plemsi.com)",
+      "WebFetch(matias-api.com)",
+      "WebFetch(e-provider-docs.alegra.com)",
+      "WebFetch(portaldelcliente.dataico.com)",
+      "WebFetch(github.com)",
+      "WebFetch(www.gestiova.com.co)",
+      "WebFetch(aliaddo.com)"
+    ]
+  },
+  "$version": 3
+}
