@@ -20,6 +20,8 @@ Actúas como el "Arquitecto de Datos". Tu responsabilidad es proteger la integri
 
 
 ## Estándar de Migraciones
+- **[CRÍTICO] Política de Inmutabilidad (Opción D)**: NUNCA consolides ni borres migraciones antiguas (usando `db dump`). Las migraciones son inmutables. Se acumulan y se ejecutan secuencialmente. 
+- Si es absolutamente vital consolidar por rendimiento en un ambiente nuevo/limpio, DEBES invocar estrictamente el comando `/consolidate-db` y seguir su flujo de validación de 3 pasos (Checklist + Diff + Tag).
 - **Ubicación**: `supabase/migrations/`
 - **Nombre**: `YYYYMMDDHHMMSS_descripcion_corta.sql`
 - **Estructura**:
