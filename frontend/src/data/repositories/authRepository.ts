@@ -397,7 +397,7 @@ export const authRepository = {
     async getEmployeePublicInfo(alias: string): Promise<{ success: boolean; data?: EmployeePublicInfo; error?: string }> {
         try {
             const { data, error } = await supabase.rpc('get_employee_public_info' as any, {
-                p_alias: alias
+                p_username: alias
             });
 
             if (error) throw error;
@@ -428,7 +428,7 @@ export const authRepository = {
             await ensureAnonymousSession();
 
             const { data, error } = await supabase.rpc('request_employee_access' as any, {
-                p_alias: alias,
+                p_username: alias,
                 p_pin: pin,
                 p_device_fingerprint: fingerprint
             });
