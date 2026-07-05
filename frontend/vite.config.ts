@@ -79,6 +79,24 @@ export default defineConfig(({ mode }) => {
         }
       })
     ],
+    build: {
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('@supabase') || id.includes('supabase')) {
+                return 'vendor-supabase';
+              }
+              if (id.includes('decimal.js')) {
+                return 'vendor-decimal';
+              }
+              return 'vendor-core';
+            }
+          }
+        }
+      }
+    },
     define: {
       // 🔒 SECURITY HARDENING (OT-001):
       // Removed process.env.GEMINI_API_KEY injection to prevent exposure in client bundle.
