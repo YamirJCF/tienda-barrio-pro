@@ -451,12 +451,20 @@ export const authRepository = {
     /**
      * Obtener solicitudes de acceso pendientes para el admin
      * Updated: 'access_requests' -> 'daily_passes'
+     * OT-2: Filtered by UTC today and 5-minute TTL to prevent stale pending cards
      */
     async getPendingAccessRequests(storeId: string) {
+        // Use UTC date to match PostgreSQL CURRENT_DATE (server runs in UTC)
+        const today = new Date().toISOString().split('T')[0];
+        // Only show pending requests from the last 5 minutes (TTL)
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
         const { data, error } = await supabase
             .from('daily_passes')
             .select('*, employees!daily_passes_employee_id_fkey!inner(name, store_id)')
             .eq('status', 'pending')
+            .eq('pass_date', today)
+            .gte('requested_at', fiveMinutesAgo)
             .eq('employees.store_id', storeId)
             .order('requested_at', { ascending: false });
 
@@ -479,12 +487,17 @@ export const authRepository = {
     /**
      * Obtener dispositivos autorizados
      * Updated: 'access_requests' -> 'daily_passes'
+     * OT-2: Filtered by UTC today to exclude authorized devices from previous days
      */
     async getAuthorizedDevices(storeId: string) {
+        // Use UTC date to match PostgreSQL CURRENT_DATE (server runs in UTC)
+        const today = new Date().toISOString().split('T')[0];
+
         const { data, error } = await supabase
             .from('daily_passes')
             .select('*, employees!daily_passes_employee_id_fkey!inner(name, store_id)')
             .eq('status', 'approved')
+            .eq('pass_date', today)
             .eq('employees.store_id', storeId)
             .order('resolved_at', { ascending: false });
 
@@ -500,7 +513,7 @@ export const authRepository = {
             deviceFingerprint: r.device_fingerprint,
             userAgent: 'N/A',
             status: r.status,
-            requestedAt: r.requested_at // pass_date?
+            requestedAt: r.requested_at
         }));
     },
 
@@ -555,7 +568,7 @@ export const authRepository = {
     /**
      * FRD-001: Solicitar Pase Diario (Real Backend)
      */
-    async requestDailyPass(employeeId: string, fingerprint: string): Promise<{ success: boolean; status?: string; error?: string; retry_count?: number }> {
+    async requestDailyPass(employeeId: string, fingerprint: string): Promise<{ success: boolean; status?: string; pass_id?: string; error?: string; retry_count?: number }> {
         try {
             // FIX: Strip 'emp-' prefix if present, as backend expects raw UUID
             const cleanId = employeeId.startsWith('emp-') ? employeeId.replace('emp-', '') : employeeId;
@@ -586,6 +599,7 @@ export const authRepository = {
             return {
                 success: true,
                 status: result.status,
+                pass_id: result.pass_id,
                 retry_count: result.retry_count
             };
         } catch (err: any) {

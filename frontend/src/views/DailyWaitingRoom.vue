@@ -2,6 +2,11 @@
 /**
  * DailyWaitingRoom Component
  * WO-005: Sala de espera para aprobación diaria (Zero Trust)
+ *
+ * OT-6: Replaced setInterval polling with:
+ *   1. Supabase Realtime subscription on the employee's specific pass row
+ *   2. Local 5-minute setTimeout that expires the request if admin doesn't respond
+ *      Timer resets on every "Reenviar Alerta" (handlePing) call.
  */
 
 import { ref, onMounted, onUnmounted, computed } from 'vue';
@@ -10,20 +15,24 @@ import { useAuthStore } from '../stores/auth';
 import { useNotifications } from '@/composables/useNotifications';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import { Hourglass, AlertCircle, BellRing } from 'lucide-vue-next';
+import { supabase } from '@/lib/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const { showInfo, showSuccess, showError } = useNotifications();
 
 // State
-const isPolling = ref(false);
 const pingCount = ref(0);
 const isPingDisabled = ref(true);
-const pingCooldown = ref(120); // 2 minutos iniciales
+const pingCooldown = ref(120); // 2 min initial cooldown display
 const maxPings = 3;
 const isLocked = ref(false);
 
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
+// Realtime channel for this employee's specific pass row
+let passChannel: RealtimeChannel | null = null;
+// 5-minute expiry timer — reset on every retry
+let expiryTimer: ReturnType<typeof setTimeout> | null = null;
 let cooldownInterval: ReturnType<typeof setInterval> | null = null;
 
 // Messages
@@ -34,30 +43,72 @@ const title = computed(() => {
 
 const subtitle = computed(() => {
     if (authStore.dailyAccessStatus === 'rejected') return 'Tu solicitud ha sido rechazada por el administrador.';
-    return isLocked.value 
-    ? 'No hemos recibido respuesta del administrador.' 
+    return isLocked.value
+    ? 'No hemos recibido respuesta del administrador.'
     : 'Tu supervisor ha sido notificado. Por favor espera.';
 });
 
-// Methods
-const startPolling = () => {
-    pollingInterval = setInterval(async () => {
-        // Consultar estado real al store
-        if (status === 'approved') {
-            router.push('/');
-        } else if (status === 'rejected') {
-            isLocked.value = true;
-            if (pollingInterval) clearInterval(pollingInterval);
-        }
-    }, 5000); // 5s polling (más rápido para demo local)
+// ─── Realtime ──────────────────────────────────────────────────────────────
+
+const subscribeToPass = (passId: string) => {
+    if (passChannel) return; // guard: already subscribed
+
+    passChannel = supabase
+        .channel(`employee_pass_${passId}`)
+        .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'daily_passes', filter: `id=eq.${passId}` },
+            (payload) => {
+                const status = (payload.new as any)?.status;
+                if (status === 'approved') {
+                    clearExpiryTimer();
+                    router.push('/');
+                } else if (status === 'rejected' || status === 'expired') {
+                    clearExpiryTimer();
+                    isLocked.value = true;
+                    cleanupChannel();
+                }
+            }
+        )
+        .subscribe();
 };
+
+const cleanupChannel = () => {
+    if (passChannel) {
+        supabase.removeChannel(passChannel);
+        passChannel = null;
+    }
+};
+
+// ─── 5-minute expiry timer ──────────────────────────────────────────────────
+
+const EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
+const startExpiryTimer = () => {
+    clearExpiryTimer();
+    expiryTimer = setTimeout(() => {
+        // Admin didn't respond within 5 minutes → logout employee
+        cleanupChannel();
+        authStore.logout();
+        router.push({ path: '/login', query: { reason: 'timeout' } });
+    }, EXPIRY_MS);
+};
+
+const clearExpiryTimer = () => {
+    if (expiryTimer) {
+        clearTimeout(expiryTimer);
+        expiryTimer = null;
+    }
+};
+
+// ─── Cooldown display ───────────────────────────────────────────────────────
 
 const startCooldown = (seconds: number) => {
     pingCooldown.value = seconds;
     isPingDisabled.value = true;
-    
+
     if (cooldownInterval) clearInterval(cooldownInterval);
-    
+
     cooldownInterval = setInterval(() => {
         if (pingCooldown.value > 0) {
             pingCooldown.value--;
@@ -68,29 +119,35 @@ const startCooldown = (seconds: number) => {
     }, 1000);
 };
 
+// ─── Actions ────────────────────────────────────────────────────────────────
+
 const handlePing = async () => {
     if (pingCount.value >= maxPings) return;
 
     pingCount.value++;
-    // START: Connection to Real Store Logic
-    await authStore.requestDailyPass(); 
-    // END
-    
+    await authStore.requestDailyPass();
+
+    // Reset the 5-minute expiry window — employee is actively waiting
+    startExpiryTimer();
+
     if (pingCount.value >= maxPings) {
         isLocked.value = true;
-        // No paramos polling, quizas el admin apruebe justo despues
     } else {
-        startCooldown(60); // 1 min cooldown para demo (antes 5 min)
+        startCooldown(60); // 1 min UI cooldown between retries
     }
 };
 
 const handleLogout = () => {
+    clearExpiryTimer();
+    cleanupChannel();
     authStore.logout();
     router.push('/login');
 };
 
+// ─── Lifecycle ──────────────────────────────────────────────────────────────
+
 onMounted(async () => {
-    // Si no hay solicitud pendiente, pedirla automáticamente
+    // If no pending request yet, fire the initial one
     if (authStore.dailyAccessStatus === 'none' || authStore.dailyAccessStatus === 'expired') {
         showInfo('Contactando al Supervisor...');
         const result = await authStore.requestDailyPass();
@@ -100,19 +157,25 @@ onMounted(async () => {
             showError(`Error: ${result.error}`);
         }
     }
-    
-    startPolling();
-    
-    // Si ya enviamos solicitud (auto o previa), iniciar cooldown visual
+
+    // Subscribe to the server-pushed pass status updates
+    const passId = authStore.dailyAccessState?.passId;
+    if (passId) {
+        subscribeToPass(passId);
+    }
+
+    // Start 5-minute expiry timer
     if (authStore.dailyAccessStatus === 'pending') {
-        startCooldown(60); 
+        startExpiryTimer();
+        startCooldown(60);
     } else {
-        startCooldown(0); // Permitir botón si falló
+        startCooldown(0); // Allow button immediately if status is not pending
     }
 });
 
 onUnmounted(() => {
-    if (pollingInterval) clearInterval(pollingInterval);
+    clearExpiryTimer();
+    cleanupChannel();
     if (cooldownInterval) clearInterval(cooldownInterval);
 });
 
