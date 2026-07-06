@@ -431,6 +431,10 @@ export const useAuthStore = defineStore(
         dailyAccessState.value.status = (result.status as any) || 'pending';
         dailyAccessState.value.fingerprint = fingerprint;
         dailyAccessState.value.requestedAt = new Date().toISOString();
+        // OT-6: Persist passId so DailyWaitingRoom can subscribe to the correct Realtime row
+        if (result.pass_id) {
+          dailyAccessState.value.passId = result.pass_id;
+        }
         return { success: true };
       } else {
         console.error("Pass Request Error:", result.error);

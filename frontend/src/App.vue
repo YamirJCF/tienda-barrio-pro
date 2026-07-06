@@ -2,7 +2,9 @@
 import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth'; // Import Auth Store
+import { useDevicesStore } from './stores/devices'; // OT-6: Realtime admin channel
 import ToastNotification from './components/ToastNotification.vue';
+import GlobalAccessRequestModal from './components/GlobalAccessRequestModal.vue'; // OT-6: Blocking modal
 import { useNetworkStatus } from './composables/useNetworkStatus';
 import { checkDataIntegrity } from './composables/useDataIntegrity';
 // SPEC-008: Alertas críticas bloqueantes
@@ -38,6 +40,7 @@ useRevocationGuard();
 const errorDetected = ref(false);
 const router = useRouter();
 const authStore = useAuthStore(); // Initialize Auth Store
+const devicesStore = useDevicesStore(); // OT-6: Admin Realtime
 // Initialize Config Store (Global System Config)
 import { useConfigStore } from './stores/config';
 const configStore = useConfigStore();
@@ -60,12 +63,35 @@ const handleSyncAuthRequired = () => {
   router.push('/login');
 };
 
+// ============================================
+// OT-6: Admin Realtime sync on focus / online
+// ============================================
+const handleAdminResync = () => {
+  if (!authStore.isAdmin || !navigator.onLine) return;
+  devicesStore.fetchPendingRequests();
+  devicesStore.fetchConnectedDevices();
+};
+
 onMounted(() => {
   window.addEventListener('sync:auth_required', handleSyncAuthRequired);
+
+  // Subscribe admin to daily_passes Realtime channel
+  if (authStore.isAdmin && authStore.currentStore?.id) {
+    devicesStore.subscribeToDailyPasses(authStore.currentStore.id);
+  }
+
+  // Re-sync when tab regains visibility or network comes back online
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') handleAdminResync();
+  });
+  window.addEventListener('online', handleAdminResync);
 });
 
 onUnmounted(() => {
   window.removeEventListener('sync:auth_required', handleSyncAuthRequired);
+  devicesStore.unsubscribeFromDailyPasses();
+  document.removeEventListener('visibilitychange', handleAdminResync as EventListener);
+  window.removeEventListener('online', handleAdminResync);
 });
 
 // CAPTURA DE ERRORES GLOBAL (MEJORADO PARA OFFLINE)
@@ -149,6 +175,9 @@ const resetApp = () => {
     <!-- Global Network Handler - Always active -->
     <GlobalNetworkHandler />
     <OfflineBanner />
+
+    <!-- OT-6: Blocking access request modal — only active for admins -->
+    <GlobalAccessRequestModal v-if="authStore.isAdmin" />
 
     <ToastNotification />
   </div>

@@ -568,7 +568,7 @@ export const authRepository = {
     /**
      * FRD-001: Solicitar Pase Diario (Real Backend)
      */
-    async requestDailyPass(employeeId: string, fingerprint: string): Promise<{ success: boolean; status?: string; error?: string; retry_count?: number }> {
+    async requestDailyPass(employeeId: string, fingerprint: string): Promise<{ success: boolean; status?: string; pass_id?: string; error?: string; retry_count?: number }> {
         try {
             // FIX: Strip 'emp-' prefix if present, as backend expects raw UUID
             const cleanId = employeeId.startsWith('emp-') ? employeeId.replace('emp-', '') : employeeId;
@@ -599,6 +599,7 @@ export const authRepository = {
             return {
                 success: true,
                 status: result.status,
+                pass_id: result.pass_id,
                 retry_count: result.retry_count
             };
         } catch (err: any) {
