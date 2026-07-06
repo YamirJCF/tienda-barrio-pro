@@ -4,6 +4,12 @@ import { authRepository } from '../data/repositories/authRepository';
 import { logger } from '../utils/logger';
 import { useNotificationsStore } from './notificationsStore';
 import { useAuthStore } from './auth';
+import { supabase } from '../lib/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
+// Module-level variable: NOT a ref() to avoid unnecessary reactivity overhead
+// OT-4: Supabase Realtime channel for daily_passes push notifications
+let realtimeChannel: RealtimeChannel | null = null;
 
 export interface DeviceRequest {
     id: string;
@@ -20,6 +26,8 @@ export const useDevicesStore = defineStore('devices', () => {
     const pendingRequests = ref<DeviceRequest[]>([]);
     const connectedDevices = ref<DeviceRequest[]>([]);
     const isLoading = ref(false);
+    // OT-4: Controls whether the blocking modal is minimized to the widget
+    const isModalMinimized = ref(false);
 
     // Actions
     const fetchPendingRequests = async () => {
@@ -163,15 +171,106 @@ export const useDevicesStore = defineStore('devices', () => {
         return result;
     };
 
+    // ================================================================
+    // OT-4: Realtime Subscription
+    // Listens to daily_passes changes pushed by the server (Zero Polling)
+    // ================================================================
+    const subscribeToDailyPasses = (storeId: string) => {
+        // Guard: prevent duplicate channels
+        if (realtimeChannel) {
+            logger.log('[DevicesStore] Realtime already subscribed, skipping.');
+            return;
+        }
+
+        logger.log('[DevicesStore] Subscribing to daily_passes Realtime channel...');
+
+        realtimeChannel = supabase
+            .channel(`admin_devices_${storeId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'daily_passes',
+                    filter: `store_id=eq.${storeId}`,
+                },
+                async (payload) => {
+                    const newRecord = payload.new as any;
+                    const oldRecord = payload.old as any;
+
+                    logger.log('[DevicesStore] Realtime event:', payload.eventType, newRecord?.status);
+
+                    if (payload.eventType === 'INSERT' && newRecord?.status === 'pending') {
+                        // New access request → refresh list and show modal
+                        await fetchPendingRequests();
+                        isModalMinimized.value = false;
+
+                    } else if (payload.eventType === 'UPDATE') {
+                        const newStatus = newRecord?.status;
+                        const oldRetryCount = oldRecord?.retry_count ?? 0;
+                        const newRetryCount = newRecord?.retry_count ?? 0;
+
+                        if (newStatus === 'approved') {
+                            // Pass approved → move to connected, hide modal if no more pending
+                            pendingRequests.value = pendingRequests.value.filter(r => r.id !== newRecord.id);
+                            await fetchConnectedDevices();
+                            if (pendingRequests.value.length === 0) {
+                                isModalMinimized.value = false; // reset for next time
+                            }
+
+                        } else if (newStatus === 'expired' || newStatus === 'rejected') {
+                            // Server-driven expiry or rejection → clean up UI
+                            pendingRequests.value = pendingRequests.value.filter(r => r.id !== newRecord.id);
+                            connectedDevices.value = connectedDevices.value.filter(d => d.id !== newRecord.id);
+
+                            // Remove linked notification from bell center
+                            const notifStore = useNotificationsStore();
+                            const notif = notifStore.notifications.find(n => n.metadata?.requestId === newRecord.id);
+                            if (notif) notifStore.removeNotification(notif.id);
+
+                            if (pendingRequests.value.length === 0) {
+                                isModalMinimized.value = false; // reset for next time
+                            }
+
+                        } else if (newStatus === 'pending' && newRetryCount > oldRetryCount) {
+                            // Employee sent a retry → refresh list and re-interrupt admin screen
+                            await fetchPendingRequests();
+                            isModalMinimized.value = false;
+                        }
+                    }
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    logger.log('[DevicesStore] Realtime SUBSCRIBED to daily_passes ✅');
+                } else if (status === 'CHANNEL_ERROR') {
+                    logger.error('[DevicesStore] Realtime CHANNEL_ERROR — will retry automatically.');
+                }
+            });
+    };
+
+    const unsubscribeFromDailyPasses = async () => {
+        if (!realtimeChannel) return;
+        logger.log('[DevicesStore] Unsubscribing from daily_passes Realtime channel.');
+        await supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+    };
+
 
     return {
+        // State
         pendingRequests,
         connectedDevices,
         isLoading,
+        isModalMinimized,
+        // Actions
         fetchPendingRequests,
         fetchConnectedDevices,
         approveDevice,
         revokeDevice,
-        rejectRequest
+        rejectRequest,
+        // OT-4: Realtime
+        subscribeToDailyPasses,
+        unsubscribeFromDailyPasses,
     };
 });
