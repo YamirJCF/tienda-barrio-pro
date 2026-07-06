@@ -108,13 +108,46 @@ const loadFromStorage = (): SystemNotification[] => {
 
     const now = Date.now();
     const ttlMs = TTL_DAYS * 24 * 60 * 60 * 1000;
+    const PASS_TTL_MS = 5 * 60 * 1000; // 5 minutes (OT-3)
 
-    // Filter valid and non-expired notifications
-    return parsed.filter((n: SystemNotification) => {
-      const createdTime = new Date(n.createdAt).getTime();
-      const isExpired = now - createdTime > ttlMs;
-      return !isExpired && isValidNotification(n);
-    });
+    // Filter valid and non-expired notifications, then convert stale access requests
+    return parsed
+      .filter((n: SystemNotification) => {
+        try {
+          const createdTime = new Date(n.createdAt).getTime();
+          const isExpired = now - createdTime > ttlMs;
+          return !isExpired && isValidNotification(n);
+        } catch {
+          return false; // discard corrupted timestamps
+        }
+      })
+      .map((n: SystemNotification) => {
+        // OT-3: Convert pending access requests older than 5 minutes into
+        // archived informational notifications (remove requestId so they
+        // leave the Security Widget and appear in the regular bell history)
+        if (
+          n.metadata?.requestId &&
+          n.metadata?.status === 'pending'
+        ) {
+          try {
+            const createdTime = new Date(n.createdAt).getTime();
+            if (now - createdTime > PASS_TTL_MS) {
+              const { requestId: _removed, ...cleanMeta } = n.metadata as any;
+              return {
+                ...n,
+                title: 'Pase Vencido',
+                message: `${n.metadata.employeeName || 'Empleado'}: Solicitud expirada (5m)`,
+                actionable: false,
+                actions: [],
+                metadata: { ...cleanMeta, status: 'expired' },
+              } as SystemNotification;
+            }
+          } catch {
+            // If date is corrupt, leave notification unchanged
+          }
+        }
+        return n;
+      });
   } catch (e) {
     console.warn('[Notifications] Datos corruptos, reseteando...', e);
     localStorage.removeItem(STORAGE_KEY);
