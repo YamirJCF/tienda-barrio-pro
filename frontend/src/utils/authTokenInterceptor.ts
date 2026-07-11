@@ -152,13 +152,13 @@ export async function interceptAuthTokens(): Promise<InterceptResult> {
             }
         }
 
-        // For recovery: store the type so the router/callback can redirect
+        // For recovery: redirect directly to update-password
         if (type === 'recovery') {
-            sessionStorage.setItem('__auth_callback_type__', 'recovery');
+            window.location.hash = '#/update-password';
+        } else {
+            // Clean the hash — replace with root route for Hash Router
+            window.location.hash = '#/';
         }
-
-        // Clean the hash — replace with root route for Hash Router
-        window.location.hash = '#/';
 
         logger.log(`[AuthInterceptor] ✅ Complete. Type: ${type}, hash cleaned.`);
 
