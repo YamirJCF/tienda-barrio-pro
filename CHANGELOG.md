@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] - 2026-07-11
+
+### Fixed
+- **Auth:** Corregir redirección del enlace de recuperación de contraseña que enviaba erróneamente al Login en lugar de a la vista de restablecer contraseña (`update-password`).
+
 ## [1.2.0] - 2026-02-22
 
 ### Added
