@@ -39,6 +39,7 @@ const editingEmployeeId = ref<string | undefined>(undefined);
 const showPinModal = ref(false);
 const selectedEmployee = ref<Employee | null>(null);
 const newPin = ref('');
+const newlyCreatedId = ref<string | null>(null);
 
 // Computed: Filter out system owner employees from UI
 // Owners (username starting with 'owner_') are technical system employees
@@ -153,8 +154,16 @@ const savePin = async () => {
   }
 };
 
-const handleEmployeeSaved = () => {
+const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') => {
   showEmployeeModal.value = false;
+  if (action === 'create') {
+    newlyCreatedId.value = employee.id;
+    setTimeout(() => {
+      if (newlyCreatedId.value === employee.id) {
+        newlyCreatedId.value = null;
+      }
+    }, 3000);
+  }
 };
 
 // WO: initializeSampleData eliminada - SPEC-007
@@ -211,7 +220,10 @@ const handleEmployeeSaved = () => {
           v-for="employee in visibleEmployees"
           :key="employee.id"
           class="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-transparent hover:border-gray-100 dark:hover:border-gray-700 transition-all"
-          :class="{ 'opacity-60': !employee.isActive }"
+          :class="[
+            !employee.isActive ? 'opacity-60' : '',
+            employee.id === newlyCreatedId ? 'highlight-new' : ''
+          ]"
           @click="editEmployee(employee)"
         >
           <div class="flex items-center gap-4 flex-1 min-w-0">

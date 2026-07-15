@@ -160,3 +160,20 @@ body {
   position: absolute;
   width: 100%;
 }
+
+/* Highlight New Element Animation */
+@keyframes highlightPulse {
+  0% {
+    background-color: rgba(16, 185, 129, 0.2); /* Emerald 500 with opacity */
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.4);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.highlight-new {
+  animation: highlightPulse 3s ease-out;
+}
+

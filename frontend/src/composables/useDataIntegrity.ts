@@ -202,11 +202,15 @@ export function repairNegativeStock(): { repaired: number; products: string[] } 
     if (!rawData) return result;
 
     const data = JSON.parse(rawData);
-    if (!Array.isArray(data)) return result;
+    
+    // Check if it's the Pinia persist wrapper or the direct array (legacy)
+    const productsArray = Array.isArray(data) ? data : (data && Array.isArray(data.products) ? data.products : null);
+    
+    if (!productsArray) return result;
 
     let modified = false;
 
-    for (const product of data) {
+    for (const product of productsArray) {
       // Stock puede ser string (serializado de Decimal.js) o número
       const stockValue =
         typeof product.stock === 'string' ? parseFloat(product.stock) : product.stock;

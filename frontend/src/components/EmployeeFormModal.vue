@@ -18,7 +18,7 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  saved: [employee: Employee];
+  saved: [employee: Employee, action: 'create' | 'update'];
 }>();
 
 const employeesStore = useEmployeesStore();
@@ -35,6 +35,8 @@ const formData = ref({
   canViewReports: false,
   canOpenCloseCash: false,
 });
+
+const isSubmitting = ref(false);
 
 // Computed properties
 const isEdit = computed(() => !!props.employeeId);
@@ -104,42 +106,46 @@ const { showError, showSuccess } = useNotifications();
 const save = async () => {
   if (!isValid.value) return;
 
-  const baseData = {
-    name: formData.value.name.trim(),
-    username: formData.value.username.trim(),
-    pin: formData.value.pin || '', // Empty string means "don't update PIN" when editing
-    permissions: {
-      canSell: true, // Always true
-      canViewInventory: formData.value.canViewInventory,
-      canViewReports: formData.value.canViewReports,
-      canFiar: formData.value.canFiar,
-      canOpenCloseCash: formData.value.canOpenCloseCash,
-    },
-    isActive: true, 
-    storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '', // Inject storeId from AuthStore (Robust)
-  };
-  
+  isSubmitting.value = true;
   try {
-      let employee: Employee | null;
+    const baseData = {
+      name: formData.value.name.trim(),
+      username: formData.value.username.trim(),
+      pin: formData.value.pin || '', // Empty string means "don't update PIN" when editing
+      permissions: {
+        canSell: true, // Always true
+        canViewInventory: formData.value.canViewInventory,
+        canViewReports: formData.value.canViewReports,
+        canFiar: formData.value.canFiar,
+        canOpenCloseCash: formData.value.canOpenCloseCash,
+      },
+      isActive: true, 
+      storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '', // Inject storeId from AuthStore (Robust)
+    };
 
-      if (isEdit.value && props.employeeId) {
-        // PREVENTIVE CHECK: If trying to change PIN in Edit Mode
-        if (formData.value.pin && formData.value.pin.length > 0) {
-            showError('Por seguridad, el PIN no se puede cambiar aquí. Usa el botón "Cambiar PIN".');
-            return;
-        }
-        employee = await employeesStore.updateEmployee(props.employeeId, baseData);
-      } else {
-        employee = await employeesStore.addEmployee(baseData);
-      }
+    let employee: Employee | null;
 
-      if (employee) {
-        emit('saved', employee);
-        showSuccess(isEdit.value ? 'Empleado actualizado' : 'Empleado creado');
-        close();
+    if (isEdit.value && props.employeeId) {
+      // PREVENTIVE CHECK: If trying to change PIN in Edit Mode
+      if (formData.value.pin && formData.value.pin.length > 0) {
+          showError('Por seguridad, el PIN no se puede cambiar aquí. Usa el botón "Cambiar PIN".');
+          isSubmitting.value = false;
+          return;
       }
+      employee = await employeesStore.updateEmployee(props.employeeId, baseData);
+    } else {
+      employee = await employeesStore.addEmployee(baseData);
+    }
+
+    if (employee) {
+      showSuccess(isEdit.value ? 'Empleado actualizado' : 'Empleado creado');
+      emit('saved', employee, isEdit.value ? 'update' : 'create');
+      close();
+    }
   } catch (e: any) {
       showError(e.message);
+  } finally {
+      isSubmitting.value = false;
   }
 };
 
@@ -308,7 +314,8 @@ watch(
             </BaseButton>
             <BaseButton
                 @click="save"
-                :disabled="!isValid"
+                :disabled="!isValid || isSubmitting"
+                :loading="isSubmitting"
                 variant="primary"
                 class="flex-1"
             >

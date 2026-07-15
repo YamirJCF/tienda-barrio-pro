@@ -23,7 +23,7 @@ const productCache: LocalDataSource<Product> = createIndexedDBDataSource<Product
 
 // Constants
 const TABLE_NAME = 'products';
-const STORAGE_KEY = 'tienda-inventory'; // Legacy key for compatibility
+const STORAGE_KEY = 'tienda-products-db-cache'; // Changed to avoid collision with Pinia persist
 
 // Type Alias for DB Row
 type ProductDB = Database['public']['Tables']['products']['Row'];

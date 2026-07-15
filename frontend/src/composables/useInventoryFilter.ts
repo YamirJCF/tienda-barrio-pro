@@ -27,6 +27,12 @@ export function useInventoryFilter() {
             products = products.filter((p) => (p.category || 'Sin categoría') === selectedCategory.value);
         }
 
+        // Si products es el array original, debemos retornar una copia para forzar 
+        // la reactividad en componentes que dependen de la referencia (ej. RecycleScroller)
+        if (products === inventoryStore.products) {
+            return [...products];
+        }
+
         return products;
     });
 

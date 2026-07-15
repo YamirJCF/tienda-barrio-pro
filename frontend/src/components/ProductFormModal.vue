@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth';
 import type { Product } from '../types';
 import { Decimal } from 'decimal.js';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { useToast } from 'vue-toastification';
 import { logger } from '../utils/logger';
 import { getMarginLoss } from '../utils/currency';
 import BaseModal from './ui/BaseModal.vue';
@@ -32,12 +33,15 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  saved: [product: Product];
+  saved: [product: Product, action: 'create' | 'update'];
 }>();
 
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
+const toast = useToast();
 // const { roundHybrid50 } = useCurrencyFormat(); // No longer needed for saving
+
+const isSubmitting = ref(false);
 
 // WO-003: Preservar stock original para evitar pérdida de precisión
 const originalStock = ref<Decimal | null>(null);
@@ -241,26 +245,33 @@ const save = async () => {
 
   logger.log('[ProductForm] productData:', productData);
 
+  isSubmitting.value = true;
   let savedProduct: Product | undefined;
 
   try {
     if (props.productId) {
       // Update existing
       logger.log('[ProductForm] Updating product:', props.productId);
-      savedProduct = await inventoryStore.updateProduct(props.productId, productData);
+      savedProduct = await inventoryStore.updateProduct(props.productId, productData) || undefined;
     } else {
       // Create new
       logger.log('[ProductForm] Creating new product');
-      savedProduct = await inventoryStore.addProduct(productData);
+      savedProduct = await inventoryStore.addProduct(productData) || undefined;
     }
 
     if (savedProduct) {
       logger.log('[ProductForm] Saved product:', savedProduct);
-      emit('saved', savedProduct);
+      toast.success(props.productId ? 'Cambios guardados' : 'Producto creado exitosamente');
+      emit('saved', savedProduct, props.productId ? 'update' : 'create');
       close();
+    } else {
+      toast.error('Error al guardar el producto');
     }
   } catch (err) {
+    toast.error('Error al guardar el producto');
     logger.error('[ProductForm] Error saving product:', err);
+  } finally {
+    isSubmitting.value = false;
   }
 };
 
@@ -584,7 +595,8 @@ watch(
                 </BaseButton>
                 <BaseButton
                     @click="save"
-                    :disabled="!isValid"
+                    :disabled="!isValid || isSubmitting"
+                    :loading="isSubmitting"
                     variant="primary"
                     class="flex-1"
                     :icon="Save"

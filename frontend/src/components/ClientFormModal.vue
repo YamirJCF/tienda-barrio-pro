@@ -23,7 +23,7 @@ interface Props {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  saved: [client: Client];
+  saved: [client: Client, action: 'create' | 'update'];
 }>();
 
 const clientsStore = useClientsStore();
@@ -38,6 +38,8 @@ const formData = ref({
   phone: '',
   creditLimit: '',
 });
+
+const isSubmitting = ref(false);
 
 // Computed
 const isEdit = computed(() => !!props.clientId);
@@ -65,44 +67,55 @@ const close = () => {
 const save = async () => {
   if (!isValid.value) return;
 
-  const data = {
-    name: formData.value.name.trim(),
-    cc: formData.value.cc.trim(),
-    phone: formData.value.phone.trim() || undefined,
-    creditLimit: new Decimal(formData.value.creditLimit || 0),
-  };
-
-  let client: Client | null;
-
-  if (isEdit.value && props.clientId) {
-    const updateData = {
-        name: data.name,
-        cedula: data.cc,
-        phone: data.phone,
-        creditLimit: data.creditLimit
+  isSubmitting.value = true;
+  try {
+    const data = {
+      name: formData.value.name.trim(),
+      cc: formData.value.cc.trim(),
+      phone: formData.value.phone.trim() || undefined,
+      creditLimit: new Decimal(formData.value.creditLimit || 0),
     };
-    client = await clientsStore.updateClient(props.clientId, updateData);
-  } else {
-    // FIX: Inject storeId from AuthStore
-    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-    if (!storeId) {
-        showError('Error: No se ha identificado la tienda activa. Recarga la página.');
-        return;
+
+    let client: Client | null;
+
+    if (isEdit.value && props.clientId) {
+      const updateData = {
+          name: data.name,
+          cedula: data.cc,
+          phone: data.phone,
+          creditLimit: data.creditLimit
+      };
+      client = await clientsStore.updateClient(props.clientId, updateData);
+    } else {
+      // FIX: Inject storeId from AuthStore
+      const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+      if (!storeId) {
+          showError('Error: No se ha identificado la tienda activa. Recarga la página.');
+          isSubmitting.value = false;
+          return;
+      }
+
+      const createData = {
+          name: data.name,
+          cc: data.cc, 
+          phone: data.phone,
+          creditLimit: data.creditLimit,
+          storeId: storeId
+      };
+      client = await clientsStore.addClient(createData);
     }
 
-    const createData = {
-        name: data.name,
-        cc: data.cc, 
-        phone: data.phone,
-        creditLimit: data.creditLimit,
-        storeId: storeId
-    };
-    client = await clientsStore.addClient(createData);
-  }
-
-  if (client) {
-    emit('saved', client);
-    close();
+    if (client) {
+      showSuccess(isEdit.value ? 'Cambios guardados' : 'Cliente creado exitosamente');
+      emit('saved', client, isEdit.value ? 'update' : 'create');
+      close();
+    } else {
+      showError('Error al guardar el cliente');
+    }
+  } catch (err) {
+    showError('Error inesperado al guardar');
+  } finally {
+    isSubmitting.value = false;
   }
 };
 
@@ -277,11 +290,12 @@ watch(
               </button>
               <button
                 @click="save"
-                :disabled="!isValid"
+                :disabled="!isValid || isSubmitting"
                 class="flex-[2] h-12 rounded-xl bg-primary hover:bg-blue-700 text-white font-semibold text-base shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save :size="20" />
-                Guardar Cliente
+                <div v-if="isSubmitting" class="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                <Save v-else :size="20" />
+                {{ isSubmitting ? 'Guardando...' : 'Guardar Cliente' }}
               </button>
             </div>
           </div>

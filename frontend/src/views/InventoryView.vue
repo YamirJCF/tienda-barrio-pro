@@ -65,6 +65,9 @@ const kardexProduct = ref<{ id: string; name: string } | null>(null);
 const showBatchModal = ref(false);
 const batchProduct = ref<{ id: string; name: string } | null>(null);
 
+// Tarea 3: UX Destello (Creación)
+const newlyCreatedId = ref<string | null>(null);
+
 // Lifecycle
 onMounted(() => {
   inventoryStore.initialize();
@@ -115,6 +118,18 @@ const confirmDelete = () => {
 const cancelDelete = () => {
   showDeleteModal.value = false;
   productToDelete.value = null;
+};
+
+const handleProductSaved = (product: { id: string }, action: 'create' | 'update') => {
+  showProductModal.value = false;
+  if (action === 'create') {
+    newlyCreatedId.value = product.id;
+    setTimeout(() => {
+      if (newlyCreatedId.value === product.id) {
+        newlyCreatedId.value = null;
+      }
+    }, 3000);
+  }
 };
 </script>
 
@@ -199,6 +214,7 @@ const cancelDelete = () => {
           :class="{
             'active:scale-[0.99] cursor-pointer': canManageInventory,
             'cursor-default': !canManageInventory,
+            'highlight-new': product.id === newlyCreatedId
           }" @click="canManageInventory ? openEditProduct(product.id) : null">
           <!-- Row 1: Product Info + Price -->
           <div class="flex justify-between items-start gap-3 min-h-0">
@@ -293,7 +309,7 @@ const cancelDelete = () => {
     <BottomNav />
 
     <!-- Product Form Modal -->
-    <ProductFormModal v-model="showProductModal" :product-id="editingProductId" @saved="showProductModal = false" />
+    <ProductFormModal v-model="showProductModal" :product-id="editingProductId" @saved="handleProductSaved" />
     
     <!-- T1.4: Kardex Modal -->
     <KardexModal 

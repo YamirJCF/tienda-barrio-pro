@@ -19,7 +19,7 @@ import { addToSyncQueue } from '../syncQueue';
 
 // Constants
 const TABLE_NAME = 'sales';
-const STORAGE_KEY = 'tienda-sales';
+const STORAGE_KEY = 'tienda-sales-db-cache'; // Changed to avoid collision with Pinia persist
 
 // Type definitions
 type SaleDB = Database['public']['Tables']['sales']['Row'];

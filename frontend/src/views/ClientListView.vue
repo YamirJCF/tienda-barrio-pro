@@ -37,6 +37,7 @@ const searchQuery = ref('');
 const showClientModal = ref(false);
 // WO-001: Changed from number to string for UUID
 const editingClientId = ref<string | undefined>(undefined);
+const newlyCreatedId = ref<string | null>(null);
 
 // Computed
 const filteredClients = computed(() => {
@@ -99,8 +100,16 @@ const openClientDetail = (clientId: string) => {
   router.push(`/clients/${clientId}`);
 };
 
-const handleClientSaved = () => {
+const handleClientSaved = (client: { id: string }, action: 'create' | 'update') => {
   showClientModal.value = false;
+  if (action === 'create') {
+    newlyCreatedId.value = client.id;
+    setTimeout(() => {
+      if (newlyCreatedId.value === client.id) {
+        newlyCreatedId.value = null;
+      }
+    }, 3000);
+  }
 };
 
 // WO: initializeSampleData eliminada - SPEC-007
@@ -157,7 +166,10 @@ const handleClientSaved = () => {
         v-for="client in filteredClients"
         :key="client.id"
         class="relative flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-3 border-l-[6px] overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors active:scale-[0.99]"
-        :class="client.totalDebt.gt(0) ? 'border-red-500' : 'border-emerald-500'"
+        :class="[
+          client.totalDebt.gt(0) ? 'border-red-500' : 'border-emerald-500',
+          client.id === newlyCreatedId ? 'highlight-new' : ''
+        ]"
         @click="openClientDetail(client.id)"
       >
         <div
