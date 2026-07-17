@@ -2,7 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-07-17
+
+### Added
+- **Clients:** Historial de movimientos visible en la pantalla de detalle de cliente — compras fiadas y abonos aparecen en "Movimientos Recientes".
+- **Clients:** Botón "Editar Cliente" en el menú de opciones del detalle de cliente (visible solo para Admins).
+
+### Fixed
+- **DB:** `client_transactions` convertida de TABLE a VIEW sobre `client_ledger` (`security_invoker=true`) — elimina la duplicidad de modelos y el historial vacío.
+- **DB:** RPC `registrar_abono` ahora escribe en `client_ledger` en lugar de `client_transactions` — consistencia total del libro mayor.
+- **DB:** Migración con backfill aplicada en producción para preservar historial existente.
+- **Frontend:** `registerPayment` redirigido al RPC `registrar_abono` — elimina el doble cargo de deuda en ventas online.
+- **Frontend:** `updateDebt` y `addTransaction` en `clientRepository` convertidos en no-ops cuando hay conexión — escrituras directas eliminadas.
+- **Frontend:** Bug en `ClientFormModal` donde `cedula` no coincidía con la clave `cc` del dominio al editar.
+- **Frontend:** Inyección de `storeId` en `updateClient` para cumplir validación RLS del adaptador.
+- **Frontend:** `supabaseAdapter.update` ahora usa Supabase como fuente de verdad (no localStorage) antes del merge, evitando datos desactualizados con `store_id` vacío.
+
 ## [1.2.1] - 2026-07-11
+
 
 ### Fixed
 - **Auth:** Corregir redirección del enlace de recuperación de contraseña que enviaba erróneamente al Login en lugar de a la vista de restablecer contraseña (`update-password`).
