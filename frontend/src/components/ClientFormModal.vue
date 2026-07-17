@@ -81,7 +81,7 @@ const save = async () => {
     if (isEdit.value && props.clientId) {
       const updateData = {
           name: data.name,
-          cedula: data.cc,
+          cc: data.cc,
           phone: data.phone,
           creditLimit: data.creditLimit
       };

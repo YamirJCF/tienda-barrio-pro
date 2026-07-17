@@ -120,14 +120,19 @@ export const clientRepository: ClientRepository = {
     },
 
     async updateDebt(id: string, amount: number): Promise<boolean> {
+        // Online path: no-op — the RPC (rpc_procesar_venta_v2 / registrar_abono) owns
+        // the balance update atomically. Writing here would cause a double-charge.
+        if (isSupabaseConfigured() && navigator.onLine) {
+            return true;
+        }
+
+        // Offline path: update locally so the POS shows the correct balance immediately
         const client = await baseRepository.getById(id);
         if (!client) return false;
 
-        // Use Domain Decimal for calculation
         const currentDebt = client.totalDebt;
         const newDebt = currentDebt.plus(amount);
 
-        // Update using Domain Partial (Adapter maps to persistence)
         const updated = await baseRepository.update(id, {
             totalDebt: newDebt
         } as Partial<Client>);
@@ -173,43 +178,13 @@ export const clientRepository: ClientRepository = {
         date: string,
         saleId?: string
     }): Promise<boolean> {
+        // Online path: no-op — client_ledger is written exclusively by RPCs on the backend.
+        // client_transactions is now a VIEW of client_ledger, so direct inserts are not possible.
         if (isSupabaseConfigured() && navigator.onLine) {
-            const supabase = getSupabaseClient()!;
-
-            // Map Domain Types -> DB Types (WO-002 Violation Fix)
-            const dbType = tx.type === 'purchase' ? 'compra' : 'pago';
-
-            const { error } = await supabase
-                .from('client_transactions')
-                .insert({
-                    id: tx.id,
-                    client_id: tx.clientId,
-                    transaction_type: dbType, // Mapped value
-                    amount: tx.amount,
-                    description: tx.description,
-                    created_at: tx.date,
-                    // FRD-012: Allow null sale_id for offline purchases
-                    // Will be reconciled when sale syncs
-                    sale_id: tx.saleId || null
-                });
-
-            if (error) {
-                // FRD-011: Log with context for debugging
-                console.error('[ClientRepo] Error adding transaction:', {
-                    code: error.code,
-                    message: error.message,
-                    details: error.details
-                });
-
-                // FK violation (23503) means sale doesn't exist yet - expected for offline
-                if (error.code === '23503') {
-                    console.warn('[ClientRepo] FK violation - sale may be pending sync. Transaction will retry.');
-                }
-                return false;
-            }
             return true;
         }
-        // Offline fallback: transaction will be created when sale syncs
+
+        // Offline path: log the pending transaction so it can be synced later
         console.warn('[ClientRepo] Offline - transaction not persisted, will sync with sale');
         return false;
     },
@@ -222,24 +197,10 @@ export const clientRepository: ClientRepository = {
         description: string,
         saleId: string
     ): Promise<boolean> {
-        if (!isSupabaseConfigured() || !navigator.onLine) return false;
-
-        const supabase = getSupabaseClient()!;
-
-        // Find transaction by description pattern (contains ticket number)
-        const { error } = await supabase
-            .from('client_transactions')
-            .update({ sale_id: saleId })
-            .is('sale_id', null)
-            .eq('transaction_type', 'compra')
-            .ilike('description', `%${description}%`);
-
-        if (error) {
-            console.error('[ClientRepo] Error reconciling transaction:', error);
-            return false;
-        }
-
-        console.log('[ClientRepo] Reconciled pending transaction with sale_id:', saleId);
+        // No-op: client_transactions is now a VIEW of client_ledger.
+        // The reference_id (sale_id) is set at the time of the RPC call and does not
+        // need manual reconciliation. This method is kept for interface compatibility.
+        console.log('[ClientRepo] updatePendingTransactionSaleId is a no-op (view-based reconciliation).', { description, saleId });
         return true;
     }
 };

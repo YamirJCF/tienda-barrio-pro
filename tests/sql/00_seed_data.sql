@@ -11,7 +11,7 @@ SET session_replication_role = 'replica';
 TRUNCATE TABLE sale_items CASCADE;
 TRUNCATE TABLE sales CASCADE;
 TRUNCATE TABLE inventory_movements CASCADE;
-TRUNCATE TABLE client_transactions CASCADE;
+TRUNCATE TABLE client_ledger CASCADE;
 TRUNCATE TABLE clients CASCADE;
 TRUNCATE TABLE products CASCADE;
 TRUNCATE TABLE employees CASCADE;
@@ -153,5 +153,18 @@ BEGIN
         );
     END LOOP;
 END $$;
+
+-- Insertar ledger inicial para Cliente Fiador para mantener consistencia
+INSERT INTO public.client_ledger (client_id, store_id, amount, previous_balance, reference_id, transaction_type)
+SELECT 
+    id, 
+    store_id, 
+    150000, 
+    0, 
+    NULL, 
+    'venta_fiado'
+FROM public.clients 
+WHERE cedula = 'C002' 
+LIMIT 1;
 
 -- Fin del seeding

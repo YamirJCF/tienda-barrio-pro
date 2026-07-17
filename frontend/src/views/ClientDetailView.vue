@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useClientsStore } from '../stores/clients';
 import { useAuthStore } from '../stores/auth';
-import { type Client, type ClientTransaction } from '../types';
+import { type ClientTransaction } from '../types';
 import { Decimal } from 'decimal.js';
 import BaseModal from '../components/ui/BaseModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import ClientFormModal from '../components/ClientFormModal.vue';
 import { 
-  ArrowLeft, 
   MoreVertical, 
   Trash2, 
   Receipt, 
@@ -17,8 +17,10 @@ import {
   ShoppingCart, 
   Plus,
   AlertTriangle,
-  ChevronLeft
+  ChevronLeft,
+  Pencil
 } from 'lucide-vue-next';
+
 
 const router = useRouter();
 const route = useRoute();
@@ -32,6 +34,7 @@ const showPaymentModal = ref(false);
 const showOptionsMenu = ref(false);
 const showDeleteConfirm = ref(false);
 const showDebtAlert = ref(false);
+const showEditModal = ref(false);
 
 // Get client ID from route
 const clientId = computed(() => String(route.params.id));
@@ -184,6 +187,14 @@ const registerPayment = () => {
                 v-if="showOptionsMenu"
                 class="absolute right-0 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden min-w-[180px] z-50"
               >
+                <button
+                  v-if="isAdmin"
+                  @click="showEditModal = true; closeOptionsMenu()"
+                  class="w-full px-4 py-3 flex items-center gap-3 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left"
+                >
+                  <Pencil :size="20" :stroke-width="1.5" />
+                  <span class="font-medium">Editar cliente</span>
+                </button>
                 <button
                   @click="confirmDelete"
                   class="w-full px-4 py-3 flex items-center gap-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
@@ -425,6 +436,9 @@ const registerPayment = () => {
             </div>
         </template>
     </BaseModal>
+
+    <!-- Edit Client Modal -->
+    <ClientFormModal v-model="showEditModal" :client-id="clientId" @saved="showEditModal = false" />
   </div>
 </template>
 

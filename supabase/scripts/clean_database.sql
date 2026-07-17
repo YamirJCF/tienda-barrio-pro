@@ -10,7 +10,7 @@ TRUNCATE TABLE
     public.sales,
     public.cash_movements,
     public.cash_sessions,
-    public.client_transactions,
+    public.client_ledger,
     public.inventory_movements,
     public.price_change_logs,
     public.daily_passes,
@@ -18,6 +18,9 @@ TRUNCATE TABLE
     public.audit_logs,
     public.error_logs
 CASCADE;
+
+-- Reset all client debt balances to keep database state consistent
+UPDATE public.clients SET balance = 0;
 
 -- 2. Reinicio de Secuencias (si aplica, aunque UUIDs no usan secuencia)
 -- Si usaras IDs numéricos autoincrementales, aquí irían los RESTART IDENTITY.

@@ -13,7 +13,7 @@ const mockClientDB = {
     credit_limit: 50000,
     created_at: '2023-01-01T00:00:00Z',
     updated_at: '2023-01-01T00:00:00Z',
-    store_id: 'store-1',
+    store_id: '3d474d8a-c238-4e3e-8b41-31346edb86eb',
     deleted_at: null,
     is_deleted: false,
     address: null,
@@ -30,7 +30,8 @@ const mockClientDomain: Client = {
     createdAt: '2023-01-01T00:00:00Z',
     updatedAt: '2023-01-01T00:00:00Z',
     email: undefined,
-    notes: undefined
+    notes: undefined,
+    storeId: '3d474d8a-c238-4e3e-8b41-31346edb86eb'
 };
 
 describe('ClientMapper (WO-FE-008)', () => {

@@ -6,6 +6,7 @@ import { clientRepository } from '../data/repositories/clientRepository';
 import { generateUUID } from '../utils/uuid';
 import { logger } from '../utils/logger';
 import { clientsSerializer } from '../data/serializers/clientsSerializer';
+import { getSupabaseClient, isSupabaseConfigured } from '../data/supabaseClient';
 
 export const useClientsStore = defineStore(
   'clients',
@@ -86,7 +87,14 @@ export const useClientsStore = defineStore(
 
     const updateClient = async (id: string, data: Partial<Client>) => {
       try {
-        const updated = await clientRepository.update(id, data);
+        // Inject storeId from cached state - required by supabaseAdapter for RLS compliance.
+        // The form only sends editable fields (name, cc, phone, creditLimit), not storeId.
+        const existingClient = getClientById(id);
+        const dataWithStore: Partial<Client> = existingClient?.storeId
+          ? { ...data, storeId: existingClient.storeId }
+          : data;
+
+        const updated = await clientRepository.update(id, dataWithStore);
         if (updated) {
           const index = clients.value.findIndex(c => c.id === id);
           if (index !== -1) {
@@ -97,6 +105,7 @@ export const useClientsStore = defineStore(
       } catch (e) {
         logger.error('Update client failed', e);
         throw e;
+
       }
       return null;
     };
@@ -173,26 +182,52 @@ export const useClientsStore = defineStore(
     };
 
     const registerPayment = async (clientId: string, amount: Decimal, description = 'Abono') => {
-      // 1. Update Debt (Negative amount to reduce)
+      // Online path: delegate entirely to the registrar_abono RPC (Backend Authority)
+      // The RPC validates balance, updates clients.balance, and writes to client_ledger atomically.
+      if (isSupabaseConfigured() && navigator.onLine) {
+        const supabase = getSupabaseClient()!;
+        const { data, error } = await supabase.rpc('registrar_abono', {
+          p_client_id: clientId,
+          p_amount: amount.toNumber()
+        });
+
+        if (error || !data?.success) {
+          const msg = data?.error || error?.message || 'Error al registrar el abono';
+          throw new Error(msg);
+        }
+
+        // Update local Pinia state optimistically after confirmed RPC success
+        const txStub: ClientTransaction = {
+          id: generateUUID(),
+          clientId,
+          type: 'payment',
+          amount,
+          description,
+          date: new Date().toISOString()
+        };
+        const client = getClientById(clientId);
+        if (client) {
+          client.totalDebt = client.totalDebt.minus(amount);
+          client.updatedAt = new Date().toISOString();
+        }
+        transactions.value.push(txStub);
+        return txStub;
+      }
+
+      // Offline path: optimistic local write (will sync when back online)
       const success = await clientRepository.updateDebt(clientId, -amount.toNumber());
       if (!success) throw new Error('Failed to register payment');
 
-      // 2. Add Transaction
       const txStub: ClientTransaction = {
         id: generateUUID(),
         clientId,
         type: 'payment',
-        amount: amount,
+        amount,
         description,
         date: new Date().toISOString()
       };
+      await clientRepository.addTransaction({ ...txStub, amount: amount.toNumber() });
 
-      await clientRepository.addTransaction({
-        ...txStub,
-        amount: amount.toNumber()
-      });
-
-      // 3. Local Update
       const client = getClientById(clientId);
       if (client) {
         client.totalDebt = client.totalDebt.minus(amount);

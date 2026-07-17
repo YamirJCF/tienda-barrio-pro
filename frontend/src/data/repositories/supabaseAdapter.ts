@@ -230,7 +230,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
         }
 
         // 1. Optimistic / Offline Save (Always save to LS)
-        let existing = getLocalArray();
+        const existing = getLocalArray();
         existing.push(enrichedPayload);
         localStorageAdapter.set(localStorageKey, existing);
 
@@ -289,44 +289,28 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
      * Update existing record
      */
     const update = async (id: string, updateData: Partial<TDomain>): Promise<TDomain | null> => {
-        // We need the full object to map properly if using toPersistence?
-        // OR we need a partial mapper?
-        // `toPersistence` takes a FULL TDomain.
-        // So we must fetch, merge, map, then save.
-
-        // 1. Get current state (Local prefered for speed/merging?)
-        // Let's get from LS first to merge.
-        let existingList = getLocalArray();
-
+        const existingList = getLocalArray();
         const index = existingList.findIndex(item => item.id === id);
 
-        if (index === -1) {
-            // If not in LS, maybe check online? 
-            // Implementing read-modify-write logic here.
-            // For simplify, if not in LS, we can't update offline.
-            // If online, we can patch.
-            // BUT `updateData` is Partial<TDomain>. Supabase expects Partial<TPersistence>.
-            // Using `toPersistence` on a Partial is risky/impossible if type is strict.
-            // Strategy: Fetch full -> Merge -> Map -> Save.
-        }
-
-        // Simplified Strategy for Phase 5:
-        // We assume we have the item in LS or can fetch it.
         let currentDomain: TDomain | null = null;
 
-        // Try fetch local
-        if (index !== -1) {
-            const currentPersistence = existingList[index];
-            currentDomain = mappers ? mappers.toDomain(currentPersistence) : (currentPersistence as unknown as TDomain);
-        } else if (isAvailable()) {
-            // Try fetch online
+        if (isAvailable()) {
+            // Online: Fetch from Supabase as source of truth.
+            // This guarantees all fields (especially store_id) are present and valid,
+            // avoiding stale localStorage data causing RLS validation errors.
             const fetched = await getById(id);
             if (fetched) currentDomain = fetched;
         }
 
+        // Offline fallback: use localStorage
+        if (!currentDomain && index !== -1) {
+            const currentPersistence = existingList[index];
+            currentDomain = mappers ? mappers.toDomain(currentPersistence) : (currentPersistence as unknown as TDomain);
+        }
+
         if (!currentDomain) return null;
 
-        // Merge
+        // Merge: updateData fields override current, preserving all fields not in updateData
         const updatedDomain = { ...currentDomain, ...updateData };
 
         let payload: TPersistence;
@@ -336,7 +320,7 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
             payload = updatedDomain as unknown as TPersistence;
         }
 
-        // 1. Save Local
+        // 1. Save Local optimistically
         if (index !== -1) {
             existingList[index] = payload;
         } else {
@@ -344,13 +328,10 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
         }
         localStorageAdapter.set(localStorageKey, existingList);
 
-        // 2. Try Online
+        // 2. Persist Online
         if (isAvailable()) {
             const supabase = getSupabaseClient()!;
             try {
-                // We send the FULL payload (PUT semantics) or Partial?
-                // `supabase.update` takes Partial. `payload` is Full TPersistence.
-                // It's safe to send full payload for update if RLS allows.
                 const { data: updated, error } = await supabase
                     .from(tableName)
                     .update(payload)
@@ -361,23 +342,19 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
                 if (error) {
                     // CRITICAL: Rollback localStorage to previous state
                     if (index !== -1) {
-                        // Restore original data
                         const rollbackList = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
                         const ri = rollbackList.findIndex(e => e.id === id);
                         if (ri !== -1) {
-                            const origPersistence = existingList[index]; // original before merge
-                            rollbackList[ri] = origPersistence;
+                            rollbackList[ri] = existingList[index];
                             localStorageAdapter.set(localStorageKey, rollbackList);
                         }
                     }
-
                     logger.error(`[SupabaseRepo:${tableName}] ❌ update FAILED - rolled back localStorage:`, error.message);
                     throw new Error(`Error al actualizar ${tableName}: ${error.message}`);
                 }
 
                 const updatedPersistence = updated as unknown as TPersistence;
-                // Update LS with authoritative
-                // (Re-read list in case it changed)
+                // Sync localStorage with authoritative Supabase response
                 const freshList = getLocalArray();
                 const freshIndex = freshList.findIndex(e => e.id === id);
                 if (freshIndex !== -1) {
@@ -389,19 +366,20 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
 
             } catch (error) {
                 logger.log(`[SupabaseRepo:${tableName}] update exception (saved locally):`, error);
-                return updatedDomain;
+                throw error;
             }
         }
 
         return updatedDomain;
     };
 
+
     /**
      * Delete record
      */
     const deleteRecord = async (id: string): Promise<boolean> => {
         // 1. Delete Local
-        let existing = getLocalArray();
+        const existing = getLocalArray();
         const filtered = existing.filter(item => item.id !== id);
 
         if (filtered.length !== existing.length) {
