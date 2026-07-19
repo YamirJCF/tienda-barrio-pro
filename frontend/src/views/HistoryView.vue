@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 const props = defineProps<{
@@ -24,7 +24,9 @@ import {
   Calendar,
   CalendarRange,
   Users,
-  X
+  X,
+  CreditCard,
+  Filter
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -32,7 +34,7 @@ const authStore = useAuthStore();
 const { formatCurrency } = useCurrencyFormat();
 const {
   items, filteredItems, isLoading, error,
-  currentType, dateFilter, employeeFilter,
+  currentType, dateFilter, employeeFilter, eventTypeFilter,
   searchQuery, customStartDate, customEndDate,
   summary, fetchHistory, setCustomDateRange
 } = useHistory();
@@ -42,10 +44,21 @@ const filters: { label: string; value: HistoryType; component: any }[] = [
   { label: 'Ventas', value: 'sales', component: ShoppingCart },
   { label: 'Caja', value: 'cash', component: Landmark },
   { label: 'Compras', value: 'inventory', component: Package },
-  { label: 'Auditoría', value: 'audit', component: ShieldCheck },
   { label: 'Gastos', value: 'expenses', component: Banknote },
   { label: 'Precios', value: 'prices', component: Tags },
+  { label: 'Créditos', value: 'credits', component: CreditCard },
+  { label: 'Auditoría', value: 'audit', component: ShieldCheck },
 ];
+
+const eventTypeOptions = computed(() => {
+  switch (currentType.value) {
+    case 'sales': return [{ label: 'Todas', value: 'all' }, { label: 'Creaciones', value: 'CREACION' }, { label: 'Anulaciones', value: 'ANULACION' }];
+    case 'cash': return [{ label: 'Todos', value: 'all' }, { label: 'Aperturas', value: 'APERTURA' }, { label: 'Cierres', value: 'CIERRE' }];
+    case 'audit': return [{ label: 'Todos', value: 'all' }, { label: 'Login OK', value: 'LOGIN_SUCCESS' }, { label: 'Login Fallido', value: 'LOGIN_FAILED' }, { label: 'Cambio PIN', value: 'PIN_CHANGE' }];
+    case 'credits': return [{ label: 'Todos', value: 'all' }, { label: 'Abonos', value: 'payment' }, { label: 'Deudas', value: 'charge' }];
+    default: return [];
+  }
+});
 
 // Date presets
 const datePresets: { label: string; value: DatePreset }[] = [
@@ -196,6 +209,7 @@ onUnmounted(() => {
           <BaseButton
             v-for="filter in filters"
             :key="filter.value"
+            v-show="filter.value !== 'audit' || authStore.isAdmin"
             @click="selectFilter(filter.value)"
             :variant="currentType === filter.value ? 'primary' : 'outline'"
             size="sm"
@@ -236,7 +250,6 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- Employee Filter (only for sales) -->
         <button
           v-if="isEmployeeFilterable()"
           @click="showEmployeeFilter = !showEmployeeFilter"
@@ -247,6 +260,22 @@ onUnmounted(() => {
         >
           <Users :size="14" />
           {{ employeeFilter ? 'Filtrando' : 'Empleado' }}
+        </button>
+      </div>
+
+      <!-- Event Type Filter -->
+      <div v-if="eventTypeOptions.length > 0" class="px-4 pb-2 flex items-center gap-1 overflow-x-auto no-scrollbar">
+        <Filter :size="14" class="text-slate-400 flex-shrink-0 mr-1" />
+        <button
+          v-for="evt in eventTypeOptions"
+          :key="evt.value"
+          @click="eventTypeFilter = evt.value"
+          class="px-3 py-1 text-[11px] font-bold rounded-full whitespace-nowrap transition-colors uppercase tracking-wider"
+          :class="eventTypeFilter === evt.value 
+            ? 'bg-slate-700 text-white dark:bg-slate-600' 
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
+        >
+          {{ evt.label }}
         </button>
       </div>
 

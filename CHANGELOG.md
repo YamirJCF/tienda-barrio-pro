@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-07-18
+
+### Added
+- **Audit UI:** Filtro dinámico de sub-tipos de evento (`eventTypeFilter`) en el Historial para segmentar (ej: Ventas -> Anulaciones, Auditoría -> Login Fallido).
+- **Audit UI:** Nueva pestaña "Créditos" en el Historial conectada al RPC `get_history_creditos`.
+- **Client Detail:** Filtros por período (Hoy, Semana, Mes) implementados en el Historial de Transacciones del Cliente.
+
+### Fixed
+- **Security:** Ocultada la pestaña "Auditoría" en el Historial para perfiles de Cajero (exclusivo para Admins).
+- **DB (Audit):** Implementada migración para tablas inmutables (append-only) de auditoría (Precios, Ventas, Seguridad, Caja).
+- **DB (Audit):** Implementados triggers en BD para registro automático de eventos de auditoría, eliminando la delegación de esta responsabilidad al Frontend.
+
+
 ## [1.3.0] - 2026-07-17
 
 ### Added

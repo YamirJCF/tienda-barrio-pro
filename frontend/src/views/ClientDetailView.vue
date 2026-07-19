@@ -49,6 +49,26 @@ watch(clientId, async (newId) => {
     }
 }, { immediate: true });
 
+type ClientDatePreset = 'today' | 'week' | 'month' | 'all';
+const dateFilter = ref<ClientDatePreset>('all');
+
+const filteredTransactions = computed(() => {
+  if (dateFilter.value === 'all') return transactions.value;
+  
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  
+  return transactions.value.filter(tx => {
+    const txTime = new Date(tx.date).getTime();
+    switch (dateFilter.value) {
+      case 'today': return txTime >= todayStart;
+      case 'week': return txTime >= todayStart - 7 * 24 * 60 * 60 * 1000;
+      case 'month': return txTime >= todayStart - 30 * 24 * 60 * 60 * 1000;
+      default: return true;
+    }
+  });
+});
+
 const availableCredit = computed(() => clientsStore.getAvailableCredit(clientId.value));
 
 const creditUsagePercent = computed(() => {
@@ -255,12 +275,31 @@ const registerPayment = () => {
     <!-- Main Content: Transaction History -->
     <main class="relative z-0 px-4 pt-6 pb-32 flex flex-col gap-4">
       <div class="flex items-center justify-between px-2">
-        <h3 class="text-slate-800 dark:text-white text-lg font-bold">Movimientos Recientes</h3>
-        <button class="text-primary text-sm font-semibold hover:underline">Ver todo</button>
+        <h3 class="text-slate-800 dark:text-white text-lg font-bold">Historial de Transacciones</h3>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex gap-2 px-2 overflow-x-auto no-scrollbar">
+        <button
+          v-for="preset in [
+            { label: 'Todos', value: 'all' },
+            { label: 'Hoy', value: 'today' },
+            { label: 'Semana', value: 'week' },
+            { label: 'Mes', value: 'month' }
+          ]"
+          :key="preset.value"
+          @click="dateFilter = preset.value as ClientDatePreset"
+          class="px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap transition-colors"
+          :class="dateFilter === preset.value 
+            ? 'bg-blue-600 text-white' 
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+        >
+          {{ preset.label }}
+        </button>
       </div>
 
       <!-- Empty State -->
-      <div v-if="transactions.length === 0" class="flex flex-col items-center py-12 text-center">
+      <div v-if="filteredTransactions.length === 0" class="flex flex-col items-center py-12 text-center">
         <div
           class="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4"
         >
@@ -272,7 +311,7 @@ const registerPayment = () => {
       <!-- Transaction List -->
       <div v-else class="flex flex-col gap-3">
         <article
-          v-for="tx in transactions"
+          v-for="tx in filteredTransactions"
           :key="tx.id"
           class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 active:scale-[0.98] transition-transform duration-150"
         >

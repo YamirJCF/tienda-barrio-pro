@@ -5,7 +5,7 @@ import { getSupabaseClient } from '../data/supabaseClient';
 import { logger } from '../utils/logger';
 import { formatCurrency } from '../utils/currency';
 
-export type HistoryType = 'sales' | 'cash' | 'audit' | 'inventory' | 'expenses' | 'prices';
+export type HistoryType = 'sales' | 'cash' | 'audit' | 'inventory' | 'expenses' | 'prices' | 'credits';
 export type DatePreset = 'today' | 'yesterday' | 'week' | 'month' | 'custom';
 
 export interface HistoryItem {
@@ -74,6 +74,7 @@ export function useHistory() {
     const currentType = ref<HistoryType>('sales');
     const dateFilter = ref<DatePreset>('today');
     const employeeFilter = ref<string | null>(null); // UUID or null for all
+    const eventTypeFilter = ref<string>('all');
 
     // Custom date range (T3)
     const customStartDate = ref<string>('');
@@ -84,10 +85,25 @@ export function useHistory() {
 
     // Filtered items — client-side search over loaded data
     const filteredItems = computed<HistoryItem[]>(() => {
-        const q = searchQuery.value.trim().toLowerCase();
-        if (!q) return items.value;
+        let result = items.value;
 
-        return items.value.filter(item => {
+        // Apply event type filter
+        if (eventTypeFilter.value !== 'all') {
+            result = result.filter(item => {
+                const m = item.metadata;
+                if (!m) return false;
+                if (m.event_type && m.event_type === eventTypeFilter.value) return true;
+                if (m.transaction_type && m.transaction_type === eventTypeFilter.value) return true;
+                // fallback logic based on item type
+                if (item.type === 'audit' && m.event_type === eventTypeFilter.value) return true;
+                return false;
+            });
+        }
+
+        const q = searchQuery.value.trim().toLowerCase();
+        if (!q) return result;
+
+        return result.filter(item => {
             // Search in title, subtitle, user
             if (item.title.toLowerCase().includes(q)) return true;
             if (item.subtitle.toLowerCase().includes(q)) return true;
@@ -116,7 +132,8 @@ export function useHistory() {
             audit: 'Eventos',
             inventory: 'Entradas',
             expenses: 'Total Gastos',
-            prices: 'Cambios'
+            prices: 'Cambios',
+            credits: 'Movimientos'
         };
         return {
             totalAmount: total,
@@ -135,7 +152,10 @@ export function useHistory() {
     const fetchHistory = async (type?: HistoryType, preset?: DatePreset) => {
         if (!authStore.currentStore) return;
 
-        if (type) currentType.value = type;
+        if (type && type !== currentType.value) {
+            currentType.value = type;
+            eventTypeFilter.value = 'all'; // reset event filter on type change
+        }
         if (preset) dateFilter.value = preset;
 
         // Clear search when switching type/period
@@ -166,6 +186,9 @@ export function useHistory() {
                     break;
                 case 'expenses':
                     await fetchExpenseLogs(storeId);
+                    break;
+                case 'credits':
+                    await fetchCreditLogs(storeId);
                     break;
                 default:
                     items.value = [];
@@ -336,7 +359,7 @@ export function useHistory() {
             user: log.user_name || 'Sistema',
             icon: getAuditIcon(log.event_type),
             colorClass: getAuditColor(log.severity),
-            metadata: log
+            metadata: { ...log, event_type: log.event_type }
         }));
     };
 
@@ -379,6 +402,48 @@ export function useHistory() {
         }));
     };
 
+    // =============================================
+    // Credits — via RPC get_history_creditos
+    // =============================================
+    const fetchCreditLogs = async (storeId: string) => {
+        const supabase = getSupabaseClient();
+        if (!supabase) { error.value = 'Sin conexión'; return; }
+
+        const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
+
+        const { data, error: rpcError } = await supabase.rpc('get_history_creditos' as any, {
+            p_store_id: storeId,
+            p_start_date: start,
+            p_end_date: end
+        });
+
+        if (rpcError) {
+            logger.error('[useHistory] get_history_creditos RPC error', rpcError);
+            error.value = 'Error al obtener historial de créditos';
+            return;
+        }
+
+        const rows = (data || []) as any[];
+        items.value = rows.map(cred => {
+            const isPayment = cred.transaction_type === 'payment';
+            return {
+                id: cred.id,
+                type: 'credits' as HistoryType,
+                title: cred.client_name || 'Cliente',
+                subtitle: cred.description || (isPayment ? 'Abono' : 'Nueva deuda'),
+                date: cred.created_at,
+                amount: Number(cred.amount),
+                amountFormatted: formatCurrency(cred.amount),
+                user: cred.employee_name || 'Desconocido',
+                icon: 'credit_card',
+                colorClass: isPayment
+                    ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    : 'text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400',
+                metadata: { ...cred, event_type: cred.transaction_type }
+            };
+        });
+    };
+
     // Utils
     const mapAuditEventTitle = (type: string) => {
         const map: Record<string, string> = {
@@ -410,6 +475,7 @@ export function useHistory() {
         currentType,
         dateFilter,
         employeeFilter,
+        eventTypeFilter,
         searchQuery,
         customStartDate,
         customEndDate,
