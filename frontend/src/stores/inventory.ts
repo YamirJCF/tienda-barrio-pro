@@ -217,29 +217,23 @@ export const useInventoryStore = defineStore(
             products.value.push(withDecimals);
           }
 
-          // Register initial stock as 'entrada' movement
-          // The DB trigger will set current_stock to the correct value
+          // Stock inicial: usar rpc_registrar_entrada (FIFO) en lugar de INSERT directo.
+          // CRÍTICO: el error NO se silencia — si falla, el producto queda inconsistente.
           if (initialStock.gt(0)) {
-            try {
-              await productRepository.registerMovement({
-                productId: withDecimals.id,
-                type: 'entrada',
-                quantity: initialStock.toNumber(),
-                reason: 'Stock inicial al crear producto',
-                storeId: storeId,
-                employeeId: authStore.currentUser?.id || undefined
-              });
-              // Update local state to reflect the movement
-              withDecimals.stock = initialStock;
-              const idx = products.value.findIndex(p => p.id === withDecimals.id);
-              if (idx !== -1) {
-                products.value[idx] = withDecimals;
-              }
-              logger.log(`[InventoryStore] Initial stock movement registered: ${initialStock} for ${withDecimals.name}`);
-            } catch (movErr) {
-              // Non-critical: product was created, movement is for history only
-              logger.warn('[InventoryStore] Failed to register initial stock movement', movErr);
+            await productRepository.registerEntry(
+              withDecimals.id,
+              initialStock.toNumber(),
+              (productData as any).cost_price ?? 0,
+              priceRounded.toNumber(),
+              'Stock inicial al crear producto'
+            );
+            // Actualizar estado local tras movimiento confirmado en BD
+            withDecimals.stock = initialStock;
+            const idx = products.value.findIndex(p => p.id === withDecimals.id);
+            if (idx !== -1) {
+              products.value[idx] = withDecimals;
             }
+            logger.log(`[InventoryStore] Stock inicial registrado vía RPC FIFO: ${initialStock} para ${withDecimals.name}`);
           }
 
           return withDecimals;
