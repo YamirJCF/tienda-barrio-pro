@@ -74,7 +74,7 @@ const hasDebtors = computed(() => {
                 {{ ledger.clientes_morosos }} Clientes Morosos
             </p>
             <div class="space-y-2">
-                <div v-for="(client, idx) in ledger.top_deudores.slice(0, 3)" :key="client.client_id" class="flex justify-between items-center text-sm">
+                <div v-for="client in ledger.top_deudores.slice(0, 3)" :key="client.client_id" class="flex justify-between items-center text-sm">
                     <span class="text-slate-700 dark:text-slate-300 truncate pr-2 max-w-[120px]">{{ client.client_name }}</span>
                     <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium">
                         <Clock :size="12" />

@@ -146,6 +146,8 @@ export interface ProductRepository extends EntityRepository<Product> {
         paymentType?: 'contado' | 'credito';
     }): Promise<boolean>;
     getMovementHistory(productId: string, limit?: number): Promise<InventoryMovementHistory[]>;
+    registerEntry(productId: string, quantity: number, purchasePrice: number, salePrice: number, reason?: string): Promise<boolean>;
+    updateBatchPrice(batchId: string, newSalePrice: number): Promise<boolean>;
 }
 
 // Create base repository with Mappers
@@ -349,6 +351,73 @@ export const productRepository: ProductRepository = {
         if (error) {
             logger.error('[ProductRepo] Failed to register movement', error);
             throw error;
+        }
+
+        return true;
+    },
+
+    /**
+     * Register a product entry with explicit purchase and sale prices (FIFO logic)
+     */
+    async registerEntry(
+        productId: string,
+        quantity: number,
+        purchasePrice: number,
+        salePrice: number,
+        reason?: string
+    ): Promise<boolean> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            throw new Error('OFFLINE_NOT_ALLOWED: Los movimientos de inventario requieren conexión a internet.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const { data, error } = await supabase.rpc('rpc_registrar_entrada', {
+            p_product_id: productId,
+            p_quantity: quantity,
+            p_purchase_price: purchasePrice,
+            p_sale_price: salePrice,
+            p_reason: reason || 'Entrada de mercancía'
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to register entry', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (res && !res.success) {
+            throw new Error(res.error || 'Error registrando entrada');
+        }
+
+        return true;
+    },
+
+    /**
+     * Update the sale price of a specific active batch
+     */
+    async updateBatchPrice(batchId: string, newSalePrice: number): Promise<boolean> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) throw new Error('OFFLINE_NOT_ALLOWED: Actualizar precios requiere conexión a internet.');
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const { data, error } = await supabase.rpc('rpc_actualizar_precio_lote', {
+            p_batch_id: batchId,
+            p_new_sale_price: newSalePrice
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to update batch price', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (res && !res.success) {
+            throw new Error(res.error || 'Error actualizando precio del lote');
         }
 
         return true;

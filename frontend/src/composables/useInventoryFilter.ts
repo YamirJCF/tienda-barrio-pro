@@ -27,13 +27,16 @@ export function useInventoryFilter() {
             products = products.filter((p) => (p.category || 'Sin categoría') === selectedCategory.value);
         }
 
-        // Si products es el array original, debemos retornar una copia para forzar 
-        // la reactividad en componentes que dependen de la referencia (ej. RecycleScroller)
-        if (products === inventoryStore.products) {
-            return [...products];
-        }
+        // Sort by createdAt descending (newest first)
+        const sortedProducts = [...products].sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return dateB - dateA;
+        });
 
-        return products;
+        // Si products es el array original y no hubo filtros, ya hicimos una copia al ordenar, 
+        // lo que preserva la reactividad en componentes que dependen de la referencia.
+        return sortedProducts;
     });
 
     // Helpers

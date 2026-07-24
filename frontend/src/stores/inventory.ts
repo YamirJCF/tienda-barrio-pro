@@ -21,9 +21,8 @@ export const useInventoryStore = defineStore(
     const loadedStoreId = ref<string | null>(null);
     let realtimeSubscription: RealtimeChannel | null = null;
 
-    // Computed
     const totalProducts = computed(() => products.value.length);
-    const lowStockProducts = computed(() => products.value.filter((p) => p.stock.lte(p.minStock)));
+    const lowStockProducts = computed(() => products.value.filter((p) => p.stock.lte(p.minStock) && p.notifiedLowStock));
 
     // Helper to ensure Decimal types after loading from raw JSON/Repo
     const ensureDecimals = (product: Partial<Product> & Record<string, any>): Product => {
@@ -111,7 +110,9 @@ export const useInventoryStore = defineStore(
           products.value[index] = updated;
 
           // 📢 Stock bajo vía Realtime (notifications.md L63)
-          if (updated.stock.lt(updated.minStock) && !oldProduct.notifiedLowStock) {
+          const stockDecreased = updated.stock.lt(oldProduct.stock);
+          const crossedThreshold = oldProduct.stock.gte(oldProduct.minStock);
+          if (updated.stock.lt(updated.minStock) && !oldProduct.notifiedLowStock && (stockDecreased || crossedThreshold)) {
             const notificationsStore = useNotificationsStore();
             notificationsStore.addNotification({
               type: 'inventory',
@@ -216,28 +217,23 @@ export const useInventoryStore = defineStore(
             products.value.push(withDecimals);
           }
 
-          // Register initial stock as 'entrada' movement
-          // The DB trigger will set current_stock to the correct value
+          // Stock inicial: usar rpc_registrar_entrada (FIFO) en lugar de INSERT directo.
+          // CRÍTICO: el error NO se silencia — si falla, el producto queda inconsistente.
           if (initialStock.gt(0)) {
-            try {
-              await productRepository.registerMovement({
-                productId: withDecimals.id,
-                type: 'entrada',
-                quantity: initialStock.toNumber(),
-                reason: 'Stock inicial al crear producto',
-                storeId: storeId
-              });
-              // Update local state to reflect the movement
-              withDecimals.stock = initialStock;
-              const idx = products.value.findIndex(p => p.id === withDecimals.id);
-              if (idx !== -1) {
-                products.value[idx] = withDecimals;
-              }
-              logger.log(`[InventoryStore] Initial stock movement registered: ${initialStock} for ${withDecimals.name}`);
-            } catch (movErr) {
-              // Non-critical: product was created, movement is for history only
-              logger.warn('[InventoryStore] Failed to register initial stock movement', movErr);
+            await productRepository.registerEntry(
+              withDecimals.id,
+              initialStock.toNumber(),
+              (productData as any).cost_price ?? 0,
+              priceRounded.toNumber(),
+              'Stock inicial al crear producto'
+            );
+            // Actualizar estado local tras movimiento confirmado en BD
+            withDecimals.stock = initialStock;
+            const idx = products.value.findIndex(p => p.id === withDecimals.id);
+            if (idx !== -1) {
+              products.value[idx] = withDecimals;
             }
+            logger.log(`[InventoryStore] Stock inicial registrado vía RPC FIFO: ${initialStock} para ${withDecimals.name}`);
           }
 
           return withDecimals;
@@ -328,6 +324,7 @@ export const useInventoryStore = defineStore(
         supplierId?: string;
         invoiceRef?: string;
         paymentType?: 'contado' | 'credito';
+        salePrice?: number; // Added for WO-FIFO-003
       }
     ): Promise<{ success: boolean; product?: Product; error?: string }> => {
       const product = products.value.find((p) => p.id === movement.productId);
@@ -366,17 +363,30 @@ export const useInventoryStore = defineStore(
         }
 
         const authStore = useAuthStore();
-        const success = await productRepository.registerMovement({
-          productId: movement.productId,
-          type: movement.type,
-          quantity: qty.toNumber(),
-          reason: finalReason,
-          // QA-FIX-005: Pass user ID for movement traceability
-          employeeId: authStore.currentUser?.id || undefined,
-          supplierId: movement.supplierId,
-          invoiceRef: movement.invoiceRef,
-          paymentType: movement.paymentType
-        });
+        let success = false;
+
+        if (movement.type === 'entrada') {
+          // Use the new FIFO Gatekeeper RPC for entries
+          success = await productRepository.registerEntry(
+            movement.productId,
+            qty.toNumber(),
+            movement.unitCost || 0,
+            movement.salePrice || product.price.toNumber(),
+            finalReason
+          );
+        } else {
+          // Legacy movement registration for other types
+          success = await productRepository.registerMovement({
+            productId: movement.productId,
+            type: movement.type,
+            quantity: qty.toNumber(),
+            reason: finalReason,
+            employeeId: authStore.currentUser?.id || undefined,
+            supplierId: movement.supplierId,
+            invoiceRef: movement.invoiceRef,
+            paymentType: movement.paymentType
+          });
+        }
 
         if (!success) {
           product.stock = oldStock;
@@ -419,7 +429,9 @@ export const useInventoryStore = defineStore(
         }
       }
 
-      if (product.stock.lt(product.minStock) && !product.notifiedLowStock) {
+      const stockDecreased = product.stock.lt(oldStock);
+      const crossedThreshold = oldStock.gte(product.minStock);
+      if (product.stock.lt(product.minStock) && !product.notifiedLowStock && (stockDecreased || crossedThreshold)) {
         const notificationsStore = useNotificationsStore();
         notificationsStore.addNotification({
           type: 'inventory',

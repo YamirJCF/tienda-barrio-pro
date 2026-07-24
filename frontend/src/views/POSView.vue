@@ -141,8 +141,8 @@ const {
 });
 
 // Wrapper to log Numpad interactions
-const onNumpadClick = (value: string) => {
-  handleNumpad(value, isQuantityMode.value || isProductMode.value);
+const onNumpadClick = async (value: string) => {
+  await handleNumpad(value, isQuantityMode.value || isProductMode.value);
   logger.log('[Numpad] pluInput:', pluInput.value, '| mode:', isQuantityMode.value ? 'QTY' : isProductMode.value ? 'PROD' : 'NORMAL');
 };
 
@@ -151,9 +151,9 @@ const goToDashboard = () => {
 };
 
 // Add product from search modal
-const addProductFromSearch = (product: Product) => {
+const addProductFromSearch = async (product: Product) => {
   const quantity = pendingQuantity.value;
-  const result = cartStore.addItem({ ...product, quantity });
+  const result = await cartStore.addItem({ ...product, quantity });
   if (!result.success) {
     showError(result.stockError || `No se pudo agregar ${product.name}`);
   } else if (result.warning) {
@@ -170,9 +170,9 @@ const ticketNumber = computed(() => {
   return `#${salesStore.nextTicketNumber.toString().padStart(3, '0')}`;
 });
 
-const addNoteItem = (item: { name: string; price: number }) => {
+const addNoteItem = async (item: { name: string; price: number }) => {
   const quantity = pendingQuantity.value;
-  cartStore.addItem({
+  await cartStore.addItem({
     id: generateUUID(),
     name: item.name,
     price: new Decimal(item.price),

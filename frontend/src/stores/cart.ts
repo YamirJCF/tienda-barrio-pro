@@ -6,6 +6,7 @@ import { getStorageKey } from '../utils/storage';
 import { getLegalCashPayable, roundToNearest50 } from '../utils/currency';
 import { useInventoryStore } from './inventory';
 import { useAuthStore } from './auth';
+import { useBatchStore } from './batches';
 import type { CartItem, MeasurementUnit } from '../types';
 
 // ============================================
@@ -29,6 +30,7 @@ export const useCartStore = defineStore(
     const items = ref<CartItem[]>([]);
     const inventoryStore = useInventoryStore();
     const authStore = useAuthStore();
+    const batchStore = useBatchStore();
 
     // BR-03: Fiscal Calculation (Exact Math)
     const total = computed(() => {
@@ -111,14 +113,14 @@ export const useCartStore = defineStore(
     };
 
     // Add regular item (integer quantity) with defensive validation
-    const addItem = (product: {
+    const addItem = async (product: {
       id: string; // UUID
       name: string;
       price: Decimal;
       quantity: number;
       measurementUnit?: MeasurementUnit;
       isWeighable?: boolean;
-    }): AddItemResult => {
+    }): Promise<AddItemResult> => {
       // ============================================
       // DEFENSIVE VALIDATION: Prevent NaN/Infinity
       // ============================================
@@ -149,31 +151,79 @@ export const useCartStore = defineStore(
         };
       }
 
-      // Add to cart
-      const existing = items.value.find((i) => i.id === product.id);
-      if (existing) {
-        const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
-        existing.quantity = currentQty.plus(qty);
-        if (existing.isWeighable) {
-          existing.subtotal = existing.price.times(existing.quantity);
+      // 🛑 WO-FIFO-004: Read active batches to split items with different prices
+      let batches = await batchStore.fetchBatchesByProduct(product.id);
+      batches = batches.filter(b => b.quantity_remaining > 0);
+
+      let remainingQtyToAllocate = new Decimal(qty);
+      let wasSplit = false;
+
+      // Ensure we have batches. If offline or no batches, fallback to global price
+      if (batches.length > 0) {
+        for (const batch of batches) {
+          if (remainingQtyToAllocate.lte(0)) break;
+          
+          const batchQtyRemaining = new Decimal(batch.quantity_remaining);
+          const qtyToTake = Decimal.min(remainingQtyToAllocate, batchQtyRemaining);
+          
+          // Add to cart with batch-specific price
+          const existing = items.value.find((i) => i.id === product.id && i.price.equals(new Decimal(batch.sale_price)));
+          if (existing) {
+            const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
+            existing.quantity = currentQty.plus(qtyToTake);
+          } else {
+            items.value.push({
+              id: product.id,
+              name: product.name,
+              price: new Decimal(batch.sale_price),
+              quantity: qtyToTake,
+              measurementUnit: product.measurementUnit || 'un',
+              isWeighable: product.isWeighable || false,
+            });
+            // If we push a new item and it's not the first batch loop, it means we split
+            if (qtyToTake.lt(new Decimal(qty))) {
+                wasSplit = true;
+            }
+          }
+          
+          remainingQtyToAllocate = remainingQtyToAllocate.minus(qtyToTake);
         }
-      } else {
-        items.value.push({
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          quantity: new Decimal(qty),
-          measurementUnit: product.measurementUnit || 'un',
-          isWeighable: product.isWeighable || false,
-        });
       }
 
-      // Return with warning if force-allowed
+      // If there's still quantity left (e.g., local overrides, offline, missing batch data), use default global price
+      if (remainingQtyToAllocate.gt(0)) {
+          const existing = items.value.find((i) => i.id === product.id && i.price.equals(product.price));
+          if (existing) {
+            const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
+            existing.quantity = currentQty.plus(remainingQtyToAllocate);
+          } else {
+            items.value.push({
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              quantity: remainingQtyToAllocate,
+              measurementUnit: product.measurementUnit || 'un',
+              isWeighable: product.isWeighable || false,
+            });
+            if (remainingQtyToAllocate.lt(new Decimal(qty))) {
+                wasSplit = true;
+            }
+          }
+      }
+
+      // Determine return warnings
       if (check.status === 'force_allowed') {
         return {
           success: true,
           warning: `⚠️ Excede stock (disponible: ${check.availableStock} ${check.unit || ''}). Se requerirá Venta Forzada al cobrar.`.trim()
         };
+      }
+
+      if (wasSplit) {
+          return {
+              success: true,
+              warning: `El producto se ha dividido en el carrito porque toma unidades de lotes con precios distintos.`
+          };
       }
 
       return { success: true };

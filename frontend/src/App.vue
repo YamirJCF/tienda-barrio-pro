@@ -90,7 +90,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('sync:auth_required', handleSyncAuthRequired);
   devicesStore.unsubscribeFromDailyPasses();
-  document.removeEventListener('visibilitychange', handleAdminResync as EventListener);
+  document.removeEventListener('visibilitychange', handleAdminResync as any);
   window.removeEventListener('online', handleAdminResync);
 });
 

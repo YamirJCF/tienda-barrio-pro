@@ -165,7 +165,7 @@ const testDataIntegrity = async (): Promise<boolean> => {
     const initialCount = cartStore.items.length;
   
     // Try to add invalid item with NaN quantity
-    cartStore.addItem({
+    await cartStore.addItem({
       id: "999999", // Changed to string
       name: 'INVALID_TEST_ITEM',
       price: new Decimal(1000),

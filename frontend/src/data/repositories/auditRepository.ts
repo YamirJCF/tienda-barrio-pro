@@ -27,17 +27,17 @@ export const auditRepository = {
         userId?: string
     ): Promise<boolean> {
         try {
-            const { error } = await (supabase.from('audit_logs').insert({
-                store_id: storeId,
-                actor_id: userId,
-                event_type: eventType,
-                severity,
-                metadata: details,
-                ip_address: 'client-side' // En producción, Supabase lo captura o se usa Edge Function
-            }) as any);
+            // Guardamos la severidad dentro del metadata ya que la nueva tabla no tiene columna explícita
+            const metadata = { ...details, severity, client_user_id: userId };
+            
+            const { error } = await supabase.rpc('rpc_log_security_event', {
+                p_event_type: eventType,
+                p_store_id: storeId,
+                p_metadata: metadata
+            });
 
             if (error) {
-                logger.error('[AuditRepo] Failed to log event', error);
+                logger.error('[AuditRepo] Failed to log event via RPC', error);
                 return false;
             }
             return true;
@@ -58,7 +58,7 @@ export const auditRepository = {
     ): Promise<AuditLog[]> {
         try {
             let query = supabase
-                .from('audit_logs')
+                .from('audit_seguridad')
                 .select(`
           *,
           employees:actor_id (name)
@@ -67,7 +67,6 @@ export const auditRepository = {
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
-            if (filters?.severity) query = query.eq('severity', filters.severity);
             if (filters?.eventType) query = query.eq('event_type', filters.eventType);
             if (filters?.userId) query = query.eq('actor_id', filters.userId);
 
@@ -77,6 +76,7 @@ export const auditRepository = {
 
             return (data || []).map((log: any) => ({
                 ...log,
+                severity: log.metadata?.severity || 'info',
                 details: log.metadata, // Correctly map DB metadata to Domain details
                 user_name: log.employees?.name || 'Sistema/Desconocido'
             }));
@@ -92,7 +92,7 @@ export const auditRepository = {
     async getPriceChangeLogs(storeId: string, limit = 20): Promise<any[]> {
         try {
             const { data, error } = await (supabase
-                .from('price_change_logs')
+                .from('audit_precios')
                 .select(`
           *,
           employees:changed_by (name),
@@ -112,7 +112,7 @@ export const auditRepository = {
                 employeeName: log.employees?.name,
                 oldPrice: log.old_price,
                 newPrice: log.new_price,
-                reason: log.reason
+                reason: log.metadata?.reason
             }));
         } catch (e) {
             logger.error('[AuditRepo] Failed to fetch price logs', e);
