@@ -145,6 +145,21 @@
                   />
                 </div>
               </div>
+
+              <!-- Sale Price visible only for Entry -->
+              <div v-if="movementType === 'entrada'" class="space-y-1">
+                <label class="text-[10px] text-gray-400 uppercase">Precio Venta</label>
+                <div class="relative">
+                  <span class="absolute left-2 top-1.5 text-gray-500 text-xs">$</span>
+                  <input 
+                    v-model.number="item.salePrice"
+                    type="number" 
+                    min="0"
+                    step="50"
+                    class="w-full bg-gray-900 border border-gray-700 rounded-lg pl-5 pr-2 py-1.5 text-right text-white font-mono focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
             </div>
 
             
@@ -266,6 +281,7 @@ interface EntryItem {
     productName: string;
     quantity: number;
     unitCost: number;
+    salePrice: number;
     measurementUnit: string;
     expirationDate?: string;
 }
@@ -338,6 +354,7 @@ const addItem = (product: Product) => {
     productName: product.name,
     quantity: 1,
     unitCost: product.cost ? new Decimal(product.cost).toNumber() : 0,
+    salePrice: product.price ? new Decimal(product.price).toNumber() : 0,
     measurementUnit: product.measurementUnit,
     expirationDate: ''
   });
@@ -394,6 +411,7 @@ const saveEntry = async () => {
               reason: reason.value,
               expirationDate: item.expirationDate,
               unitCost: item.unitCost,
+              salePrice: item.salePrice,
               supplierId: selectedSupplierId.value || undefined,
               invoiceRef: invoiceRef.value || undefined,
               paymentType: paymentType.value as 'contado' | 'credito'

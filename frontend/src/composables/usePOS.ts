@@ -36,8 +36,8 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
     // DRY HELPER: Add item + handle feedback
     // Replaces 3 duplicated blocks of ~12 lines each
     // ============================================
-    const addWithFeedback = (product: Product, quantity: number): boolean => {
-        const result: AddItemResult = cartStore.addItem({ ...product, quantity });
+    const addWithFeedback = async (product: Product, quantity: number): Promise<boolean> => {
+        const result: AddItemResult = await cartStore.addItem({ ...product, quantity });
         if (!result.success) {
             showError(result.stockError || `No se pudo agregar ${product.name}`);
             return false;
@@ -51,7 +51,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
     };
 
     // Handle CANT. × button
-    const handleQuantity = () => {
+    const handleQuantity = async () => {
         logger.log('[CANT.×] Pressed. pluInput:', pluInput.value);
 
         if (!pluInput.value) {
@@ -64,7 +64,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
             const rawQty = parseInt(pluInput.value);
             const qty = isNaN(rawQty) || rawQty <= 0 ? 1 : rawQty;
 
-            addWithFeedback(pendingProduct.value, qty);
+            await addWithFeedback(pendingProduct.value, qty);
             clearPluInput();
             resetModes();
             return;
@@ -94,7 +94,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
     };
 
     // Add product by PLU (The main + button)
-    const addProductByPLU = () => {
+    const addProductByPLU = async () => {
         logger.log(
             '[AGREGAR] pluInput:',
             pluInput.value,
@@ -118,7 +118,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
                     return;
                 }
 
-                addWithFeedback(pendingProduct.value, quantity);
+                await addWithFeedback(pendingProduct.value, quantity);
                 clearPluInput();
                 resetModes();
                 return;
@@ -142,7 +142,7 @@ export function usePOS({ pluInput, clearPluInput, openWeightCalculator }: UsePOS
             }
 
             const quantity = pendingQuantity.value;
-            addWithFeedback(product, quantity);
+            await addWithFeedback(product, quantity);
             clearPluInput();
             resetModes();
         } else {

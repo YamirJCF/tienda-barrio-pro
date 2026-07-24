@@ -20,8 +20,12 @@ import {
   Banknote,
   AlertTriangle,
   TrendingUp,
-  Save
+  Save,
+  CheckCircle,
+  Clock
 } from 'lucide-vue-next';
+import { useBatchStore } from '../stores/batches';
+import productRepository from '../data/repositories/productRepository';
 
 // Props
 // WO-001: Changed productId from number to string for UUID
@@ -38,6 +42,7 @@ const emit = defineEmits<{
 
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
+const batchStore = useBatchStore();
 const toast = useToast();
 // const { roundHybrid50 } = useCurrencyFormat(); // No longer needed for saving
 
@@ -279,6 +284,29 @@ const toggleSaleMode = (mode: 'unit' | 'weight') => {
   formData.value.saleMode = mode;
 };
 
+// Batch Management
+const updatingBatch = ref<string | null>(null);
+
+const saveBatchPrice = async (batchId: string, newPrice: number) => {
+  if (!newPrice || newPrice <= 0) {
+    toast.error('El precio debe ser mayor a 0');
+    return;
+  }
+  updatingBatch.value = batchId;
+  try {
+    await productRepository.updateBatchPrice(batchId, newPrice);
+    toast.success('Precio del lote actualizado');
+    // Reload batches
+    if (props.productId) {
+      await batchStore.fetchBatchesByProduct(props.productId);
+    }
+  } catch (e: any) {
+    toast.error(e.message || 'Error actualizando precio del lote');
+  } finally {
+    updatingBatch.value = null;
+  }
+};
+
 // Watch for product editing
 watch(
   () => props.productId,
@@ -306,6 +334,9 @@ watch(
           stock: formatQuantity(product.stock), // WO-004: Mostrar formateado
           minStock: product.minStock.toString(),
         };
+
+        // WO-003: Load active batches
+        batchStore.fetchBatchesByProduct(id);
       }
     } else {
       resetForm();
@@ -580,6 +611,62 @@ watch(
                     type="number"
                     min="0"
                 />
+              </div>
+
+              <!-- WO-003: Lotes Activos (solo en edición) -->
+              <div v-if="props.productId" class="col-span-12 mt-4">
+                 <h3 class="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                   <Package2 :size="16" class="text-primary-400" />
+                   Lotes Activos (FIFO)
+                 </h3>
+                 
+                 <div v-if="batchStore.isLoading" class="text-center py-4 text-gray-400 text-sm">
+                   Cargando lotes...
+                 </div>
+                 <div v-else-if="batchStore.batches.filter(b => b.quantity_remaining > 0).length === 0" class="text-center py-4 text-gray-500 text-sm italic bg-gray-800/50 rounded-lg">
+                   No hay lotes con stock activo.
+                 </div>
+                 <div v-else class="space-y-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
+                   <div 
+                     v-for="batch in batchStore.batches.filter(b => b.quantity_remaining > 0)" 
+                     :key="batch.id"
+                     class="flex items-center justify-between p-3 bg-gray-800 border border-gray-700 rounded-lg"
+                   >
+                      <div class="flex flex-col">
+                        <span class="text-xs text-gray-400 flex items-center gap-1">
+                          <Clock :size="12" />
+                          {{ new Date(batch.created_at).toLocaleDateString() }}
+                        </span>
+                        <span class="text-sm font-bold text-white mt-0.5">
+                          Stock: {{ formatQuantity(batch.quantity_remaining) }}
+                        </span>
+                        <span class="text-xs text-gray-500">Costo: ${{ formatQuantity(batch.cost_unit) }}</span>
+                      </div>
+                      
+                      <div class="flex items-center gap-2">
+                         <div class="flex flex-col relative">
+                            <span class="text-[10px] text-gray-400 absolute -top-4 right-0">Precio Venta</span>
+                            <div class="flex items-center">
+                              <span class="bg-gray-900 border border-r-0 border-gray-700 text-gray-400 px-2 py-1.5 rounded-l-md text-sm">$</span>
+                              <input 
+                                v-model.number="batch.sale_price"
+                                type="number"
+                                class="w-24 bg-gray-900 border border-gray-700 rounded-r-md px-2 py-1.5 text-right text-white font-mono text-sm focus:ring-1 focus:ring-primary-500 outline-none"
+                              />
+                            </div>
+                         </div>
+                         <button 
+                           @click="saveBatchPrice(batch.id, batch.sale_price)"
+                           :disabled="updatingBatch === batch.id"
+                           class="p-1.5 rounded-md mt-2"
+                           :class="updatingBatch === batch.id ? 'bg-gray-700 text-gray-500' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white transition-colors'"
+                         >
+                           <Save v-if="updatingBatch !== batch.id" :size="16" />
+                           <Clock v-else class="animate-spin" :size="16" />
+                         </button>
+                      </div>
+                   </div>
+                 </div>
               </div>
           </div>
     </div> 

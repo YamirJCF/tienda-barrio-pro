@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-07-23
+
+### Added
+- **Inventory (FIFO & Batches - Phase 4/5):**
+  - **Batch Price Editing:** Edición directa de precios de costo y venta de lotes activos desde la interfaz (`BatchHistoryModal.vue`).
+  - **Dynamic FIFO Sales:** Descuento y valuación de ventas basándose en el precio de venta real de cada lote consumido (RPC `rpc_procesar_venta_v2`).
+  - **Batch Price RPC:** RPC `rpc_actualizar_precio_lote` para actualización segura de precios por lote.
+  - **Architecture Doc:** FRD documentando la interacción `inventory_movements` -> `inventory_batches` -> `products`.
+
+### Fixed
+- **Database:** Eliminación de trigger obsoleto `trg_sales_to_cash` que causaba violaciones de constraint `cash_movements_amount_check` al insertar ventas iniciales en $0.
+- **Database:** Corrección de nombres de columnas (`quantity_consumed`, `unit_cost`, `unit_price`) en `sale_item_batches` dentro de `rpc_procesar_venta_v2`.
+- **Database:** Corrección de cálculo de `v_deficit` en `rpc_force_sale` al agrupar por `product_id`.
+
 ## [1.4.0] - 2026-07-18
 
 ### Added
