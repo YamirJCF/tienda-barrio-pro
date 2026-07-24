@@ -200,7 +200,7 @@ const close = () => {
 };
 
 // Watchers
-watch(() => props.modelValue, (val) => {
+watch(() => props.modelValue, async (val) => {
   if (val) {
     payments.value = [];
     currentMethod.value = activeMethods.value.length > 0 ? activeMethods.value[0].code : 'cash';
@@ -208,6 +208,12 @@ watch(() => props.modelValue, (val) => {
     reference.value = '';
     clientSearch.value = '';
     selectedFiadoClient.value = props.selectedClient || null;
+
+    // Asegurar carga de clientes de la tienda activa para el flujo de Fiado/Crédito
+    const authStore = useAuthStore();
+    if (authStore.currentUser?.storeId) {
+      await clientsStore.initialize(authStore.currentUser.storeId);
+    }
   }
 });
 
