@@ -421,7 +421,8 @@ export const useInventoryStore = defineStore(
           batchStore.addLocalBatch({
             product_id: movement.productId,
             quantity_initial: qty.toNumber(),
-            cost_unit: movement.unitCost
+            cost_unit: movement.unitCost,
+            sale_price: product.price ? product.price.toNumber() : 0
           });
           logger.log('[Inventory] Simulated Local Batch creation in Audit Mode');
         } catch (err) {
