@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1] - 2026-07-24
+
+### Fixed
+- **Inventory (Stock Inicial al Crear Producto):**
+  - **RPC `rpc_registrar_entrada`:** Soporte para usuarios administradores (`admin_profiles`) y validación de `quantity > 0` con códigos de error estandarizados.
+  - **Frontend (`inventory.ts`):** Sustituida la llamada a `registerMovement()` por `registerEntry()` al crear productos con stock inicial. Eliminado el silenciado de errores, haciendo que cualquier fallo de stock inicial sea tratado como error bloqueante e informativo.
+
 ## [1.5.0] - 2026-07-23
 
 ### Added
