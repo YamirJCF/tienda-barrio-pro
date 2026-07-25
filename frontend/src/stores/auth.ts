@@ -377,16 +377,8 @@ export const useAuthStore = defineStore(
 
 
     // Mantenemos propiedad computada para compatibilidad
-    // 'deviceApproved' ahora deriva calculando la expiración
+    // FRD-017 v3.0: Desacoplado de la medianoche. El pase es válido mientras la sesión/caja esté activa.
     const deviceApproved = computed(() => {
-      // Regla 1: Expiración Diaria
-      if (dailyAccessState.value.status === 'approved' && dailyAccessState.value.lastApprovedAt) {
-        const lastDate = new Date(dailyAccessState.value.lastApprovedAt).toDateString();
-        const today = new Date().toDateString();
-        if (lastDate !== today) {
-          return 'expired';
-        }
-      }
       return dailyAccessState.value.status;
     });
 

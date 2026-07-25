@@ -9,6 +9,17 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
     const currentSession = ref<CashSession | null>(null);
     const sessionHistory = ref<CashSession[]>([]);
 
+    // FRD-017: System Notifications (Forced Close Audit Alert)
+    const unreadNotifications = ref<Array<{ id: string; type: string; title: string; message: string; created_at: string }>>([]);
+
+    const hasForcedCloseNotification = computed(() => {
+        return unreadNotifications.value.some(n => n.type === 'FORCED_CLOSE');
+    });
+
+    const forcedCloseNotification = computed(() => {
+        return unreadNotifications.value.find(n => n.type === 'FORCED_CLOSE') || null;
+    });
+
     // Computed
     const isOpen = computed(() => currentSession.value?.status === 'open');
 
@@ -105,27 +116,50 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     currentSession.value.transactions = transactions;
                 }
 
+                await fetchNotifications(storeId);
                 return true;
             } else {
-                // Backend authoritatively says "no open session"
-                // FIX: Trust the backend when ONLINE. The old logic preserved stale local
-                // sessions even when the backend said "closed", causing cerrar_caja to fail
-                // with "Sesión no encontrada" or "La caja ya está cerrada".
-                // Offline resilience is handled in the catch block (network errors only).
                 if (hasExistingSession) {
                     console.warn('⚠️ [CashRegisterStore] Backend says closed — clearing stale local session');
                 }
                 currentSession.value = null;
+                await fetchNotifications(storeId);
                 return false;
             }
         } catch (e) {
             console.error('🚫 [CashRegisterStore] Sync failed:', e);
-            // FRD-012: ALWAYS preserve existing session on error
             if (hasExistingSession) {
                 console.log('✅ [CashRegisterStore] Network error - preserving existing session');
                 return true;
             }
             return false;
+        }
+    };
+
+    const fetchNotifications = async (storeId: string) => {
+        if (!navigator.onLine) return;
+        try {
+            const { isSupabaseConfigured, getSupabaseClient } = await import('../data/supabaseClient');
+            if (!isSupabaseConfigured()) return;
+            const supabase = getSupabaseClient()!;
+            const { data, error } = await supabase.rpc('rpc_get_unread_notifications', { p_store_id: storeId });
+            if (!error && data && data.success) {
+                unreadNotifications.value = data.notifications || [];
+            }
+        } catch (e) {
+            console.error('Failed to fetch system notifications:', e);
+        }
+    };
+
+    const acknowledgeNotification = async (notificationId: string) => {
+        try {
+            const { isSupabaseConfigured, getSupabaseClient } = await import('../data/supabaseClient');
+            if (!isSupabaseConfigured()) return;
+            const supabase = getSupabaseClient()!;
+            await supabase.rpc('rpc_mark_notification_read', { p_notification_id: notificationId });
+            unreadNotifications.value = unreadNotifications.value.filter(n => n.id !== notificationId);
+        } catch (e) {
+            console.error('Failed to acknowledge notification:', e);
         }
     };
 
@@ -334,6 +368,11 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         totalIncome,
         isStaleSession,
         staleSessionDate,
+        unreadNotifications,
+        hasForcedCloseNotification,
+        forcedCloseNotification,
+        fetchNotifications,
+        acknowledgeNotification,
         openRegister,
         closeRegister,
         registerExpense,

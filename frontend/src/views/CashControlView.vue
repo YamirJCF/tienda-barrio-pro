@@ -179,6 +179,26 @@ const goBack = () => {
 
         <div class="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6">
 
+            <!-- FRD-017: Forced Close Audit Notification Banner -->
+            <div v-if="cashRegisterStore.hasForcedCloseNotification" class="bg-red-50 dark:bg-red-900/30 border-2 border-red-400 dark:border-red-600 rounded-2xl p-4 animate-slide-up">
+                <div class="flex items-start gap-3">
+                    <div class="bg-red-100 dark:bg-red-800/40 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <AlertTriangle :size="22" class="text-red-600 dark:text-red-400" />
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-bold text-red-800 dark:text-red-200 text-sm">{{ cashRegisterStore.forcedCloseNotification?.title }}</h3>
+                        <p class="text-red-700 dark:text-red-300 text-xs mt-1 leading-relaxed">
+                            {{ cashRegisterStore.forcedCloseNotification?.message }}
+                        </p>
+                        <button 
+                            @click="cashRegisterStore.acknowledgeNotification(cashRegisterStore.forcedCloseNotification!.id)"
+                            class="mt-3 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors">
+                            Acusar Recibo y Entendido
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- FRD-015: Stale Shift Alert Banner -->
             <div v-if="isStale" class="bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-400 dark:border-amber-600 rounded-2xl p-4 animate-slide-up">
                 <div class="flex items-start gap-3">
