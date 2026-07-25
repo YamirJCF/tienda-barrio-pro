@@ -12,6 +12,7 @@ import CriticalAlertModal from './components/CriticalAlertModal.vue';
 import { useCriticalAlerts } from './composables/useCriticalAlerts';
 import OfflineBanner from './components/common/OfflineBanner.vue';
 import GlobalNetworkHandler from './components/common/GlobalNetworkHandler.vue';
+import PinUnlockModal from './components/PinUnlockModal.vue';
 
 
 // ============================================
@@ -178,6 +179,9 @@ const resetApp = () => {
 
     <!-- OT-6: Blocking access request modal — only active for admins -->
     <GlobalAccessRequestModal v-if="authStore.isAdmin" />
+
+    <!-- Global PIN Unlock Modal for CryptoKey rehydration -->
+    <PinUnlockModal />
 
     <ToastNotification />
   </div>

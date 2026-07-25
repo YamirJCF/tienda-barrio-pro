@@ -50,11 +50,16 @@ export const useAuthStore = defineStore(
     const currentUser = ref<CurrentUser | null>(null);
     const isAuthenticated = ref(false);
 
+    // Crypto State (RAM ONLY - Never persisted to localStorage)
+    const sessionCryptoKey = ref<CryptoKey | null>(null);
+    const storeCryptoSalt = ref<string | null>(null);
+
     // SPEC-005: Estados IAM
     // deviceApproved ref removed -> replaced by computed dailyAccessState
     // storeOpenStatus removed - replaced by Offline Accountability logic
 
     // Computed
+    const isCryptoKeyReady = computed(() => sessionCryptoKey.value !== null);
     const isAdmin = computed(() => currentUser.value?.type === 'admin');
     const isEmployee = computed(() => currentUser.value?.type === 'employee');
     const currentStore = computed(() => {
@@ -326,10 +331,70 @@ export const useAuthStore = defineStore(
       return true;
     };
 
+    const fetchStoreSalt = async (): Promise<string> => {
+      if (storeCryptoSalt.value) return storeCryptoSalt.value;
+      const storeId = currentUser.value?.storeId;
+      if (!storeId) throw new Error('No active store ID for salt retrieval');
+
+      try {
+        const supabase = requireSupabase();
+        const { data, error } = await supabase
+          .from('stores')
+          .select('crypto_salt')
+          .eq('id', storeId)
+          .single();
+
+        if (error) throw error;
+
+        if (data?.crypto_salt) {
+          storeCryptoSalt.value = data.crypto_salt;
+          return data.crypto_salt;
+        }
+
+        // If no salt exists yet, generate a new random salt and store it in DB
+        const newSalt = Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+
+        await supabase
+          .from('stores')
+          .update({ crypto_salt: newSalt })
+          .eq('id', storeId);
+
+        storeCryptoSalt.value = newSalt;
+        return newSalt;
+      } catch (err) {
+        logger.error('[Auth Store] Failed to fetch store salt:', err);
+        // Fallback salt derived from storeId to prevent total failure if offline
+        const fallbackSalt = `salt-${storeId}`;
+        storeCryptoSalt.value = fallbackSalt;
+        return fallbackSalt;
+      }
+    };
+
+    const setupCryptoKey = async (pin: string): Promise<boolean> => {
+      try {
+        const { deriveKeyFromPin } = await import('../utils/crypto');
+        const salt = await fetchStoreSalt();
+        sessionCryptoKey.value = await deriveKeyFromPin(pin, salt);
+        logger.log('[Auth Store] CryptoKey setup successfully in RAM');
+        return true;
+      } catch (err) {
+        logger.error('[Auth Store] Failed to setup CryptoKey:', err);
+        return false;
+      }
+    };
+
+    const clearCryptoKey = () => {
+      sessionCryptoKey.value = null;
+      logger.log('[Auth Store] CryptoKey cleared from RAM');
+    };
+
     const logout = async () => {
       await authRepository.logout();
       currentUser.value = null;
       isAuthenticated.value = false;
+      clearCryptoKey();
       localStorage.removeItem('pin_auth_token');
       // Reset daily access? Maybe not, device is still same.
       // But user session is gone.
@@ -377,7 +442,8 @@ export const useAuthStore = defineStore(
 
 
     // Mantenemos propiedad computada para compatibilidad
-    // FRD-017 v3.0: Desacoplado de la medianoche. El pase es válido mientras la sesión/caja esté activa.
+    // 'deviceApproved' ya NO expira por reloj astronómico (FRD-017 v3.0).
+    // La expiración ocurre por trigger en la base de datos al cerrar el turno.
     const deviceApproved = computed(() => {
       return dailyAccessState.value.status;
     });
@@ -474,10 +540,17 @@ export const useAuthStore = defineStore(
       currentUser,
       isAuthenticated,
       dailyAccessState, // Exposed for Persistence
-      // SPEC-005: IAM States
+      // Accessors
       dailyAccessStatus, // Replaces direct exposure of deviceApproved
       deviceApproved, // Exposed for LoginView and GatekeeperPending
       pendingRequestTime,
+
+      // Crypto State & Methods (RAM ONLY)
+      sessionCryptoKey,
+      isCryptoKeyReady,
+      setupCryptoKey,
+      clearCryptoKey,
+      fetchStoreSalt,
 
       // Computed
       isAdmin,
@@ -519,6 +592,7 @@ export const useAuthStore = defineStore(
   {
     persist: {
       key: getStorageKey('tienda-auth'),
+      paths: ['stores', 'currentUser', 'isAuthenticated', 'dailyAccessState'],
     },
   },
 );

@@ -7,19 +7,20 @@ import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
 import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
 import PinChallengeModal from '../components/PinChallengeModal.vue';
-// PinSetupModal removed
+import ForcedCloseAuditModal, { type PendingForcedSession } from '../components/ForcedCloseAuditModal.vue';
 import Decimal from 'decimal.js';
 
-import { useAuthStore } from '../stores/auth'; // Import auth store
+import { useAuthStore } from '../stores/auth';
 import BaseButton from '@/components/ui/BaseButton.vue';
-import { 
-  ArrowLeft, 
-  LockOpen, 
-  Lock, 
-  Store, 
-  CheckCircle, 
-  Info, 
-  AlertTriangle 
+import { requireSupabase } from '../data/supabaseClient';
+import {
+  ArrowLeft,
+  LockOpen,
+  Lock,
+  Store,
+  CheckCircle,
+  Info,
+  AlertTriangle
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -32,7 +33,61 @@ const { showSuccess, showError } = useNotifications();
 import { useAsyncAction } from '../composables/useAsyncAction';
 const { execute: executeAction, isLoading: isSubmitting } = useAsyncAction();
 
-// Lifecycle
+// =============================================
+// FORCED CLOSE AUDIT STATE (FRD-017)
+// =============================================
+const pendingForcedSessions = ref<PendingForcedSession[]>([]);
+const showAuditModal = computed(() => pendingForcedSessions.value.length > 0);
+
+const fetchPendingForcedSessions = async () => {
+    try {
+        const supabase = requireSupabase();
+        const { data, error } = await supabase
+            .from('cash_sessions')
+            .select('id, opened_at, expected_balance')
+            .eq('status', 'closed')
+            .eq('forced_close', true)
+            .is('actual_balance', null)
+            .order('opened_at', { ascending: true });
+
+        if (error) throw error;
+
+        pendingForcedSessions.value = (data ?? []).map(s => ({
+            id:              s.id,
+            openedAt:        s.opened_at,
+            expectedBalance: Number(s.expected_balance ?? 0),
+        }));
+    } catch (e) {
+        console.error('🚫 [CashControl] Failed to fetch pending forced sessions:', e);
+    }
+};
+
+const handleAuditConfirm = async (sessionId: string, actualBalance: number) => {
+    const employeeId = authStore.currentUser?.employeeId || authStore.currentUser?.id;
+    if (!employeeId) {
+        showError('No se encontró el ID del usuario para la reconciliación.');
+        return;
+    }
+
+    try {
+        const supabase = requireSupabase();
+        const { data, error } = await supabase.rpc('rpc_reconciliar_cierre_forzado', {
+            p_session_id:     sessionId,
+            p_employee_id:    employeeId,
+            p_actual_balance: actualBalance,
+        });
+
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Reconciliación fallida');
+
+        // Eliminar la sesión conciliada de la cola
+        pendingForcedSessions.value = pendingForcedSessions.value.filter(s => s.id !== sessionId);
+        showSuccess('Turno reconciliado correctamente.');
+    } catch (e: any) {
+        showError(e.message || 'Error al reconciliar el cierre forzado.');
+    }
+};
+
 // Lifecycle
 onMounted(async () => {
     try {
@@ -40,16 +95,17 @@ onMounted(async () => {
             console.error('🚫 [CashControl] No store loaded in AuthStore!');
             return;
         }
-        
+
         console.log('🔍 [CashControl] Syncing Status for Store:', authStore.currentStore.id);
         const result = await cashRegisterStore.syncFromBackend(authStore.currentStore.id);
-        console.log('✅ [CashControl] Sync Result:', { 
-            isOpen: cashRegisterStore.isOpen, 
+        console.log('✅ [CashControl] Sync Result:', {
+            isOpen: cashRegisterStore.isOpen,
             result,
-            session: cashRegisterStore.currentSession 
+            session: cashRegisterStore.currentSession
         });
 
-        // Computed property 'isOpening' will update automatically based on store state
+        // Verificar si hay cierres forzados sin reconciliar
+        await fetchPendingForcedSessions();
     } catch (e) {
         console.error('🚫 [CashControl] Mount Error:', e);
     }
@@ -125,13 +181,19 @@ const handlePinSuccess = async () => {
     
     await executeAction(async () => {
         if (pendingAction.value === 'open') {
+            // Bloqueo de apertura si hay reconciliaciones pendientes
+            if (pendingForcedSessions.value.length > 0) {
+                showError('Debes reconciliar los turnos cerrados forzosamente antes de abrir una nueva caja.');
+                return;
+            }
+
             // ===== VALIDACIÓN STOREID (Fase 2 Estabilización) =====
             const storeId = authStore.currentStore?.id;
             if (!storeId) {
                 showError('No hay tienda asociada. Cierra sesión e ingresa de nuevo.');
                 return;
             }
-            
+
                 if (authStore.currentUser?.id) {
                     // FIX: Use raw UUID for employees (remove 'emp-' prefix) to satisfy Postgres UUID type
                     const secureId = authStore.currentUser.employeeId || authStore.currentUser.id;
@@ -178,26 +240,6 @@ const goBack = () => {
         </div>
 
         <div class="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6">
-
-            <!-- FRD-017: Forced Close Audit Notification Banner -->
-            <div v-if="cashRegisterStore.hasForcedCloseNotification" class="bg-red-50 dark:bg-red-900/30 border-2 border-red-400 dark:border-red-600 rounded-2xl p-4 animate-slide-up">
-                <div class="flex items-start gap-3">
-                    <div class="bg-red-100 dark:bg-red-800/40 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <AlertTriangle :size="22" class="text-red-600 dark:text-red-400" />
-                    </div>
-                    <div class="flex-1">
-                        <h3 class="font-bold text-red-800 dark:text-red-200 text-sm">{{ cashRegisterStore.forcedCloseNotification?.title }}</h3>
-                        <p class="text-red-700 dark:text-red-300 text-xs mt-1 leading-relaxed">
-                            {{ cashRegisterStore.forcedCloseNotification?.message }}
-                        </p>
-                        <button 
-                            @click="cashRegisterStore.acknowledgeNotification(cashRegisterStore.forcedCloseNotification!.id)"
-                            class="mt-3 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors">
-                            Acusar Recibo y Entendido
-                        </button>
-                    </div>
-                </div>
-            </div>
 
             <!-- FRD-015: Stale Shift Alert Banner -->
             <div v-if="isStale" class="bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-400 dark:border-amber-600 rounded-2xl p-4 animate-slide-up">
@@ -314,6 +356,13 @@ const goBack = () => {
             :action="pendingAction"
             @close="showPinModal = false"
             @success="handlePinSuccess"
+        />
+
+        <!-- FRD-017: Forced Close Audit Modal -->
+        <ForcedCloseAuditModal
+            :isVisible="showAuditModal"
+            :pendingSessions="pendingForcedSessions"
+            @confirm="handleAuditConfirm"
         />
 
         <!-- PO-02: Pin Setup Modal REMOVED (Zero-Auth Strategy uses Employee PIN) -->

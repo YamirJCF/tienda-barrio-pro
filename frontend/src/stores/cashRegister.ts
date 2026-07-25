@@ -9,17 +9,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
     const currentSession = ref<CashSession | null>(null);
     const sessionHistory = ref<CashSession[]>([]);
 
-    // FRD-017: System Notifications (Forced Close Audit Alert)
-    const unreadNotifications = ref<Array<{ id: string; type: string; title: string; message: string; created_at: string }>>([]);
-
-    const hasForcedCloseNotification = computed(() => {
-        return unreadNotifications.value.some(n => n.type === 'FORCED_CLOSE');
-    });
-
-    const forcedCloseNotification = computed(() => {
-        return unreadNotifications.value.find(n => n.type === 'FORCED_CLOSE') || null;
-    });
-
     // Computed
     const isOpen = computed(() => currentSession.value?.status === 'open');
 
@@ -53,13 +42,16 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             .reduce((sum, t) => sum.plus(new Decimal(t.amount)), new Decimal(0));
     });
 
-    // FRD-004/FRD-015: Stale Shift Detection
-    // A session is "stale" if it was opened on a previous date and is still open
+    // FRD-017 v3.0: Stale Shift Detection (24 Hours)
+    // A session is "stale" if it has been open for 24 hours or more
     const isStaleSession = computed(() => {
         if (!currentSession.value || currentSession.value.status !== 'open') return false;
-        const openedDate = new Date(currentSession.value.openingTime).toDateString();
-        const today = new Date().toDateString();
-        return openedDate !== today;
+        
+        const openingTimestamp = new Date(currentSession.value.openingTime).getTime();
+        const nowTimestamp = Date.now();
+        const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+        return (nowTimestamp - openingTimestamp) >= TWENTY_FOUR_HOURS_MS;
     });
 
     // Human-readable date of the stale session for UI display
@@ -86,12 +78,23 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
         try {
             const { cashRepository } = await import('../data/repositories/cashRepository');
-            const { isSupabaseConfigured } = await import('../data/supabaseClient');
+            const { isSupabaseConfigured, requireSupabase } = await import('../data/supabaseClient');
 
             // If Supabase not configured, preserve existing state
             if (!isSupabaseConfigured()) {
                 console.warn('⚠️ [CashRegisterStore] Supabase not configured - preserving local session');
                 return hasExistingSession;
+            }
+
+            // Lazy RPC Call for Forced Closure (FRD-017)
+            if (isStaleSession.value) {
+                try {
+                    const supabase = requireSupabase();
+                    await supabase.rpc('rpc_check_and_force_close_shifts');
+                    console.log('🔄 [CashRegisterStore] Stale session detected. Force close RPC executed.');
+                } catch (rpcError) {
+                    console.error('🚫 [CashRegisterStore] Failed to execute forced close RPC:', rpcError);
+                }
             }
 
             const status = await cashRepository.getStoreStatus(storeId);
@@ -116,50 +119,27 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     currentSession.value.transactions = transactions;
                 }
 
-                await fetchNotifications(storeId);
                 return true;
             } else {
+                // Backend authoritatively says "no open session"
+                // FIX: Trust the backend when ONLINE. The old logic preserved stale local
+                // sessions even when the backend said "closed", causing cerrar_caja to fail
+                // with "Sesión no encontrada" or "La caja ya está cerrada".
+                // Offline resilience is handled in the catch block (network errors only).
                 if (hasExistingSession) {
                     console.warn('⚠️ [CashRegisterStore] Backend says closed — clearing stale local session');
                 }
                 currentSession.value = null;
-                await fetchNotifications(storeId);
                 return false;
             }
         } catch (e) {
             console.error('🚫 [CashRegisterStore] Sync failed:', e);
+            // FRD-012: ALWAYS preserve existing session on error
             if (hasExistingSession) {
                 console.log('✅ [CashRegisterStore] Network error - preserving existing session');
                 return true;
             }
             return false;
-        }
-    };
-
-    const fetchNotifications = async (storeId: string) => {
-        if (!navigator.onLine) return;
-        try {
-            const { isSupabaseConfigured, getSupabaseClient } = await import('../data/supabaseClient');
-            if (!isSupabaseConfigured()) return;
-            const supabase = getSupabaseClient()!;
-            const { data, error } = await supabase.rpc('rpc_get_unread_notifications', { p_store_id: storeId });
-            if (!error && data && data.success) {
-                unreadNotifications.value = data.notifications || [];
-            }
-        } catch (e) {
-            console.error('Failed to fetch system notifications:', e);
-        }
-    };
-
-    const acknowledgeNotification = async (notificationId: string) => {
-        try {
-            const { isSupabaseConfigured, getSupabaseClient } = await import('../data/supabaseClient');
-            if (!isSupabaseConfigured()) return;
-            const supabase = getSupabaseClient()!;
-            await supabase.rpc('rpc_mark_notification_read', { p_notification_id: notificationId });
-            unreadNotifications.value = unreadNotifications.value.filter(n => n.id !== notificationId);
-        } catch (e) {
-            console.error('Failed to acknowledge notification:', e);
         }
     };
 
@@ -368,11 +348,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         totalIncome,
         isStaleSession,
         staleSessionDate,
-        unreadNotifications,
-        hasForcedCloseNotification,
-        forcedCloseNotification,
-        fetchNotifications,
-        acknowledgeNotification,
         openRegister,
         closeRegister,
         registerExpense,

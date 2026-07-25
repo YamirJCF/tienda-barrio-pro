@@ -138,17 +138,36 @@ export const addToSyncQueue = async (type: TransactionType, payload: any): Promi
         return false;
     }
 
+    // Attempt payload encryption if CryptoKey is ready in RAM
+    let payloadToStore = sanitizedPayload;
+    try {
+        const { useAuthStore } = await import('../stores/auth');
+        const authStore = useAuthStore();
+        if (authStore.isCryptoKeyReady && authStore.sessionCryptoKey) {
+            const { encryptData } = await import('../utils/crypto');
+            const { cipherText, iv } = await encryptData(sanitizedPayload, authStore.sessionCryptoKey);
+            payloadToStore = {
+                __encrypted: true,
+                cipherText: Array.from(new Uint8Array(cipherText)),
+                iv: Array.from(iv)
+            };
+            logger.log(`[SyncQueue] 🔒 Payload encrypted with AES-GCM for storage`);
+        }
+    } catch (encErr) {
+        logger.warn('[SyncQueue] Failed to encrypt payload, storing plain sanitized payload as fallback:', encErr);
+    }
+
     const item: QueueItem = {
         id: crypto.randomUUID(),
         type,
-        payload: sanitizedPayload, // Store SANITIZED payload (snake_case)
+        payload: payloadToStore, // Encrypted or sanitized fallback
         timestamp: Date.now(),
         retryCount: 0,
         isAudit: auditMode
     };
 
     await db.put(QUEUE_STORE, item);
-    logger.log(`[SyncQueue] Added ${type} to queue (sanitized)`);
+    logger.log(`[SyncQueue] Added ${type} to queue`);
 
     // Try to process immediately if online AND not in audit mode
     if (navigator.onLine && !isAuditMode()) {
@@ -257,9 +276,41 @@ export const processSyncQueue = async (): Promise<void> => {
             continue;
         }
 
+        // ===== DECRYPTION CHECKPOINT =====
+        let rawPayload = item.payload;
+        if (rawPayload && rawPayload.__encrypted) {
+            try {
+                const { useAuthStore } = await import('../stores/auth');
+                const authStore = useAuthStore();
+                if (!authStore.isCryptoKeyReady || !authStore.sessionCryptoKey) {
+                    logger.warn(`[SyncQueue] 🔒 CryptoKey missing for encrypted item ${item.id} — requesting PIN unlock`);
+                    window.dispatchEvent(new CustomEvent('sync:pin_required', { detail: { itemId: item.id } }));
+                    return; // Pause queue processing until user unlocks PIN
+                }
+                const { decryptData } = await import('../utils/crypto');
+                const cipherBuffer = new Uint8Array(rawPayload.cipherText).buffer;
+                const ivArray = new Uint8Array(rawPayload.iv);
+                rawPayload = await decryptData(cipherBuffer, ivArray, authStore.sessionCryptoKey);
+            } catch (decErr) {
+                logger.error(`[SyncQueue] ❌ Failed to decrypt payload for item ${item.id}:`, decErr);
+                // Move to corrupted
+                const corruptTx = db.transaction([QUEUE_STORE, CORRUPTED_STORE], 'readwrite');
+                await corruptTx.objectStore(CORRUPTED_STORE).put({
+                    ...item,
+                    corruptedAt: Date.now(),
+                    reason: 'Decryption Failed',
+                    obsoleteFields: [],
+                    missingRequired: []
+                });
+                await corruptTx.objectStore(QUEUE_STORE).delete(item.id);
+                await corruptTx.done;
+                continue;
+            }
+        }
+
         // ===== SCHEMA DRIFT DETECTION =====
         const tableName = getTableFromTransactionType(item.type);
-        const sanitizedPayload = sanitizeCamelToSnake(item.payload);
+        const sanitizedPayload = sanitizeCamelToSnake(rawPayload);
         const driftResult = detectSchemaDrift(sanitizedPayload, tableName);
 
         if (driftResult.drifted) {
