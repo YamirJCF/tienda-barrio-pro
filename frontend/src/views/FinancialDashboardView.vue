@@ -182,20 +182,33 @@ onMounted(() => {
           <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
             <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ventas Totales</p>
             <h2 class="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-              $ {{ formatCurrency(store.summary.total_sales) }}
+              $ {{ formatCurrency(store.summary.revenue) }}
             </h2>
           </div>
-
-          <!-- Sub-KPIs: Costo & Ganancia -->
+          <!-- Sub-KPIs: Flujo Financiero -->
           <div class="grid grid-cols-2 gap-3">
             <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Costo Mercancía</p>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Costo de Ventas (FIFO)</p>
               <p class="text-lg font-bold text-slate-700 dark:text-slate-300">
-                $ {{ formatCurrency(store.summary.total_cost) }}
+                $ {{ formatCurrency(store.summary.cogs) }}
+              </p>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Utilidad Bruta</p>
+              <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                $ {{ formatCurrency(store.summary.gross_profit) }}
+              </p>
+              <p class="text-[10px] text-slate-400 mt-1">Margen: {{ store.summary.gross_margin }}%</p>
+            </div>
+            
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gastos Operativos (OPEX)</p>
+              <p class="text-lg font-bold text-red-500 dark:text-red-400">
+                $ {{ formatCurrency(store.summary.operational_expenses) }}
               </p>
             </div>
             <div
-              class="p-4 rounded-xl border shadow-sm text-center"
+              class="p-4 rounded-xl border shadow-sm text-center flex flex-col justify-center"
               :class="store.summary.net_profit >= 0
                 ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/40'
                 : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/40'"
@@ -208,8 +221,18 @@ onMounted(() => {
                 :class="store.summary.net_profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
                 $ {{ formatCurrency(Math.abs(store.summary.net_profit)) }}
               </p>
-              <p class="text-[10px] text-slate-400 mt-1">Margen: {{ store.summary.profit_margin }}%</p>
             </div>
+          </div>
+
+          <!-- Valor de Inventario -->
+          <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800/40 shadow-sm text-center flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <Package :size="20" class="text-blue-600 dark:text-blue-400" />
+              <p class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Capital en Stock</p>
+            </div>
+            <p class="text-xl font-black text-blue-700 dark:text-blue-300 tracking-tight">
+              $ {{ formatCurrency(store.summary.inventory_value) }}
+            </p>
           </div>
         </section>
 
@@ -227,7 +250,7 @@ onMounted(() => {
               <div>
                 <span class="text-[10px] text-slate-400 block">Efectivo</span>
                 <span class="font-bold text-slate-800 dark:text-white block">
-                  {{ formatCurrency(store.summary.money_breakdown.cash) }}
+                  {{ formatCurrency(store.summary.payment_breakdown.cash) }}
                 </span>
               </div>
             </div>
@@ -240,7 +263,7 @@ onMounted(() => {
               <div>
                 <span class="text-[10px] text-slate-400 block">Transferencias</span>
                 <span class="font-bold text-slate-800 dark:text-white block">
-                  {{ formatCurrency(store.summary.money_breakdown.transfer) }}
+                  {{ formatCurrency(store.summary.payment_breakdown.transfer) }}
                 </span>
               </div>
             </div>
@@ -253,7 +276,7 @@ onMounted(() => {
               <div>
                 <span class="text-[10px] text-slate-400 block">Fiado</span>
                 <span class="font-bold text-slate-800 dark:text-white block">
-                  {{ formatCurrency(store.summary.money_breakdown.credit) }}
+                  {{ formatCurrency(store.summary.payment_breakdown.credit) }}
                 </span>
               </div>
             </div>
@@ -318,7 +341,7 @@ onMounted(() => {
         <!-- 5. Info Footer -->
         <div class="p-4 bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800/30 rounded-xl text-center">
           <p class="text-xs font-medium text-violet-600 dark:text-violet-400">
-            💡 Los costos estimados se basan en el precio de compra registrado. Actualiza los costos de tus productos para mayor precisión.
+            💡 Los costos se calculan de manera exacta por el método FIFO basándose en el inventario despachado y los gastos de operación.
           </p>
         </div>
       </div>

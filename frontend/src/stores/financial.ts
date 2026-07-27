@@ -5,12 +5,16 @@ import { useAuthStore } from './auth';
 
 // --- Interfaces matching RPC payloads ---
 
-export interface FinancialSummary {
-    total_sales: number;
-    total_cost: number;
+export interface FinancialReportPayload {
+    period: { start: string; end: string };
+    revenue: number;
+    cogs: number;
+    gross_profit: number;
+    gross_margin: number;
+    operational_expenses: number;
     net_profit: number;
-    profit_margin: number;
-    money_breakdown: { cash: number; transfer: number; credit: number };
+    inventory_value: number;
+    payment_breakdown: { cash: number; transfer: number; credit: number };
     fiado_pendiente: number;
     traffic_light: { status: 'green' | 'red' | 'gray'; message: string };
 }
@@ -66,7 +70,7 @@ export const useFinancialStore = defineStore('financial', () => {
     const stagnantProducts = ref<StagnantProduct[]>([]);
     
     // State - Time-Series (Dynamic based on period)
-    const summary = ref<FinancialSummary | null>(null);
+    const summary = ref<FinancialReportPayload | null>(null);
     const topProductsByUnits = ref<TopProductUnit[]>([]);
     
     const isLoadingSnapshots = ref(false);
@@ -149,16 +153,16 @@ export const useFinancialStore = defineStore('financial', () => {
 
     // --- Actions: TIME-SERIES (Load on Period Change) ---
 
-    const fetchFinancialSummary = async (startDate: string, endDate: string) => {
+    const fetchFinancialReport = async (startDate: string, endDate: string) => {
         const supabase = getSupabaseClient();
         if (!supabase || !authStore.currentUser?.storeId) return;
-        const { data, error: rpcError } = await supabase.rpc('get_financial_summary', {
+        const { data, error: rpcError } = await supabase.rpc('rpc_get_comprehensive_financial_report', {
             p_store_id: authStore.currentUser.storeId,
             p_start_date: startDate,
             p_end_date: endDate,
         });
         if (rpcError) throw rpcError;
-        summary.value = data as FinancialSummary;
+        summary.value = data as FinancialReportPayload;
     };
 
     const fetchTopProductsByUnits = async (startDate: string, endDate: string, limit = 10) => {
@@ -184,7 +188,7 @@ export const useFinancialStore = defineStore('financial', () => {
         try {
             const { start, end } = getDateRange(period);
             const results = await Promise.allSettled([
-                fetchFinancialSummary(start, end),
+                fetchFinancialReport(start, end),
                 fetchTopProductsByUnits(start, end)
             ]);
 

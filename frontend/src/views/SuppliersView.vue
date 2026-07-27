@@ -119,6 +119,13 @@ const getDayName = (day?: number) => {
           </button>
           <h2 class="text-slate-900 dark:text-white text-xl font-bold">Proveedores</h2>
         </div>
+        <button
+            v-if="authStore.isAdmin"
+            @click="router.push('/payables')"
+            class="text-sm font-medium bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors whitespace-nowrap ml-2"
+          >
+            Cuentas por Pagar
+        </button>
       </div>
       <div class="px-4 py-2">
            <BaseInput

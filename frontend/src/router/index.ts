@@ -157,6 +157,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/SuppliersView.vue'),
     meta: { requiresAuth: true }
   },
+  // Payables Management (Admin only)
+  {
+    path: '/payables',
+    name: 'payables',
+    component: () => import('../views/PayablesView.vue'),
+    meta: { requiresAuth: true }
+  },
   // Catch-all for Supabase Auth fragments (access_token=...) and 404s
   {
     path: '/:pathMatch(.*)*',
@@ -297,6 +304,11 @@ router.beforeEach(async (to, from, next) => {
 
   // 4. Suppliers: Admin only
   if (to.name === 'suppliers' && !authStore.isAdmin) {
+    return next({ name: 'dashboard' });
+  }
+
+  // 5. Payables: Admin only
+  if (to.name === 'payables' && !authStore.isAdmin) {
     return next({ name: 'dashboard' });
   }
 

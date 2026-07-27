@@ -323,6 +323,7 @@ export const useInventoryStore = defineStore(
         unitCost?: number;
         supplierId?: string;
         invoiceRef?: string;
+        referenceInvoiceId?: string;
         paymentType?: 'contado' | 'credito';
         salePrice?: number; // Added for WO-FIFO-003
       }

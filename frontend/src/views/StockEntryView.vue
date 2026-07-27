@@ -43,8 +43,8 @@
         </div>
       </section>
 
-      <!-- Supplier Section (Only for Entry) -->
-      <section v-if="movementType === 'entrada'" class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50">
+      <!-- Supplier Section (Entry or Devolution) -->
+      <section v-if="movementType === 'entrada' || (movementType === 'salida' && reason === 'Devolución Proveedor')" class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50">
         <h2 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">Datos del Proveedor</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="space-y-1">
@@ -65,15 +65,32 @@
           </div>
           <div class="space-y-1">
             <BaseInput
+              v-if="movementType === 'entrada'"
               v-model="invoiceRef"
-              label="Ref. Factura"
+              label="Ref. Factura (Opcional)"
               placeholder="Ej: FAC-2024-001"
             />
+            <div v-else-if="movementType === 'salida' && reason === 'Devolución Proveedor' && selectedSupplierId">
+              <label class="text-xs text-gray-400 block mb-1">Factura de Referencia (Abono)</label>
+              <select
+                v-model="referenceInvoiceId"
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Sin factura --</option>
+                <option 
+                  v-for="invoice in availableInvoices" 
+                  :key="invoice.id" 
+                  :value="invoice.id"
+                >
+                  {{ invoice.invoice_number }} (Saldo: {{ formatCurrency(invoice.total_amount - invoice.amount_paid) }})
+                </option>
+              </select>
+            </div>
           </div>
         </div>
 
         <!-- Payment Toggle -->
-        <div class="mt-4 flex bg-gray-900 p-1 rounded-lg">
+        <div v-if="movementType === 'entrada'" class="mt-4 flex bg-gray-900 p-1 rounded-lg">
           <button 
             v-for="type in ['contado', 'credito']" 
             :key="type"
@@ -243,6 +260,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useInventoryStore } from '../stores/inventory';
 import { useAuthStore } from '../stores/auth';
+import { usePayablesStore } from '../stores/payables';
 import { Decimal } from 'decimal.js';
 import type { Product } from '../types';
 import { useSuppliersStore } from '../stores/suppliers';
@@ -254,12 +272,14 @@ const router = useRouter();
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
 const suppliersStore = useSuppliersStore();
+const payablesStore = usePayablesStore();
 
 // Fetch suppliers on mount
 onMounted(async () => {
   const storeId = authStore.currentStore?.id;
   if (storeId) {
     await suppliersStore.fetchSuppliers(storeId);
+    await payablesStore.fetchInvoices();
   }
 });
 
@@ -269,6 +289,7 @@ const suppliers = computed(() => suppliersStore.suppliers);
 // State
 const selectedSupplierId = ref('');
 const invoiceRef = ref('');
+const referenceInvoiceId = ref('');
 const paymentType = ref('contado');
 const movementType = ref('entrada');
 const reason = ref('Compra');
@@ -314,6 +335,13 @@ watch(movementType, (newVal) => {
   if (availableReasons.value.length > 0) {
     reason.value = availableReasons.value[0];
   }
+});
+
+const availableInvoices = computed(() => {
+  if (!selectedSupplierId.value) return [];
+  return payablesStore.invoices.filter(
+    (inv) => inv.supplier_id === selectedSupplierId.value && inv.status !== 'pagada'
+  );
 });
 
 // FIX: Búsqueda reactiva inmediata (001)
@@ -414,6 +442,7 @@ const saveEntry = async () => {
               salePrice: item.salePrice,
               supplierId: selectedSupplierId.value || undefined,
               invoiceRef: invoiceRef.value || undefined,
+              referenceInvoiceId: referenceInvoiceId.value || undefined,
               paymentType: paymentType.value as 'contado' | 'credito'
             });
           
