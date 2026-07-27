@@ -92,6 +92,7 @@ import { usePayablesStore, type SupplierInvoice } from '@/stores/payables';
 import { formatCurrency } from '@/utils/currency';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
+import { useToast } from 'vue-toastification';
 
 const props = defineProps<{
   show: boolean;
@@ -103,6 +104,7 @@ const emit = defineEmits<{
   (e: 'success'): void;
 }>();
 
+const toast = useToast();
 const authStore = useAuthStore();
 const cashRegisterStore = useCashRegisterStore();
 const payablesStore = usePayablesStore();
@@ -153,9 +155,12 @@ const submitPayment = async () => {
   const { success, error } = await payablesStore.payInvoice(props.invoice.id, Number(amountToPay.value));
   
   if (success) {
-    isSubmitting.value = false;
-    emit('success');
-    close();
+    toast.success('Abono registrado correctamente');
+    setTimeout(() => {
+      isSubmitting.value = false;
+      emit('success');
+      close();
+    }, 400); // Pequeño delay para que el usuario perciba que se procesó
   } else {
     errorMessage.value = error;
     isSubmitting.value = false;
