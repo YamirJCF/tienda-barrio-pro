@@ -71,7 +71,7 @@
               placeholder="Ej: FAC-2024-001"
             />
             <div v-else-if="movementType === 'salida' && reason === 'Devolución Proveedor' && selectedSupplierId">
-              <label class="text-xs text-gray-400 block mb-1">Factura de Referencia (Abono)</label>
+              <label class="text-xs text-gray-400 block mb-1">¿A qué factura corresponde esta devolución? (Opcional)</label>
               <select
                 v-model="referenceInvoiceId"
                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -82,9 +82,10 @@
                   :key="invoice.id" 
                   :value="invoice.id"
                 >
-                  {{ invoice.invoice_number }} (Saldo: {{ formatCurrency(invoice.total_amount - invoice.amount_paid) }})
+                  F-{{ invoice.invoice_number }} (Saldo: {{ formatCurrency(invoice.total_amount - invoice.amount_paid) }})
                 </option>
               </select>
+              <p class="text-[10px] text-gray-500 mt-1">Si se deja vacío, se deducirá de la deuda más antigua.</p>
             </div>
           </div>
         </div>
