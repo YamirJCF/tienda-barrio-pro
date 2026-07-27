@@ -312,7 +312,7 @@ export const productRepository: ProductRepository = {
     async registerMovement(
         movement: {
             productId: string;
-            type: 'entrada' | 'salida' | 'ajuste' | 'venta' | 'devolucion';
+            type: 'entrada' | 'salida' | 'ajuste' | 'venta' | 'devolucion' | 'merma' | 'CORRECCION_SISTEMA';
             quantity: number;
             reason?: string;
             storeId?: string;
@@ -331,26 +331,29 @@ export const productRepository: ProductRepository = {
             throw new Error('OFFLINE_NOT_ALLOWED: Los movimientos de inventario requieren conexión a internet.');
         }
 
-        // Online: Insert into inventory_movements (Trigger updates stock)
         const supabase = getSupabaseClient();
         if (!supabase) {
             throw new Error('Supabase client not available');
         }
 
-        const { error } = await supabase.from('inventory_movements').insert({
-            product_id: movement.productId,
-            movement_type: movement.type,
-            quantity: movement.quantity,
-            reason: movement.reason,
-            created_by: movement.employeeId || null,
-            supplier_id: movement.supplierId || null,
-            invoice_reference: movement.invoiceRef || null,
-            payment_type: movement.paymentType || null
+        const { data, error } = await supabase.rpc('rpc_registrar_movimiento_inventario', {
+            p_product_id: movement.productId,
+            p_movement_type: movement.type,
+            p_quantity: movement.quantity,
+            p_reason: movement.reason || null,
+            p_supplier_id: movement.supplierId || null,
+            p_payment_type: movement.paymentType || null,
+            p_invoice_reference: movement.invoiceRef || null
         });
 
         if (error) {
-            logger.error('[ProductRepo] Failed to register movement', error);
+            logger.error('[ProductRepo] Failed to register movement (RPC Error)', error);
             throw error;
+        }
+
+        if (data && data.success === false) {
+            logger.error('[ProductRepo] Failed to register movement (Business Error)', data.error);
+            throw new Error(data.error || 'Error desconocido al registrar el movimiento');
         }
 
         return true;
