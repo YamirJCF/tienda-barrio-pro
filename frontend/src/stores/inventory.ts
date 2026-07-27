@@ -414,8 +414,9 @@ export const useInventoryStore = defineStore(
           }
         }
       } catch (e) {
+        logger.error('[InventoryStore] Excepción al registrar movimiento:', e);
         product.stock = oldStock;
-        return { success: false, error: 'Excepción al registrar movimiento' };
+        return { success: false, error: e instanceof Error ? e.message : 'Excepción al registrar movimiento' };
       }
 
       if (!isSupabaseConfigured() && movement.type === 'entrada' && movement.unitCost !== undefined) {
