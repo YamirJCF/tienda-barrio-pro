@@ -153,6 +153,7 @@ const submitPayment = async () => {
   const { success, error } = await payablesStore.payInvoice(props.invoice.id, Number(amountToPay.value));
   
   if (success) {
+    isSubmitting.value = false;
     emit('success');
     close();
   } else {
