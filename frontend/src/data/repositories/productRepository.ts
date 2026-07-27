@@ -146,7 +146,7 @@ export interface ProductRepository extends EntityRepository<Product> {
         paymentType?: 'contado' | 'credito';
     }): Promise<boolean>;
     getMovementHistory(productId: string, limit?: number): Promise<InventoryMovementHistory[]>;
-    registerEntry(productId: string, quantity: number, purchasePrice: number, salePrice: number, reason?: string): Promise<boolean>;
+    registerEntry(productId: string, quantity: number, purchasePrice: number, salePrice: number, reason?: string, supplierId?: string, paymentType?: string, invoiceRef?: string, referenceInvoiceId?: string): Promise<boolean>;
     updateBatchPrice(batchId: string, newSalePrice: number): Promise<boolean>;
 }
 
@@ -364,7 +364,11 @@ export const productRepository: ProductRepository = {
         quantity: number,
         purchasePrice: number,
         salePrice: number,
-        reason?: string
+        reason?: string,
+        supplierId?: string,
+        paymentType?: string,
+        invoiceRef?: string,
+        referenceInvoiceId?: string
     ): Promise<boolean> {
         const isOnline = isSupabaseConfigured() && navigator.onLine;
         if (!isOnline) {
@@ -379,7 +383,11 @@ export const productRepository: ProductRepository = {
             p_quantity: quantity,
             p_purchase_price: purchasePrice,
             p_sale_price: salePrice,
-            p_reason: reason || 'Entrada de mercancía'
+            p_reason: reason || 'Entrada de mercancía',
+            p_supplier_id: supplierId || null,
+            p_payment_type: paymentType || null,
+            p_invoice_reference: invoiceRef || null,
+            p_reference_invoice_id: referenceInvoiceId || null
         });
 
         if (error) {

@@ -373,7 +373,11 @@ export const useInventoryStore = defineStore(
             qty.toNumber(),
             movement.unitCost || 0,
             movement.salePrice || product.price.toNumber(),
-            finalReason
+            finalReason,
+            movement.supplierId,
+            movement.paymentType,
+            movement.invoiceRef,
+            movement.referenceInvoiceId
           );
         } else {
           // Legacy movement registration for other types
