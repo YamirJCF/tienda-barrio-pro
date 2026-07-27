@@ -232,4 +232,4 @@ BEGIN
 
     RETURN NEW;
 END;
-$FUNC$;
+$FUNC$ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public';
