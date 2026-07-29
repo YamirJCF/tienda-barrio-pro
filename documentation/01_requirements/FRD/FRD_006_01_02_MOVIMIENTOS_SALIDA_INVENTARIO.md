@@ -1,52 +1,51 @@
-# FRD-006-01-02: Alcance y Límites de "Movimientos de Salida"
+# FRD-006-01-02: Prohibición de Salidas Manuales y Delegación al POS
 
-### El Egreso Físico de Mercancía
+### El POS como Embudo Único de Egresos
 
 #### Descripción
-Este documento rige el comportamiento de los "Movimientos de Salida" (reducción manual de stock) dentro del módulo de Inventario. Al igual que con las entradas, las salidas logísticas deben estar estrictamente desvinculadas de cualquier operación de reembolso de caja o cancelación de deudas, funcionando únicamente como un registro de disminución física de productos en bodega.
+Este documento erradica la subfunción de "Salidas Manuales" (Mermas, Consumos, Devoluciones) del módulo de Inventario. Históricamente, permitir que el inventario descuente productos de forma aislada creaba un "agujero negro contable", donde la mercancía desaparecía sin dejar rastro financiero en la jornada laboral. Para garantizar una auditoría estricta, **toda salida de mercancía que implique una pérdida o movimiento de activos DEBE canalizarse obligatoriamente a través de la caja registradora (POS)**.
 
 ---
 
 ## Reglas de Negocio
 
-1. **Naturaleza Logística Pura:** La función de Salida tiene un único mandato operativo: recibir una cantidad 'X' mayor a cero y restar esa cantidad del stock actual del producto asociado, validando que el stock final no sea negativo.
-2. **Ceguera Financiera Absoluta:** Al registrar una salida (ej. devolución a un proveedor), el sistema TIENE PROHIBIDO ingresar dinero automáticamente a la sesión de caja actual, o cancelar una deuda pendiente en el módulo de Cuentas por Pagar.
-3. **Desvinculación de Cuentas (El Formulario UI):** Si la interfaz de usuario solicita "Datos del Proveedor" al registrar una salida, este dato es **estrictamente referencial** para auditoría en el Kardex. Devolverle un producto defectuoso al camión no anula mágicamente la factura en el sistema financiero; el usuario debe registrar la nota de crédito o cancelación en el módulo de Proveedores de forma manual o a través de un servicio backend independiente.
-4. **Validación de Bloqueo Logístico:** Ningún movimiento de salida (ni siquiera por "Merma") puede dejar el inventario en un número negativo. Si hay 0 unidades en el sistema, no se puede registrar una pérdida de 1 unidad. Se debe realizar primero un ajuste positivo si la realidad física no coincide con el sistema.
-5. **Motivos de Salida Permitidos (Trazabilidad):** Toda salida manual DEBE registrar un "Motivo" en el historial de movimientos (Kardex). Se mantienen exclusivamente los siguientes motivos logísticos:
-   - **Devolución Proveedor:** Se retorna mercancía (dañada o vencida) al distribuidor.
-   - **Pérdida/Merma:** Productos dañados, caducados o extraviados en la tienda.
-   - **Consumo Interno:** Productos consumidos por los empleados o dueños del local.
-   - **Ajuste Negativo:** Corrección de inventario al encontrar menos unidades físicas que las del sistema (Inventario Físico).
+1. **Prohibición de Egresos Ciegos:** El módulo de Inventario TIENE PROHIBIDO ofrecer interfaces o botones para registrar salidas de mercancía (Pérdidas, Mermas, Consumo Interno, Devolución a Proveedor). El módulo de inventario queda restringido exclusivamente a **Entradas** (recibir mercancía) y **Ajustes de Cuadre** (Inventario físico anual/mensual por el Admin).
+2. **El POS como Motor Único de Salida:** Toda reducción de stock operativo DEBE procesarse escaneando el producto en la interfaz del Punto de Venta (POS). Para el sistema, una botella rota es una "transacción" tan importante como una venta exitosa.
+3. **Clasificación del Gasto en POS:** En la pantalla de cobro del POS, el sistema habilitará métodos de "Cierre Alternativo" que no involucran dinero del cliente. En lugar de cobrar en Efectivo, el cajero cerrará el carrito usando opciones como:
+   - *Baja por Merma*
+   - *Consumo Interno*
+   - *Devolución a Proveedor*
+4. **Anclaje Inquebrantable al Turno de Caja:** Al canalizar las salidas por el POS, el valor monetario (a costo o precio de venta) de la mercancía destruida o consumida queda **anclado permanentemente al turno activo del cajero**. Esto permite que el Arqueo de Caja (Reporte Z) audite exactamente cuánta mercancía se "perdió" bajo la guardia de un empleado específico.
+5. **Aislamiento de la Utilidad:** Las transacciones cerradas como Merma o Consumo Interno NO SUMAN al "Total de Ventas" (ingresos) del turno, pero sí se totalizan en una sección separada del reporte llamada "Pérdidas / Bajas del Turno".
 
 ---
 
 ## Casos de Uso
 
-**Caso A: Devolución de Mercancía a Proveedor**
-- **Actor:** Usuario Operativo / Administrador.
-- **Precondición:** El empleado detecta 5 botellas rotas que el proveedor acepta cambiar o reembolsar.
-- **Flujo Principal:**
-  1. El usuario accede al inventario y registra una "Salida" por 5 botellas seleccionando el motivo "Devolución Proveedor".
-  2. El sistema resta las 5 unidades del stock.
-  3. *Límite de Dominio:* El inventario no altera el saldo adeudado a ese proveedor ni ingresa dinero a la caja.
-  4. Si el proveedor devuelve el dinero en efectivo, el empleado debe ir a la Caja y registrar un "Ingreso Extraordinario". Si el proveedor lo descuenta de la próxima factura, se maneja en el módulo de Cuentas por Pagar.
-- **Flujo Alternativo:** El sistema indica que solo hay 3 botellas en stock en el sistema. La operación de salida por 5 es rechazada (Bloqueo Logístico).
-- **Postcondición:** El inventario físico cuadra con el del sistema. Las finanzas permanecen intactas hasta que el usuario las afecte deliberadamente.
-
-**Caso B: Registro de Merma (Producto Dañado)**
+**Caso A: Registro de Merma (Ej. Botella Rota)**
 - **Actor:** Usuario Operativo / Cajero.
-- **Precondición:** Un paquete de arroz se rompió en el almacén.
+- **Precondición:** Un empleado accidentalmente rompe una botella de aceite en el pasillo. La botella es insalvable y debe ir a la basura.
 - **Flujo Principal:**
-  1. El usuario registra una "Salida" por 1 paquete, con motivo "Pérdida/Merma".
-  2. El stock se reduce en 1.
-  3. *Límite de Dominio:* El sistema asume una pérdida logística, pero no registra un "Gasto Financiero" en la caja diaria, ya que el dinero ya había salido cuando se compró el arroz inicialmente.
-- **Flujo Alternativo:** Ninguno.
-- **Postcondición:** Inventario depurado, flujo de caja de la jornada actual inalterado.
+  1. El empleado lleva el código de barras (o el producto) a la caja registradora y lo escanea en el POS.
+  2. En lugar de presionar "Cobrar", selecciona la opción especial "Baja de Inventario" y elige "Pérdida/Merma".
+  3. El POS registra una transacción con valor de ingreso cero ($0) para la caja, pero anota la salida del producto.
+  4. El sistema descuenta 1 unidad del stock de inventario.
+- **Flujo Alternativo:** Si el sistema marca que hay 0 botellas en stock, el POS prohíbe darla de baja (Bloqueo Logístico), obligando a realizar un Cuadre de Inventario primero.
+- **Postcondición:** El inventario físico cuadra. El dueño, al revisar el reporte de caja de ese día, verá en la sección de bajas: *"1 Botella de Aceite - Merma - Registrado por Cajero X"*.
+
+**Caso B: Consumo Interno**
+- **Actor:** Usuario Operativo / Cajero.
+- **Precondición:** El dueño autoriza al cajero a tomarse un refresco y unas galletas de la tienda para su refrigerio.
+- **Flujo Principal:**
+  1. El cajero escanea el refresco y las galletas en el POS.
+  2. Selecciona el cierre especial "Consumo Interno".
+  3. El inventario se descuenta.
+  4. La transacción queda amarrada al turno actual.
+- **Postcondición:** Los productos salen del inventario legalmente sin afectar el descuadre del efectivo en caja.
 
 ---
 
 ## Criterios de Aceptación
-- [ ] **CA-FRD-006-01-02-01:** La función de base de datos que procesa la salida de inventario NO DEBE generar ingresos (`cash_movements` tipo 'income') en el turno de caja.
-- [ ] **CA-FRD-006-01-02-02:** Los componentes UI que gestionan las salidas (ej. "Nueva Salida") deben tener cualquier formulario de cobro o pago desactivado o eliminado por completo.
-- [ ] **CA-FRD-006-01-02-03:** El sistema DEBE rechazar cualquier movimiento de salida si la cantidad solicitada supera el stock disponible en la base de datos en ese instante exacto (previniendo race conditions).
+- [ ] **CA-FRD-006-01-02-01:** La interfaz visual del módulo de Inventario (`/inventory`) DEBE carecer por completo de pestañas, botones o formularios etiquetados como "Salida", "Devolución" o "Merma".
+- [ ] **CA-FRD-006-01-02-02:** El componente del POS (`POSView`) DEBE incluir un flujo o botón de "Baja/Merma" que permita vaciar el carrito actual catalogando los productos como egresos no monetarios.
+- [ ] **CA-FRD-006-01-02-03:** El Reporte de Turno de Caja (FRD-027-01) DEBE ser capaz de consultar y listar las transacciones de tipo "Merma/Consumo" que ocurrieron usando el `session_id` del turno.
