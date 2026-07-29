@@ -22,30 +22,12 @@ Este documento erradica la subfunción de "Salidas Manuales" (Mermas, Consumos, 
 
 ## Casos de Uso
 
-**Caso A: Registro de Merma (Ej. Botella Rota)**
-- **Actor:** Usuario Operativo / Cajero.
-- **Precondición:** Un empleado accidentalmente rompe una botella de aceite en el pasillo. La botella es insalvable y debe ir a la basura.
-- **Flujo Principal:**
-  1. El empleado lleva el código de barras (o el producto) a la caja registradora y lo escanea en el POS.
-  2. En lugar de presionar "Cobrar", selecciona la opción especial "Baja de Inventario" y elige "Pérdida/Merma".
-  3. El POS registra una transacción con valor de ingreso cero ($0) para la caja, pero anota la salida del producto.
-  4. El sistema descuenta 1 unidad del stock de inventario.
-- **Flujo Alternativo:** Si el sistema marca que hay 0 botellas en stock, el POS prohíbe darla de baja (Bloqueo Logístico), obligando a realizar un Cuadre de Inventario primero.
-- **Postcondición:** El inventario físico cuadra. El dueño, al revisar el reporte de caja de ese día, verá en la sección de bajas: *"1 Botella de Aceite - Merma - Registrado por Cajero X"*.
-
-**Caso B: Consumo Interno**
-- **Actor:** Usuario Operativo / Cajero.
-- **Precondición:** El dueño autoriza al cajero a tomarse un refresco y unas galletas de la tienda para su refrigerio.
-- **Flujo Principal:**
-  1. El cajero escanea el refresco y las galletas en el POS.
-  2. Selecciona el cierre especial "Consumo Interno".
-  3. El inventario se descuenta.
-  4. La transacción queda amarrada al turno actual.
-- **Postcondición:** Los productos salen del inventario legalmente sin afectar el descuadre del efectivo en caja.
+> [!NOTE]
+> **Alcance Diferido:** Los casos de uso exactos (flujo de interacción del usuario) para registrar Mermas, Devoluciones y Consumo Interno quedan intencionalmente omitidos en este documento. Su definición técnica y visual queda sujeta al rediseño de la interfaz del Punto de Venta (POS). No se documentarán flujos ficticios hasta que no se defina cómo el POS absorberá esta responsabilidad nativamente.
 
 ---
 
 ## Criterios de Aceptación
-- [ ] **CA-FRD-006-01-02-01:** La interfaz visual del módulo de Inventario (`/inventory`) DEBE carecer por completo de pestañas, botones o formularios etiquetados como "Salida", "Devolución" o "Merma".
-- [ ] **CA-FRD-006-01-02-02:** El componente del POS (`POSView`) DEBE incluir un flujo o botón de "Baja/Merma" que permita vaciar el carrito actual catalogando los productos como egresos no monetarios.
-- [ ] **CA-FRD-006-01-02-03:** El Reporte de Turno de Caja (FRD-027-01) DEBE ser capaz de consultar y listar las transacciones de tipo "Merma/Consumo" que ocurrieron usando el `session_id` del turno.
+- [ ] **CA-FRD-006-01-02-01:** La interfaz visual del módulo de Inventario (`/inventory`) DEBE carecer por completo de pestañas, botones o formularios etiquetados como "Salida", "Devolución a Proveedor" o "Merma".
+- [ ] **CA-FRD-006-01-02-02:** El módulo del POS DEBE absorber la responsabilidad de procesar salidas no monetarias, mediante un mecanismo de UX/UI que será definido posteriormente (Documentación Pendiente).
+- [ ] **CA-FRD-006-01-02-03:** El Reporte de Turno de Caja (FRD-027-01) DEBE listar las transacciones de salidas (Mermas, Consumo, etc.) vinculadas al `session_id` del turno, separadas del efectivo real.
