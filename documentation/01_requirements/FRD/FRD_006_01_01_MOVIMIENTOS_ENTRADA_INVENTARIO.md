@@ -15,8 +15,8 @@ Este documento detalla y restringe el comportamiento de los "Movimientos de Entr
 4. **Registro de Costo Referencial (No Contable):** Durante la entrada, el sistema permite registrar el "Costo de Adquisición". Este dato se guarda **únicamente** con fines informativos para el Kardex y para actualizar el costo teórico del producto en el catálogo. Este número NO representa una transacción de dinero real en el sistema.
 5. **Motivos de Entrada Permitidos (Trazabilidad):** Toda entrada DEBE registrar un "Motivo" en el historial de movimientos (Kardex). Se mantienen exclusivamente los siguientes motivos logísticos:
    - **Compra:** Ingreso por adquisición a un proveedor. (No afecta finanzas automáticamente).
-   - **Devolución Cliente:** Un cliente devuelve un producto. (El reembolso del dinero se hace por Caja, el ingreso físico por Inventario).
    - **Ajuste Positivo:** Corrección de inventario al encontrar más unidades físicas que las del sistema.
+   - *(Nota: Las devoluciones de clientes YA NO SE MANEJAN por aquí, han sido migradas al Gestor de Reembolsos según FRD-006-02).*
 
 ---
 
