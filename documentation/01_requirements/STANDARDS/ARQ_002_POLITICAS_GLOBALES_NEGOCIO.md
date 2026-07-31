@@ -100,12 +100,13 @@ Una Política es una directiva estratégica del negocio que permanece estable au
 
 ---
 
-### POL-FIN-05: Política de Distribución por Tipo de Cierre
+### POL-FIN-05: Política de Distribución por Tipo de Transacción en POS
 
 - **Objetivo:** Garantizar que el POS distribuya correctamente el resultado de cada transacción al módulo financiero correspondiente según su naturaleza.
-- **Declaración:** El comportamiento financiero post-venta depende exclusivamente del método de cierre seleccionado por el cajero. Cada tipo de cierre tiene un destinatario financiero predefinido e inmutable: Efectivo/Digital va a Caja, Crédito va a Cuentas por Cobrar, y Baja Logística registra ingreso cero.
+- **Declaración:** El comportamiento financiero post-venta depende exclusivamente del tipo de transacción seleccionado por el cajero al finalizar el carrito. Cada tipo de transacción tiene un destinatario financiero predefinido e inmutable: Efectivo/Digital va a Caja, Crédito va a Cuentas por Cobrar, y Baja Logística registra ingreso cero.
+- **Nota terminológica:** "Tipo de Transacción" se refiere al método con el que el cajero finaliza (checkout) un carrito individual en el POS (Efectivo, Fiado, Merma). No debe confundirse con el "Cierre de Caja" que es el arqueo de fin de turno.
 - **Reglas que gobierna:**
-  - FRD-007-01, Regla 2: Tipología de cierre de carrito
+  - FRD-007-01, Regla 2: Tipología de transacción de carrito
   - FRD-007-01, Regla 5: Políticas de redondeo heredadas
   - FRD-006-02, Regla 3: Cálculo inmutable de reembolso
 - **Consecuencia de violación:** El POS mezclaría ventas reales con mermas o fiados en el mismo total, corrompiendo el reporte Z del turno.
@@ -232,52 +233,23 @@ Una Política es una directiva estratégica del negocio que permanece estable au
 
 ---
 
-# II. MATRIZ DE TRAZABILIDAD POLÍTICA → REGLA
+# Documentos Complementarios
 
-| Política | FRDs que Gobierna | Módulos Afectados |
-|----------|-------------------|-------------------|
-| POL-FIN-01 | FRD-027, FRD-027-01, FRD-026 | Caja, Reportes, Gastos |
-| POL-FIN-02 | FRD-027, FRD-026 | Caja, Gastos |
-| POL-FIN-03 | FRD-024, FRD-025, FRD-027 | Fiados, Proveedores, Caja |
-| POL-FIN-04 | FRD-024, FRD-025, FRD-006-02 | Fiados, Proveedores, Reembolsos |
-| POL-FIN-05 | FRD-007-01, FRD-006-02 | POS, Reembolsos |
-| POL-LOG-01 | FRD-027, FRD-006-01, FRD-006-01-01 | Caja, Inventario, Entradas |
-| POL-LOG-02 | FRD-006-01, FRD-007-01 | Inventario, POS |
-| POL-LOG-03 | FRD-006-01-02, FRD-007-01 | Salidas, POS |
-| POL-LOG-04 | FRD-024, FRD-025, FRD-006-01 | Fiados, Proveedores, Inventario |
-| POL-SEG-01 | FRD-027-01 | Reportes, Caja |
-| POL-SEG-02 | FRD-027-02 | Caja, POS, Gastos, Fiados |
-| POL-SEG-03 | FRD-006-02, FRD-007-01 | Reembolsos, POS |
-| POL-AUD-01 | FRD-027-01, FRD-006-01 | Reportes, Inventario |
-| POL-AUD-02 | FRD-027-01, FRD-006-01-01, FRD-006-01-02, FRD-007-01, FRD-006-02 | Todos |
-| POL-AUD-03 | FRD-027-01, FRD-027-02 | Reportes, Caja |
+Las siguientes secciones han sido extraídas a documentos independientes para mantener la separación de responsabilidades:
+
+| Sección | Documento | Propósito |
+|---------|-----------|----------|
+| Matriz de Trazabilidad Política → Regla | `ARQ_003_MATRIZ_TRAZABILIDAD_POLITICAS.md` | Mapeo bidireccional entre Políticas y FRDs |
+| Diccionario de Parámetros del Sistema | `ARQ_004_DICCIONARIO_PARAMETROS_SISTEMA.md` | Valores configurables que las reglas consumen |
 
 ---
 
-# III. DICCIONARIO DE PARÁMETROS DEL SISTEMA
-
-> [!IMPORTANT]
-> Los siguientes valores son los parámetros configurables que las reglas de los FRDs consumen. Los números no son la regla; son variables de la regla. Cambiar un parámetro aquí no requiere reescribir ningún FRD ni redesplegar código, solo actualizar la tabla de configuración del sistema.
-
-| Código | Nombre | Valor Actual | Unidad | Política Origen | FRD que lo Consume |
-|--------|--------|-------------|--------|-----------------|-------------------|
-| `P_MAX_HORAS_TURNO` | Vida máxima de un turno de caja | 24 | Horas | POL-SEG-02 | FRD-027-02 |
-| `P_REDONDEO_MULTIPLO` | Múltiplo de redondeo para subtotales | 50 | Pesos (COP) | POL-FIN-05 | FRD-007-01 |
-| `P_MAX_ITEMS_CARRITO` | Límite de productos por transacción | 50 | Unidades | POL-FIN-05 | FRD-007-01 |
-
-> [!NOTE]
-> **Alcance Diferido:** A medida que se formalicen nuevos FRDs o se descubran valores numéricos enterrados en las reglas existentes, este diccionario DEBE actualizarse. La condición para revisar este documento es: "Si un FRD contiene un número que podría cambiar por decisión del dueño sin alterar la lógica del software, ese número debe extraerse aquí".
-
----
-
-# IV. PROTOCOLO DE USO
-
-## ¿Cuándo consultar este documento?
+## Protocolo de Uso
 
 | Situación | Acción |
 |-----------|--------|
 | Estoy redactando un nuevo FRD y una regla se parece a algo que ya escribí en otro módulo | Buscar si ya existe una Política que la cubra. Si existe, referenciar la Política en el nuevo FRD en lugar de reescribir la regla. |
-| El dueño quiere cambiar un número ("ahora el turno caduca a las 12 horas") | Actualizar la Sección III (Diccionario de Parámetros), no el texto del FRD. |
+| El dueño quiere cambiar un número ("ahora el turno caduca a las 12 horas") | Actualizar el Diccionario de Parámetros (`ARQ-004`), no el texto del FRD. |
 | Dos FRDs se contradicen en una regla | Revisar qué Política gobierna esa regla. La Política tiene autoridad sobre el FRD en caso de conflicto. |
 | Estoy implementando código y necesito saber si una acción está permitida | Leer la Política del dominio correspondiente. Si la acción la viola, está prohibida sin importar lo que diga un FRD individual. |
 
@@ -296,7 +268,8 @@ Una Política es una directiva estratégica del negocio que permanece estable au
 
 | Versión | Fecha | Autor | Cambio |
 |---------|-------|-------|--------|
-| 1.0 | 2026-07-31 | Arquitecto de Producto | Creación inicial. Extracción de 15 Políticas desde 11 FRDs. Diccionario de 3 parámetros iniciales. |
+| 1.0 | 2026-07-31 | Arquitecto de Producto | Creación inicial. Extracción de 15 Políticas desde 11 FRDs. |
+| 1.1 | 2026-07-31 | Arquitecto de Producto | POL-FIN-05 renombrada a "Tipo de Transacción". Secciones II y III migradas a ARQ-003 y ARQ-004 respectivamente. |
 
 ---
 
