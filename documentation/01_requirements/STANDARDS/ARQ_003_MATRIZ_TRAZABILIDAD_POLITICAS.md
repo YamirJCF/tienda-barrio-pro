@@ -24,7 +24,7 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 
 | Código | Política | FRDs que Gobierna | Módulos Afectados |
 |--------|----------|-------------------|-------------------|
-| POL-FIN-01 | Solidez de Caja (Liquidez Real) | FRD-027, FRD-027-01, FRD-026, FRD-004 | Caja, Reportes, Gastos, Multicanal |
+| POL-FIN-01 | Solidez de Caja (Liquidez Real) | FRD-027, FRD-027-01, FRD-026, FRD-004, FRD-028 | Caja, Reportes, Gastos, Multicanal, Almacenamiento Seguro |
 | POL-FIN-02 | Segregación de Canales Monetarios | FRD-027, FRD-026, FRD-004 | Caja, Gastos, Multicanal |
 | POL-FIN-03 | Aislamiento de Promesas de Pago | FRD-024, FRD-025, FRD-027 | Fiados, Proveedores, Caja |
 | POL-FIN-04 | Transformación de Promesa a Liquidez | FRD-024, FRD-025, FRD-006-02 | Fiados, Proveedores, Reembolsos |
@@ -35,8 +35,8 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 | POL-LOG-04 | Inmediatez Logística | FRD-024, FRD-025, FRD-006-01, FRD-012-01 | Fiados, Proveedores, Inventario, Sincronización |
 | POL-SEG-01 | Arqueo Ciego | FRD-027-01 | Reportes |
 | POL-SEG-02 | Caducidad del Turno Operativo | FRD-027-02, FRD-001, FRD-001-1, FRD-012-01 | Límite 24h, Seguridad, Pase Diario, Sincronización |
-| POL-SEG-03 | Control de Acceso por Roles | FRD-006-02, FRD-007-01, FRD-001, FRD-001-1, FRD-003, FRD-012-01 | Reembolsos, POS, Seguridad, Pase Diario, Empleados, Sincronización |
-| POL-AUD-01 | Inmutabilidad Histórica | FRD-027-01, FRD-006-01, FRD-012-01 | Reportes, Inventario, Sincronización |
+| POL-SEG-03 | Control de Acceso por Roles | FRD-006-02, FRD-007-01, FRD-001, FRD-001-1, FRD-003, FRD-012-01, FRD-028 | Reembolsos, POS, Seguridad, Pase Diario, Empleados, Sincronización, Almacenamiento |
+| POL-AUD-01 | Inmutabilidad Histórica | FRD-027-01, FRD-006-01, FRD-012-01, FRD-028 | Reportes, Inventario, Sincronización, Almacenamiento |
 | POL-AUD-02 | Trazabilidad Universal | FRD-027-01, FRD-006-01-01, FRD-006-01-02, FRD-007-01, FRD-006-02, FRD-007-02, FRD-006-03 | Todos |
 | POL-AUD-03 | Detección de Anomalías | FRD-027-01, FRD-027-02 | Reportes, Caja |
 
@@ -64,6 +64,7 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 | FRD-025 (Proveedores) | POL-FIN-03, POL-FIN-04, POL-LOG-04 |
 | FRD-026 (Gastos) | POL-FIN-01, POL-FIN-02 |
 | FRD-027 (Núcleo Caja) | POL-FIN-01, POL-FIN-02, POL-FIN-03, POL-LOG-01 |
+| FRD-028 (Almacenamiento Local Seguro) | POL-FIN-01, POL-SEG-03, POL-AUD-01 |
 | FRD-027-01 (Reportes) | POL-FIN-01, POL-SEG-01, POL-AUD-01, POL-AUD-02, POL-AUD-03 |
 | FRD-027-02 (Límite 24h) | POL-SEG-02, POL-AUD-03 |
 
