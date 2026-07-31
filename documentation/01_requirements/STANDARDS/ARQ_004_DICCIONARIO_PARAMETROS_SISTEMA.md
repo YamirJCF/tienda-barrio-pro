@@ -38,6 +38,7 @@ Los valores numéricos (límites, porcentajes, umbrales) tienden a quedar enterr
 | `P_MAX_HORAS_TURNO` | Vida máxima de un turno de caja | 24 | Horas | POL-SEG-02 | FRD-027-02 | 1 - 48 |
 | `P_REDONDEO_MULTIPLO` | Múltiplo de redondeo para subtotales | 50 | Pesos (COP) | POL-FIN-05 | FRD-007-01 | 1 - 1000 |
 | `P_MAX_ITEMS_CARRITO` | Límite de productos por transacción | 50 | Unidades | POL-FIN-05 | FRD-007-01 | 1 - 500 |
+| `P_TICKET_PREFIX` | Prefijo alfanumérico para el número de ticket | TK- | Texto | POL-AUD-02 | FRD-007-02 | Máximo 5 caracteres |
 
 > [!NOTE]
 > **Alcance Diferido:** A medida que se formalicen nuevos FRDs o se descubran valores numéricos enterrados en las reglas existentes, este diccionario DEBE actualizarse. *Condición de revisión:* "Si un FRD contiene un número que podría cambiar por decisión del dueño sin alterar la lógica del software, ese número debe extraerse aquí". *Trade-off:* Se acepta iniciar con 3 parámetros porque el sistema aún está en fase de especificación y los restantes valores aún no han sido formalmente decretados por el Arquitecto. *Revisión futura:* Al finalizar la fase de FRDs y antes de iniciar la implementación técnica (DSD), se debe hacer un barrido exhaustivo de todos los FRDs para extraer parámetros pendientes.
