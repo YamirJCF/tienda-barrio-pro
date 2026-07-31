@@ -39,6 +39,9 @@ Los valores numéricos (límites, porcentajes, umbrales) tienden a quedar enterr
 | `P_REDONDEO_MULTIPLO` | Múltiplo de redondeo para subtotales | 50 | Pesos (COP) | POL-FIN-05 | FRD-007-01 | 1 - 1000 |
 | `P_MAX_ITEMS_CARRITO` | Límite de productos por transacción | 50 | Unidades | POL-FIN-05 | FRD-007-01 | 1 - 500 |
 | `P_TICKET_PREFIX` | Prefijo alfanumérico para el número de ticket | TK- | Texto | POL-AUD-02 | FRD-007-02 | Máximo 5 caracteres |
+| `P_MIN_PLU_LENGTH` | Longitud mínima del Código de Producto | 1 | Caracteres | POL-LOG-01 | FRD-006-03 | 1 - 3 |
+| `P_MAX_PLU_LENGTH` | Longitud máxima del Código de Producto | 15 | Caracteres | POL-LOG-01 | FRD-006-03 | 10 - 20 |
+| `P_AUTO_PLU_SEED` | Semilla para autogenerar Códigos de Producto | 1000 | Número | POL-LOG-01 | FRD-006-03 | Mayor a 0 |
 
 > [!NOTE]
 > **Alcance Diferido:** A medida que se formalicen nuevos FRDs o se descubran valores numéricos enterrados en las reglas existentes, este diccionario DEBE actualizarse. *Condición de revisión:* "Si un FRD contiene un número que podría cambiar por decisión del dueño sin alterar la lógica del software, ese número debe extraerse aquí". *Trade-off:* Se acepta iniciar con 3 parámetros porque el sistema aún está en fase de especificación y los restantes valores aún no han sido formalmente decretados por el Arquitecto. *Revisión futura:* Al finalizar la fase de FRDs y antes de iniciar la implementación técnica (DSD), se debe hacer un barrido exhaustivo de todos los FRDs para extraer parámetros pendientes.

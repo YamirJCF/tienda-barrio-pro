@@ -29,15 +29,15 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 | POL-FIN-03 | Aislamiento de Promesas de Pago | FRD-024, FRD-025, FRD-027 | Fiados, Proveedores, Caja |
 | POL-FIN-04 | Transformación de Promesa a Liquidez | FRD-024, FRD-025, FRD-006-02 | Fiados, Proveedores, Reembolsos |
 | POL-FIN-05 | Distribución por Tipo de Transacción en POS | FRD-007-01, FRD-006-02 | POS, Reembolsos |
-| POL-LOG-01 | Independencia Logística-Financiera | FRD-027, FRD-006-01, FRD-006-01-01 | Caja, Inventario, Entradas |
+| POL-LOG-01 | Independencia Logística-Financiera | FRD-027, FRD-006-01, FRD-006-01-01, FRD-006-03 | Caja, Inventario, Entradas |
 | POL-LOG-02 | Verdad Física (Anti-Negativos) | FRD-006-01, FRD-007-01 | Inventario, POS |
 | POL-LOG-03 | Embudo Único de Egresos (POS) | FRD-006-01-02, FRD-007-01 | Salidas, POS |
 | POL-LOG-04 | Inmediatez Logística | FRD-024, FRD-025, FRD-006-01 | Fiados, Proveedores, Inventario |
 | POL-SEG-01 | Arqueo Ciego | FRD-027-01 | Reportes, Caja |
 | POL-SEG-02 | Caducidad del Turno Operativo | FRD-027-02 | Caja, POS, Gastos, Fiados |
 | POL-SEG-03 | Control de Acceso por Roles | FRD-006-02, FRD-007-01 | Reembolsos, POS |
-| POL-AUD-01 | Inmutabilidad Histórica | FRD-027-01, FRD-006-01, FRD-007-02 | Reportes, Inventario, POS |
-| POL-AUD-02 | Trazabilidad Universal | FRD-027-01, FRD-006-01-01, FRD-006-01-02, FRD-007-01, FRD-006-02, FRD-007-02 | Todos |
+| POL-AUD-01 | Inmutabilidad Histórica | FRD-027-01, FRD-006-01, FRD-007-02, FRD-006-03 | Reportes, Inventario, POS |
+| POL-AUD-02 | Trazabilidad Universal | FRD-027-01, FRD-006-01-01, FRD-006-01-02, FRD-007-01, FRD-006-02, FRD-007-02, FRD-006-03 | Todos |
 | POL-AUD-03 | Detección de Anomalías | FRD-027-01, FRD-027-02 | Reportes, Caja |
 
 ---
@@ -50,6 +50,7 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 | FRD-006-01-01 (Entradas) | POL-LOG-01, POL-AUD-02 |
 | FRD-006-01-02 (Salidas) | POL-LOG-03, POL-AUD-02 |
 | FRD-006-02 (Reembolsos) | POL-FIN-04, POL-FIN-05, POL-SEG-03, POL-AUD-02 |
+| FRD-006-03 (Código Producto) | POL-LOG-01, POL-AUD-01, POL-AUD-02 |
 | FRD-007-01 (Núcleo POS) | POL-FIN-05, POL-LOG-02, POL-LOG-03, POL-SEG-03, POL-AUD-02 |
 | FRD-007-02 (Ticket Venta) | POL-AUD-01, POL-AUD-02 |
 | FRD-024 (Fiados) | POL-FIN-03, POL-FIN-04, POL-LOG-04 |
