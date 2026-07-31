@@ -25,15 +25,18 @@ Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar 
     - Este PIN es local y gestionado por el Admin.
     - El Admin puede restablecer el PIN en cualquier momento sin intervención del empleado.
 
-4. **Capacidad de Venta por Defecto:**
-    - Todo empleado creado TIENE la capacidad de vender por defecto.
-    - No es un permiso opcional, es la función base del cargo.
+4. **Capacidad de Venta por Defecto (Subordinada al Pase Diario):**
+    - Todo empleado creado TIENE la capacidad base de operar el Punto de Venta (POS).
+    - **Restricción Zero Trust:** Esta capacidad está bloqueada por defecto cada día. El empleado DEBE obtener un **Pase Diario** aprobado por el Admin (FRD-001) para poder ingresar al sistema.
+    - **Restricción de Caja:** Si el turno de caja está cerrado, la capacidad de venta se degrada a "Solo Lectura" (no puede procesar pagos).
 
-5. **Permisos Adicionales:**
-    - `canViewInventory`: Puede ver stock (pero no editar).
-    - `canFiar`: Puede asignar crédito a clientes.
-    - `canOpenCloseCash`: Puede realizar apertura y cierre de caja (requiere además el PIN de caja).
-    - `canViewReports`: Puede ver métricas básicas.
+5. **Permisos Adicionales (POL-SEG-03):**
+    - El acceso a funciones privilegiadas se controla estrictamente por booleanos (toggles) en el perfil del empleado. No hay jerarquías implícitas.
+    - `canManageInventory`: Permite crear/editar productos, registrar Entradas de mercancía y procesar Reembolsos. (Nivel de riesgo: Alto).
+    - `canViewInventory`: Permite buscar y consultar stock (Nivel de riesgo: Bajo).
+    - `canFiar`: Permite seleccionar el método de pago "Fiado" para clientes en el POS.
+    - `canOpenCloseCash`: Permite abrir y cerrar el turno de caja (requiere PIN adicional).
+    - `canViewReports`: Permite ver el reporte parcial del turno activo.
 
 6. **Estado Activo/Inactivo:**
     - Los empleados NO se eliminan para preservar el histórico de ventas.
@@ -41,10 +44,10 @@ Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar 
     - Al desactivar un empleado, cualquier sesión activa DEBE caducar inmediatamente.
 
 7. **Límite de Equipo:**
-    - Cada cuenta de Admin tiene un límite de **5 empleados activos**.
-    - Si se alcanza el límite (5/5), el sistema DEBE bloquear la creación de nuevos empleados.
+    - Cada cuenta de Admin tiene un límite máximo de empleados activos definido por el parámetro `P_MAX_EMPLOYEES_PER_STORE`.
+    - Si se alcanza este límite, el sistema DEBE bloquear la creación o activación de nuevos empleados.
     - Para agregar uno nuevo, el Admin DEBE desactivar previamente a uno existente.
-    - Este límite se valida en el servidor, no solo en la interfaz.
+    - Este límite se valida a nivel de servidor (RLS/RPC).
 
 ---
 
@@ -107,6 +110,6 @@ Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar 
 - [ ] El alias numérico es único a nivel global del sistema (todas las tiendas).
 - [ ] El PIN DEBE ser numérico estricto de 4 dígitos.
 - [ ] Al desactivar un empleado, su sesión activa caduca inmediatamente.
-- [ ] El sistema rechaza la creación o activación si ya hay 5 empleados activos.
-- [ ] El rechazo por límite ocurre en el servidor, no solo en la interfaz.
+- [ ] El sistema rechaza la creación o activación si se supera el límite `P_MAX_EMPLOYEES_PER_STORE`.
+- [ ] El rechazo por límite ocurre en el servidor (Base de datos), no solo en la interfaz.
 - [ ] Al buscar empleado por alias, el sistema lo redirige a la tienda correcta.
