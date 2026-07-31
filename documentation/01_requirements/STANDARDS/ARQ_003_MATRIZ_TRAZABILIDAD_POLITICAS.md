@@ -24,8 +24,8 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 
 | Código | Política | FRDs que Gobierna | Módulos Afectados |
 |--------|----------|-------------------|-------------------|
-| POL-FIN-01 | Solidez de Caja (Liquidez Real) | FRD-027, FRD-027-01, FRD-026 | Caja, Reportes, Gastos |
-| POL-FIN-02 | Segregación de Canales Monetarios | FRD-027, FRD-026 | Caja, Gastos |
+| POL-FIN-01 | Solidez de Caja (Liquidez Real) | FRD-027, FRD-027-01, FRD-026, FRD-004 | Caja, Reportes, Gastos, Multicanal |
+| POL-FIN-02 | Segregación de Canales Monetarios | FRD-027, FRD-026, FRD-004 | Caja, Gastos, Multicanal |
 | POL-FIN-03 | Aislamiento de Promesas de Pago | FRD-024, FRD-025, FRD-027 | Fiados, Proveedores, Caja |
 | POL-FIN-04 | Transformación de Promesa a Liquidez | FRD-024, FRD-025, FRD-006-02 | Fiados, Proveedores, Reembolsos |
 | POL-FIN-05 | Distribución por Tipo de Transacción en POS | FRD-007-01, FRD-006-02 | POS, Reembolsos |
@@ -49,6 +49,7 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 | FRD-001 (Seguridad Diaria) | POL-SEG-02, POL-SEG-03 |
 | FRD-001-1 (Pase Diario) | POL-SEG-02, POL-SEG-03 |
 | FRD-003 (Gestión Empleados) | POL-SEG-03 |
+| FRD-004 (Caja Estricta Multicanal) | POL-FIN-01, POL-FIN-02 |
 | FRD-006-01 (Núcleo Inventario) | POL-LOG-01, POL-LOG-02, POL-LOG-04, POL-AUD-01 |
 | FRD-006-01-01 (Entradas) | POL-LOG-01, POL-AUD-02 |
 | FRD-006-01-02 (Salidas) | POL-LOG-03, POL-AUD-02 |
