@@ -26,16 +26,18 @@ El sistema offline no está diseñado para operar días enteros sin internet.
 - Se establece un límite máximo de transacciones encoladas. Una vez alcanzado este límite, el sistema DEBE rechazar nuevas ventas hasta que se recupere la conexión y se drene la cola.
 - Si la sesión de seguridad (JWT) expira y no puede ser renovada automáticamente, la cola de sincronización se DEBE detener inmediatamente (bloqueo `sync:auth_required`) hasta que el usuario se re-autentique con internet (apoyo a *POL-SEG-02*).
 
-### RN-OFF-04: Resolución de Conflictos Simplificada (DLQ)
-Cuando la conexión vuelve, el servidor procesa la cola. Si una venta falla por razones del servidor (ej. un producto fue eliminado o el stock real sí era cero):
-1. El sistema DEBE reintentar automáticamente la sincronización de esa venta fallida hasta un máximo de 3 veces.
-2. Tras 3 fallos, la venta DEBE ser movida a una Cola de Letras Muertas (DLQ - Dead Letter Queue).
-3. **Resolución Binaria:** Las únicas acciones permitidas sobre una venta en DLQ son **Reintentar** o **Eliminar**. No existe la funcionalidad de "editar la cantidad encolada" o "forzar ajuste"; si la venta es irremediable, se elimina del dispositivo local.
+### RN-OFF-04: Inmutabilidad Histórica y Fallos Técnicos (DLQ)
+Una venta realizada offline bajo las reglas locales de ese momento es un **hecho histórico inmutable** (*POL-AUD-01*). 
+- El servidor **TIENE PROHIBIDO** rechazar la sincronización de una venta offline por motivos de lógica de negocio que hayan cambiado durante el apagón (ej. si el Administrador "eliminó" el producto o si el stock en el servidor llegó a cero). El POS ya hizo su validación de seguridad local en el momento de la venta.
+- Si una venta falla al sincronizarse, **DEBE** ser estrictamente por **fallos técnicos** (ej. timeout de red persistente, error 500 del servidor, fallos criptográficos).
+- El sistema reintentará 3 veces ante fallos técnicos. Tras 3 fallos, la venta se mueve a la Cola de Letras Muertas (DLQ).
+- En la DLQ, el administrador puede **Reintentar** o **Eliminar** (solo en caso de pruebas o ventas fantasma comprobadas), pero el sistema asume que la venta es legítima.
 
-### RN-OFF-05: Resiliencia ante Cambios de Esquema (Drift Detection)
-Si durante el apagón el Administrador cambió reglas en el servidor (ej. borró una columna o requirió un nuevo campo obligatorio):
-- El sistema interceptor DEBE detectar la incompatibilidad (*Schema Drift*).
-- La transacción incompatible no se envía (para evitar errores 500) y se mueve directamente a la bandeja de ítems corruptos, previniendo que una mala transacción atasque el resto de las ventas offline legítimas.
+### RN-OFF-05: Resiliencia ante Cambios de Esquema (Bandeja de Intervención)
+Si durante el apagón el Administrador cambió reglas estructurales en el servidor (ej. borró una columna obligatoria o cambió el tipo de dato) provocando incompatibilidad (*Schema Drift*):
+- El sistema interceptor DEBE detectar la incompatibilidad antes de enviarla para evitar errores de base de datos.
+- La transacción incompatible **NO SE INVALIDA ni se considera "errónea"** (la información de la venta sigue siendo un hecho real). 
+- En lugar de rechazarla, el sistema la mueve a una "Bandeja de Intervención Técnica" (DLQ). Allí esperará hasta que el sistema se actualice o un administrador resuelva la incompatibilidad estructural, garantizando que el historial de la venta no se pierda.
 
 ---
 
@@ -50,15 +52,15 @@ Si durante el apagón el Administrador cambió reglas en el servidor (ej. borró
   3. El sistema aborta la operación y notifica: "Las operaciones de inventario requieren conexión a internet obligatoria".
 - **Postcondición:** Nada se encola.
 
-**Caso B: Venta atascada por fallo recurrente**
+**Caso B: Venta atascada por fallo técnico o de esquema**
 - **Actor:** Sistema / Servidor.
 - **Flujo Principal:**
   1. El internet regresa. La cola envía la `Venta A`.
-  2. El servidor rechaza la `Venta A` (ej. cliente eliminado).
-  3. El sistema reintenta 3 veces y falla.
-  4. La `Venta A` se mueve a la cola DLQ.
-  5. El sistema notifica al administrador: "X ventas no pudieron sincronizarse".
-  6. El administrador revisa y presiona "Eliminar" sobre la venta atascada.
+  2. El servidor responde con un Error 500 temporal o el Interceptor detecta *Schema Drift*.
+  3. El sistema reintenta 3 veces (si es error de red) y falla.
+  4. La `Venta A` se mueve a la cola DLQ (Bandeja de Intervención).
+  5. El sistema notifica al administrador: "X ventas requieren revisión técnica para sincronizarse".
+  6. El administrador revisa la DLQ. La información de la venta sigue intacta. Tras solucionar el problema de red o esquema, presiona "Reintentar".
 
 ---
 
