@@ -60,6 +60,37 @@
         <div v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded-xl border border-red-200 dark:border-red-800/50">
           {{ errorMessage }}
         </div>
+
+        <!-- Método de Pago Selector -->
+        <div class="mt-4">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Método de Pago</label>
+            <div class="grid grid-cols-3 gap-2">
+                <button
+                    @click="paymentMethod = 'efectivo'"
+                    :class="paymentMethod === 'efectivo' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                    class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                >
+                    <Banknote :size="24" :stroke-width="1.5" class="mb-1" />
+                    <span class="text-xs font-semibold">Efectivo</span>
+                </button>
+                <button
+                    @click="paymentMethod = 'nequi'"
+                    :class="paymentMethod === 'nequi' ? 'bg-[#4A148C] text-white border-[#4A148C] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                    class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                >
+                    <Smartphone :size="24" :stroke-width="1.5" class="mb-1" />
+                    <span class="text-xs font-semibold">Nequi</span>
+                </button>
+                <button
+                    @click="paymentMethod = 'daviplata'"
+                    :class="paymentMethod === 'daviplata' ? 'bg-[#E32119] text-white border-[#E32119] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                    class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                >
+                    <CreditCard :size="24" :stroke-width="1.5" class="mb-1" />
+                    <span class="text-xs font-semibold">Daviplata</span>
+                </button>
+            </div>
+        </div>
       </div>
       
       <div class="flex gap-3 mt-6">
@@ -93,6 +124,7 @@ import { formatCurrency } from '@/utils/currency';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import { useToast } from 'vue-toastification';
+import { Banknote, Smartphone, CreditCard } from 'lucide-vue-next';
 
 const props = defineProps<{
   show: boolean;
@@ -110,6 +142,7 @@ const cashRegisterStore = useCashRegisterStore();
 const payablesStore = usePayablesStore();
 
 const amountToPay = ref<number | ''>('');
+const paymentMethod = ref('efectivo');
 const isSubmitting = ref(false);
 const errorMessage = ref<string | null>(null);
 
@@ -142,6 +175,7 @@ const payFullAmount = () => {
 const close = () => {
   if (isSubmitting.value) return;
   amountToPay.value = '';
+  paymentMethod.value = 'efectivo';
   errorMessage.value = null;
   emit('close');
 };
@@ -152,7 +186,7 @@ const submitPayment = async () => {
   isSubmitting.value = true;
   errorMessage.value = null;
   
-  const { success, error } = await payablesStore.payInvoice(props.invoice.id, Number(amountToPay.value));
+  const { success, error } = await payablesStore.payInvoice(props.invoice.id, Number(amountToPay.value), paymentMethod.value);
   
   if (success) {
     toast.success('Abono registrado correctamente');

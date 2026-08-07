@@ -1,8 +1,9 @@
 # 📜 Estándar de Documentación del Proyecto
 
-> **Versión:** 1.0
-> **Fecha de Vigencia:** 2026-01-27
+> **Versión:** 2.0
+> **Fecha de Vigencia:** 2026-08-07
 > **Autor:** Arquitecto de Producto y Requisitos
+> **Revisión v2.0:** Alineación Documental — Plan aprobado 2026-08-07
 > **Autoridad:** Este documento es NORMATIVO. Todo documento que no cumpla estos criterios será rechazado.
 
 ---
@@ -17,10 +18,12 @@ Este documento establece las **reglas inviolables** para la redacción de docume
 
 ```mermaid
 graph LR
-    A[FRD<br>Arquitecto] -->|QUÉ| B[DSD<br>Data]
-    A -->|QUÉ| C[UXD<br>UX/UI]
-    B -->|CÓMO DB| D[QAR<br>QA]
-    C -->|CÓMO UI| D
+    A["FRD<br>Arquitecto"] -->|QUÉ| B["DSD<br>Data"]
+    A -->|QUÉ| C["UXD<br>UX/UI"]
+    A -->|QUÉ| S["SDD<br>Integrado"]
+    B -->|"CÓMO DB"| D["QAR<br>QA"]
+    C -->|"CÓMO UI"| D
+    S -->|"CÓMO DB+Contrato"| D
     D -->|VALIDACIÓN| E[Producto Final]
 ```
 
@@ -29,6 +32,7 @@ graph LR
 | **Arquitecto** | FRD (Functional Requirements) | ¿QUÉ hace el sistema? | Código, nombres de archivos, tecnologías específicas |
 | **Data** | DSD (Data Specification Document) | ¿CÓMO se estructura el dato? | Decisiones de UI, flujos de usuario |
 | **UX/UI** | UXD (User Experience Document) | ¿CÓMO interactúa el usuario? | SQL, lógica de backend, estructuras de datos |
+| **Integrado** | SDD (Software Design Document) | ¿CÓMO se integra el dato con el contrato? | Especificaciones visuales, código de componentes, estados `🟢 Aprobado` con hallazgos críticos abiertos |
 | **QA** | QAR (Quality Assurance Report) | ¿ES SEGURO y CORRECTO? | Nuevos requisitos, cambios de alcance |
 
 ---
@@ -385,7 +389,124 @@ Un **Quality Assurance Report (QAR)** documenta los resultados de auditoría de 
 
 ---
 
-# Parte V: Proceso de Validación de Documentos
+# Parte V: Documentos SDD (Software Design Document)
+
+## Definición
+
+Un **Software Design Document (SDD)** es un documento de diseño integrado que combina la especificación del modelo de datos (responsabilidad del rol Data) con la definición de los contratos de interfaz entre Backend y Frontend (responsabilidad compartida). **No reemplaza al DSD ni al UXD** — un SDD que contenga especificaciones visuales o un DSD que no tenga contrato de interfaz son ambos documentos incompletos.
+
+> [!NOTE]
+> El tipo SDD existe porque en este proyecto la relación entre el esquema de datos y el contrato de API es tan estrecha que separarlos en dos documentos producía más fricción que valor. El SDD es la solución pragmática, pero tiene reglas estrictas para no degenerar en un documento omnibus sin criterios claros.
+
+## Estructura Obligatoria del SDD
+
+```markdown
+# SDD-XXX: [Nombre del Módulo]
+
+> **Asociado a:** [FRD-XXX](ruta_al_frd)
+> **Fase del Plan:** [Fase N — Nombre]
+> **Estado:** [Ver estados válidos abajo]
+> **Última Actualización:** YYYY-MM-DD
+
+---
+
+## 0. Contexto y Restricciones Aplicables
+
+### 0.1 Políticas Globales Activadas (ARQ-002)
+[Tabla de políticas con impacto específico en este SDD]
+
+### 0.2 Contratos Vecinos que Limitan el Diseño
+[Tabla de SDDs vecinos y la restricción que imponen]
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica)
+[Lista de brechas entre el diseño del SDD y la BD real. OBLIGATORIO si existe deuda.]
+
+---
+
+## 1. Glosario Local
+[Definiciones de términos específicos de este módulo]
+
+---
+
+## 2. Diagramas de Secuencia
+[Flujos principales de interacción sistema-usuario-BD]
+
+---
+
+## 3. Diagramas de Estado
+[Ciclo de vida de las entidades principales]
+
+---
+
+## 4. Especificación Detallada de Casos de Uso
+[TODOS los casos de uso del FRD, con precondiciones, flujo principal, flujos alternativos y postcondiciones]
+
+---
+
+## 5. Contrato de Interfaz
+[Por cada operación: nombre, entradas, reglas de transformación, salida esperada, catálogo de errores]
+
+---
+
+## 6. Análisis de Seguridad
+[Control de acceso, funciones centralizadas usadas (assert_store_access), superficie de amenazas, mitigaciones]
+
+---
+
+## 7. Modelo de Datos Lógico
+[ERD en Mermaid + diccionario de datos. Solo columnas verificadas en BD real.]
+```
+
+## Estados Válidos de un SDD
+
+| Estado | Significado | Requisito para asignarlo |
+|--------|-------------|-------------------------|
+| `🔴 Borrador` | Redactado, sin verificación | Ninguno |
+| `🟡 Validado Localmente` | PAC ejecutado, sin verificación de BD | PAC-SDD Bloques 0-6 completados |
+| `🟠 Aprobado con Deuda` | PAC completo, hay deuda técnica documentada pero la decisión fue deliberada | Todos los hallazgos de §0.3 tienen decisión documentada con trade-off y condición de revisión |
+| `🟢 Aprobado` | PAC completo, BD alineada, sin hallazgos críticos abiertos | BD real refleja el diseño. §0.3 vacío o con deuda exclusivamente de baja severidad. |
+
+> [!CAUTION]
+> **Prohibición absoluta:** Un SDD NO puede ser marcado `🟢 Aprobado` si su sección §0.2 o §0.3 contiene hallazgos críticos (`🔴`) abiertos. Hacerlo invalida la validación.
+
+## Reglas de Redacción SDD
+
+### ✅ PERMITIDO
+
+| Elemento | Justificación |
+|----------|---------------|
+| Diagramas de secuencia UML | Comunicación de flujos |
+| Diagramas de estado | Ciclo de vida de entidades |
+| Nombres de operaciones RPC | Es el contrato de interfaz |
+| Nombres de tablas y columnas (verificadas en BD) | Es el modelo de datos |
+| Descripción de políticas RLS | Seguridad es responsabilidad del Data |
+| Deuda técnica declarada en §0.3 | La deuda oculta es más peligrosa que la declarada |
+
+### ❌ PROHIBIDO
+
+| Elemento | Justificación |
+|----------|---------------|
+| Nombres de archivos `.vue`, `.ts`, `.py` | Responsabilidad de implementación, no de diseño |
+| Nombres de stores, componentes o vistas | Igual que anterior |
+| Especificaciones visuales (colores, tamaños, layouts) | Responsabilidad exclusiva del UXD |
+| Estados `🟢 Aprobado` con hallazgos críticos abiertos | Viola el principio de honestidad documental |
+| Listas de tareas de implementación | Pertenecen al Orquestador o al plan de trabajo |
+| Implantar lógica de negocio no especificada en el FRD | El SDD implementa el FRD, no lo reescribe |
+
+## Criterios de Aceptación para un SDD Válido
+
+- [ ] **CA-SDD-01:** Referencia explícita al FRD que implementa (en el encabezado)
+- [ ] **CA-SDD-02:** Todos los casos de uso del FRD están cubiertos en §4 (ninguno omitido)
+- [ ] **CA-SDD-03:** El contrato de interfaz §5 incluye catálogo de errores completo
+- [ ] **CA-SDD-04:** El modelo de datos §7 solo referencia columnas verificadas en BD real
+- [ ] **CA-SDD-05:** La sección §6 cita explícitamente las funciones de seguridad centralizadas usadas
+- [ ] **CA-SDD-06:** La sección §0.3 declara toda deuda técnica conocida (no la oculta)
+- [ ] **CA-SDD-07:** El estado del documento refleja la realidad (no se marca 🟢 con hallazgos críticos abiertos)
+- [ ] **CA-SDD-08:** No contiene nombres de archivos de código ni especificaciones de UI
+
+---
+
+# Parte VI: Proceso de Validación de Documentos
 
 ## Flujo de Aprobación
 
@@ -405,10 +526,13 @@ Antes de publicar cualquier documento, verificar:
 ### Para FRD:
 ```
 □ ¿Cero código fuente?
-□ ¿Cero nombres de archivos/componentes?
+□ ¿Cero nombres de archivos/componentes/stores?
+□ ¿Cero rutas de código (src/..., stores/..., views/...)?
 □ ¿Todas las reglas son prescriptivas (DEBE/NO PUEDE)?
 □ ¿Cero ambigüedades (puede ser/opcionalmente)?
 □ ¿Casos de uso completos con Actor/Pre/Flujo/Post?
+□ ¿Cero listas de tareas de implementación?
+□ ¿Sin sección "Impacto en el Sistema" con nombres de archivos?
 ```
 
 ### Para DSD:
@@ -417,6 +541,18 @@ Antes de publicar cualquier documento, verificar:
 □ ¿Todas las tablas tienen RLS?
 □ ¿SQL ejecutable sin errores?
 □ ¿Diccionario de datos completo?
+```
+
+### Para SDD:
+```
+□ ¿Referencia a FRD en el encabezado?
+□ ¿Todos los casos de uso del FRD cubiertos en §4?
+□ ¿Contrato de interfaz §5 con catálogo de errores?
+□ ¿Modelo de datos §7 con columnas verificadas en BD?
+□ ¿Seguridad §6 cita assert_store_access o equivalente?
+□ ¿Deuda técnica declarada en §0.3 (no oculta)?
+□ ¿Estado del documento es honesto con la realidad?
+□ ¿Cero nombres de archivos .vue/.ts/.py?
 ```
 
 ### Para UXD:
@@ -437,22 +573,43 @@ Antes de publicar cualquier documento, verificar:
 
 ---
 
-# Anexo: Glosario de Términos Prohibidos en FRD
+# Anexo A: Glosario de Términos Prohibidos en FRD
 
 | Término Prohibido | Reemplazo Correcto |
 |-------------------|-------------------|
 | `archivo.ts` | "el módulo de [nombre]" |
-| `ComponentName.vue` | "el componente de [función]" |
+| `ComponentName.vue` | "la interfaz de [función]" |
+| `stores/nombre.ts` | "el gestor de [entidad]" |
+| `AuthStore`, `DeviceStore` | "el gestor de [entidad]" |
+| `src/views/Vista.vue` | "la vista de [nombre]" |
 | `functionName()` | "la operación de [acción]" |
+| `rpc_nombre_funcion` | "la operación del servidor de [acción]" |
 | `WebSocket` | "comunicación en tiempo real" |
 | `IndexedDB` | "almacenamiento local" |
 | `RPC` | "operación del servidor" |
 | `RLS` | "políticas de acceso" |
 | `JSONB` | "estructura de datos flexible" |
 | `UUID` | "identificador único" |
+| Nombre de tabla SQL (`supplier_invoices`) | "el registro de facturas de proveedor" |
+| Nombre de columna SQL (`payment_type`) | "el tipo de pago" |
 | "puede ser X o Y" | [DECIDIR: X] o [DECIDIR: Y] |
 | "opcionalmente" | ELIMINAR o hacer prescriptivo |
 | "en el futuro" | ELIMINAR o mover a Roadmap |
+| Lista de tareas de implementación | Mover al plan de trabajo del Orquestador |
+| Sección "Impacto en el Sistema" con rutas | Mover al SDD o DSD correspondiente |
+
+---
+
+# Anexo B: Glosario de Términos Prohibidos en SDD
+
+| Término Prohibido | Ubicación correcta |
+|-------------------|-----------------|
+| Nombres de archivos `.vue`, `.ts` | No pertenece al SDD |
+| Nombres de stores o componentes | No pertenece al SDD |
+| Colores, tamaños, estilos visuales | Pertenece al UXD |
+| Rutas de navegación (`/ruta/pantalla`) | Pertenece al UXD |
+| Listas de tareas de implementación | Pertenece al plan del Orquestador |
+| Decisiones de UX (qué botón, qué mensaje) | Pertenece al UXD |
 
 ---
 
@@ -461,3 +618,4 @@ Antes de publicar cualquier documento, verificar:
 | Versión | Fecha | Cambios |
 |---------|-------|---------|
 | 1.0 | 2026-01-27 | Versión inicial del estándar |
+| 2.0 | 2026-08-07 | Formalización del tipo SDD: estructura obligatoria, estados válidos (🔴/🟡/🟠/🟢), criterios de aceptación CA-SDD-01 a CA-SDD-08, prohibiciones explícitas. Ampliación del glosario de términos prohibidos en FRDs y SDDs. Actualización del diagrama de roles para incluir SDD. Renumeración de Parte V→VI. |

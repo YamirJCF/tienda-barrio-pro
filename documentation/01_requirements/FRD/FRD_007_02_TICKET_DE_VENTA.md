@@ -29,8 +29,8 @@ Este documento establece las reglas, límites y el nivel de acoplamiento del "Ti
   1. El servidor recibe el payload del carrito.
   2. El servidor genera el siguiente número secuencial asegurando integridad transaccional (evitando race conditions).
   3. El servidor ancla el `session_id`, el `cajero_id` y el timestamp.
-  4. El servidor guarda la venta y retorna el número de ticket (ej. `TK-1045`) al POS.
-  5. El POS muestra el comprobante al cliente.
+  4. El servidor guarda la venta y retorna al POS la cabecera del ticket junto con el **desglose completo de productos (ítems, cantidades y precios fotográficos)**.
+  5. El POS muestra el comprobante y la lista de productos al cliente.
 - **Flujo Alternativo:** Si hay un error de conexión, el POS entra en modo offline. Al reconectar, el servidor asignará los números secuenciales definitivos en el orden en que reciba las transacciones.
 
 **Caso B: Auditoría de Ticket Anulado**
@@ -38,9 +38,9 @@ Este documento establece las reglas, límites y el nivel de acoplamiento del "Ti
 - **Precondición:** Una venta ha sido anulada.
 - **Flujo Principal:**
   1. El administrador busca el ticket `TK-1045`.
-  2. El sistema muestra el ticket con su contenido original, pero con una marca de agua o estado visual prominente de "ANULADO".
+  2. El sistema muestra el ticket con su contenido original (**incluyendo la lista de productos vendidos**), pero con una marca de agua o estado visual prominente de "ANULADO".
   3. El ticket retiene y muestra el historial: quién lo emitió originalmente y quién/cuándo ejecutó la anulación.
-- **Postcondición:** El número `TK-1045` sigue existiendo en el sistema para fines de auditoría.
+- **Postcondición:** El número `TK-1045` y su lista de productos siguen existiendo en el sistema para fines de auditoría.
 
 ---
 

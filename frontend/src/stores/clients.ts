@@ -181,14 +181,15 @@ export const useClientsStore = defineStore(
       return txStub;
     };
 
-    const registerPayment = async (clientId: string, amount: Decimal, description = 'Abono') => {
+    const registerPayment = async (clientId: string, amount: Decimal, description = 'Abono', paymentMethod: string = 'efectivo') => {
       // Online path: delegate entirely to the registrar_abono RPC (Backend Authority)
       // The RPC validates balance, updates clients.balance, and writes to client_ledger atomically.
       if (isSupabaseConfigured() && navigator.onLine) {
         const supabase = getSupabaseClient()!;
         const { data, error } = await supabase.rpc('registrar_abono', {
           p_client_id: clientId,
-          p_amount: amount.toNumber()
+          p_amount: amount.toNumber(),
+          p_payment_method: paymentMethod
         });
 
         if (error || !data?.success) {

@@ -11,6 +11,8 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate';
 import VueVirtualScroller from 'vue-virtual-scroller';
 import App from './App.vue';
 import router from './router';
+import Toast from 'vue-toastification';
+import 'vue-toastification/dist/index.css';
 
 // =============================================
 // Bootstrap: Async IIFE wraps the app initialization
@@ -49,5 +51,19 @@ import router from './router';
 
     app.use(router);
     app.use(VueVirtualScroller);
+    app.use(Toast, {
+        position: 'top-right',
+        timeout: 3000,
+        closeOnClick: true,
+        pauseOnFocusLoss: true,
+        pauseOnHover: true,
+        draggable: true,
+        draggablePercent: 0.6,
+        showCloseButtonOnHover: false,
+        hideProgressBar: true,
+        closeButton: "button",
+        icon: true,
+        rtl: false
+    });
     app.mount('#app');
 })();

@@ -287,10 +287,12 @@ export const useInventoryStore = defineStore(
           }
           return true;
         }
-      } catch (e) {
+        return false;
+      } catch (e: any) {
         logger.error('[InventoryStore] Delete failed', e);
+        // Throw the error so the UI can display the specific DB message
+        throw e;
       }
-      return false;
     };
 
     const getProductById = (id: string) => {

@@ -10,10 +10,11 @@ Este documento toma el rol principal (documento padre) sobre las reglas del POS 
 ## Reglas de Negocio
 
 1. **Embudo Universal de Egresos de Inventario:** El POS es la única herramienta del sistema con jurisdicción para restar unidades del stock de forma rutinaria. Toda transacción que reduzca el inventario (excepto el cuadre anual por Admin) DEBE originarse en el carrito del POS.
-2. **Tipología de Cierre de Carrito (Desacoplamiento):** El comportamiento post-venta depende del método de cierre seleccionado:
-   - **Efectivo/Nequi (Ingreso Comercial):** El POS aprueba la resta del stock y notifica al módulo de *Caja Diaria* de un INGRESO equivalente al valor pagado.
-   - **Fiado (Ingreso a Crédito):** El POS aprueba la resta del stock, valida el cupo del cliente y notifica al módulo de *Cuentas por Cobrar* de una DEUDA. **TIENE PROHIBIDO** notificar a la Caja Diaria sobre ingresos de efectivo.
-   - **Cierre Logístico (Mermas, Consumo Interno, Devolución Proveedor):** El POS aprueba la resta del stock y registra la acción para la auditoría del turno. El valor de INGRESO reportado a la caja es exactamente cero dólares ($0).
+2. **Tipología de Cierre de Carrito (Desacoplamiento):** El comportamiento post-venta depende del método de cierre seleccionado. Ningún movimiento de inventario puede quedar sin contrapartida contable:
+   - **Efectivo / Nequi (Ingreso Comercial):** El POS aprueba la resta del stock y notifica al módulo de *Caja Diaria* un INGRESO equivalente al valor pagado.
+   - **Fiado (Ingreso a Crédito):** El POS aprueba la resta del stock, valida el cupo del cliente y notifica al módulo de *Cuentas por Cobrar* una DEUDA por el valor total. **TIENE PROHIBIDO** notificar a la Caja Diaria sobre ingresos de efectivo. El ingreso en caja es $0.
+   - **Merma / Consumo Interno (Pérdida Operativa):** El POS aprueba la resta del stock, registra la acción para auditoría del turno, y notifica al módulo de *Gastos Operativos* un EGRESO equivalente al costo del inventario perdido/consumido. El ingreso en caja es $0.
+   - **Devolución a Proveedor (Ajuste de Inventario):** El POS aprueba la resta del stock, registra la acción para auditoría del turno, y notifica al módulo de *Cuentas por Pagar* un AJUSTE (disminución de deuda o nota crédito pendiente) equivalente al valor del producto devuelto. El ingreso en caja es $0.
 3. **Anclaje Obligatorio al Turno Vigente:** El POS se bloquea por completo si no existe una Sesión de Caja Activa y no caducada (Límite 24H según FRD-027-02). Toda transacción procesada desde el carrito hereda forzosamente el `session_id` actual. El cajero en turno asume la responsabilidad auditable de todo lo que cobró, fió, rompió o consumió.
 4. **Respeto Absoluto al Límite Logístico:** Al intentar agregar un producto al carrito, el POS realiza una lectura estricta del inventario actual. Si el stock es cero o menor a la cantidad solicitada, el sistema emite un **Bloqueo Logístico** impidiendo la adición al carrito. Ningún cajero puede dar salida a algo que el sistema cree no tener.
 5. **Políticas de Redondeo (Heredadas):**

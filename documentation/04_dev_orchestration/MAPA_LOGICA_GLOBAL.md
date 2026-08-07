@@ -1,8 +1,6 @@
-# Mapa de Lógica Global - Tienda de Barrio Pro
+# 🗺️ Mapa de Lógica Global (v2.8)
 
-> **Última actualización:** 2026-01-20 (v12 - Backend Verification & Standards)  
-> **Rama:** master  
-> **Propósito:** Hoja de ruta para sincronización código ↔ documentación
+> **Módulos documentados:** 48 / 50 (96%)
 
 ---
 
@@ -73,10 +71,11 @@ Documentos transversales que rigen la calidad y arquitectura:
 | Métrica | Valor |
 |---------|-------|
 | Vistas en código (`SRC/src/views/`) | 15 |
-| Módulos documentados (`01_REQUIREMENTS/`) | 26 ⬆️ |
+| Módulos documentados (`01_REQUIREMENTS/`) | 45 ⬆️ |
 | Módulos sincronizados (100%) | 20 ✅ |
 | Documentos de diseño UX/UI (`03_UI_UX_DESIGN/`) | 6 |
 | Estándares Técnicos | 5 (Decimal, Rounding, Cache, Security, Verif) 🆕 |
+| Estándares Arquitectónicos | 4 (Terminología, Políticas, Trazabilidad, Parámetros) 🆕 |
 | Especificaciones implementadas | SPEC-005 IAM ✅, Backend RPCs ✅ |
 | Vistas sin documentación | 1 (SystemAuditView - solo DEV) |
 
@@ -87,17 +86,17 @@ Documentos transversales que rigen la calidad y arquitectura:
 | Módulo | Archivo Requisitos | Vista/Componente | Nivel Sync | Estado |
 |--------|-------------------|------------------|------------|--------|
 | Dashboard | `dashboard.md` | `DashboardView.vue` | 🟢 100% | **Sincronizado** |
-| Inventario | `inventory.md` | `InventoryView.vue` | � 100% | **Sincronizado** |
+| Inventario | `inventory.md` | `InventoryView.vue` | 🟢 100% | **Sincronizado** |
 | POS | `pos.md` | `POSView.vue` | 🟢 100% | **Sincronizado** |
-| Clientes | `clients.md` | `ClientListView.vue` | � 100% | **Sincronizado** |
-| Detalle Cliente | `client-detail.md` | `ClientDetailView.vue` | � 100% | **Sincronizado** |
-| Admin Hub | `admin-hub.md` | `AdminHubView.vue` | � 100% | **Sincronizado** |
-| Empleados | `employees.md` | `EmployeeManagerView.vue` | � 100% | **Sincronizado** |
+| Clientes | `clients.md` | `ClientListView.vue` | 🟢 100% | **Sincronizado** |
+| Detalle Cliente | `client-detail.md` | `ClientDetailView.vue` | 🟢 100% | **Sincronizado** |
+| Admin Hub | `admin-hub.md` | `AdminHubView.vue` | 🟢 100% | **Sincronizado** |
+| Empleados | `employees.md` | `EmployeeManagerView.vue` | 🟢 100% | **Sincronizado** |
 | Login | `login.md` | `LoginView.vue` | 🟢 100% | **Sincronizado** |
 | Checkout Modal | `checkout-modal.md` | `CheckoutModal.vue` | 🟢 100% | **Sincronizado** |
-| Product Form | `product-form-modal.md` | `ProductFormModal.vue` | � 100% | **Sincronizado** |
-| Client Form | `client-form-modal.md` | `ClientFormModal.vue` | � 100% | **Sincronizado** |
-| Employee Form | `employee-form-modal.md` | `EmployeeFormModal.vue` | � 100% | **Sincronizado** |
+| Product Form | `product-form-modal.md` | `ProductFormModal.vue` | 🟢 100% | **Sincronizado** |
+| Client Form | `client-form-modal.md` | `ClientFormModal.vue` | 🟢 100% | **Sincronizado** |
+| Employee Form | `employee-form-modal.md` | `EmployeeFormModal.vue` | 🟢 100% | **Sincronizado** |
 | Control de Caja | `cash-control.md` | `CashControlView.vue` | 🟢 100% | **Sincronizado** |
 | Gastos | `expenses.md` | `ExpensesView.vue` | 🟢 100% | **Sincronizado** |
 | Recuperar Password | `forgot-password.md` | `ForgotPasswordView.vue` | 🟢 100% | **Sincronizado** |
@@ -105,7 +104,26 @@ Documentos transversales que rigen la calidad y arquitectura:
 | Registro de Tienda | `register-store.md` | `RegisterStoreView.vue` | 🟢 100% | **Sincronizado** |
 | Entrada de Stock | `stock-entry.md` | `StockEntryView.vue` | 🟢 100% | **Sincronizado** |
 | **Auth Unificada IAM** | `auth-unificada-iam.md` | `LoginView.vue` + `DeviceApprovalModal.vue` | 🟢 100% | **Implementado** ✅ |
+| Seguridad Diaria | `FRD_001_SEGURIDAD_DIARIA.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Pase Diario | `FRD_001_1_PASE_DIARIO_STABLE.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Gestión de Empleados | `FRD_003_GESTION_EMPLEADOS.md` | N/A | ⚪ N/A | **Estándar Definido** |
 | Auditoría Sistema | ⚙️ Solo DEV | `SystemAuditView.vue` | ⚪ N/A | Herramienta interna |
+| Almacenamiento Local Seguro | `FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md` | `supabaseAdapter.ts` | 🟡 SPEC | **Por implementar** |
+| Política Fiados | `FRD_024_POLITICA_FIADOS_CLIENTES.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Política Proveedores | `FRD_025_POLITICA_DEUDAS_PROVEEDORES.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Política Gastos | `FRD_026_POLITICA_GASTOS_INMEDIATOS.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Núcleo de Caja | `FRD_027_NUCLEO_CAJA_DIARIA.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Reportes de Caja | `FRD_027_01_REPORTES_DE_CAJA.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Caducidad de Caja | `FRD_027_02_LIMITE_24_HORAS_CAJA.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Núcleo Inventario Desacoplado | `FRD_006_01_NUCLEO_INVENTARIO.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Movimientos Entrada | `FRD_006_01_01_MOVIMIENTOS_ENTRADA_INVENTARIO.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Movimientos Salida | `FRD_006_01_02_MOVIMIENTOS_SALIDA_INVENTARIO.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Inventario - Gestor Reembolsos | `FRD_006_02_GESTOR_REEMBOLSOS.md` | `RefundManager.vue` | 🟢 100% | **Sincronizado** |
+| Inventario - Semilla de Código | `FRD_006_03_CODIGO_PRODUCTO.md` | `ProductForm.vue` | 🟡 SPEC | **Por implementar** |
+| Sincronización Offline - Resolución | `FRD_012_SINCRONIZACION_OFFLINE.md` | `syncQueue.ts` / `syncInterceptor.ts` | 🟢 100% | **Sincronizado** |
+| Sincronización Offline - Remediación | `FRD_012_REMEDIACION_OFFLINE.md` | `syncQueue.ts` | 🟢 100% | **Sincronizado** |
+| Sincronización Offline - Límites Acoplamiento | `FRD_012_01_LIMITES_SISTEMA_OFFLINE.md` | `syncQueue.ts` / `syncInterceptor.ts` | 🟢 100% | **Sincronizado** |
+| **Punto de Venta (POS)** | `FRD_007_01_NUCLEO_POS.md` | `PosView.vue` | 🟡 SPEC / 🔴 0% | **Refactor Pendiente** |
 
 ---
 

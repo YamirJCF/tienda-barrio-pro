@@ -1,67 +1,92 @@
-## Documento de Requisitos Funcionales (FRD)
+# FRD-015: Gestión Centralizada de Dispositivos
 
-### FRD-015: Gestión Centralizada de Dispositivos
+> **Módulo:** Seguridad / Accesos  
+> **Versión:** 2.0 (Saneamiento documental 2026-08-07)  
+> **Estado:** Aprobado  
+> **SDD Asociado:** SDD_015 (Por crear — Fase 3-P2)
 
-#### Descripción
-Implementación de un sistema de gestión de dispositivos desacoplado y centralizado. Se extrae la lógica de control de acceso (aprobación/revocación) del `AuthStore` y de los componentes de UI (`ConnectedDevicesModal`, `NotificationCenter`) para consolidarla en un nuevo Dominio de Datos: `DeviceStore`.
+---
 
-#### Problema a Resolver
-Actualmente, la gestión de dispositivos está fragmentada. El usuario quiere centralizar **toda la experiencia de usuario (UX)** dentro del Centro de Notificaciones, evitando tener que navegar a secciones administrativas separadas ("otros espacios") para gestionar accesos.
+## Descripción
 
-#### Solución Arquitectónica
-- **Nuevo Store (`stores/devices.ts`)**: Lógica de negocio centralizada (fetch, approve, revoke).
-- **NotificationCenter (UI)**: 
-    - **Widget de Seguridad Embebido**: Se integra una sección fija en la parte superior ("Control de Accesos").
-    - **Visibilidad Dinámica**: El widget solo aparece si hay dispositivos pendientes o conectados. Si no hay nada, desaparece.
-    - **Lista Unificada**: Muestra tanto las solicitudes pendientes como los dispositivos ya conectados en esta sección prioritaria.
-- **AuthStore**: Se descarga de responsabilidad de gestión de terceros.
+El sistema DEBE proveer un punto de control centralizado y unificado para que el Administrador gestione los accesos de dispositivos (solicitudes pendientes y dispositivos actualmente conectados). Esta gestión DEBE ser accesible sin necesidad de navegar a secciones administrativas separadas — DEBE estar integrada dentro del flujo principal de notificaciones del Administrador.
 
-#### Reglas de Negocio
-1.  **Prioridad Visual**: La gestión de empleados siempre aparece antes que cualquier otra notificación del sistema.
-2.  **Persistencia en Vista**: Los empleados conectados permanecen visibles en esta sección para permitir su revocación inmediata.
-3.  **Auto-Hiding**: Si `Pending == 0` Y `Connected == 0`, la sección de seguridad se oculta completamente.
+---
 
-#### Casos de Uso
+## Reglas de Negocio
 
-**CU-001: Gestión In-Situ (Embedded)**
+1. **Prioridad de Visibilidad:** La sección de control de accesos a dispositivos DEBE aparecer siempre por encima de cualquier otra notificación del sistema. El Administrador nunca debe buscar entre notificaciones para encontrar solicitudes de acceso pendientes.
+
+2. **Persistencia de Dispositivos Conectados:** El listado de dispositivos con sesión activa DEBE permanecer visible en la sección de control de accesos para permitir su revocación inmediata sin navegar a otra sección.
+
+3. **Auto-Ocultamiento:** Cuando no existan solicitudes pendientes Y no existan dispositivos con sesión activa, la sección de control de accesos DEBE ocultarse completamente de la vista. No DEBE mostrar un estado vacío permanente.
+
+4. **Vista Unificada:** Las solicitudes de acceso pendientes y los dispositivos ya conectados DEBEN mostrarse en la misma sección de control, distinguidos visualmente por su estado (Pendiente / Conectado).
+
+5. **Dominio Exclusivo del Admin:** Solo el Administrador PUEDE aprobar, rechazar o revocar accesos de dispositivos. Un empleado NUNCA DEBE ver ni acceder a esta sección de control.
+
+---
+
+## Casos de Uso
+
+**Caso A: Gestión de Acceso en el Flujo de Notificaciones**
+
 - **Actor:** Administrador
-- **Precondición:** Existe solicitud pendiente o dispositivo conectado.
-- **Flujo Principal:** 
-  1. Admin entra a Notificaciones.
-  2. En el tope, ve el widget "Control de Accesos".
-  3. Ve a "Juan (Pendiente)" -> Click Aprobar.
-  4. La tarjeta de Juan pasa a estado "Conectado" (o baja a la lista de conectados) ahí mismo.
-  5. Ve a "Maria (Conectada)" -> Click Revocar.
-  6. Maria desaparece de la lista.
-
-**CU-002: Limpieza Automática**
-- **Actor:** Sistema
+- **Precondición:** Existe al menos una solicitud de acceso pendiente o un dispositivo con sesión activa.
 - **Flujo Principal:**
-  1. Admin revoca el último dispositivo.
-  2. No quedan pendientes ni conectados.
-  3. El widget de seguridad desaparece de la vista.
+  1. El Administrador accede al centro de notificaciones.
+  2. El sistema muestra la sección de control de accesos en la posición más prominente (tope de la lista).
+  3. El Administrador visualiza las solicitudes pendientes y los dispositivos conectados en una sola vista.
+  4. El Administrador selecciona una solicitud pendiente y la aprueba.
+  5. El sistema registra la aprobación y actualiza el estado del dispositivo a Conectado en la misma vista, sin recargar la página.
+  6. El Administrador selecciona un dispositivo conectado y lo revoca.
+  7. El sistema registra la revocación y el dispositivo desaparece del listado inmediatamente.
+- **Postcondición:** El estado de accesos queda actualizado. La revocación es inmediata y persistente.
 
-#### Criterios de Aceptación
-- [ ] `AuthStore` no contiene referencias a `pendingRequests` ni métodos `approve/reject`.
-- [ ] `DeviceStore` maneja independientemente `fetchPendingRequests` y `fetchConnectedDevices`.
-- [ ] El Centro de Notificaciones funciona correctamente delegando la acción al nuevo store.
-- [ ] El Panel de Dispositivos lista y permite revocar correctamente sin duplicar lógica.
+**Caso B: Auto-Ocultamiento por Estado Vacío**
+
+- **Actor:** Sistema
+- **Precondición:** No existen solicitudes pendientes ni dispositivos con sesión activa.
+- **Flujo Principal:**
+  1. El Administrador revoca el último dispositivo activo.
+  2. El sistema verifica que el conteo de pendientes = 0 y el conteo de conectados = 0.
+  3. La sección de control de accesos desaparece de la vista automáticamente.
+- **Postcondición:** La vista de notificaciones no muestra secciones vacías.
+
+**Caso C: Rechazo de Solicitud de Acceso**
+
+- **Actor:** Administrador
+- **Precondición:** Existe al menos una solicitud de acceso pendiente.
+- **Flujo Principal:**
+  1. El Administrador visualiza la solicitud de acceso de un dispositivo desconocido o no autorizado.
+  2. El Administrador selecciona la opción de rechazar la solicitud.
+  3. El sistema registra el rechazo y elimina la solicitud del listado inmediatamente.
+  4. El dispositivo rechazado no obtiene acceso al sistema.
+- **Postcondición:** La solicitud desaparece del listado. El dispositivo no tiene acceso.
 
 ---
 
-## Lista de Tareas de Alto Nivel
-1. [ ] Crear `src/stores/devices.ts` y migrar lógica.
-2. [ ] Limpiar `src/stores/auth.ts` (remover lógica de dispositivos).
-3. [ ] Refactorizar `NotificationCenterView.vue` para usar `DeviceStore`.
-4. [ ] Refactorizar `ConnectedDevicesModal.vue` para usar `DeviceStore`.
-5. [ ] Verificar flujos completos (Aprobación y Revocación).
+## Criterios de Aceptación
+
+- [ ] **CA-015-01:** La sección de control de accesos aparece en la posición más prominente del flujo de notificaciones, por encima de cualquier otra notificación.
+- [ ] **CA-015-02:** Las solicitudes pendientes y los dispositivos conectados se muestran en una sola sección unificada.
+- [ ] **CA-015-03:** La aprobación de una solicitud cambia el estado del dispositivo a Conectado sin recargar la página completa.
+- [ ] **CA-015-04:** La revocación de un dispositivo lo elimina del listado inmediatamente.
+- [ ] **CA-015-05:** Cuando `pendientes = 0 AND conectados = 0`, la sección de control desaparece completamente de la vista.
+- [ ] **CA-015-06:** Los empleados no tienen acceso a la sección de control de dispositivos bajo ninguna circunstancia.
+- [ ] **CA-015-07:** Las operaciones de aprobación, rechazo y revocación quedan registradas en el historial de auditoría del sistema.
 
 ---
 
-## Impacto en el Sistema
-| Componente | Modificación |
-|------------|--------------|
-| `stores/devices.ts` | **[NUEVO]** Centraliza lógica de negocio. |
-| `stores/auth.ts` | **[REFACTOR]** Elimina gestión de devices. |
-| `NotificationCenter.vue` | **[REFACTOR]** Pasa a ser presentación pura. |
-| `ConnectedDevicesModal` | **[REFACTOR]** Pasa a consumir `DeviceStore`. |
+## Requisitos de Datos (Para Equipo Data)
+
+El sistema DEBE mantener:
+
+| Información | Descripción |
+|-------------|-------------|
+| Estado del dispositivo | Pendiente / Conectado / Revocado / Rechazado |
+| Identificación del dispositivo | Nombre o referencia que permita al Admin reconocer el dispositivo |
+| Identificación del usuario solicitante | A qué empleado pertenece el dispositivo |
+| Marca de tiempo de la solicitud | Cuándo fue enviada la solicitud de acceso |
+| Marca de tiempo de la acción | Cuándo fue aprobado, rechazado o revocado |
+| Responsable de la acción | Qué Administrador tomó la decisión |

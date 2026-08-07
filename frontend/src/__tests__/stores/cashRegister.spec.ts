@@ -163,7 +163,8 @@ describe('CashRegister Store - Bridge Validation', () => {
             await store.openRegister('emp-123', validStoreId, 1000);
 
             expect(consoleSpy).toHaveBeenCalledWith(
-                '✅ [CashRegisterStore] Opening event registered via repository'
+                '✅ [CashRegisterStore] Session ID synced from backend:',
+                'test-session-id'
             );
 
             consoleSpy.mockRestore();

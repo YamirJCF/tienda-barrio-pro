@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useCashRegisterStore } from '../stores/cashRegister';
-import { useCashControlStore } from '../stores/cashControl';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
 import FormInputCurrency from '../components/ui/FormInputCurrency.vue';
@@ -25,7 +24,6 @@ import {
 
 const router = useRouter();
 const cashRegisterStore = useCashRegisterStore();
-const cashControlStore = useCashControlStore();
 const authStore = useAuthStore();
 const { formatCurrency } = useCurrencyFormat();
 const { showSuccess, showError } = useNotifications();
@@ -42,7 +40,9 @@ const showAuditModal = computed(() => pendingForcedSessions.value.length > 0);
 const fetchPendingForcedSessions = async () => {
     try {
         const supabase = requireSupabase();
-        const { data, error } = await supabase
+        
+        // 1. Fetch pending sessions
+        const { data: sessions, error } = await supabase
             .from('cash_sessions')
             .select('id, opened_at, expected_balance')
             .eq('status', 'closed')
@@ -51,12 +51,43 @@ const fetchPendingForcedSessions = async () => {
             .order('opened_at', { ascending: true });
 
         if (error) throw error;
+        
+        if (!sessions || sessions.length === 0) {
+            pendingForcedSessions.value = [];
+            return;
+        }
 
-        pendingForcedSessions.value = (data ?? []).map(s => ({
-            id:              s.id,
-            openedAt:        s.opened_at,
-            expectedBalance: Number(s.expected_balance ?? 0),
-        }));
+        // 2. Fetch multichannel balances for those sessions
+        const sessionIds = sessions.map(s => s.id);
+        const { data: balancesData, error: balancesError } = await supabase
+            .from('cash_session_balances')
+            .select('session_id, payment_method, expected_amount')
+            .in('session_id', sessionIds);
+            
+        if (balancesError) throw balancesError;
+
+        // 3. Map balances to sessions
+        pendingForcedSessions.value = sessions.map(s => {
+            const sBalances = balancesData?.filter(b => b.session_id === s.id) || [];
+            
+            // Build balancesByMethod map
+            const balancesByMethod: Record<string, number> = {};
+            if (sBalances.length > 0) {
+                sBalances.forEach(b => {
+                    balancesByMethod[b.payment_method] = Number(b.expected_amount || 0);
+                });
+            } else {
+                // Fallback if no multichannel balances exist (e.g. legacy session)
+                balancesByMethod['efectivo'] = Number(s.expected_balance ?? 0);
+            }
+
+            return {
+                id:              s.id,
+                openedAt:        s.opened_at,
+                expectedBalance: Number(s.expected_balance ?? 0),
+                balancesByMethod
+            };
+        });
     } catch (e) {
         console.error('🚫 [CashControl] Failed to fetch pending forced sessions:', e);
     }
@@ -113,7 +144,6 @@ onMounted(async () => {
 
 // PIN Challenge State
 const showPinModal = ref(false);
-const showPinSetupModal = ref(false); // PO-02: Setup Modal State
 const pendingAction = ref<'open' | 'close'>('open');
 
 // Computed State
@@ -365,7 +395,7 @@ const goBack = () => {
             @confirm="handleAuditConfirm"
         />
 
-        <!-- PO-02: Pin Setup Modal REMOVED (Zero-Auth Strategy uses Employee PIN) -->
+
     </div>
 </template>
 

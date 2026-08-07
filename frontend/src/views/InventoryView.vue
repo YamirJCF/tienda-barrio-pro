@@ -12,6 +12,7 @@ import { useQuantityFormat } from '../composables/useQuantityFormat';
 import { Decimal } from 'decimal.js';
 import KardexModal from '../components/inventory/KardexModal.vue';
 import BatchHistoryModal from '../components/inventory/BatchHistoryModal.vue';
+import { useToast } from 'vue-toastification';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseModal from '../components/ui/BaseModal.vue';
@@ -35,6 +36,7 @@ const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
 const { formatCurrency } = useCurrencyFormat();
 const { formatStock } = useQuantityFormat();
+const toast = useToast();
 
 // Permisos del usuario
 const canViewInventory = computed(() => authStore.canViewInventory);
@@ -107,9 +109,16 @@ const deleteProduct = (id: string) => {
   }
 };
 
-const confirmDelete = () => {
+const confirmDelete = async () => {
   if (productToDelete.value) {
-    inventoryStore.deleteProduct(productToDelete.value.id);
+    try {
+      const success = await inventoryStore.deleteProduct(productToDelete.value.id);
+      if (success) {
+        toast.success('Producto eliminado correctamente');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Error desconocido al eliminar');
+    }
   }
   showDeleteModal.value = false;
   productToDelete.value = null;

@@ -20,6 +20,7 @@ export interface Product {
     createdAt?: string;
     updatedAt?: string;
     notifiedLowStock?: boolean;
+    isActive?: boolean;
     storeId: string; // REQUIRED - RLS compliance (was optional, caused 401 errors)
     supplierId?: string; // Smart Supply (FRD-008 Fase 2)
 }
@@ -160,6 +161,7 @@ export interface CashTransaction {
     timestamp: string;
     category?: string;
     relatedSaleId?: string; // Optional link to a sale
+    paymentMethod?: string; // Multichannel
 }
 
 // Maps to: Database['public']['Tables']['cash_register']['Row'] (partially)

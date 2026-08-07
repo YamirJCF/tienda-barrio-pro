@@ -1,10 +1,9 @@
 # FRD-018: Marco de Control Operacional Completo y Análisis Financiero Integral
 
 > **Módulo:** Finanzas / Operaciones / Analítica de Negocio  
-> **Rol:** Arquitecto de Producto y Requisitos (Desarrollador-Economista Senior)  
-> **Versión:** 1.0  
-> **Fecha:** 2026-07-25  
-> **Estado:** ✅ Propuesta Estratégica para Implementación
+> **Versión:** 2.0 (Saneamiento documental 2026-08-07 — eliminado código SQL y especificaciones UI)
+> **Fecha Original:** 2026-07-25
+> **Estado:** ✅ Aprobado
 
 ---
 
@@ -45,8 +44,8 @@ $$\text{Gastos Operativos (OPEX)} = \text{Gastos Fijos} + \text{Gastos Variables
 $$\mathbf{\text{Ganancia Neta Real}} = \text{Margen Bruto} - \text{OPEX}$$
 
 #### Requisitos de Datos:
-- Captura estricta de `unit_cost` en cada `sale_item` consumiendo lotes FIFO (`FRD_010`).
-- Categorización de `expenses` en OPEX: `Servicios`, `Arriendo`, `Nómina/Personal`, `Transporte/Fletes`, `Mantenimiento`, `Merma/Deterioro`.
+- Registro del costo unitario en cada línea de venta consumiendo lotes FIFO (ver FRD_016 y FRD_010).
+- Categorización de gastos en tipos de OPEX: Servicios, Arriendo, Nómina/Personal, Transporte/Fletes, Mantenimiento, Merma/Deterioro.
 
 ---
 
@@ -66,8 +65,8 @@ Controla la liquidez inmediata del tendero y previene crisis de efectivo.
    - Calendario de vencimientos de facturas para evitar mora con distribuidores.
 
 #### Requisitos de Datos:
-- Tabla `supplier_invoices` (Facturas por pagar a proveedores con fecha de vencimiento).
-- Tabla `client_ledger` (Rastreabilidad de deudas y abonos con envejecimiento).
+- Gestión de facturas pendientes de pago con fechas de vencimiento programadas.
+- Registro centralizado de deudas de clientes y abonos realizados, incluyendo antigüedad de saldo.
 
 ---
 
@@ -101,61 +100,17 @@ Mide la productividad y mitiga el fraude o fugas de dinero en el Punto de Venta.
 
 ---
 
-## 3. Especificación de la Solución Técnica (Nuevos RPCs y Vistas)
+## 3. Requisito de Consulta Consolidada
 
-### 3.1. RPC Consolidado: `rpc_get_comprehensive_financial_report`
+El sistema DEBE proveer una operación del servidor que entregue en una sola respuesta la radiografía financiera y operacional completa de la tienda para un período de tiempo dado. Esta operación DEBE recibir como parámetros mínimos:
 
-Devuelve en un solo payload optimizado la radiografía financiera y operacional completa de la tienda.
+- Identificador de la tienda
+- Fecha y hora de inicio del período
+- Fecha y hora de fin del período
 
-```sql
-CREATE OR REPLACE FUNCTION rpc_get_comprehensive_financial_report(
-    p_store_id UUID,
-    p_start_date TIMESTAMPTZ,
-    p_end_date TIMESTAMPTZ
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_result JSONB;
-BEGIN
-    SELECT jsonb_build_object(
-        'period', jsonb_build_object('start', p_start_date, 'end', p_end_date),
-        'p_and_l', (
-            SELECT jsonb_build_object(
-                'gross_sales', COALESCE(SUM(total), 0),
-                'cogs', COALESCE(SUM(total_cost), 0),
-                'gross_margin', COALESCE(SUM(total - total_cost), 0),
-                'opex', (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE store_id = p_store_id AND created_at BETWEEN p_start_date AND p_end_date),
-                'net_profit', COALESCE(SUM(total - total_cost), 0) - (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE store_id = p_store_id AND created_at BETWEEN p_start_date AND p_end_date)
-            )
-            FROM sales
-            WHERE store_id = p_store_id AND is_voided = FALSE AND created_at BETWEEN p_start_date AND p_end_date
-        ),
-        'working_capital', (
-            SELECT jsonb_build_object(
-                'cash_in_hand', (SELECT COALESCE(SUM(closing_balance_real), 0) FROM cash_registers WHERE store_id = p_store_id AND status = 'closed'),
-                'accounts_receivable', (SELECT COALESCE(SUM(total_debt), 0) FROM clients WHERE store_id = p_store_id),
-                'accounts_payable', (SELECT COALESCE(SUM(pending_amount), 0) FROM supplier_invoices WHERE store_id = p_store_id AND status = 'pending'),
-                'inventory_valuation', (SELECT COALESCE(SUM(stock * cost), 0) FROM products WHERE store_id = p_store_id AND is_active = TRUE)
-            )
-        ),
-        'operational_kpis', (
-            SELECT jsonb_build_object(
-                'total_transactions', COUNT(*),
-                'average_ticket', CASE WHEN COUNT(*) > 0 THEN ROUND(SUM(total) / COUNT(*), 2) ELSE 0 END,
-                'stagnant_products_count', (SELECT COUNT(*) FROM products WHERE store_id = p_store_id AND id NOT IN (SELECT DISTINCT product_id FROM sale_items WHERE created_at > NOW() - INTERVAL '30 days'))
-            )
-            FROM sales
-            WHERE store_id = p_store_id AND is_voided = FALSE AND created_at BETWEEN p_start_date AND p_end_date
-        )
-    ) INTO v_result;
+El resultado DEBE contener los datos de los 4 pilares descritos en la sección 2, estructurados de forma que el consumidor pueda acceder a cada pilar de forma independiente sin procesamiento adicional.
 
-    RETURN v_result;
-END;
-$$;
-```
+> **Nota para Equipo Data:** La especificación técnica completa de esta operación (incluyendo el esquema de respuesta exacto, manejo de casos borde y políticas de acceso) corresponde al SDD_018 y al DSD correspondiente. Este FRD establece el requisito funcional; el cómo implementarlo no es responsabilidad de este documento.
 
 ---
 
@@ -170,11 +125,11 @@ $$;
 
 ---
 
-## 5. Requisitos de Interfaz de Usuario (UX)
+## 5. Criterios de Aceptación
 
-- **Diseño Móvil-First con Tarjetas Ejecutivas:** Los indicadores complejos (COGS, Margen Bruto, OPEX) se traducen en un lenguaje claro para el tendero:
-  - *"Ventas Totales"*, *"Costo de Mercancía"*, *"Gastos del Negocio"*, *"Dinero Libre Real"*.
-- **Semáforos de Salud Financiera:**
-  - 🟢 Verde: Margen de Utilidad > 20% y Flujo de caja positivo.
-  - 🟡 Amarillo: Cartera vencida > 15% de las ventas del mes.
-  - 🔴 Rojo: OPEX supera el Margen Bruto (Operando en Pérdida).
+- [ ] **CA-018-01:** El sistema provee una consulta consolidada que retorna los indicadores de los 4 pilares en una sola llamada, para un período dado.
+- [ ] **CA-018-02:** Los datos del Pilar 1 (Ganancia Neta) se calculan usando el costo real de venta registrado, no un costo de cero.
+- [ ] **CA-018-03:** Los datos del Pilar 2 incluyen el saldo de cuentas por cobrar (clientes) y cuentas por pagar (proveedores) a la fecha de corte.
+- [ ] **CA-018-04:** Los datos del Pilar 3 incluyen la valoración del inventario usando el método FIFO.
+- [ ] **CA-018-05:** Los datos del Pilar 4 diferencian las operaciones por empleado o turno.
+- [ ] **CA-018-06:** Solo el Administrador puede acceder al reporte financiero consolidado. Los empleados no tienen acceso.

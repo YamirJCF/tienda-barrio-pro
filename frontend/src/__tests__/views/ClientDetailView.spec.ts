@@ -215,6 +215,6 @@ describe('ClientDetailView.vue', () => {
     await input.setValue('15000');
     await confirmBtn!.trigger('click');
     
-    expect(mockRegisterPayment).toHaveBeenCalledWith('cli-001', new Decimal(15000), 'Abono Efectivo');
+    expect(mockRegisterPayment).toHaveBeenCalledWith('cli-001', new Decimal(15000), 'Abono Efectivo', 'efectivo');
   });
 });

@@ -3,7 +3,6 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useCashRegisterStore } from '../stores/cashRegister';
-import { useCashControlStore } from '../stores/cashControl';
 import { useAuthStore } from '../stores/auth'; // Import auth store
 import { usePresenceStore } from '../stores/presence'; // New Presence Store import
 import { 
@@ -22,24 +21,17 @@ import {
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 
-// WO-004: Modal de PIN para SPEC-006 (consolidado)
-// T-008: Modal de PIN para SPEC-006 (consolidado)
-import PinSetupModal from '../components/PinSetupModal.vue';
 // A-02: UserProfileSidebar para icono de perfil
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 
 const router = useRouter();
 const salesStore = useSalesStore();
 const cashRegisterStore = useCashRegisterStore();
-const cashControlStore = useCashControlStore();
 const authStore = useAuthStore(); // Use auth store
 const presenceStore = usePresenceStore(); // Initialize
 
 
 
-
-// WO-004: State para modal de PIN (consolidado)
-const showPinSetupModal = ref(false);
 
 // Methods
 const goBack = () => {
@@ -53,8 +45,6 @@ const navigateTo = (route: string) => {
 
 // Computed Properties & Refs (Fixing missing definitions)
 const isAdmin = computed(() => authStore.isAdmin);
-const hasPinConfigured = computed(() => cashControlStore.hasPinConfigured);
-const pinSetupMode = computed(() => hasPinConfigured.value ? 'change' : 'setup');
 const showProfileSidebar = ref(false);
 
 
@@ -329,42 +319,6 @@ const showProfileSidebar = ref(false);
         </div>
       </section>
 
-      <section>
-        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">🔐 Seguridad</h3>
-        <div
-          class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
-        >
-
-
-          <!-- Configurar/Cambiar PIN de Caja (inteligente) -->
-          <button
-            @click="showPinSetupModal = true"
-            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group"
-          >
-            <div class="flex items-center gap-4">
-              <div
-                class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
-              >
-                <KeyRound :size="20" />
-              </div>
-              <div>
-                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {{ hasPinConfigured ? 'Cambiar PIN de Caja' : 'Configurar PIN de Caja' }}
-                </p>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  {{
-                    hasPinConfigured
-                      ? 'Modificar tu PIN actual'
-                      : 'Establecer PIN para apertura y cierre'
-                  }}
-                </p>
-              </div>
-            </div>
-            <ChevronRight :size="20" class="text-slate-300 group-hover:text-primary transition-colors" />
-          </button>
-        </div>
-      </section>
-
 
 
       <div class="h-10"></div>
@@ -372,16 +326,6 @@ const showProfileSidebar = ref(false);
 
 
 
-    <!-- WO-004: Modal de PIN (consolidado con detección automática de modo) -->
-    <PinSetupModal
-      :isVisible="showPinSetupModal"
-      :mode="pinSetupMode"
-      @close="showPinSetupModal = false"
-      @success="
-        showPinSetupModal = false;
-        cashControlStore.checkPinConfigured();
-      "
-    />
     <UserProfileSidebar
       :isOpen="showProfileSidebar"
       @close="showProfileSidebar = false"

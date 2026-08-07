@@ -20,9 +20,9 @@ describe('Cart Store (Logic Verification)', () => {
         setActivePinia(createPinia());
     });
 
-    it('should add items properly', () => {
+    it('should add items properly', async () => {
         const cart = useCartStore();
-        const success = cart.addItem({
+        const success = await cart.addItem({
             id: 'prod-1',
             name: 'Soda',
             price: new Decimal(2000),
@@ -34,10 +34,10 @@ describe('Cart Store (Logic Verification)', () => {
         expect(cart.total.toNumber()).toBe(4000);
     });
 
-    it('should block adding more than stock', () => {
+    it('should block adding more than stock', async () => {
         const cart = useCartStore();
         // Stock is 10
-        const success = cart.addItem({
+        const success = await cart.addItem({
             id: 'prod-1',
             name: 'Soda',
             price: new Decimal(2000),
@@ -81,9 +81,9 @@ describe('Cart Store (Logic Verification)', () => {
         // But store rounds per item for weighable? Checked code: yes `roundToNearest50(item.subtotal)`
     });
 
-    it('should clear cart', () => {
+    it('should clear cart', async () => {
         const cart = useCartStore();
-        cart.addItem({ id: 'prod-1', name: 'Soda', price: new Decimal(2000), quantity: 1 });
+        await cart.addItem({ id: 'prod-1', name: 'Soda', price: new Decimal(2000), quantity: 1 });
         cart.clearCart();
         expect(cart.items.length).toBe(0);
         expect(cart.total.toNumber()).toBe(0);

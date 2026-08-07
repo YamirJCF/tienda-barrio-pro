@@ -397,17 +397,20 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
 
                 if (error) {
                     logger.log(`[SupabaseRepo:${tableName}] delete error:`, error.message);
-                    return false; // Or true if we consider local delete enough? 
-                    // Usually for sync we need to track "deleted items".
-                    // Phase 5 doesn't specify soft-delete sync queues yet.
-                    // For now, return false implies sync failed.
+                    // CRITICAL: Rollback localStorage since DB rejected the deletion
+                    if (filtered.length !== existing.length) {
+                        localStorageAdapter.set(localStorageKey, existing);
+                    }
+                    return false; 
                 }
                 return true;
             } catch (error) {
                 logger.log(`[SupabaseRepo:${tableName}] delete exception:`, error);
-                // Return true because we deleted locally?
-                // "Offline First" dictates local op is primary.
-                return true;
+                // CRITICAL: Rollback localStorage on exception
+                if (filtered.length !== existing.length) {
+                    localStorageAdapter.set(localStorageKey, existing);
+                }
+                return false;
             }
         }
 

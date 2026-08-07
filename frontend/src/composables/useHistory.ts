@@ -75,6 +75,7 @@ export function useHistory() {
     const dateFilter = ref<DatePreset>('today');
     const employeeFilter = ref<string | null>(null); // UUID or null for all
     const eventTypeFilter = ref<string>('all');
+    const paymentMethodFilter = ref<string>('all'); // 'all', 'efectivo', 'digital', 'nequi', 'daviplata'
 
     // Custom date range (T3)
     const customStartDate = ref<string>('');
@@ -97,6 +98,22 @@ export function useHistory() {
                 // fallback logic based on item type
                 if (item.type === 'audit' && m.event_type === eventTypeFilter.value) return true;
                 return false;
+            });
+        }
+        // Apply payment method filter (Multichannel)
+        if (paymentMethodFilter.value !== 'all') {
+            result = result.filter(item => {
+                const m = item.metadata;
+                if (!m) return false;
+                
+                const pm = m.payment_method;
+                if (!pm) return false; // If no payment method recorded, ignore or treat as 'efectivo'?
+
+                if (paymentMethodFilter.value === 'digital') {
+                    return pm === 'nequi' || pm === 'daviplata';
+                }
+                
+                return pm === paymentMethodFilter.value;
             });
         }
 
@@ -476,6 +493,7 @@ export function useHistory() {
         dateFilter,
         employeeFilter,
         eventTypeFilter,
+        paymentMethodFilter,
         searchQuery,
         customStartDate,
         customEndDate,

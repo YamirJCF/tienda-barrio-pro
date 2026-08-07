@@ -601,7 +601,10 @@ watch(
                   type="number"
                   step="any"
                   min="0"
+                  :disabled="!!props.productId"
+                  :title="props.productId ? 'El stock de un producto existente solo puede modificarse mediante Ajustes de Inventario o Entradas.' : undefined"
                 />
+                <p v-if="props.productId" class="text-[10px] text-gray-500 mt-1">Solo modificable vía Ajustes/Entradas</p>
               </div>
               <div class="col-span-6">
                 <BaseInput

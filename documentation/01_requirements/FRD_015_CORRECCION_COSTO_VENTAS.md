@@ -1,4 +1,12 @@
-# Documento de Requisitos Funcionales (FRD)
+> [!WARNING]
+> **ARCHIVO OBSOLETO — RENUMERADO**  
+> Este documento fue renumerado a **FRD_016** y movido a la carpeta `FRD/` durante el proceso de saneamiento documental (2026-08-07).  
+> El archivo canónico actualizado es: [`FRD/FRD_016_CORRECCION_COSTO_VENTAS.md`](FRD/FRD_016_CORRECCION_COSTO_VENTAS.md)  
+> Este archivo se conserva únicamente para trazabilidad histórica. No debe modificarse ni referenciarse.
+
+---
+
+# Documento de Requisitos Funcionales (FRD) — OBSOLETO
 
 ## 015. Habilitación de Analytics (Corrección de Costos en Ventas)
 

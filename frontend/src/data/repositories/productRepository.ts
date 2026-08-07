@@ -64,7 +64,9 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             updatedAt: row.updated_at,
             storeId: row.store_id,
             // Map low_stock_alerted (DB) to notifiedLowStock (Domain)
-            notifiedLowStock: row.low_stock_alerted || false
+            notifiedLowStock: row.low_stock_alerted || false,
+            // Soft delete state
+            isActive: row.is_active ?? true
         };
     },
     toPersistence: (entity: Product): ProductDB => {
@@ -110,7 +112,9 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
             // Map notifiedLowStock (Domain) to low_stock_alerted (DB)
             low_stock_alerted: entity.notifiedLowStock || false,
             // Supplier FK - preserve existing value
-            supplier_id: entity.supplierId || null
+            supplier_id: entity.supplierId || null,
+            // Soft delete state
+            is_active: entity.isActive ?? true
         };
     }
 };
@@ -171,6 +175,8 @@ export const productRepository: ProductRepository = {
      * 2. OFFLINE: Return from IDB cache (or legacy localStorage fallback)
      */
     async getAll(storeId?: string): Promise<Product[]> {
+        let results: Product[] = [];
+        
         // 1. ONLINE: Always fetch fresh from Supabase
         if (navigator.onLine && isSupabaseConfigured()) {
             try {
@@ -181,7 +187,7 @@ export const productRepository: ProductRepository = {
                         logger.warn('[ProductRepo] IDB cache update failed:', e)
                     );
                 }
-                return fresh;
+                results = fresh;
             } catch (e) {
                 logger.warn('[ProductRepo] Supabase fetch failed, falling back to cache', e);
                 // Fall through to IDB cache on network error
@@ -189,13 +195,52 @@ export const productRepository: ProductRepository = {
         }
 
         // 2. OFFLINE or network error: Try IDB cache
-        const cached = await productCache.getAll();
-        if (cached.length > 0) {
-            return cached;
+        if (results.length === 0) {
+            const cached = await productCache.getAll();
+            if (cached.length > 0) {
+                results = cached;
+            } else {
+                // 3. Last resort: legacy localStorage fallback via baseRepository
+                results = await baseRepository.getAll(storeId);
+            }
         }
 
-        // 3. Last resort: legacy localStorage fallback via baseRepository
-        return baseRepository.getAll(storeId);
+        // 4. CRITICAL: Filter out soft-deleted products for UI consumption
+        return results.filter(p => p.isActive !== false);
+    },
+
+    /**
+     * Soft Delete Product — Delegated to Supabase RPC
+     * Adheres to strictly defined business rules for stock and payables.
+     */
+    async delete(id: string): Promise<boolean> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            throw new Error('OFFLINE_NOT_ALLOWED: Eliminar productos requiere conexión a internet.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const { data, error } = await supabase.rpc('rpc_soft_delete_product', {
+            p_product_id: id
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to soft delete product (RPC Error)', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (res && res.success === false) {
+            logger.error('[ProductRepo] Failed to soft delete product (Business Error)', res.error);
+            throw new Error(res.error || 'Error desconocido al eliminar el producto');
+        }
+
+        // Remove from local cache immediately
+        await productCache.remove(id);
+
+        return true;
     },
 
     /**
@@ -216,10 +261,11 @@ export const productRepository: ProductRepository = {
     async getByPlu(plu: string, storeId?: string): Promise<Product | null> {
         // 1. Fast indexed lookup in IDB
         const results = await productCache.getByIndex('by_plu', plu);
-        if (results.length > 0) return results[0];
+        const activeResults = results.filter(p => p.isActive !== false);
+        if (activeResults.length > 0) return activeResults[0];
 
         // 2. Fallback: full scan (legacy path)
-        const all = await this.getAll(storeId);
+        const all = await this.getAll(storeId); // getAll already filters isActive
         return all.find(p => p.plu === plu) || null;
     },
 

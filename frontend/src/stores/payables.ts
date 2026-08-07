@@ -73,11 +73,12 @@ export const usePayablesStore = defineStore('payables', () => {
         }
     };
 
-    const payInvoice = async (invoiceId: string, amount: number): Promise<{ success: boolean; error?: string }> => {
+    const payInvoice = async (invoiceId: string, amount: number, paymentMethod: string): Promise<{ success: boolean; error?: string }> => {
         try {
             const { error: rpcError } = await supabase.rpc('rpc_pay_supplier_invoice', {
                 p_invoice_id: invoiceId,
-                p_amount: amount
+                p_amount: amount,
+                p_payment_method: paymentMethod
             });
 
             if (rpcError) throw rpcError;

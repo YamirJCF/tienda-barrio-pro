@@ -251,6 +251,7 @@ export const cashRepository: CashRepository = {
                 description: row.description,
                 timestamp: row.created_at,
                 relatedSaleId: row.sale_id,
+                paymentMethod: row.payment_method || 'efectivo',
                 category: 'General'
             }));
 

@@ -34,7 +34,7 @@ const authStore = useAuthStore();
 const { formatCurrency } = useCurrencyFormat();
 const {
   items, filteredItems, isLoading, error,
-  currentType, dateFilter, employeeFilter, eventTypeFilter,
+  currentType, dateFilter, employeeFilter, eventTypeFilter, paymentMethodFilter,
   searchQuery, customStartDate, customEndDate,
   summary, fetchHistory, setCustomDateRange
 } = useHistory();
@@ -59,6 +59,17 @@ const eventTypeOptions = computed(() => {
     default: return [];
   }
 });
+
+const paymentMethodOptions = [
+  { label: 'Todo', value: 'all' },
+  { label: 'Efectivo', value: 'efectivo' },
+  { label: 'Digitales', value: 'digital' }
+];
+
+const digitalPaymentOptions = [
+  { label: 'Nequi', value: 'nequi' },
+  { label: 'Daviplata', value: 'daviplata' }
+];
 
 // Date presets
 const datePresets: { label: string; value: DatePreset }[] = [
@@ -277,6 +288,39 @@ onUnmounted(() => {
         >
           {{ evt.label }}
         </button>
+      </div>
+
+      <!-- Payment Method Filter (FRD-021 Multichannel) -->
+      <div v-if="currentType === 'sales' || currentType === 'credits'" class="px-4 pb-2 flex flex-col gap-2">
+        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <Banknote :size="14" class="text-slate-400 flex-shrink-0 mr-1" />
+          <button
+            v-for="pm in paymentMethodOptions"
+            :key="pm.value"
+            @click="paymentMethodFilter = pm.value"
+            class="px-3 py-1 text-[11px] font-bold rounded-full whitespace-nowrap transition-colors uppercase tracking-wider"
+            :class="paymentMethodFilter === pm.value || (pm.value === 'digital' && (paymentMethodFilter === 'nequi' || paymentMethodFilter === 'daviplata'))
+              ? 'bg-blue-600 text-white' 
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
+          >
+            {{ pm.label }}
+          </button>
+        </div>
+
+        <!-- Sub-filters for Digital -->
+        <div v-if="paymentMethodFilter === 'digital' || paymentMethodFilter === 'nequi' || paymentMethodFilter === 'daviplata'" class="flex items-center gap-1 pl-6 overflow-x-auto no-scrollbar">
+          <button
+            v-for="dpm in digitalPaymentOptions"
+            :key="dpm.value"
+            @click="paymentMethodFilter = dpm.value"
+            class="px-3 py-1 text-[10px] font-bold rounded-full whitespace-nowrap transition-colors uppercase tracking-wider"
+            :class="paymentMethodFilter === dpm.value
+              ? 'bg-indigo-500 text-white' 
+              : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'"
+          >
+            {{ dpm.label }}
+          </button>
+        </div>
       </div>
 
       <!-- Custom Date Range Panel (T3) -->

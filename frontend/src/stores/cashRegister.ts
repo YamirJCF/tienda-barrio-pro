@@ -28,6 +28,27 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         return opening.plus(totalIncome).minus(totalExpenses);
     });
 
+    const balancesByMethod = computed(() => {
+        if (!currentSession.value) return {};
+
+        const balances: Record<string, Decimal> = {
+            'efectivo': new Decimal(currentSession.value.openingBalance)
+        };
+
+        for (const t of currentSession.value.transactions) {
+            const method = t.paymentMethod || 'efectivo';
+            if (!balances[method]) balances[method] = new Decimal(0);
+
+            if (t.type === 'income') {
+                balances[method] = balances[method].plus(t.amount);
+            } else if (t.type === 'expense') {
+                balances[method] = balances[method].minus(t.amount);
+            }
+        }
+
+        return balances;
+    });
+
     const totalExpenses = computed(() => {
         if (!currentSession.value) return new Decimal(0);
         return currentSession.value.transactions
@@ -344,6 +365,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         sessionHistory,
         isOpen,
         currentBalance,
+        balancesByMethod,
         totalExpenses,
         totalIncome,
         isStaleSession,

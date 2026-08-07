@@ -7,19 +7,8 @@
       </div>
 
       <div class="modal-content">
-        <!-- Locked State -->
-        <div v-if="cashControlStore.isLocked" class="locked-state">
-          <div class="locked-icon">🔒</div>
-          <h3>Acceso Bloqueado</h3>
-          <p>Demasiados intentos fallidos.</p>
-          <div class="countdown">
-            <span class="timer">{{ formatTime(cashControlStore.lockRemainingSeconds) }}</span>
-            <span class="timer-label">para reintentar</span>
-          </div>
-        </div>
-
         <!-- PIN Input State -->
-        <div v-else class="pin-state">
+        <div class="pin-state">
           <p class="step-label">{{ subtitle }}</p>
           <PinKeypad
             ref="pinKeypad"
@@ -44,7 +33,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import PinKeypad from './PinKeypad.vue';
-import { useCashControlStore } from '../stores/cashControl';
 import { useAuthStore } from '../stores/auth';
 import { authRepository } from '../data/repositories/authRepository';
 import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
@@ -60,8 +48,6 @@ const emit = defineEmits<{
   close: [];
   success: [];
 }>();
-
-const cashControlStore = useCashControlStore();
 const authStore = useAuthStore();
 const { getShortFingerprint } = useDeviceFingerprint();
 
@@ -163,8 +149,6 @@ watch(
   (visible) => {
     if (visible) {
       resetModal();
-      // Check lock status on open
-      cashControlStore.checkCashStatus();
     }
   }
 );
@@ -253,46 +237,6 @@ watch(
   font-weight: 500;
 }
 
-/* Locked State */
-.locked-state {
-  text-align: center;
-  padding: 2rem 1rem;
-}
-
-.locked-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-}
-
-.locked-state h3 {
-  color: #dc2626;
-  margin-bottom: 0.5rem;
-}
-
-.locked-state p {
-  color: #6b7280;
-  margin-bottom: 1.5rem;
-}
-
-.countdown {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.timer {
-  font-size: 2.5rem;
-  font-weight: 700;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  color: #dc2626;
-}
-
-.timer-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
 /* Loading Overlay */
 .loading-overlay {
   position: absolute;
@@ -339,11 +283,6 @@ watch(
 
   .step-label {
     color: #d1d5db;
-  }
-
-  .locked-state p,
-  .timer-label {
-    color: #9ca3af;
   }
 }
 </style>

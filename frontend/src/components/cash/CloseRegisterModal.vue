@@ -20,10 +20,21 @@ const emit = defineEmits<{
 const cashRegisterStore = useCashRegisterStore();
 
 // State
-const physicalCount = ref('');
+const physicalCounts = ref<Record<string, string>>({});
 const notes = ref('');
 const isLoading = ref(false);
 const { showError, showSuccess } = useNotifications(); // Hook
+
+// Initialize counts
+import { watch } from 'vue';
+watch(() => props.modelValue, (isOpen) => {
+  if (isOpen) {
+    physicalCounts.value = {};
+    Object.keys(cashRegisterStore.balancesByMethod).forEach(method => {
+      physicalCounts.value[method] = '';
+    });
+  }
+});
 
 // Computed
 const systemExpected = computed(() => cashRegisterStore.currentBalance);
@@ -31,25 +42,45 @@ const openingBalance = computed(() => cashRegisterStore.currentSession?.openingB
 const totalIncome = computed(() => cashRegisterStore.totalIncome);
 const totalExpenses = computed(() => cashRegisterStore.totalExpenses);
 
+const balancesByMethod = computed(() => cashRegisterStore.balancesByMethod);
+
+const differences = computed(() => {
+  const diffs: Record<string, Decimal> = {};
+  for (const [method, expected] of Object.entries(balancesByMethod.value)) {
+    const physical = new Decimal(physicalCounts.value[method] || 0);
+    diffs[method] = physical.minus(expected);
+  }
+  return diffs;
+});
+
+const totalPhysical = computed(() => {
+  return Object.values(physicalCounts.value).reduce((sum, count) => sum.plus(new Decimal(count || 0)), new Decimal(0));
+});
+
 const difference = computed(() => {
-  const physical = new Decimal(physicalCount.value || 0);
-  return physical.minus(systemExpected.value);
+  return totalPhysical.value.minus(systemExpected.value);
 });
 
 const isBalanced = computed(() => difference.value.equals(0));
-const isValid = computed(() => physicalCount.value !== '' && !isNaN(parseFloat(physicalCount.value)));
+const isValid = computed(() => {
+  // All methods must have a valid number entered
+  return Object.keys(balancesByMethod.value).every(method => {
+    const val = physicalCounts.value[method];
+    return val !== '' && !isNaN(parseFloat(val));
+  });
+});
 
-const differenceColor = computed(() => {
-  if (difference.value.greaterThan(0)) return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20';
-  if (difference.value.lessThan(0)) return 'text-red-600 bg-red-50 dark:bg-red-900/20';
+const differenceColor = (diff: Decimal) => {
+  if (diff.greaterThan(0)) return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20';
+  if (diff.lessThan(0)) return 'text-red-600 bg-red-50 dark:bg-red-900/20';
   return 'text-gray-600 bg-gray-50 dark:text-gray-300 dark:bg-slate-700';
-});
+};
 
-const differenceLabel = computed(() => {
-  if (difference.value.greaterThan(0)) return 'Sobrante';
-  if (difference.value.lessThan(0)) return 'Faltante';
+const differenceLabel = (diff: Decimal) => {
+  if (diff.greaterThan(0)) return 'Sobrante';
+  if (diff.lessThan(0)) return 'Faltante';
   return 'Cuadrado';
-});
+};
 
 // Methods
 const formatCurrency = (val: Decimal) => {
@@ -62,7 +93,7 @@ const formatCurrency = (val: Decimal) => {
 
 const close = () => {
   emit('update:modelValue', false);
-  physicalCount.value = '';
+  physicalCounts.value = {};
   notes.value = '';
 };
 
@@ -72,8 +103,11 @@ const handleClose = () => {
 
   try {
     isLoading.value = true;
+    // Note: The store `closeRegister` currently accepts a single number.
+    // For FRD-020 we might need to send the individual counts or a JSON,
+    // but right now it sends the total. (Store will send amount_declared).
     cashRegisterStore.closeRegister(
-      new Decimal(physicalCount.value),
+      totalPhysical.value,
       notes.value
     );
 
@@ -83,10 +117,10 @@ const handleClose = () => {
       type: 'finance',
       audience: 'all',
       title: 'Cierre de Caja',
-      message: `Cierre exitoso. Total reportado: ${formatCurrency(new Decimal(physicalCount.value))}`,
+      message: `Cierre exitoso. Total reportado: ${formatCurrency(totalPhysical.value)}`,
       icon: 'banknote',
       isRead: false,
-      metadata: { amount: parseFloat(physicalCount.value) }
+      metadata: { amount: totalPhysical.value.toNumber() }
     });
 
     emit('closed');
@@ -144,15 +178,18 @@ const handleClose = () => {
               </div>
             </div>
 
-            <div class="space-y-4">
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Efectivo Real en Caja (Conteo)
-                </label>
+            <div class="space-y-6">
+              <div v-for="(expected, method) in balancesByMethod" :key="method" class="space-y-3">
+                <div class="flex justify-between text-sm">
+                  <label class="font-medium text-gray-700 dark:text-gray-300 capitalize">
+                    Saldo Real en {{ method }}
+                  </label>
+                  <span class="text-gray-500 dark:text-gray-400">Esperado: {{ formatCurrency(expected) }}</span>
+                </div>
                 <div class="relative">
                   <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
                   <input 
-                    v-model="physicalCount"
+                    v-model="physicalCounts[method]"
                     type="number" 
                     min="0"
                     step="100"
@@ -160,19 +197,21 @@ const handleClose = () => {
                     class="w-full h-14 pl-10 pr-4 text-2xl font-bold text-gray-900 dark:text-white bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-blue-500 focus:ring-0 transition-colors"
                   />
                 </div>
+                <div 
+                  v-if="physicalCounts[method] !== ''"
+                  class="flex items-center justify-between p-2 rounded-lg border border-transparent text-sm"
+                  :class="differenceColor(differences[method])"
+                >
+                  <div class="flex items-center gap-1.5 font-medium">
+                    <component :is="differences[method].equals(0) ? CheckCircle : AlertTriangle" :size="16" />
+                    <span>{{ differenceLabel(differences[method]) }}</span>
+                  </div>
+                  <span class="font-bold">{{ formatCurrency(differences[method].abs()) }}</span>
+                </div>
               </div>
 
-              <div 
-                v-if="isValid"
-                class="flex items-center justify-between p-3 rounded-lg border border-transparent"
-                :class="differenceColor"
-              >
-                <div class="flex items-center gap-2 font-medium">
-                  <component :is="isBalanced ? CheckCircle : AlertTriangle" :size="20" />
-                  <span>{{ differenceLabel }}</span>
-                </div>
-                <span class="font-bold text-lg">{{ formatCurrency(difference.abs()) }}</span>
-              </div>
+            <div class="space-y-4">
+
 
               <div class="space-y-2">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">

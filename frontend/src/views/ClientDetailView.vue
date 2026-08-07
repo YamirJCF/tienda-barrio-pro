@@ -18,7 +18,9 @@ import {
   Plus,
   AlertTriangle,
   ChevronLeft,
-  Pencil
+  Pencil,
+  Smartphone,
+  CreditCard
 } from 'lucide-vue-next';
 
 
@@ -30,6 +32,7 @@ const isAdmin = computed(() => authStore.isAdmin);
 
 // State
 const paymentAmount = ref('');
+const paymentMethod = ref('efectivo');
 const showPaymentModal = ref(false);
 const showOptionsMenu = ref(false);
 const showDeleteConfirm = ref(false);
@@ -157,8 +160,9 @@ const registerPayment = () => {
   // Ensure amount is valid before sending
   const finalAmount = amount.toNumber(); // Convert to number if needed by store, though store likely takes Decimal or number
   
-  clientsStore.registerPayment(clientId.value, new Decimal(finalAmount), 'Abono Efectivo');
+  clientsStore.registerPayment(clientId.value, new Decimal(finalAmount), 'Abono ' + (paymentMethod.value.charAt(0).toUpperCase() + paymentMethod.value.slice(1)), paymentMethod.value);
   paymentAmount.value = '';
+  paymentMethod.value = 'efectivo';
   showPaymentModal.value = false;
 };
 
@@ -381,6 +385,37 @@ const registerPayment = () => {
                 icon="attach_money"
                 autofocus
             />
+
+            <!-- Método de Pago Selector -->
+            <div class="mt-5">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Método de Pago</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <button
+                        @click="paymentMethod = 'efectivo'"
+                        :class="paymentMethod === 'efectivo' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                        class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                    >
+                        <Banknote :size="24" :stroke-width="1.5" class="mb-1" />
+                        <span class="text-xs font-semibold">Efectivo</span>
+                    </button>
+                    <button
+                        @click="paymentMethod = 'nequi'"
+                        :class="paymentMethod === 'nequi' ? 'bg-[#4A148C] text-white border-[#4A148C] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                        class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                    >
+                        <Smartphone :size="24" :stroke-width="1.5" class="mb-1" />
+                        <span class="text-xs font-semibold">Nequi</span>
+                    </button>
+                    <button
+                        @click="paymentMethod = 'daviplata'"
+                        :class="paymentMethod === 'daviplata' ? 'bg-[#E32119] text-white border-[#E32119] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                        class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                    >
+                        <CreditCard :size="24" :stroke-width="1.5" class="mb-1" />
+                        <span class="text-xs font-semibold">Daviplata</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <template #footer>

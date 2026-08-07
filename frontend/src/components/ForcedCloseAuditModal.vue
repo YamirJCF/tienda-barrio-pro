@@ -12,6 +12,7 @@ export interface PendingForcedSession {
   id: string;
   openedAt: string;
   expectedBalance: number;
+  balancesByMethod?: Record<string, number>;
 }
 
 // =============================================
@@ -34,17 +35,62 @@ const emit = defineEmits<{
 // STATE
 // =============================================
 const { formatCurrency } = useCurrencyFormat();
-const actualBalance = ref(0);
+const physicalCounts = ref<Record<string, string>>({});
 
 // La sesión que se está conciliando ahora es siempre la primera de la lista (más antigua primero)
 const currentSession = computed(() => props.pendingSessions[0] ?? null);
 
+import { watch } from 'vue';
+watch(() => currentSession.value, (session) => {
+  if (session && session.balancesByMethod) {
+    physicalCounts.value = {};
+    Object.keys(session.balancesByMethod).forEach(method => {
+      physicalCounts.value[method] = '';
+    });
+  }
+}, { immediate: true });
+
 const remainingCount = computed(() => props.pendingSessions.length);
+
+const totalPhysical = computed(() => {
+  return Object.values(physicalCounts.value).reduce((sum, count) => sum + (parseFloat(count) || 0), 0);
+});
+
+const differences = computed(() => {
+  const diffs: Record<string, number> = {};
+  if (!currentSession.value?.balancesByMethod) return diffs;
+  
+  for (const [method, expected] of Object.entries(currentSession.value.balancesByMethod)) {
+    const physical = parseFloat(physicalCounts.value[method]) || 0;
+    diffs[method] = physical - expected;
+  }
+  return diffs;
+});
 
 const difference = computed(() => {
   if (!currentSession.value) return 0;
-  return actualBalance.value - currentSession.value.expectedBalance;
+  return totalPhysical.value - currentSession.value.expectedBalance;
 });
+
+const isValid = computed(() => {
+  if (!currentSession.value?.balancesByMethod) return false;
+  return Object.keys(currentSession.value.balancesByMethod).every(method => {
+    const val = physicalCounts.value[method];
+    return val !== '' && !isNaN(parseFloat(val));
+  });
+});
+
+const differenceColor = (diff: number) => {
+  if (diff > 0) return 'text-blue-500 bg-blue-50 dark:bg-blue-900/20';
+  if (diff < 0) return 'text-red-500 bg-red-50 dark:bg-red-900/20';
+  return 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20';
+};
+
+const differenceLabel = (diff: number) => {
+  if (diff > 0) return 'Sobrante';
+  if (diff < 0) return 'Faltante';
+  return 'Cuadra';
+};
 
 const differenceStatus = computed(() => {
   const diff = difference.value;
@@ -65,10 +111,9 @@ const formattedOpenedAt = computed(() => {
 // HANDLERS
 // =============================================
 const handleConfirm = () => {
-  if (!currentSession.value) return;
-  emit('confirm', currentSession.value.id, actualBalance.value);
-  // Reset para la siguiente sesión de la cola
-  actualBalance.value = 0;
+  if (!currentSession.value || !isValid.value) return;
+  emit('confirm', currentSession.value.id, totalPhysical.value);
+  // Reset will happen in the watcher when currentSession changes
 };
 </script>
 
@@ -123,29 +168,34 @@ const handleConfirm = () => {
             </p>
           </div>
 
-          <!-- Physical count input -->
-          <div>
-            <label class="block text-xs font-bold uppercase text-gray-400 mb-2 text-center">
-              ¿Cuánto hay físicamente en caja?
-            </label>
-            <FormInputCurrency
-              v-model="actualBalance"
-              placeholder="0"
-              class="text-2xl font-bold text-center"
-              :autofocus="true"
-            />
-
-            <!-- Difference indicator -->
-            <div
-              class="mt-3 flex items-center justify-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700"
-            >
-              <CheckCircle :size="16" :class="differenceStatus.color" />
-              <span class="text-sm font-bold" :class="differenceStatus.color">
-                {{ differenceStatus.label }}
-              </span>
-              <span v-if="Math.abs(difference) >= 50" class="font-mono text-sm" :class="differenceStatus.color">
-                ({{ formatCurrency(Math.abs(difference)) }})
-              </span>
+          <!-- Physical count inputs -->
+          <div class="space-y-4 max-h-[40vh] overflow-y-auto px-1 no-scrollbar">
+            <div v-for="(expected, method) in currentSession.balancesByMethod" :key="method" class="space-y-2">
+              <div class="flex justify-between text-xs">
+                <label class="font-bold uppercase text-gray-400 capitalize">
+                  ¿Cuánto hay en {{ method }}?
+                </label>
+                <span class="text-gray-500">Esperado: {{ formatCurrency(expected) }}</span>
+              </div>
+              <FormInputCurrency
+                v-model="physicalCounts[method]"
+                placeholder="0"
+                class="text-xl font-bold text-center"
+              />
+              
+              <!-- Difference indicator for this channel -->
+              <div
+                v-if="physicalCounts[method] !== ''"
+                class="mt-1 flex items-center justify-center gap-2 p-1.5 rounded-lg text-xs font-bold"
+                :class="differenceColor(differences[method])"
+              >
+                <CheckCircle v-if="Math.abs(differences[method]) < 50" :size="14" />
+                <AlertTriangle v-else :size="14" />
+                <span>{{ differenceLabel(differences[method]) }}</span>
+                <span v-if="Math.abs(differences[method]) >= 50" class="font-mono">
+                  ({{ formatCurrency(Math.abs(differences[method])) }})
+                </span>
+              </div>
             </div>
           </div>
 
@@ -154,6 +204,7 @@ const handleConfirm = () => {
             id="btn-confirm-forced-close-audit"
             variant="dark"
             class="w-full h-12 font-bold"
+            :disabled="!isValid"
             @click="handleConfirm"
           >
             Confirmar Conteo y Continuar

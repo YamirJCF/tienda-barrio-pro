@@ -45,3 +45,26 @@ Toda simplificación de alcance ("MVP", "por ahora", "fuera de alcance", "se dif
 ## 8. Privilegios Base en Tablas Nuevas
 
 Toda tabla nueva creada vía migración SQL debe incluir explícitamente `GRANT ALL ON TABLE <tabla> TO anon, authenticated, service_role;` (o los roles relevantes) — Supabase Cloud NO lo asigna automáticamente fuera del dashboard, a diferencia de crear la tabla vía UI. La omisión de esto provoca errores 42501 (Permission Denied) que pueden confundirse con fallos de RLS impidiendo el paso a producción.
+
+## 9. Principios Anti-Sesgo (Verificación y Auditoría)
+
+Estos principios son operaciones obligatorias que el verificador debe ejecutar sobre su propio trabajo antes de cerrar cualquier conclusión, en cualquier bloque o fase de verificación.
+
+### 9.1 Invariante de Reconciliación por Conteo
+Antes de escribir cualquier conclusión, veredicto o resumen, ejecuta este conteo mecánico:
+`N = número total de hallazgos, discrepancias, ausencias, contradicciones o resultados negativos producidos`
+La conclusión DEBE contener exactamente N referencias explícitas — una por cada hallazgo contado. Si el número de referencias es menor a N, la conclusión está incompleta y debe reescribirse.
+
+### 9.2 Principio de No-Fusión de Dimensiones
+Cuando una tarea evalúa más de una pregunta distinta (ej. ¿existe en producción? vs ¿cumple la regla de negocio?), una respuesta positiva a una pregunta NUNCA se usa como justificación, evidencia o mitigante de una respuesta negativa a otra.
+**Ejemplo prohibido:** Que un documento admita una carencia ("deuda técnica") es una propiedad del documento, no una resolución. "El documento admite que X no existe" y "X ya funciona" no deben fundirse en una sola conclusión optimista que silencie el hallazgo negativo.
+
+### 9.3 Prohibición de Citar la Fuente Auditada Como Evidencia Propia
+Si la tarea es auditar un documento X, y X contiene una afirmación (ej. "la base de datos no tiene la columna Y"), esa afirmación es **material a verificar**, nunca **evidencia ya verificada**. Solo cuenta como verificado lo que se confirmó ejecutando una consulta o prueba propia en el proceso.
+
+### 9.4 Auto-Chequeo Obligatorio Antes de Cualquier Cierre
+Como último paso antes de entregar una conclusión:
+1. Aplicar 9.1 (contar N hallazgos y confirmar su inclusión).
+2. Aplicar 9.2 (verificar que ninguna dimensión positiva silencie una negativa).
+3. Aplicar 9.3 (confirmar que los "hallazgos verificados" no repiten lo que el documento auditado ya decía de sí mismo sin consulta propia).
+4. Si cualquiera de los tres falla: DETENER. Reescribir la conclusión antes de presentarla.
