@@ -1,7 +1,12 @@
-# FRD-004_1: Gestión de PIN de Caja
+> [!WARNING]
+> **DOCUMENTO DEPRECATED / OBSOLETO**  
+> Este documento fue marcado como **DEPRECATED** por decisión arquitectónica del proyecto (**Decisión D-01**, 2026-08-07).  
+> **Motivo:** El PIN de caja fue erradicado para simplificar el flujo de autenticación y unificar la seguridad en el Token JWT/Session Token principal.  
+> Este archivo se conserva exclusivamente por motivos de trazabilidad histórica. No debe ser implementado ni referenciado en nuevos SDDs.
 
-### Nombre de la Funcionalidad
-Configuración y Ciclo de Vida del PIN de Caja
+---
+
+# FRD-004_1: Gestión de PIN de Caja (DEPRECATED)
 
 #### Descripción
 Sub-módulo de seguridad enfocado exclusivamente en la "Llave de la Caja". Este PIN es independiente de la contraseña de login del Admin y sirve como firma electrónica para autorizar movimientos de dinero.

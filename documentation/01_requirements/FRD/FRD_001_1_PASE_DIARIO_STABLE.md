@@ -1,5 +1,9 @@
 # FRD-001.1: Re-implementación del Pase Diario (Daily Pass)
 
+> **Relación Documental:** Este documento (`FRD_001_1`) especifica la implementación estabilizada del Pase Diario bajo el modelo Zero Trust. Mantiene una relación de especialización con `FRD_001_SEGURIDAD_DIARIA.md` (documento canónico del módulo). Se conservan como archivos independientes por diseño arquitectónico para maximizar la trazabilidad y mantener un desacoplamiento óptimo.
+
+---
+
 ## 1. Contexto y Objetivo
 El objetivo es restaurar la funcionalidad de "Pase Diario" para empleados, eliminando la "Auto-Aprobación" temporal que se había implementado para estabilización. Volvemos al modelo de **Zero Trust** donde el Administrador debe aprobar explícitamente el acceso cada día.
 

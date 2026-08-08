@@ -5,6 +5,8 @@
 #### Descripción
 Este documento establece la naturaleza indeleble de todo movimiento financiero u operativo asentado en la base de datos. Ninguna operación finalizada puede desaparecer de la historia contable del negocio. Para enmendar errores humanos u operativos, el sistema impone la lógica de "movimientos de contrapeso", protegiendo la confianza e integridad del rastro de auditoría.
 
+> **Relación Documental:** Este documento establece la norma del **Principio de Inmutabilidad** (movimientos de contrapeso). Se complementa de forma directa con [`FRD_005_AUDITORIA_TRAZABILIDAD.md`](FRD_005_AUDITORIA_TRAZABILIDAD.md), el cual define la estructura centralizada de historiales y evidencia auditables. Ambos se conservan como documentos separados porque responden a principios de arquitectura distintos que se complementan mutuamente.
+
 ---
 
 ## Reglas de Negocio

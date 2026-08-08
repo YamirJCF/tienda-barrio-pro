@@ -6,6 +6,8 @@ Evidence Hub / Sistema Centralizado de Auditoría
 #### Descripción
 Implementación de un sistema centralizado de historiales que permite auditar todas las operaciones críticas del negocio. Este módulo sirve como la fuente de verdad para la integridad financiera y operativa.
 
+> **Relación Documental:** Este documento define la estructura centralizada del **Evidence Hub y Sistema de Trazabilidad**. Se complementa de forma directa con [`FRD_005_AUDITORIA_INVIOLABLE.md`](FRD_005_AUDITORIA_INVIOLABLE.md), el cual rige el Principio de Inmutabilidad y movimientos de contrapeso. Ambos se conservan como documentos separados por responder a principios conceptuales independientes.
+
 ---
 
 ## Reglas de Negocio

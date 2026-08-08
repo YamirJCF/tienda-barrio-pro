@@ -5,6 +5,8 @@
 #### Descripción
 Este documento norma la separación estricta entre la operación logística de ingreso de mercancía y la operación financiera de asunción de pasivos corporativos (deudas). Su objetivo es garantizar que la responsabilidad contable sea un acto consciente, desvinculado de procesos automáticos derivados de la recepción física de bienes.
 
+> **Relación Documental (Decisión D-02, 2026-08-07):** Este documento coexiste armoniosamente con `FRD_019_CUENTAS_POR_PAGAR.md`. El principio establecido aquí se preserva íntegramente: la recepción física de mercancía NO genera pasivos ni registros contables automáticamente. La gestión de cuentas por pagar opera como un módulo aislado e independiente (apunte manual consciente por parte del usuario).
+
 ---
 
 ## Reglas de Negocio

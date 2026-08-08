@@ -14,7 +14,7 @@
 |-------------|---------|------------------------------|
 | **POL-SEG-01** | Seguridad | Arqueo Ciego Obligatorio. El Frontend no debe mostrar (ni pedir al servidor) el saldo esperado de ningún canal al cerrar. |
 | **POL-AUD-01** | Auditoría | Inmutabilidad de los cierres. Tras cerrar, ni el admin puede reabrir o modificar la sesión. |
-| **POL-AUTH-01** | Seguridad | **Eliminación del PIN de Caja.** Por decisión arquitectónica transversal previa, se erradicó el "PIN de Caja" para unificar la seguridad en el Token JWT principal del usuario. Todo control de acceso se basa en el Session Token y el RLS. |
+| **POL-AUTH-01** | Seguridad | **Eliminación del PIN de Caja (Decisión D-01, 2026-08-07).** Por decisión arquitectónica transversal previa y formalizada por el Arquitecto, se erradicó el "PIN de Caja" para unificar la seguridad en el Token JWT principal del usuario. Todo control de acceso se basa en el Session Token y las políticas RLS. FRD_004_1 queda deprecado. |
 
 ### 0.2 Restricciones Transversales Inyectadas (Fase 0)
 | SDD Origen | Restricción Inyectada | Impacto en el Control de Caja |

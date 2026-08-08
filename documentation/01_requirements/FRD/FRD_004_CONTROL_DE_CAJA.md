@@ -1,10 +1,9 @@
 # FRD-004: Control de Caja (Turnos)
 
-### Nombre de la Funcionalidad
-Gestión de Sesiones de Caja (Apertura, Movimientos y Cierre)
-
-#### Descripción
-Módulo crítico que controla el flujo de efectivo físico en la tienda. Establece límites temporales ("Turnos" o "Sesiones") para responsabilizar a los cajeros del dinero procesado durante su gestión.
+> **Módulo:** Caja / Operaciones  
+> **Versión:** 2.0 (Saneamiento 2026-08-07 — Decisión D-01: Erradicación del PIN de caja)  
+> **Estado:** Aprobado  
+> **SDD Asociado:** SDD_004
 
 ---
 
@@ -22,8 +21,9 @@ Módulo crítico que controla el flujo de efectivo físico en la tienda. Estable
 
 3. **Requisito para Operar Caja:**
     - Solo empleados con el permiso `canOpenCloseCash` pueden abrir o cerrar la caja.
-    - Además del permiso, DEBEN ingresar el PIN de caja para validar la operación.
+    - La autenticación se valida contra la sesión/token JWT principal del usuario.
     - El Admin siempre tiene este permiso implícitamente.
+    - **Nota de Arquitectura (Decisión D-01, 2026-08-07):** El PIN de caja fue erradicado por redundancia de seguridad. La validación se delega al control de acceso basado en tokens y permisos.
 
 4. **Inmutabilidad de Transacciones:**
     - Una vez registrado un movimiento (ingreso/gasto), NO puede borrarse ni editarse.
@@ -41,14 +41,12 @@ Módulo crítico que controla el flujo de efectivo físico en la tienda. Estable
 - **Actor:** Empleado con permiso `canOpenCloseCash`
 - **Precondición:** Caja cerrada, pase diario aprobado.
 - **Flujo Principal:**
-    1. Usuario intenta ingresar al módulo de control de caja.
-    2. Sistema solicita PIN de caja.
-    3. Usuario ingresa PIN → Sistema valida.
-    4. Si PIN es incorrecto → Error con intentos restantes.
-    5. Si PIN es correcto → Muestra pantalla "Apertura de Turno".
-    6. Usuario ingresa monto base (fondo de cambio).
-    7. Usuario confirma.
-    8. Sistema abre sesión y habilita el POS.
+    1. Usuario ingresa al módulo de control de caja.
+    2. Sistema verifica permisos y estado de caja.
+    3. Muestra pantalla "Apertura de Turno".
+    4. Usuario ingresa monto base (fondo de cambio).
+    5. Usuario confirma.
+    6. Sistema abre sesión y habilita el POS.
 - **Postcondición:** Caja abierta, ventas habilitadas.
 
 **Caso B: Cierre de Turno (Arqueo)**
@@ -56,12 +54,11 @@ Módulo crítico que controla el flujo de efectivo físico en la tienda. Estable
 - **Precondición:** Caja abierta.
 - **Flujo Principal:**
     1. Usuario selecciona "Cerrar Turno".
-    2. Sistema muestra cuánto DEBERÍA haber (Saldo Esperado) con desglose de ventas/gastos.
+    2. Sistema solicita conteo de dinero físico (Arqueo Ciego).
     3. Usuario realiza conteo físico e ingresa el dinero real que tiene en mano.
     4. Usuario pulsa "Confirmar Cierre".
-    5. Sistema solicita PIN de caja para firmar el arqueo.
-    6. Si PIN es correcto → Sistema cierra la sesión y guarda el reporte histórico.
-    7. Sistema calcula y registra la diferencia entre esperado y real.
+    5. Sistema cierra la sesión y guarda el reporte histórico.
+    6. Sistema calcula y registra la diferencia entre esperado y real.
 - **Postcondición:** Caja cerrada, pases diarios expirados, POS bloqueado hasta próxima apertura.
 
 **Caso C: Registro de Gasto (Salida de Dinero)**
@@ -120,10 +117,10 @@ Módulo crítico que controla el flujo de efectivo físico en la tienda. Estable
 - [ ] No se puede abrir caja si ya hay una abierta.
 - [ ] El POS está completamente bloqueado cuando la caja está cerrada.
 - [ ] Solo usuarios con permiso `canOpenCloseCash` ven las opciones de abrir/cerrar.
-- [ ] El cierre de caja requiere PIN de caja válido.
+- [ ] El cierre de caja no requiere PIN (Decisión D-01).
 - [ ] Cada movimiento de caja tiene descripción obligatoria.
 - [ ] El cierre genera un registro inmutable con la diferencia calculada.
-- [ ] Al cerrar la caja, todos los pases diarios de empleados expiran automáticamente.
+- [ ] Al cerrar la caja, los permisos operativos de venta quedan bloqueados.
 - [ ] El sistema detecta y bloquea turnos con fecha de apertura < hoy.
 - [ ] No se permite abrir un nuevo turno si existe uno caducado pendiente de cierre.
 ```

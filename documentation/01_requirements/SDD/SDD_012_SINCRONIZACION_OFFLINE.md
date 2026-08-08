@@ -97,3 +97,30 @@ El contrato requiere extender las entidades transaccionales (sin especificar nom
 - Marca temporal de integración al servidor.
 - Estado lógico de la sincronización.
 - Identificador del actor que resolvió un conflicto, si aplica.
+
+---
+
+## §8. Límites Estrictos del Sistema Offline (FRD-012-01)
+
+### 8.1 Exclusividad del POS (RN-OFF-01)
+El modo offline es un mecanismo defensivo de emergencia acoplado **exclusivamente al flujo de ventas POS (`CREATE_SALE`)**.
+- **PROHIBIDO:** Operaciones de inventario (mermas, consumos, devoluciones), gastos operativos o cierres de caja en modo offline.
+- Cualquier intento de encolar transacciones distintas a ventas es destruido por la cola de sincronización.
+
+### 8.2 Validación Local Preventiva y Límite de Cola (RN-OFF-02 / RN-OFF-03)
+- El cliente valida stock local y cupo de crédito local ANTES de encolar una venta offline. Si el stock es insuficiente o el cupo del cliente se excede, la venta se bloquea en origen.
+- Se impone un límite máximo de transacciones encoladas. Al alcanzarlo, el botón de cobrar se deshabilita hasta reconectar y drenar la cola.
+
+---
+
+## §9. Remediación y Cola de Letras Muertas - DLQ (FRD-012-R)
+
+### 9.1 Inmutabilidad de Ventas Offline y Manejo de Fallos (RN-OFF-04)
+Una venta realizada offline bajo las reglas locales de ese momento es un **hecho histórico inmutable** (*POL-AUD-01*).
+- El servidor NO rechaza la sincronización de una venta por cambios de inventario ocurridos durante el apagón.
+- Los fallos de sincronización se restringen a **fallos técnicos** (red, timeout, 500, *Schema Drift*).
+- Tras 3 reintentos fallidos de red o al detectar incompatibilidad de esquema, la transacción se traslada a la **Cola de Letras Muertas (DLQ)**.
+
+### 9.2 Intervención en DLQ
+En la DLQ, el Administrador tiene acceso exclusivamente a las acciones de **Reintentar** o **Eliminar** (para pruebas o ventas fantasma comprobadas), asegurando la preservación del historial financiero legítimo.
+

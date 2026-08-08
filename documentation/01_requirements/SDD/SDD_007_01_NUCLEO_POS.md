@@ -1,8 +1,8 @@
 # SDD-007-01: Núcleo del Punto de Venta (POS) Desacoplado
 
 > **Asociado a:** [FRD-007-01](../FRD/FRD_007_01_NUCLEO_POS.md)  
-> **Estado:** 🟢 Aprobado y Consolidado  
-> **Última Actualización:** 2026-08-04
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Deuda: Migración SQL `rpc_procesar_venta_v3` pendiente)  
+> **Última Actualización:** 2026-08-07
 
 ---
 
@@ -259,7 +259,7 @@ De acuerdo a las Políticas Globales (ARQ-002), el POS es un embudo crítico que
 | Amenaza | Vector de Ataque / Error | Mitigación en el Diseño |
 |---------|--------------------------|-------------------------|
 | **Venta Fantasma (Stock Negativo)** | Dos cajeros venden la última Coca-Cola al mismo tiempo. | El backend verifica el stock físico *dentro* de la transacción atómica. Si la consulta concurrente agota el stock, la segunda transacción falla con `STOCK_INSUFFICIENT`. |
-| **Doble Cobro** | El cajero presiona "Cobrar" 5 veces rápidamente por lentitud del internet. | La UI se bloquea en el primer clic. A nivel de Base de Datos, el `idempotency_key` DEBE tener una constraint `UNIQUE` en la tabla `sales`. El RPC captura la violación de integridad para abortar transacciones gemelas. |
+| **Doble Cobro** | El cajero presiona "Cobrar" 5 veces rápidamente por lentitud del internet. | **Decisión D-04 (Autoridad del Backend):** La idempotencia no recae en la UI. A nivel de Base de Datos, el `idempotency_key` es una restricción `UNIQUE` obligatoria en la tabla `sales`. El backend es la única fuente de verdad y rechaza transacciones duplicadas por constraint de BD. El Frontend colabora bloqueando el botón, pero no es la última línea de defensa. |
 | **Manipulación de Precios** | Un atacante modifica el payload JSON enviando `total: 0.50` a la API. | Mitigado por diseño de payload. El backend no acepta totales, recalcula basándose en `product_id` y su precio vigente en base de datos. |
 | **Fraude de Devolución / Evasión** | Un cajero inventa una devolución por un monto superior al real para robar efectivo. | El payload exige `original_sale_item_id`. El backend valida el monto de egreso estrictamente contra el `unit_price` congelado de la venta original, imposibilitando montos libres. |
 

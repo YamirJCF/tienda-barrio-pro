@@ -91,10 +91,19 @@ stateDiagram-v2
 ### Caso D: Crear Nuevo Cliente
 - **Precondiciones:** Usuario Administrador.
 - **Flujo Principal:**
-  1. El Admin envía datos del cliente a la BD.
+  1. El Admin envía datos del cliente a la BD (nombre, teléfono, cédula, cupo de crédito opcional).
   2. El backend inserta en `clients` con `balance = 0`.
-  3. Se asume el `credit_limit` enviado por la UI o el configurado globalmente.
+  3. Si no se especifica `credit_limit`, el backend hereda automáticamente el cupo global configurado para la tienda (`store_settings.default_credit_limit`).
 - **Postcondiciones:** Cliente nuevo en estado 'Activo'.
+
+### Caso E: Búsqueda Rápida de Clientes (POS / Módulo Clientes)
+- **Precondiciones:** Usuario autenticado.
+- **Flujo Principal:**
+  1. El usuario ingresa un término de búsqueda (nombre o teléfono) en la UI de cobro o de clientes.
+  2. La UI invoca `rpc_buscar_clientes(p_query)`.
+  3. El backend realiza una búsqueda insensible a mayúsculas/minúsculas por coincidencia parcial (`ILIKE`) sobre los campos `name` y `phone`.
+  4. Retorna el listado de clientes activos (`is_deleted = false`) que coinciden con el término.
+- **Postcondiciones:** Resultados mostrados para selección inmediata.
 
 ## § Contrato de Interfaz
 
@@ -109,6 +118,14 @@ stateDiagram-v2
 - **Salida esperada (JSON):**
   - Éxito: `{ "success": true }`
   - Catálogo de Errores: `INVALID_AMOUNT`, `CLIENT_NOT_FOUND`, `AMOUNT_EXCEEDS_BALANCE`, `NO_OPEN_CASH_SESSION`.
+
+### Operación: Buscar Clientes (`rpc_buscar_clientes`)
+- **Entrada esperada:** `p_query` (Text, requerido, min 2 caracteres).
+- **Reglas de transformación:**
+  - `PERFORM assert_store_access(get_current_store_id())`.
+  - `SELECT * FROM clients WHERE store_id = current_store AND is_deleted = false AND (name ILIKE '%' || p_query || '%' OR phone ILIKE '%' || p_query || '%')`.
+- **Salida esperada (JSON):**
+  - Arreglo de objetos cliente conteniendo `id`, `name`, `phone`, `id_number`, `balance`, `credit_limit`.
 
 ### Operación: Eliminar Lógicamente Cliente (`rpc_soft_delete_client`)
 - **Entrada esperada:** `p_client_id` (UUID).
@@ -143,8 +160,9 @@ erDiagram
         uuid id PK
         uuid store_id FK
         text name
+        text phone "Teléfono de contacto"
         text id_number "Cédula"
-        numeric credit_limit "Cupo de crédito"
+        numeric credit_limit "Cupo de crédito (hereda global si es nulo)"
         numeric balance "Deuda actual, >= 0"
         boolean is_deleted "Soft delete flag"
     }
@@ -163,5 +181,7 @@ erDiagram
 | Atributo | Entidad | Tipo Lógico | Restricciones | Descripción |
 |---|---|---|---|---|
 | `balance` | `clients` | Monetario Entero | `>= 0` | Deuda total acumulada viva del cliente. |
+| `phone` | `clients` | Alfanumérico | Opcional | Número de teléfono de contacto para búsquedas. |
 | `id_number` | `clients` | Alfanumérico | UNIQUE (por tienda) | Identificación oficial del cliente. |
+| `credit_limit` | `clients` | Monetario Entero | `>= 0` | Límite máximo de deuda. Si es NULO al crear, hereda el valor global de la tienda. |
 | `transaction_type` | `client_ledger` | Enumeración | `venta_fiado`, `abono`, `anulacion_fiado` | Naturaleza inmutable de la alteración de saldo. |

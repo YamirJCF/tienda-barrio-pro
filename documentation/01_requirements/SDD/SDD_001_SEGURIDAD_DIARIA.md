@@ -103,8 +103,26 @@ stateDiagram-v2
   1. El Administrador recibe la alerta (con datos del empleado y dispositivo).
   2. El Administrador oprime "Aprobar".
   3. El sistema actualiza el estado del `daily_pass` a `approved`.
-  4. El frontend del empleado detecta el cambio de estado (vía realtime o polling) y le da acceso al sistema.
+  4. El frontend del empleado detecta el cambio de estado (vía realtime o polling a intervalo de 10 segundos) y le da acceso al sistema.
 - **Postcondiciones (Éxito):** El empleado queda facultado para interactuar con los módulos operativos (POS, Inventario) según su rol base.
+
+### 4.3 Caso C: Rechazo Explicitó de Pase Diario
+- **Precondiciones:** Existe un `daily_pass` en estado `pending`.
+- **Flujo Principal:**
+  1. El Administrador recibe la alerta de solicitud de acceso.
+  2. El Administrador evalúa el contexto del dispositivo o la hora y oprime "Rechazar".
+  3. El sistema actualiza el estado del `daily_pass` a `rejected`.
+  4. El frontend del empleado detecta la respuesta (polling cada 10s) y destruye la sesión temporal, redirigiendo a la pantalla de login con mensaje de rechazo.
+- **Postcondiciones:** Acceso negado definitivamente para el turno.
+
+### 4.4 Caso D: Caducidad Natural por Cambio de Día (00:00 Horas)
+- **Precondiciones:** Existe un `daily_pass` en estado `approved` emitido en la fecha actual.
+- **Flujo Principal:**
+  1. El reloj del servidor cruza la medianoche (`00:00:00`).
+  2. Al realizar cualquier petición subsiguiente, el backend evalúa `created_at::date = CURRENT_DATE`.
+  3. Al detectar que la fecha del pase pertenece a un día previo, la consulta es rechazada con código `PASS_EXPIRED`.
+  4. El frontend redirige al empleado a la Sala de Espera para solicitar el pase correspondiente al nuevo día.
+- **Postcondiciones:** El pase del día anterior queda inactivo sin importar el estado de la caja.
 
 ---
 
@@ -113,10 +131,10 @@ stateDiagram-v2
 ### 5.1 Operación: `solicitar_pase_diario`
 - **Entrada esperada:** Ninguna explícita (se deduce del token JWT del usuario logueado en modo restringido). Opcionalmente se envía el `device_fingerprint` (String).
 - **Reglas de transformación:** 
-  - Validar que no exista ya un pase pendiente que exceda los límites de reintento.
-  - Generar registro con `status = 'pending'`.
+  - Validar que no exista ya un pase pendiente que exceda los límites de reintento (`retry_count >= 3` congela por 15 minutos).
+  - Generar registro con `status = 'pending'` e incrementar `retry_count`.
 - **Salida esperada:** 
-  - Éxito: Objeto `daily_pass` recién creado.
+  - Éxito: Objeto `daily_pass` recién creado incluyendo `retry_count`.
 
 ### 5.2 Operación: `resolver_pase_diario`
 - **Entrada esperada:** 
@@ -154,6 +172,7 @@ stateDiagram-v2
 | `employee_id` | UUID | FK a `profiles`. | Empleado solicitante. |
 | `status` | Enum | `'pending'`, `'approved'`, `'rejected'`, `'expired'`. | Estado del ciclo de vida. |
 | `device_fingerprint` | Texto | Opcional. | Cadena identificadora del dispositivo/navegador. |
+| `retry_count` | Entero | Default `0`. | Contador de reintentos de notificación por el empleado. |
 | `requested_at` | Timestamp | Default `NOW()`. | Cuándo se hizo la petición. |
 | `resolved_at` | Timestamp | Nulo hasta resolución. | Cuándo el Admin tomó la decisión. |
 | `expires_at` | Timestamp | Nulo hasta cierre de caja. | Marcado por el motor del SDD_004 al culminar el turno. |
