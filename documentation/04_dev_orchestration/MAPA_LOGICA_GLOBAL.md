@@ -1,4 +1,4 @@
-# 🗺️ Mapa de Lógica Global (v2.9)
+# 🗺️ Mapa de Lógica Global (v2.10)
 
 > **Módulos documentados:** 48 / 50 (96%)
 
@@ -63,6 +63,19 @@ Documentos transversales que rigen la calidad y arquitectura:
 | `SECURITY_STANDARDS.md` | Especificación Técnica de Seguridad y Encriptación | ✅ Estándar |
 
 > 📖 Ver **SISTEMA_TRAZABILIDAD.md** para reglas de gobernanza completas.
+
+---
+
+## 📖 Diccionarios de Dominio (DICT)
+
+Gobiernan los valores permitidos para columnas enum o de estado, evitando inconsistencias (ARQ-001).
+
+| Diccionario | Dominio | Estado |
+|-------------|---------|--------|
+| `DICT_001_CASH_MOVEMENTS.md` | `movement_type` (ingreso, gasto) | ✅ Definido |
+| `DICT_002_SUPPLIER_PAYMENT_ORIGIN.md` | `payment_origin` (INTERNAL, EXTERNAL) | ✅ Definido |
+| `DICT_003_DAILY_PASS_STATUS.md` | `pass_status` (pending, approved, rejected, expired) | ✅ Definido |
+| `DICT_004_PAYMENT_CHANNELS.md` | `payment_channel` (CASH, NEQUI, BRE_KEY) | ✅ Definido |
 
 ---
 
