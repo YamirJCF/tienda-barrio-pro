@@ -2,7 +2,7 @@
 
 > **Documento auditado:** SDD_007_01_NUCLEO_POS.md  
 > **Fecha de inicio:** 2026-08-07  
-> **Estado del protocolo:** FASE A — En curso (Bloque 1)
+> **Estado del protocolo:** 🔴 Detenido por Halt [H-2: rpc_procesar_venta_v3 ausente]
 
 ---
 
@@ -726,38 +726,52 @@ Los hallazgos H-1, H-2, H-3 y H-4 fueron verificados mediante consultas propias 
 
 #### Tabla de Clasificación de Hallazgos (Regla 9.1 — 4 referencias explícitas)
 
-| ID | Hallazgo | ¿Auto-documentado en SDD? | Clasificación PVS-A | Acción requerida |
-|----|----------|---------------------------|---------------------|------------------|
-| **H-1** | `rpc_procesar_venta_v3` ausente en DB. | **SÍ** — §0.3 #1 lo declara como "Deuda Técnica Crítica" explícitamente. | **Deuda Técnica Documentada** — No es contradicción interna. El documento es consciente del gap. | Ninguna corrección en el SDD. La acción requerida es la migración SQL. |
-| **H-2** | `idempotency_key` ausente en tabla `sales` de BD. | **SÍ** — §0.3 #2 lo declara como "Deuda Técnica". | **Deuda Técnica Documentada** — No es contradicción interna. | Ninguna corrección en el SDD. La acción requerida es `ALTER TABLE sales ADD COLUMN idempotency_key`. |
-| **H-3** | `caja_diaria` y `daily_cash_movements` no existen. | **SÍ** — §0.2 #8 los llama explícitamente "Alucinación de Nombres de Tabla" y ordena unificar a `cash_movements`. | **Falso Positivo Textual** — Al inspeccionar la Sección 3 y 7 actuales, los nombres incorrectos ya no existen. El texto ya utiliza `cash_movements`. | Ninguna. La deuda textual ya estaba resuelta. |
-| **H-4** | `payment_method_id` es TEXT en BD, no FK real a `payment_methods`. | **SÍ** — §0.3 #3 lo declara como "Deuda Técnica". | **Deuda Técnica Documentada** — No es contradicción interna. | Ninguna corrección en el SDD. La acción requerida es alinear el RPC v3 con el FK real. |
+> **CORRECCIÓN DE PROTOCOLO (2026-08-08):** La clasificación original usó categorías inventadas ("Deuda Técnica Documentada") en lugar de citar la definición literal del PEA-N. Además, violó la Regla 9.3 al usar la auto-declaración del §0.3 del SDD como evidencia para no disparar Halt. A continuación, la reclasificación usando exclusivamente la taxonomía real del PEA-N.
+
+**Definiciones PEA-N citadas literalmente:**
+- **H-1:** Dos filas del RVC se contradicen entre sí directamente.
+- **H-2:** Vacío que involucra dinero real/permisos, sin resolución vía Jerarquía niveles 1-3.
+- **H-3:** Un SDD nuevo obligaría a marcar 🟡 a 2+ SDDs ya 🟢.
+- **H-4:** El FRD fuente mismo tiene contradicción interna.
+
+| ID | Hallazgo | ¿Dispara Halt? | Clasificación PEA-N (con cita literal) | Acción requerida |
+|----|----------|----------------|----------------------------------------|------------------|
+| **F-1** | `rpc_procesar_venta_v3` ausente en DB. El SDD lo declara como contrato central (§5.1). | **🔴 SÍ — H-2** | La ausencia total de la función/RPC que el SDD declara como su contrato central constituye un "vacío que involucra dinero real" (el RPC procesa ventas) "sin resolución vía Jerarquía niveles 1-3" (no existe función análoga que lo supla; `v2` no acepta los mismos parámetros). | Migración SQL para crear `rpc_procesar_venta_v3`. Halt bloquea Fase C. |
+| **F-2** | `idempotency_key` ausente en tabla `sales`. | **❌ NO** | Hallazgo normal. La columna es de soporte, no la función central. Resoluble por Jerarquía nivel 1 (¿hay patrón análogo en el RVC?). | Pendiente de Fase C tras resolución de Halt. |
+| **F-3** | `caja_diaria` / `daily_cash_movements` no existen en BD. | **❌ NO** | Falso positivo textual. Las menciones están en §0.2 #8 como registro histórico; en las Secciones 3 y 7 actuales ya aparece correctamente `cash_movements`. | Ninguna. |
+| **F-4** | `payment_method_id` es TEXT en BD, no FK real a `payment_methods`. | **❌ NO** | Hallazgo normal. El RVC ya tiene fila análoga (patrón `TEXT` + `CHECK` en vez de `ENUM`/FK es el estándar establecido del proyecto, confirmado en `supplier_invoices`). Resoluble por Jerarquía nivel 1. | Pendiente de Fase C tras resolución de Halt. |
 
 ---
 
 ### SDD_007_01.23 — CHECKPOINT FINAL — VEREDICTO PVS-A
 
-#### Veredicto: 🟠 APROBADO CON DEUDA TÉCNICA DOCUMENTADA
+#### Veredicto: 🔴 DETENIDO POR HALT [H-2]
 
 **Justificación (N=4 hallazgos referenciados explícitamente):**
 
-1. **H-1 (RPC ausente):** El SDD es internamente consistente. La ausencia de `rpc_procesar_venta_v3` en la BD es una brecha entre documento y código, no una contradicción dentro del documento. El propio §0.3 lo declara y clasifica correctamente.
-2. **H-2 (columna ausente):** El SDD es internamente consistente. La ausencia de `idempotency_key` en `sales` es una brecha de implementación, no de diseño. El §0.3 la documenta.
-3. **H-3 (nombres de tabla alucinados):** Es un falso positivo de la extracción de la lista histórica (§0.2 #8). En el texto actual de las Secciones 3 y 7, la tabla ya aparece correctamente nombrada como `cash_movements`. No hay corrección pendiente.
-4. **H-4 (tipo de FK divergente):** El SDD es internamente consistente. La divergencia entre el tipo declarado (FK) y el tipo físico (TEXT+CHECK) es una brecha de implementación documentada en §0.3 #3.
+1. **F-1 (`rpc_procesar_venta_v3` ausente):** Halt H-2 activo. La definición literal de H-2 es: *"Vacío que involucra dinero real/permisos, sin resolución vía Jerarquía niveles 1-3."* El RPC central del POS no existe en la BD y no es resoluble mediante corrección documental.
+2. **F-2 (`idempotency_key` ausente):** Hallazgo normal, resoluble por Jerarquía. No dispara Halt. Queda pendiente de Fase C.
+3. **F-3 (`caja_diaria`/`daily_cash_movements`):** Falso positivo textual. El texto del SDD ya está corregido.
+4. **F-4 (`payment_method_id` TEXT vs FK):** Hallazgo normal, resoluble por Jerarquía nivel 1 (patrón RVC análogo). No dispara Halt. Queda pendiente de Fase C.
 
 **Clasificación Final:**
-- **Halt activado:** ❌ NO (ningún hallazgo es una contradicción interna no documentada que invalide el diseño).
-- **Corrección de texto requerida en SDD:** ❌ NO (El texto ya fue saneado).
-- **Acciones en BD pendientes (fuera del SDD):** Migración SQL para `rpc_procesar_venta_v3`, columna `idempotency_key`, y alineación de FK `payment_method_id`.
+- **Halt activado:** ✅ SÍ — H-2 por F-1 (`rpc_procesar_venta_v3`).
+- **Bifurcación §4.1:** → §6 Manejo de Halt. No se avanza a Fase C.
+- **Impacto en cascada (H-3 retroactivo):** `SDD_007_02` fue procesado y cerrado apoyándose en este SDD. Al pasar de 🟠 a 🔴, se activa retroactivamente la definición de H-3 (*"un SDD obligaría a marcar 🟡 a 2+ SDDs ya 🟢"*).
 
-> **Estado final del SDD_007_01:** 🟠 Aprobado — La arquitectura y el diseño son coherentes. La deuda técnica de implementación en BD (H-1, H-2, H-4) está explícitamente declarada y lista para ser abordada.
+> **Estado final del SDD_007_01:** 🔴 Detenido por Halt [H-2]. Pendiente: resolución del Halt con supervisión humana.
 
 ---
 
-## Fase C — Corrección de Documento
+## Fase C — No Ejecutada (Halt Activo)
 
-### SDD_007_01.25 / .26 — Jerarquía de Resolución
-- Tras verificar exhaustivamente el documento, se confirma que no hay alteraciones textuales requeridas. La supuesta deuda textual del hallazgo H-3 (`caja_diaria`/`daily_cash_movements`) ya había sido resuelta en iteraciones previas del SDD, dejando solo la referencia histórica en §0.2 #8, la cual sirve como registro y no debe borrarse.
-- **Conclusión de Fase C:** Cero líneas modificadas.
+> [!CAUTION]
+> **Fase C bloqueada por §6 del protocolo (Manejo de Halt).**
+>
+> El hallazgo F-1 disparó Halt H-2. Según §6:
+> 1. El protocolo para **este SDD** queda detenido por completo.
+> 2. **No se ejecuta Fase C para NINGÚN hallazgo** — incluyendo F-2 y F-4, que son resoluble por Jerarquía pero se resolverán en conjunto tras la resolución del Halt.
+> 3. No se inicia el siguiente SDD hasta que el Halt quede resuelto con supervisión humana.
+>
+> **Nota de corrección de protocolo (2026-08-08):** La versión anterior de este documento ejecutó Fase C ("Cero líneas modificadas") a pesar de que debía estar bloqueada. Esto fue un error procedimental que ha sido corregido.
 

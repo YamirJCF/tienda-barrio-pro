@@ -14,7 +14,7 @@
 ### 0.1 Restricciones Transversales Inyectadas (Fase 0)
 | SDD Origen | Restricción Inyectada | Impacto en el Ticket |
 |------------|-----------------------|----------------------|
-| **SDD_027 (Caja Multicanal)** | El pago pertenece a un canal específico (`payment_method_id`). | El ticket debe reflejar el canal de liquidez real en caso de venta (Efectivo, Transferencia). |
+| **SDD_027 (Caja Multicanal)** | El pago pertenece a un canal específico (desnormalizado como `payment_method`). | El ticket refleja el canal de liquidez real (Efectivo, Transferencia) mediante este campo de texto fijo. |
 | **SDD_010_016 (FIFO)** | El costo contable es confidencial y varía por lote. | El ticket **TIENE PROHIBIDO** mostrar o recibir el `unit_cost`. Solo muestra `sale_price`. |
 
 ### 0.2 Hallazgos Críticos Históricos (🔴)
@@ -170,6 +170,7 @@ Cuando el Frontend consulta un Ticket (o el historial de tickets), el Backend re
 | `items` | Obligatorio | **Arreglo (Array) de líneas de venta.** Contiene el desglose exacto de los productos vendidos (Ver 5.2). |
 | `voided_by` | Condicional | Identificador del Administrador que anuló el ticket (Nulo si `is_voided = false`). |
 | `void_reason` | Condicional | Texto con la justificación de la anulación (Nulo si `is_voided = false`). |
+| `payment_method` | Obligatorio | Texto que describe el canal de liquidez con el que se concretó la venta (Ej. 'Efectivo', 'Transferencia'). |
 
 ### 5.2. Entidad: Detalle del Ticket (Líneas)
 

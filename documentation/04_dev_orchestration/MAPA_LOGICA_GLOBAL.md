@@ -1,4 +1,4 @@
-# 🗺️ Mapa de Lógica Global (v2.8)
+# 🗺️ Mapa de Lógica Global (v2.9)
 
 > **Módulos documentados:** 48 / 50 (96%)
 
@@ -105,12 +105,14 @@ Documentos transversales que rigen la calidad y arquitectura:
 | Entrada de Stock | `stock-entry.md` | `StockEntryView.vue` | 🟢 100% | **Sincronizado** |
 | **Auth Unificada IAM** | `auth-unificada-iam.md` | `LoginView.vue` + `DeviceApprovalModal.vue` | 🟢 100% | **Implementado** ✅ |
 | Seguridad Diaria | `FRD_001_SEGURIDAD_DIARIA.md` | N/A | ⚪ N/A | **Estándar Definido** |
-| Pase Diario | `FRD_001_1_PASE_DIARIO_STABLE.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Pase Diario | `FRD_001_1_PASE_DIARIO_STABLE.md` | N/A | ⚪ N/A | **Derogado** |
 | Gestión de Empleados | `FRD_003_GESTION_EMPLEADOS.md` | N/A | ⚪ N/A | **Estándar Definido** |
 | Auditoría Sistema | ⚙️ Solo DEV | `SystemAuditView.vue` | ⚪ N/A | Herramienta interna |
 | Almacenamiento Local Seguro | `FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md` | `supabaseAdapter.ts` | 🟡 SPEC | **Por implementar** |
 | Política Fiados | `FRD_024_POLITICA_FIADOS_CLIENTES.md` | N/A | ⚪ N/A | **Estándar Definido** |
-| Política Proveedores | `FRD_025_POLITICA_DEUDAS_PROVEEDORES.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Política Proveedores | `FRD_025_POLITICA_DEUDAS_PROVEEDORES.md` | N/A | ⚪ N/A | **Derogado** |
+| Cuentas por Pagar | `FRD_019_CUENTAS_POR_PAGAR.md` | N/A | ⚪ N/A | **Estándar Definido** |
+| Control de Caja | `FRD_004_CONTROL_DE_CAJA.md` | N/A | ⚪ N/A | **Estándar Definido** |
 | Política Gastos | `FRD_026_POLITICA_GASTOS_INMEDIATOS.md` | N/A | ⚪ N/A | **Estándar Definido** |
 | Núcleo de Caja | `FRD_027_NUCLEO_CAJA_DIARIA.md` | N/A | ⚪ N/A | **Estándar Definido** |
 | Reportes de Caja | `FRD_027_01_REPORTES_DE_CAJA.md` | N/A | ⚪ N/A | **Estándar Definido** |

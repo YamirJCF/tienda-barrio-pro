@@ -43,8 +43,11 @@ Los valores numéricos (límites, porcentajes, umbrales) tienden a quedar enterr
 | `P_MAX_PLU_LENGTH` | Longitud máxima del Código de Producto | 6 | Caracteres | POL-LOG-01 | FRD-006-03 | 4 - 8 |
 | `P_AUTO_PLU_SEED` | Semilla para autogenerar Códigos de Producto | 1000 | Número | POL-LOG-01 | FRD-006-03 | Mayor a 0 |
 | `P_MAX_EMPLOYEES_PER_STORE` | Límite de empleados activos por cuenta de administrador | 5 | Empleados | POL-SEG-03 | FRD-003 | 1 - 20 |
-| `P_ALLOWED_PAYMENT_CHANNELS` | Canales de pago permitidos e inmutables | `['CASH', 'NEQUI', 'BRE_KEY']` | Arreglo de Strings | POL-FIN-02 | FRD-004 | N/A |
+| `P_ALLOWED_PAYMENT_CHANNELS` | Canales de pago permitidos e inmutables | `['CASH', 'NEQUI', 'BRE_KEY']` | Arreglo de Strings | POL-FIN-02 | FRD-004, FRD-019 | N/A |
 | `P_MAX_OFFLINE_QUEUE_SIZE` | Límite máximo de transacciones pendientes en modo offline antes de bloquear nuevas operaciones | 50 | Transacciones | POL-LOG-02 | FRD-012-01 | 10 - 100 |
+| `P_MAX_ACCESS_ATTEMPTS` | Máximo de reintentos de alerta de acceso (pase diario) | 3 | Intentos | POL-SEG-03 | FRD-001 | 1 - 10 |
+| `P_WAIT_TIME_RETRY_1` | Tiempo de espera en sala antes de permitir 1er reintento | 2 | Minutos | POL-SEG-03 | FRD-001 | 1 - 15 |
+| `P_WAIT_TIME_RETRY_2` | Tiempo de espera en sala antes de permitir 2do reintento | 5 | Minutos | POL-SEG-03 | FRD-001 | 2 - 30 |
 
 > [!NOTE]
 > **Alcance Diferido:** A medida que se formalicen nuevos FRDs o se descubran valores numéricos enterrados en las reglas existentes, este diccionario DEBE actualizarse. *Condición de revisión:* "Si un FRD contiene un número que podría cambiar por decisión del dueño sin alterar la lógica del software, ese número debe extraerse aquí". *Trade-off:* Se acepta iniciar con 3 parámetros porque el sistema aún está en fase de especificación y los restantes valores aún no han sido formalmente decretados por el Arquitecto. *Revisión futura:* Al finalizar la fase de FRDs y antes de iniciar la implementación técnica (DSD), se debe hacer un barrido exhaustivo de todos los FRDs para extraer parámetros pendientes.
