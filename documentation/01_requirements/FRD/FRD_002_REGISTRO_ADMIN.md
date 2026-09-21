@@ -57,7 +57,7 @@ Proceso mediante el cual un nuevo dueño de negocio (Admin) crea su cuenta en el
 ## Requisitos de Datos (Funcionales)
 
 **Entidad Usuario (Identidad):**
-- Identificador único (UUID)
+- Identificador único
 - Correo electrónico
 - Estado de verificación (Confirmado / Pendiente)
 

@@ -8,58 +8,57 @@ Este documento rige la especificación del Código de Producto (PLU), que sirve 
 ## Reglas de Negocio
 
 1. **Unicidad Operativa:** El Código de Producto DEBE ser estrictamente único dentro de los productos activos de una misma tienda. El sistema TIENE PROHIBIDO permitir la existencia de dos productos activos con el mismo código, ya que esto causaría una colisión en el Punto de Venta (POS).
-2. **Independencia de Identidad (Desacoplamiento Absoluto):** El Código de Producto **NO DEBE** usarse como llave foránea o identificador relacional en bases de datos (Tickets, Kardex, Proveedores). El sistema utilizará un UUID interno inmutable para enlazar las entidades. Esto garantiza que si un código cambia o se reutiliza, el historial contable y de auditoría no se corrompe.
+2. **Independencia de Identidad (Desacoplamiento Absoluto):** El Código de Producto **NO DEBE** usarse como identificador operativo para vincular entidades del sistema (como tickets, kardex o proveedores). El sistema DEBE utilizar un identificador interno inmutable para enlazar las entidades. Esto garantiza que si un código cambia o se reutiliza, el historial contable y de auditoría no se corrompe.
 3. **Optimización para Teclado Numérico (Formato):** Dado que la interacción es 100% manual, el campo de código DEBE ser puramente numérico (o alfanumérico corto) y estrictamente limitado en longitud para evitar errores de digitación. 
-   - Debe cumplir con los parámetros de longitud mínima (`P_MIN_PLU_LENGTH`) y máxima (`P_MAX_PLU_LENGTH`).
-   - El sistema debe procesar "001" y "1" como códigos distintos si el diseño de base de datos usa VARCHAR para preservar ceros a la izquierda.
-4. **Política de Reutilización (Baja Lógica):** Si un producto es dado de baja (marcado como inactivo/eliminado lógicamente), su Código de Producto queda **LIBERADO** de inmediato y puede ser asignado a un producto completamente nuevo. Esta reutilización es contablemente segura debido a la Regla 2 (Desacoplamiento).
-5. **Autogeneración Inteligente:** Si al crear un producto el usuario deja el campo de código vacío, el sistema DEBE autogenerar un código numérico secuencial corto. Este código será el número consecutivo más alto disponible que sea mayor o igual al parámetro semilla (`P_AUTO_PLU_SEED`).
-6. **Búsqueda Exacta y Rápida en POS:** Cuando el cajero en el POS realiza una consulta por código (digitando el PLU en el teclado numérico + Enter), la búsqueda DEBE ser una coincidencia exacta y absoluta (`=`, no `LIKE`). El sistema no ejecutará autocompletado ni búsquedas parciales para el PLU; si el código no coincide exactamente, el producto no se agrega. Las búsquedas parciales se reservan exclusivamente para el campo "Nombre del Producto".
+   - Debe cumplir con los límites de longitud mínima y máxima configurados para la tienda.
+   - El sistema DEBE procesar los códigos manteniendo los ceros a la izquierda (por ejemplo, "001" y "1" son códigos distintos).
+4. **Política de Reutilización (Baja Lógica):** Si un producto es dado de baja (marcado como inactivo), su Código de Producto queda **LIBERADO** de inmediato y puede ser asignado a un producto completamente nuevo. Esta reutilización es contablemente segura debido a la Regla 2 (Desacoplamiento).
+5. **Autogeneración Inteligente:** Si al crear un producto el usuario deja el campo de código vacío, el sistema DEBE autogenerar un código numérico secuencial corto. Este código será el número consecutivo más alto disponible que cumpla con la semilla de inicio configurada.
+6. **Búsqueda Exacta y Rápida en POS:** Cuando el cajero en el POS realiza una consulta por código, la búsqueda DEBE ser una coincidencia exacta y absoluta. El sistema NO ejecutará autocompletado ni búsquedas parciales para el código; si no coincide exactamente, el producto no se agrega. Las búsquedas parciales se reservan exclusivamente para el campo "Nombre del Producto" (ver FRD-006 para la navegación del catálogo).
 
 ---
 
 ## Casos de Uso
 
-**Caso A: Reasignación de PLU Operativo**
-- **Actor:** Empleado con `canManageInventory`
-- **Precondición:** El producto "Gaseosa Cola" existe con el PLU `015`. El dueño decide que ahora las gaseosas usarán la serie de los `300`.
+**Caso A: Reasignación de Código de Producto (PLU)**
+- **Actor:** Empleado con permisos de gestión de inventario.
+- **Precondición:** El producto "Gaseosa Cola" existe con el código `015`. El dueño decide que ahora las gaseosas usarán la serie de los `300`.
 - **Flujo Principal:**
-  1. El empleado edita el producto.
+  1. El empleado edita el producto en el sistema.
   2. Borra el código `015` y digita el nuevo código `301`.
-  3. El sistema valida que el nuevo código no esté en uso.
-  4. Guarda el cambio.
-- **Postcondición:** Las ventas futuras de ese producto responderán al digitar `301`. Los tickets pasados generados con `015` permanecen intactos y apuntando a "Gaseosa Cola" gracias al UUID.
+  3. El sistema valida que el nuevo código no esté asignado a otro producto activo en la tienda.
+  4. El empleado guarda los cambios exitosamente.
+- **Postcondición:** Las ventas futuras del producto se procesarán al digitar `301`. Los comprobantes pasados generados con el código `015` permanecen intactos y siguen referenciando de manera correcta a "Gaseosa Cola".
 
-**Caso B: Reutilización de PLU Corto**
-- **Actor:** Empleado con `canManageInventory`
-- **Precondición:** El PLU `100` pertenecía a "Pan de Bono" (inactivo/dado de baja).
+**Caso B: Reutilización de un Código Liberado**
+- **Actor:** Empleado con permisos de gestión de inventario.
+- **Precondición:** El código `100` pertenecía al producto "Pan de Bono" que ya fue dado de baja (marcado inactivo).
 - **Flujo Principal:**
-  1. El empleado crea un nuevo producto "Pan Integral".
+  1. El empleado registra un nuevo producto llamado "Pan Integral".
   2. Asigna el código `100`.
-  3. El sistema valida la unicidad excluyendo los productos inactivos.
-  4. El sistema permite la creación.
-- **Postcondición:** El PLU `100` ahora factura "Pan Integral". El kardex histórico del "Pan de Bono" no se ve afectado.
+  3. El sistema valida la disponibilidad excluyendo los productos que están inactivos.
+  4. El sistema permite la creación sin generar conflicto.
+- **Postcondición:** El código `100` ahora factura a nombre de "Pan Integral". El registro histórico del inventario del producto inactivo "Pan de Bono" no sufre alteraciones ni conflictos.
 
 **Caso C: Búsqueda Rápida por Teclado Numérico (POS)**
-- **Actor:** Empleado Cajero.
+- **Actor:** Cajero.
 - **Flujo Principal:**
-  1. El cajero digita rápidamente `105` en el teclado numérico del POS y presiona Enter.
-  2. El POS recibe el código y ejecuta una búsqueda exacta inmediata en memoria/caché.
-  3. El sistema localiza el UUID asociado a `105` y agrega el producto directamente al carrito sin requerir confirmación extra.
+  1. El cajero digita rápidamente el código `105` en el teclado numérico y presiona la tecla de confirmación.
+  2. El sistema recibe el código y localiza el producto mediante una búsqueda de coincidencia exacta.
+  3. El sistema agrega el producto directamente al ticket de venta en curso sin exigir ventanas o confirmaciones adicionales.
 
 ---
 
 ## Criterios de Aceptación
-- [ ] **CA-FRD-006-03-01:** La base de datos debe tener un índice único parcial que garantice que no haya dos códigos iguales en la misma tienda, aplicando SOLO a productos `is_active = true`.
-- [ ] **CA-FRD-006-03-02:** Guardar un producto sin ingresar un código genera uno secuencial basado en `P_AUTO_PLU_SEED` de manera automática.
-- [ ] **CA-FRD-006-03-03:** Todas las tablas dependientes (Kardex, Detalles de Ticket) deben referenciar al producto por su UUID, nunca por su Código/PLU.
-- [ ] **CA-FRD-006-03-04:** El sistema permite registrar códigos de longitud controlada por `P_MAX_PLU_LENGTH` (recomendado máximo 6 caracteres para digitación humana rápida).
+- [ ] **CA-FRD-006-03-01:** El sistema rechaza la creación o modificación de un producto si el código ingresado ya pertenece a otro producto activo de la misma tienda.
+- [ ] **CA-FRD-006-03-02:** El sistema autogenera y asigna un código secuencial disponible basado en la configuración de la tienda, al guardar un producto dejando el código en blanco.
+- [ ] **CA-FRD-006-03-03:** El sistema mantiene íntegro el historial transaccional (ventas, movimientos) asociado al producto original, sin que este se corrompa al modificar o reutilizar su código de producto.
+- [ ] **CA-FRD-006-03-04:** El sistema valida que el código ingresado cumpla con la longitud mínima y máxima configurada para la tienda.
 
 ---
 
-## Impacto en el Sistema
-| Componente | Modificación |
-|------------|--------------|
-| Tabla `products` | Validar restricción `UNIQUE(store_id, code) WHERE is_active = true`. Alterar tipo de columna `code` a `VARCHAR(6)` o adaptado al nuevo límite. |
-| Módulo Configuración | Ajustar parámetros `P_MIN_PLU_LENGTH`, `P_MAX_PLU_LENGTH` (max 6), `P_AUTO_PLU_SEED`. |
-| Frontend POS | Asegurar que el input del POS enfoque automáticamente y capture el evento Enter para agregar al carrito instantáneamente. |
+## Requisitos de Datos (Para Equipo Data)
+- **Atributo Código de Producto:** Campo optimizado para la digitación, con soporte para validaciones de longitud (mínima y máxima).
+- **Unicidad Condicional:** Regla de persistencia que asegure la unicidad del código de producto exclusivamente entre los registros en estado activo de una misma tienda.
+- **Identidad Fuerte:** El modelo debe enlazar el producto con el resto de entidades transaccionales mediante un identificador interno inmutable, desacoplando el código de producto de la integridad referencial.
+- **Secuencia de Autogeneración:** Mecanismo para determinar el siguiente código numérico consecutivo a partir de un valor base configurado.

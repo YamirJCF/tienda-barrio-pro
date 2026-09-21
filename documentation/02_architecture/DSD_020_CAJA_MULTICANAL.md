@@ -2,6 +2,8 @@
 
 ## Modelo de Datos - Caja Multicanal (Fase 1)
 
+> **Nota de Trazabilidad:** Este documento fue renombrado de DBD_020 a DSD_020 para alinearse al estándar v2.0.
+
 ### Explicación Lógica
 Para soportar cierres de caja detallados por método de pago sin alterar destructivamente el historial, introducimos una arquitectura de tabla anexa (`cash_session_balances`). Esta tabla registra el saldo esperado, saldo físico real, y el descuadre (difference) aglomerado por método de pago para cada sesión de caja. 
 

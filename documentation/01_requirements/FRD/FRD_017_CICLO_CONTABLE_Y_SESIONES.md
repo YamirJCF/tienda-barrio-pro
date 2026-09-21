@@ -91,6 +91,6 @@ Todas las ventas y gastos registrados durante un turno quedan irrevocablemente a
 
 | Componente | Tipo de Modificación | Descripción |
 | :--- | :--- | :--- |
-| `src/stores/auth.ts` | **MODIFY** | Eliminar toda lógica de expiración astronómica pura. La sesión vive mientras el turno viva (< 24h). |
-| `src/stores/cashRegister.ts` | **MODIFY** | Integrar validación de antigüedad del turno. Flujo de notificación y bloqueo post-cierre forzado. |
+| Gestor de sesión | **MODIFY** | Eliminar toda lógica de expiración astronómica pura. La sesión vive mientras el turno viva (< 24h). |
+| Gestor de caja | **MODIFY** | Integrar validación de antigüedad del turno. Flujo de notificación y bloqueo post-cierre forzado. |
 | Backend (Supabase RPC/Cron) | **NEW** | Lógica automatizada que detecte cajas abiertas con `created_at < NOW() - INTERVAL '24 hours'` y ejecute el Cierre Forzado con auditoría. |

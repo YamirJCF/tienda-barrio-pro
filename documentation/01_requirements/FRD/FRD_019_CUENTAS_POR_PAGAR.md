@@ -50,6 +50,14 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 20. **Registro claro del origen:** Cada reducción de deuda DEBE indicar su origen: EXTERNO o INTERNO. Si el origen es EXTERNO, el registro NO DEBE indicar canal, NO DEBE indicar movimiento de caja y NO DEBE requerir turno abierto. Si el origen es INTERNO, el registro DEBE indicar canal, DEBE indicar movimiento de caja asociado, DEBE indicar turno asociado y DEBE validar fondos.
 
+21. **Navegación y Filtrado del Listado:** El módulo DEBE proveer mecanismos de búsqueda y filtrado para que el usuario localice facturas dentro de la lista de cuentas por pagar sin necesidad de recorrerla completa.
+    - **Búsqueda por proveedor:** El sistema DEBE permitir buscar facturas ingresando una porción del nombre del proveedor. La búsqueda es insensible a mayúsculas/minúsculas y retorna coincidencias parciales.
+    - **Filtro por estado calculado:** El listado DEBE ofrecer un filtro para mostrar facturas según su estado dinámico (Regla 15): Todas, solo PENDIENTES, solo VENCIDAS, solo PAGADAS.
+    - **Filtro por rango de fechas:** El listado DEBE ofrecer un filtro por rango de fechas aplicable sobre la fecha de creación de la factura. El rango puede dejarse abierto en cualquiera de sus extremos.
+    - **Ordenamiento y Dirección:** El listado DEBE permitir ordenar por: fecha de creación, monto total, nombre de proveedor y fecha de vencimiento. En cualquier criterio seleccionado, el usuario DEBE poder alternar libremente la dirección del orden entre descendente y ascendente.
+    - **Estado y Orden por Defecto:** Al ingresar al listado, la vista por defecto DEBE mostrar "Todas" las facturas excluyendo PAGADAS, y DEBE estar ordenada por fecha de creación en dirección descendente (más reciente primero), permitiendo al usuario modificar dicho criterio o alternar a orden ascendente en cualquier momento.
+    - **Combinación de filtros:** Los filtros de estado, proveedor y rango de fechas DEBEN poder combinarse simultáneamente. El ordenamiento y su dirección seleccionada se aplican sobre los resultados filtrados.
+
 ---
 
 ## Casos de Uso
@@ -177,6 +185,36 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 ---
 
+**Caso G: Filtrar facturas vencidas**
+
+- **Actor:** Admin o empleado con permiso de gestión de cuentas por pagar.
+- **Precondición:** Existen facturas en distintos estados (pendientes, vencidas, pagadas).
+- **Flujo Principal:**
+    1. El usuario accede al módulo de Cuentas por Pagar.
+    2. El sistema muestra el listado con la configuración por defecto: facturas no pagadas ordenadas por fecha de creación descendente (más recientes primero).
+    3. El usuario selecciona el filtro de estado "Vencidas".
+    4. El sistema muestra únicamente las facturas cuyo estado calculado es VENCIDA.
+    5. El usuario puede alternar la dirección del orden a ascendente para ver las deudas vencidas más antiguas primero.
+    6. El usuario revisa la lista para priorizar pagos.
+- **Flujo Alternativo:** Ninguno.
+- **Postcondición:** Vista filtrada y ordenada que permite identificar rápidamente las obligaciones urgentes.
+
+---
+
+**Caso H: Buscar facturas de un proveedor específico**
+
+- **Actor:** Admin o empleado con permiso de gestión de cuentas por pagar.
+- **Precondición:** Existen múltiples facturas de distintos proveedores.
+- **Flujo Principal:**
+    1. El usuario accede al módulo de Cuentas por Pagar.
+    2. El usuario ingresa parte del nombre del proveedor en el campo de búsqueda (ej: "coca").
+    3. El sistema filtra el listado mostrando únicamente las facturas cuyo nombre de proveedor contenga "coca".
+    4. El usuario selecciona la factura deseada para ver detalle, abonar o pagar.
+- **Flujo Alternativo:** Ninguno.
+- **Postcondición:** Factura localizada sin recorrer la lista completa.
+
+---
+
 ## Criterios de Aceptación
 
 - [ ] CA-FRD-019-01: El sistema permite registrar facturas por pagar con proveedor y monto total.
@@ -254,6 +292,11 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 - [ ] CA-FRD-019-73: El servidor no confía en banderas de autoridad enviadas por el cliente.
 - [ ] CA-FRD-019-74: La ocultación de botones en la interfaz no sustituye la validación de servidor.
 - [ ] CA-FRD-019-75: El sistema rechaza explícitamente operaciones sin permiso suficiente.
+- [ ] CA-FRD-019-76: El listado de cuentas por pagar permite buscar facturas por nombre parcial de proveedor.
+- [ ] CA-FRD-019-77: El listado de cuentas por pagar ofrece filtro por estado calculado: Todas, Pendientes, Vencidas, Pagadas.
+- [ ] CA-FRD-019-78: El listado de cuentas por pagar ofrece filtro por rango de fechas de creación.
+- [ ] CA-FRD-019-79: El listado de cuentas por pagar permite ordenar por fecha de creación, monto total, nombre de proveedor y fecha de vencimiento, pudiendo alternar la dirección entre descendente y ascendente.
+- [ ] CA-FRD-019-80: Al ingresar al módulo, el estado por defecto muestra todas las facturas no pagadas ordenadas por fecha de creación en orden descendente, con opción de modificar el criterio o alternar la dirección a ascendente.
 
 ---
 

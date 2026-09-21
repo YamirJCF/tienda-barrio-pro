@@ -16,6 +16,11 @@
 | 04 | [Design System](./04_DESIGN_SYSTEM.md) | Guía de estilo funcional |
 | 05 | [Lógica de Componentes](./05_COMPONENT_LOGIC.md) | Comportamiento e interacciones |
 
+### 📂 Documentación Modular
+| Directorio | Descripción |
+|------------|-------------|
+| `UXD/` | Documentos de diseño UX específicos por módulo (ej. `UXD_008_SMART_SUPPLY.md`) |
+
 ---
 
 ## 🎯 Principios de Diseño

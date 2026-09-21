@@ -82,6 +82,27 @@ El redondeo se aplica al momento del cálculo, no solo en visualización. Los da
 
 ---
 
+### Navegación y Búsqueda en el Catálogo
+
+El módulo de inventario DEBE proveer mecanismos de búsqueda y filtrado para que el usuario localice productos dentro del catálogo sin necesidad de recorrer la lista completa.
+
+1. **Búsqueda por Nombre (Parcial):** El sistema DEBE permitir buscar productos ingresando una porción del nombre. La búsqueda es insensible a mayúsculas/minúsculas y retorna coincidencias parciales desde 2 caracteres. Esta búsqueda se ejecuta sobre el catálogo local (caché).
+
+2. **Filtros de Estado:** El listado DEBE ofrecer la capacidad de filtrar por:
+   - **Estado activo/inactivo:** Por defecto se muestran solo los activos. El Admin puede alternar para ver también los inactivos.
+   - **Stock bajo:** Mostrar únicamente productos cuyo stock actual sea menor o igual a su stock mínimo.
+
+3. **Filtro por Categoría:** Si existen categorías asignadas, el listado DEBE ofrecer un filtro para mostrar solo los productos de una categoría específica.
+
+4. **Ordenamiento:** El listado DEBE permitir ordenar por:
+   - Nombre (A-Z / Z-A) — orden por defecto.
+   - Stock (menor a mayor / mayor a menor).
+   - Precio (menor a mayor / mayor a menor).
+
+5. **Combinación de Filtros:** Los filtros de estado, categoría y la búsqueda por nombre DEBEN poder combinarse simultáneamente. El ordenamiento se aplica sobre los resultados filtrados.
+
+---
+
 ## Casos de Uso
 
 **Caso A: Crear Producto**
@@ -112,6 +133,24 @@ El redondeo se aplica al momento del cálculo, no solo en visualización. Los da
     2. Sistema filtra instantáneamente al producto coincidente.
 - **Postcondición:** Producto encontrado en menos de 1 segundo.
 
+**Caso D: Localizar Producto por Nombre en el Catálogo**
+- **Actor:** Admin o Empleado con permiso de consulta o gestión de inventario.
+- **Precondición:** El catálogo tiene 100+ productos.
+- **Flujo Principal:**
+    1. Usuario ingresa parte del nombre en el campo de búsqueda (ej: "pan").
+    2. Sistema filtra la lista mostrando todos los productos cuyo nombre contenga "pan" (ej: "Pan Bimbo", "Pandebono", "Empanada").
+    3. Usuario selecciona el producto deseado para ver detalle o editar.
+- **Postcondición:** Producto localizado sin recorrer la lista completa.
+
+**Caso E: Filtrar Productos con Stock Bajo**
+- **Actor:** Admin o Empleado con permiso de consulta o gestión de inventario.
+- **Precondición:** Existen productos cuyo stock actual es menor o igual a su stock mínimo.
+- **Flujo Principal:**
+    1. Usuario activa el filtro "Stock Bajo".
+    2. Sistema muestra únicamente los productos que cumplen la condición stock ≤ stock mínimo.
+    3. Usuario revisa la lista para decidir qué reabastecer.
+- **Postcondición:** Vista filtrada que permite acción rápida de reabastecimiento.
+
 ---
 
 ## Requisitos de Datos (Para Equipo Data)
@@ -141,3 +180,8 @@ El redondeo se aplica al momento del cálculo, no solo en visualización. Los da
 - [ ] Todos los movimientos de stock quedan registrados con el usuario responsable.
 - [ ] No se permite crear movimientos que resulten en stock negativo.
 - [ ] El precio siempre se guarda redondeado al múltiplo de $50.
+- [ ] La búsqueda por nombre retorna coincidencias parciales desde 2 caracteres ingresados.
+- [ ] El filtro "Stock Bajo" muestra solo productos con stock ≤ stock mínimo.
+- [ ] El listado muestra solo productos activos por defecto; el Admin puede alternar para incluir inactivos.
+- [ ] Los filtros (estado, categoría, stock bajo) y la búsqueda por nombre se pueden combinar simultáneamente.
+- [ ] El listado permite ordenar por nombre, stock o precio.

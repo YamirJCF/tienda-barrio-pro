@@ -118,7 +118,7 @@ El resultado DEBE contener los datos de los 4 pilares descritos en la sección 2
 
 | Fase | Alcance | Entregables Clave |
 | :--- | :--- | :--- |
-| **Fase 1: P&L Real (Ganancia Neta)** | Consolidación del Costo de Ventas (COGS) FIFO e integración con Gastos Categorizados | RPC `rpc_get_comprehensive_financial_report` + Vista de P&L |
+| **Fase 1: P&L Real (Ganancia Neta)** | Consolidación del Costo de Ventas (COGS) FIFO e integración con Gastos Categorizados | Operación de reporte financiero integral + Vista de P&L |
 | **Fase 2: Tesorería y Cartera** | Módulo de Cuentas por Cobrar (Fiado) con Envejecimiento y Cuentas por Pagar (Proveedores) | Tabla `supplier_invoices` + Reporte de Cartera por Edades |
 | **Fase 3: Analítica de Inventario** | Clasificación ABC, Valoración de Inventario y Días de Inventario (DIO) | Reporte de Rotación + Alertas de Capital Estancado |
 | **Fase 4: Auditoría y KPIs POS** | Medición de rendimiento por cajero, auditoría de descuadres de caja y anulaciones | Dashboard Operativo de Personal |

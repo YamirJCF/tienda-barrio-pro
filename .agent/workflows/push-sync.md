@@ -1,21 +1,25 @@
 ---
-description: Sincronización automática con GitHub tras commit exitoso
+description: Sincronización remota con GitHub tras validación formal
 ---
 
-# Workflow: Push Sync (Sincronización Remota Automática)
+# Workflow: Push Sync (Sincronización Remota Deliberada)
 
-Este workflow automatiza el envío de cambios a GitHub tras un commit exitoso.
+Este workflow envía cambios validados a GitHub de forma explícita y deliberada.
+
+> [!IMPORTANT]
+> **POLÍTICA DE PUSH:** No se hace push remoto automático de borradores ni tareas en progreso. `/push-sync` se invoca únicamente cuando una funcionalidad, documento o fase ha sido formalmente aprobada y validada por sus respectivos protocolos.
 
 ## Condiciones de Ejecución
 
 | ID | Condición | Descripción |
 |----|-----------|-------------|
-| C01 | ✅ Commit exitoso | El commit anterior no debe tener errores |
-| C02 | ✅ Rama válida | Solo ramas `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `audit/` |
-| C03 | ⚠️ Build exitoso | Si estás en `03_SRC`, verificar que compile sin errores |
+| C01 | ✅ Validación previa | El documento o código pasó su protocolo de validación |
+| C02 | ✅ Commit exitoso | El commit de la rama no debe tener errores pendientes |
+| C03 | ✅ Rama válida | Solo ramas `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `audit/` |
+| C04 | ⚠️ Build exitoso | Si estás en `frontend/` (o código fuente), verificar que compile sin errores |
 
 > [!CAUTION]
-> **NUNCA** hacer push directo a `main` o `master`. Siempre usar ramas de funcionalidad.
+> **NUNCA** hacer push directo a `main` o `master`. Siempre usar ramas de funcionalidad o documentación validada.
 
 ---
 
@@ -33,17 +37,17 @@ git status
 git branch --show-current
 ```
 
-3. **VALIDACIÓN DE RAMA**: Verificar que la rama NO sea `main` ni `master`.
+3. **VALIDACIÓN DE RAMA**: Verificar que la rama NO sea `main`, `master` ni `production`.
    - Si es `main` o `master`: **ABORTAR** y notificar al usuario.
-   - Si es una rama de funcionalidad: Continuar.
+   - Si es una rama de funcionalidad/documentación válida: Continuar.
 
 // turbo
-4. (Condicional) Si hay cambios en `03_SRC/`, verificar build:
+4. (Condicional) Si hay cambios en `frontend/`, verificar build:
 ```bash
-cd 03_SRC && npm run build
+cd frontend && npm run build
 ```
    - Si el build **FALLA**: **ABORTAR** push y notificar error.
-   - Si el build **PASA** o no hay cambios en 03_SRC: Continuar.
+   - Si el build **PASA** o no hay cambios de código: Continuar.
 
 5. Ejecutar push a origin:
 ```bash
@@ -66,12 +70,12 @@ git status
 
 # 2. Obtener rama
 git branch --show-current
-# Salida: feat/new-feature
+# Salida: feat/new-feature o docs/FRD_099
 
 # 3. Validar rama (manual - verificar que no sea main)
 
-# 4. Verificar build (si aplica)
-cd 03_SRC && npm run build
+# 4. Verificar build (si aplica código)
+cd frontend && npm run build
 
 # 5. Push
 git push origin feat/new-feature
@@ -95,12 +99,14 @@ Al finalizar exitosamente, reportar:
 
 ---
 
-## Integración con commit.md
+## Cuándo usar este workflow
 
-Este workflow se ejecuta **automáticamente** después de usar `/commit` cuando:
-1. El commit fue exitoso (exit code 0)
-2. La rama actual es una rama de funcionalidad
-3. El build de Vue.js pasa (si hay cambios en 03_SRC)
+| Situación | Workflow |
+|-----------|----------|
+| Guardado de iteración local en borrador | `/add-doc` (crea/actualiza rama `draft/`) |
+| Guardado local de código en progreso | `/commit` |
+| **Sincronización remota tras validación formal** | **`/push-sync`** ← Este |
+| Deploy a producción | `/deploy` |
 
 ---
 

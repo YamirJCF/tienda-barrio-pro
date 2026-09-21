@@ -22,6 +22,10 @@ Expansión del centro de inteligencia e historiales para permitir al administrad
 3. **Identificación Visual:**
    - Cada registro en el historial DEBE identificar visualmente el método de pago utilizado para la transacción (mediante ícono, etiqueta o texto descriptivo).
 
+4. **Filtro Temporal:**
+   - El historial de caja DEBE ofrecer un filtro por rango de fechas (desde–hasta) que se aplique sobre los movimientos del turno seleccionado o, en la vista global, sobre el conjunto de turnos cerrados.
+   - Los filtros de método de pago (Regla 2) y el filtro temporal DEBEN poder combinarse simultáneamente (ej. "Solo Nequi en los últimos 3 días").
+
 ## Casos de Uso
 
 **Caso A: Filtrar Ingresos de Nequi**
@@ -29,12 +33,14 @@ Expansión del centro de inteligencia e historiales para permitir al administrad
 - **Precondición:** Existen movimientos de efectivo y nequi en el historial.
 - **Flujo Principal:**
   1. Usuario ingresa al historial de caja.
-  2. Usuario selecciona el filtro "Digitales".
-  3. Usuario selecciona el sub-filtro "Nequi".
-  4. Sistema lista únicamente ventas, abonos y gastos pagados mediante Nequi.
-  5. El usuario puede contrastar esta lista con los movimientos reportados en su app móvil de Nequi.
+  2. Usuario selecciona un rango de fechas para acotar la consulta (ej. "Lunes a Miércoles de esta semana").
+  3. Usuario selecciona el filtro "Digitales".
+  4. Usuario selecciona el sub-filtro "Nequi".
+  5. Sistema lista únicamente ventas, abonos y gastos pagados mediante Nequi dentro del rango de fechas seleccionado.
+  6. El usuario puede contrastar esta lista con los movimientos reportados en su app móvil de Nequi.
 
 ## Criterios de Aceptación
 - [ ] Existen filtros funcionales en el frontend para: Todo, Efectivo y Digitales (con subfiltros Nequi/Daviplata).
 - [ ] Los abonos de clientes aparecen en el historial de caja respetando los filtros de método de pago.
 - [ ] La identificación visual del método de pago es clara en cada fila del historial.
+- [ ] El historial de caja ofrece un filtro por rango de fechas (desde–hasta) combinable con los filtros de método de pago.

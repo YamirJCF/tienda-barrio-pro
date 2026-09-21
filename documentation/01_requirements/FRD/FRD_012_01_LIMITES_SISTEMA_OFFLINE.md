@@ -67,7 +67,7 @@ Si durante el apagón el Administrador cambió reglas estructurales en el servid
 ## Impacto en el Sistema
 | Componente | Modificación |
 |------------|--------------|
-| `syncQueue.ts` | Consolidación del drop de `CREATE_MOVEMENT` (ya implementado). Definición clara del límite máximo. |
+| Gestor de cola de sincronización | Consolidación de descarte de movimientos de inventario (ya implementado). Definición clara del límite máximo. |
 | DLQ UI | Simplificación de la interfaz a "Reintentar / Eliminar", descartando requerimientos complejos de "Ajuste forzoso offline". |
 
 ---

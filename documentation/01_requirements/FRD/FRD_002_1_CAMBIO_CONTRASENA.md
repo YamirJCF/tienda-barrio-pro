@@ -78,10 +78,10 @@ Funcionalidad que permite al Administrador (dueño de tienda) cambiar su contras
 
 | Componente | Modificación |
 |------------|--------------|
-| `authRepository.ts` | Nuevo método `changePassword(email, current, new)` |
-| `auth.ts` (Pinia Store) | Nuevo método `changePassword(current, new)` expuesto |
-| `ChangePasswordModal.vue` (NUEVO) | Modal completo con validación y estados |
-| `UserProfileSidebar.vue` | "Seguridad y Contraseña" abre modal en vez de navegar |
+| Repositorio de autenticación | Nuevo método de cambio de contraseña |
+| Gestor de sesión | Nuevo método de cambio de contraseña expuesto |
+| Interfaz de cambio de contraseña (NUEVA) | Interfaz modal completa con validación y estados |
+| Menú lateral de perfil | "Seguridad y Contraseña" abre modal en vez de navegar |
 
 ---
 

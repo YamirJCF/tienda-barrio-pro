@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.2] - 2026-09-20
+
+### Added
+- **Requirements (FRD Cross-Analysis Amendments):**
+  - **FRD-006 / FRD-006-03 (Inventory):** Especificación de búsqueda parcial por nombre (≥2 caracteres), filtros por estado activo/inactivo, stock bajo, categorías y ordenamiento múltiple. Cierre de referencia para búsqueda por nombre en POS.
+  - **FRD-027-01 / FRD-021 (Cash & Audit):** Navegación temporal en reportes de caja ratificando el turno como unidad atómica, listado cronológico de turnos y filtros por rango de fechas combinables con canales multicanal.
+  - **FRD-019 (Accounts Payable):** Búsqueda parcial por proveedor, filtro por estado dinámico (Todas/Pendientes/Vencidas/Pagadas), filtro por fechas de creación, orden por defecto descendente por fecha de creación con alternancia descendente/ascendente.
+  - **Analysis Artifact:** Documentación de análisis cruzado de 20 huecos lógicos entre FRDs (`ANALISIS_CRUZADO_HUECOS_LOGICOS_FRD.md`).
+
 ## [1.5.1] - 2026-07-24
 
 ### Fixed

@@ -62,9 +62,9 @@ Si el caché local se corrompe (ej. un JSON malformado o un schema desactualizad
 ## Impacto en el Sistema
 | Componente | Modificación |
 |------------|--------------|
-| `supabaseAdapter.ts` | **(Refactor Requerido):** El adaptador genérico actual usa `localStorageAdapter` como fallback automático para colecciones. DEBE migrarse para usar `IndexedDB` o lanzar una excepción de límite para entidades de dominio (Clientes, Gastos, etc). |
-| `App.vue` | Modificar el logout para purgar selectivamente (`removeItem` del auth y caches de dominio) en lugar de un `clear()` destructivo ciego si llega a afectar colas futuras. |
-| `useDataIntegrity.ts` | Ya implementa la purga ante corrupción (RN-CACHE-04), pero debe expandirse a las nuevas llaves de IDB. |
+| Adaptador de base de datos | **(Refactor Requerido):** El adaptador genérico actual usa almacenamiento local básico como fallback automático para colecciones. DEBE migrarse para usar almacenamiento local avanzado o lanzar una excepción de límite para entidades de dominio (Clientes, Gastos, etc). |
+| Componente principal de interfaz | Modificar el logout para purgar selectivamente (`removeItem` del auth y caches de dominio) en lugar de un `clear()` destructivo ciego si llega a afectar colas futuras. |
+| Gestor de integridad de datos | Ya implementa la purga ante corrupción (RN-CACHE-04), pero debe expandirse a las nuevas llaves de almacenamiento avanzado. |
 
 ---
 

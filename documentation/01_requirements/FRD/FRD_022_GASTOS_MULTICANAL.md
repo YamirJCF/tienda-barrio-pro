@@ -13,7 +13,7 @@ Permite registrar salidas de dinero (gastos del día y pagos a proveedores) espe
 
 1. **Origen de Fondos Obligatorio:**
    - Al registrar un gasto del día o un pago a proveedor (salida de dinero), el sistema DEBE exigir la selección del método de pago que origina los fondos (Ej. Efectivo, Nequi, Daviplata).
-   - Esto impacta directamente al RPC `rpc_pay_supplier_invoice` (definido en FRD-019), el cual ahora DEBE recibir y registrar el `payment_method` con el que se le pagó a dicho proveedor.
+   - Esto impacta directamente a la operación de pago a proveedor (definido en FRD-019), la cual ahora DEBE recibir y registrar el método de pago con el que se le pagó a dicho proveedor.
 
 2. **Impacto en el Turno (Protección de Saldos):**
    - Si un gasto o pago a proveedor se registra en Efectivo, DEBE restar únicamente del "Saldo Esperado Efectivo" del turno actual.
@@ -34,7 +34,7 @@ Permite registrar salidas de dinero (gastos del día y pagos a proveedores) espe
   3. Ingresa el monto.
   4. Selecciona "Nequi" en el selector de Método de Pago.
   5. Confirma el pago.
-  6. Sistema ejecuta `rpc_pay_supplier_invoice` con el nuevo parámetro, el cual reduce el saldo de la deuda e inserta un movimiento en la caja restando el saldo esperado de Nequi, dejando el saldo esperado de efectivo intacto.
+  6. Sistema ejecuta la operación de pago a proveedor con el nuevo parámetro, la cual reduce el saldo de la deuda e inserta un movimiento en la caja restando el saldo esperado de Nequi, dejando el saldo esperado de efectivo intacto.
 
 ## Criterios de Aceptación
 - [ ] El formulario de registro de gastos exige seleccionar de dónde salió el dinero.

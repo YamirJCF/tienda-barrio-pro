@@ -3,6 +3,7 @@
 > **Módulo:** Finanzas / Proveedores  
 > **Rol:** Arquitecto de Datos y Supabase (Ingeniero de Datos)  
 > **Estado:** 🟢 Aprobado para Construcción
+> **Nota de Trazabilidad:** Este documento fue renombrado de DBD_019 a DSD_019 para alinearse al estándar v2.0.
 
 ### Explicación Lógica
 

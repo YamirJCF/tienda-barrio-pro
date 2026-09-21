@@ -99,13 +99,13 @@ Una vista separada (opcional para v2) permite consultar todos los cambios de pre
 
 | Campo | Tipo | Requerido | Notas |
 |-------|------|-----------|-------|
-| `id` | UUID | ✅ | PK |
-| `productId` | UUID | ✅ | FK → products |
+| `id` | identificador único | ✅ | Identificador |
+| `productId` | identificador único | ✅ | Referencia a producto |
 | `previousPrice` | Decimal | ✅ | Precio antes del cambio |
 | `newPrice` | Decimal | ✅ | Precio después del cambio |
 | `changedAt` | Timestamp | ✅ | Autogenerado |
-| `changedBy` | UUID | ✅ | FK → employees |
-| `reason` | String(200) | ❌ | Opcional |
+| `changedBy` | identificador único | ✅ | Referencia a empleado |
+| `reason` | Texto descriptivo | ❌ | Opcional |
 
 **Índices sugeridos:**
 - `productId` + `changedAt DESC` (para consulta rápida del historial)
@@ -130,8 +130,8 @@ Una vista separada (opcional para v2) permite consultar todos los cambios de pre
 - [ ] Indicador visual de aumento (↑ rojo) o disminución (↓ verde).
 
 ### Datos
-- [ ] Tabla `price_change_logs` creada con estructura definida.
-- [ ] Trigger o lógica que registra cambios automáticamente.
+- [ ] El registro de cambios creado con estructura definida.
+- [ ] Lógica que registra cambios automáticamente.
 - [ ] Sin límite de registros (historial completo).
 
 ---
@@ -140,12 +140,12 @@ Una vista separada (opcional para v2) permite consultar todos los cambios de pre
 
 | Componente | Modificación |
 |------------|--------------|
-| **Backend/Supabase** | Nueva tabla `price_change_logs` |
-| **Backend/Supabase** | RLS policy basada en permiso inventario |
-| **Backend/Supabase** | Trigger en `products.price` para auto-log |
-| **Frontend/Store** | Extender `inventoryStore` para cargar historial |
-| **Frontend/Vista** | Agregar sección en `ProductDetailView` |
-| **Frontend/Modelo** | Nuevo tipo `PriceChangeLog` en types |
+| **Servidor** | Nuevo registro de cambios de precio |
+| **Servidor** | Política de acceso basada en permiso inventario |
+| **Servidor** | Lógica en el precio de productos para auto-log |
+| **Gestor de estado** | Extender gestor de inventario para cargar historial |
+| **Interfaz de usuario**| Agregar sección en detalle de producto |
+| **Estructura de datos** | Nuevo tipo para historial de precios |
 
 ---
 

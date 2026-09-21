@@ -55,6 +55,6 @@ Este documento establece las reglas, límites y el nivel de acoplamiento del "Ti
 ## Impacto en el Sistema
 | Componente | Modificación |
 |------------|--------------|
-| Tabla `sales` (o similar) | Reemplazar generación UUID/aleatoria del ticket por una secuencia segura administrada por BD. Asegurar constraint de inmutabilidad. |
+| El registro de ventas | Reemplazar generación de identificador único/aleatorio del ticket por una secuencia segura administrada centralizadamente. Asegurar regla de inmutabilidad. |
 | Módulo Configuración | Agregar parámetro `P_TICKET_PREFIX` al diccionario y UI. |
 | Vistas de Historial | Asegurar que los tickets anulados sigan siendo visibles con su estado correspondiente, sin desaparecer del listado secuencial. |

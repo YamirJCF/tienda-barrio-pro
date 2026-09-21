@@ -23,7 +23,7 @@ La caja ya no es exclusivamente un control del dinero físico en el cajón. Se t
 3. **Arqueo Desglosado (Cierre Multicanal y Cierre Forzado):**
    - El sistema NO PUEDE exigir un único "Saldo Real" consolidado al cerrar el turno.
    - El sistema DEBE exigir un arqueo independiente para cada canal activo que haya tenido movimientos en ese turno (Efectivo, Nequi, Daviplata).
-   - Esta regla APLICA TAMBIÉN para el proceso de Cierre Forzado de 24h (`rpc_check_and_force_close_shifts` y el modal de auditoría). Si el administrador audita un turno expirado, el modal debe solicitar la conciliación multicanal.
+   - Esta regla APLICA TAMBIÉN para el proceso de Cierre Forzado de 24h (operación de cierre forzado en el servidor y el modal de auditoría). Si el administrador audita un turno expirado, el modal debe solicitar la conciliación multicanal.
    - A nivel de base de datos, este desglose SE DEBE soportar estructurando el balance en una tabla separada (`cash_session_balances`), y no agrupado en JSON, para favorecer consultas limpias de agregación financiera.
 
 ## Casos de Uso

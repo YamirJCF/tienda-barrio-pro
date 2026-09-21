@@ -58,6 +58,6 @@ Este documento toma el rol principal (documento padre) sobre las reglas del POS 
 ---
 
 ## Criterios de Aceptación
-- [ ] **CA-FRD-007-01-01:** Si la función de backend `rpc_get_active_session` retorna nulo o caducado, cualquier intento de procesar un carrito DEBE ser abortado lanzando una excepción de sistema.
+- [ ] **CA-FRD-007-01-01:** Si la operación de validación de sesión activa en el servidor retorna nulo o caducado, cualquier intento de procesar un carrito DEBE ser abortado lanzando una excepción de sistema.
 - [ ] **CA-FRD-007-01-02:** Los cierres de carrito procesados bajo la tipología "Cierre Logístico" o "Fiado" DEBEN registrar $0 en la columna de ingresos en efectivo del flujo de caja.
 - [ ] **CA-FRD-007-01-03:** El sistema DEBE garantizar la atomicidad (Transacción de Base de Datos). Si el descuento de inventario falla o el incremento de deuda de fiado falla, el carrito entero hace rollback y no se asienta ningún cambio.

@@ -15,6 +15,11 @@ Este documento rige la generación, visualización y protección de la informaci
 3. **Inmutabilidad del Cierre (Sello de Tiempo):** En el instante en que el operario declara el monto físico y cierra el turno, el servidor DEBE generar una instantánea matemática irreversible de los totales y el descuadre (si lo hubiere). Este reporte queda sellado criptográficamente o bloqueado a nivel de base de datos; nadie, ni siquiera un administrador, PUEDE alterarlo o recalcularlo en el futuro.
 4. **Fidelidad al Flujo Puro:** Fiel a las reglas de caja, los reportes TIENEN PROHIBIDO proyectar ingresos futuros (fiados no cobrados) o egresos futuros (facturas de proveedores pendientes). El reporte es un reflejo dogmático de la liquidez exclusiva que cambió de manos en ese periodo.
 5. **Autenticidad de Descuadres:** Si el monto físico declarado por el operario difiere del monto líquido calculado por el servidor, el sistema DEBE generar un registro de ajuste por diferencia (faltante o sobrante) que impacte el reporte de auditoría de manera indeleble, emitiendo alertas de seguridad silenciosas a los perfiles de administración.
+6. **Navegación Temporal por Turnos Cerrados:** El módulo de reportes DEBE permitir al Administrador consultar turnos cerrados anteriores mediante un mecanismo de selección temporal.
+   - **Unidad de consulta:** El turno (sesión de caja) es la unidad atómica. No existe un "reporte diario" consolidado; cada turno se inspecciona individualmente.
+   - **Listado de turnos:** El sistema DEBE presentar una lista cronológica de turnos cerrados, mostrando para cada uno: fecha, hora de apertura, hora de cierre, empleado responsable y estado de cuadre (con/sin descuadre).
+   - **Filtro por rango de fechas:** El listado de turnos cerrados DEBE ser filtrable por un rango de fechas (desde–hasta). Por defecto, el sistema muestra los turnos de los últimos 7 días.
+   - **Acceso al detalle:** Al seleccionar un turno cerrado de la lista, el sistema DEBE mostrar el reporte de auditoría interna completo de ese turno, con los mismos datos que se generaron al momento del cierre (instantánea inmutable, Regla 3).
 
 ---
 
@@ -48,3 +53,6 @@ Este documento rige la generación, visualización y protección de la informaci
 - [ ] **CA-FRD-027-01-01:** La interfaz visual orientada al cajero DEBE ocultar obligatoriamente el acumulado de efectivo esperado antes y durante el formulario de cierre de turno.
 - [ ] **CA-FRD-027-01-02:** El servidor DEBE rechazar cualquier petición de base de datos que intente aplicar una operación de edición (UPDATE) o borrado (DELETE) sobre el registro histórico de un turno ya cerrado.
 - [ ] **CA-FRD-027-01-03:** El sistema DEBE clasificar automáticamente cualquier discrepancia entre el monto esperado por cálculo y el monto declarado por conteo como una "anomalía de cuadre", registrándola de manera separada en la auditoría.
+- [ ] **CA-FRD-027-01-04:** El módulo de reportes DEBE presentar una lista cronológica de turnos cerrados filtrable por rango de fechas (desde–hasta).
+- [ ] **CA-FRD-027-01-05:** Cada turno cerrado en la lista DEBE mostrar: fecha, hora de apertura, hora de cierre, empleado responsable y estado de cuadre.
+- [ ] **CA-FRD-027-01-06:** Al seleccionar un turno cerrado, el sistema DEBE mostrar la instantánea inmutable del reporte de auditoría de ese turno.
