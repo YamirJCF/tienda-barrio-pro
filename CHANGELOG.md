@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **Requirements (FRD Cross-Analysis Amendments):**
   - **FRD-009 (Clients):** Especificación de filtros por estado de deuda (Todos, Con Deuda, Al Día), ordenamiento por nombre o monto de deuda, y opción (exclusiva para Admin) de visualizar clientes con borrado lógico (soft delete). Se añadieron los Casos de Uso E y F.
+  - **FRD-007 / FRD-006-03 (Sales):** Especificación de búsqueda inteligente en POS con campo unificado. Detección automática entre PLU (búsqueda exacta) y nombre (búsqueda parcial). Carga progresiva de resultados desplegables priorizando la fluidez de la interfaz. Se añadió el Caso de Uso D y extensión de trazabilidad.
 
 ## [1.5.2] - 2026-09-20
 

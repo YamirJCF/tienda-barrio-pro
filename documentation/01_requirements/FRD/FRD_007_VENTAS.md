@@ -83,6 +83,22 @@ El POS está **BLOQUEADO** y muestra mensaje si:
 
 ---
 
+### Búsqueda Inteligente en el POS (Campo Unificado)
+
+El POS DEBE ofrecer un único campo de entrada que acepte tanto el código PLU como el nombre del producto. El sistema DEBE distinguir automáticamente el tipo de entrada antes de ejecutar la consulta.
+
+1. **Campo Único de Entrada:** El POS DEBE utilizar un solo campo de búsqueda para localizar productos. NO DEBE existir un campo separado para PLU y otro para nombre. El cajero escribe en el mismo lugar independientemente de si ingresa un código o un nombre.
+2. **Detección Automática del Tipo de Entrada:** El sistema DEBE analizar el contenido ingresado para determinar la estrategia de búsqueda:
+   - Si la entrada es **exclusivamente numérica**, el sistema DEBE ejecutar una búsqueda de coincidencia exacta por PLU (comportamiento definido en FRD-006-03, Regla 6).
+   - Si la entrada contiene **al menos un carácter alfabético**, el sistema DEBE ejecutar una búsqueda parcial por nombre de producto (insensible a mayúsculas/minúsculas).
+3. **Mínimo de Caracteres para Búsqueda por Nombre:** La búsqueda parcial por nombre DEBE activarse a partir de 2 caracteres alfabéticos ingresados. Con menos de 2 caracteres, el sistema NO DEBE ejecutar consultas ni mostrar sugerencias de nombre.
+4. **Resultados Desplegables:** Cuando la búsqueda es por nombre, el sistema DEBE mostrar un listado desplegable de coincidencias. Cada resultado DEBE mostrar: nombre del producto, PLU (si existe), precio de venta vigente y stock disponible.
+5. **Carga Progresiva de Resultados:** El listado desplegable DEBE mostrar inicialmente un máximo de 10 coincidencias. Si existen más resultados, el sistema DEBE permitir al usuario cargar manualmente las siguientes coincidencias (ej: botón "Cargar más" o desplazamiento al final de la lista). El sistema DEBE priorizar la fluidez de la interfaz, evitando sobrecargar la pantalla con datos innecesarios. La consulta inicial al servidor DEBE limitarse a los primeros 10 resultados, cargando los siguientes bajo demanda.
+6. **Selección Directa:** Al seleccionar un producto del listado, el sistema DEBE agregarlo directamente al carrito de la venta en curso con cantidad 1, sin requerir confirmaciones adicionales — idéntico al comportamiento de ingreso por PLU (Caso A).
+7. **Solo Productos Activos con Stock:** La búsqueda por nombre en el POS DEBE retornar exclusivamente productos en estado activo con stock disponible mayor a 0.
+
+---
+
 ## Flujo de Venta
 
 1. Usuario en POS ingresa PLU con teclado numérico o busca por nombre
@@ -138,6 +154,18 @@ El POS está **BLOQUEADO** y muestra mensaje si:
     5. Sistema revierte stock, registra anulación en auditoría.
 - **Postcondición:** Venta anulada, stock revertido, razón registrada.
 
+**Caso D: Venta por Búsqueda de Nombre (Sin PLU Conocido)**
+- **Actor:** Empleado con permiso de venta.
+- **Precondición:** Caja abierta, producto existente sin PLU conocido por el cajero.
+- **Flujo Principal:**
+    1. Cajero no recuerda el PLU del producto.
+    2. En el mismo campo de búsqueda del POS, escribe "pan" (el sistema detecta entrada alfabética).
+    3. Sistema muestra listado desplegable con los primeros 10 resultados: "Pan Integral (PLU: 301) - $3,500 - Stock: 12", "Pan de Bono (PLU: 105) - $2,800 - Stock: 8", etc.
+    4. Cajero selecciona "Pan Integral".
+    5. Sistema agrega "Pan Integral" al carrito con cantidad 1.
+    6. Cajero continúa agregando productos o procede a cobrar.
+- **Postcondición:** Producto agregado al carrito sin necesidad de conocer el PLU. El campo de búsqueda se limpia para la siguiente entrada.
+
 ---
 
 ## Requisitos de Datos (Para Equipo Data)
@@ -173,3 +201,5 @@ El POS está **BLOQUEADO** y muestra mensaje si:
 - [ ] Ventas sin conexión se almacenan y sincronizan automáticamente.
 - [ ] Cada venta genera número de ticket secuencial.
 - [ ] La diferencia de redondeo se registra en cada venta.
+- [ ] El POS utiliza un único campo de búsqueda que acepta tanto PLU (numérico, coincidencia exacta) como nombre de producto (alfabético, coincidencia parcial).
+- [ ] La búsqueda por nombre muestra coincidencias parciales a partir de 2 caracteres, con nombre, PLU, precio y stock en cada resultado, cargando los primeros 10 y permitiendo cargar más bajo demanda.
