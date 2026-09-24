@@ -1,4 +1,5 @@
 ---
+name: push-sync
 description: Sincronización remota con GitHub tras validación formal
 ---
 

@@ -1,6 +1,9 @@
 ---
+name: run-app
 description: Run the frontend application
 ---
+
+# Run App
 
 1. Start the development server
 // turbo

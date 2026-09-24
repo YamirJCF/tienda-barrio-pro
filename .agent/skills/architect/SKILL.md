@@ -1,4 +1,5 @@
 ---
+name: architect
 description: Activar rol de Arquitecto de Producto y Requisitos - Desarrollador-Economista Senior
 ---
 

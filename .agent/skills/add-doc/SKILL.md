@@ -1,4 +1,5 @@
 ---
+name: add-doc
 description: Agregar nuevos documentos a 01_REQUIREMENTS siguiendo el sistema de trazabilidad y autoguardado en ramas draft
 ---
 

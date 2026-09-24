@@ -1,4 +1,5 @@
 ---
+name: deploy
 description: Verificación y despliegue seguro a producción con checklist automático
 ---
 

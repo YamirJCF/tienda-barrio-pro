@@ -1,4 +1,5 @@
 ---
+name: data
 description: Activar rol de Arquitecto de Datos y Supabase - Ingeniero de Bases de Datos
 ---
 

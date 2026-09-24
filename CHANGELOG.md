@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.3] - 2026-09-24
+
+### Added
+- **Requirements (FRD Cross-Analysis Amendments):**
+  - **FRD-009 (Clients):** Especificación de filtros por estado de deuda (Todos, Con Deuda, Al Día), ordenamiento por nombre o monto de deuda, y opción (exclusiva para Admin) de visualizar clientes con borrado lógico (soft delete). Se añadieron los Casos de Uso E y F.
+
 ## [1.5.2] - 2026-09-20
 
 ### Added

@@ -117,6 +117,25 @@ Cuando el usuario intenta procesar una venta "Fiado" desde el POS:
 
 ---
 
+### Navegación y Filtrado del Listado de Clientes
+
+El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clientes según su estado financiero sin necesidad de recorrer la lista completa.
+
+1. **Filtro por Estado de Deuda:** El listado DEBE ofrecer un filtro para mostrar clientes según su estado financiero:
+   - **Todos:** Muestra todos los clientes activos (estado por defecto).
+   - **Con Deuda:** Muestra únicamente clientes cuyo balance es mayor a $0.
+   - **Al Día:** Muestra únicamente clientes cuyo balance es igual a $0.
+
+2. **Filtro de Clientes Eliminados:** El Admin DEBE poder activar una opción para incluir clientes eliminados (soft-deleted) en el listado. Por defecto, los clientes eliminados no se muestran. Este filtro NO está disponible para empleados.
+
+3. **Ordenamiento:** El listado DEBE permitir ordenar por:
+   - Nombre (A-Z / Z-A) — orden por defecto.
+   - Monto de deuda (mayor a menor / menor a mayor).
+
+4. **Combinación de Filtros:** Los filtros de estado de deuda y la búsqueda textual existente (nombre, cédula, teléfono) DEBEN poder combinarse simultáneamente. El ordenamiento se aplica sobre los resultados filtrados.
+
+---
+
 
 ## Transacciones
 
@@ -205,6 +224,30 @@ Cuando el usuario intenta procesar una venta "Fiado" desde el POS:
 
 ---
 
+**Caso E: Consultar Clientes con Deuda Pendiente**
+- **Actor:** Admin o Empleado.
+- **Precondición:** Existen clientes con balance > 0 y clientes con balance = 0.
+- **Flujo Principal:**
+    1. Usuario ingresa al módulo de Clientes.
+    2. Sistema muestra el listado con todos los clientes activos (estado por defecto).
+    3. Usuario selecciona el filtro "Con Deuda".
+    4. Sistema muestra únicamente los clientes cuyo balance es mayor a $0.
+    5. Usuario ordena por "Monto de deuda" de mayor a menor.
+    6. Usuario identifica rápidamente a los clientes con mayor deuda pendiente.
+- **Postcondición:** Vista filtrada y ordenada que permite priorizar cobros.
+
+**Caso F: Consultar Clientes Eliminados (Auditoría)**
+- **Actor:** Admin.
+- **Precondición:** Existen clientes eliminados mediante Soft Delete.
+- **Flujo Principal:**
+    1. Admin ingresa al módulo de Clientes.
+    2. Admin activa la opción "Mostrar eliminados".
+    3. Sistema muestra el listado incluyendo clientes eliminados, identificados visualmente como "(eliminado)".
+    4. Admin selecciona un cliente eliminado para consultar su historial de transacciones.
+- **Postcondición:** Acceso a la auditoría de clientes eliminados sin restaurar su estado.
+
+---
+
 ## Requisitos de Datos (Para Equipo Data)
 
 **Entidad Cliente:**
@@ -251,3 +294,8 @@ Cuando el usuario intenta procesar una venta "Fiado" desde el POS:
 - [ ] Búsqueda funciona por nombre, cédula y teléfono.
 - [ ] Eliminación usa Soft Delete (campos `deleted`, `deletedAt`).
 - [ ] Clientes eliminados no aparecen en listados pero conservan historial.
+- [ ] El listado de clientes ofrece filtro por estado de deuda: Todos, Con Deuda, Al Día.
+- [ ] El listado de clientes permite ordenar por nombre o por monto de deuda.
+- [ ] El Admin puede activar la visualización de clientes eliminados (soft-deleted) en el listado.
+- [ ] Los filtros de estado de deuda y la búsqueda textual se pueden combinar simultáneamente.
+- [ ] El listado muestra por defecto todos los clientes activos ordenados por nombre.

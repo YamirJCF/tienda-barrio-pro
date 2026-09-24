@@ -1,4 +1,5 @@
 ---
+name: orchestrator
 description: Activar rol de Orquestador Técnico y Maestro Git - Tech Lead de ejecución
 ---
 

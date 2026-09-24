@@ -1,4 +1,5 @@
 ---
+name: doc-standard
 description: Consultar el estándar de documentación para validar FRD, DSD, UXD y QAR
 ---
 

@@ -1,4 +1,5 @@
 ---
+name: qa
 description: Activar rol de QA y Auditoría - Auditor de Seguridad y Resiliencia
 ---
 

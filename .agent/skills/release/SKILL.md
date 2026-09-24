@@ -1,4 +1,5 @@
 ---
+name: release
 description: Ritual de guardado seguro con CHANGELOG, commit semántico y tag
 ---
 

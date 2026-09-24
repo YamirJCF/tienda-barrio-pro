@@ -1,4 +1,5 @@
 ---
+name: ux
 description: Activar rol de Diseñador de UX/UI - Estratega de Experiencia de Usuario
 ---
 

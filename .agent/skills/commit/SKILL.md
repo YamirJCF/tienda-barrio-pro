@@ -1,4 +1,5 @@
 ---
+name: commit
 description: Automatizar commits de git con mensajes descriptivos
 ---
 

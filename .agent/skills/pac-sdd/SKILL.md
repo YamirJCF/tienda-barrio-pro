@@ -1,4 +1,5 @@
 ---
+name: pac-sdd
 description: Protocolo de Pre-Análisis Contextual (PAC) - Secuencia inmutable de verificación antes de redactar cualquier SDD. Cada bloque es un gate obligatorio. No se puede avanzar al siguiente bloque sin declarar la evidencia real del bloque anterior.
 ---
 

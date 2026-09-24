@@ -1,4 +1,5 @@
 ---
+name: validate-policy
 description: Validar un FRD nuevo contra las Políticas Globales (ARQ-002) y sincronizar la Matriz de Trazabilidad (ARQ-003) y el Diccionario de Parámetros (ARQ-004)
 ---
 

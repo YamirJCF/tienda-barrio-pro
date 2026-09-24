@@ -1,4 +1,5 @@
 ---
+name: pac-uxd
 description: Pre-Auditoría Contextual para Interfaz de Usuario (PAC-UXD) - Cartógrafo de discrepancias en componentes Vue contra el Contrato de Interfaz del SDD
 ---
 
