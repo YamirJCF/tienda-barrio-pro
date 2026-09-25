@@ -101,6 +101,15 @@ El módulo de inventario DEBE proveer mecanismos de búsqueda y filtrado para qu
 
 5. **Combinación de Filtros:** Los filtros de estado, categoría y la búsqueda por nombre DEBEN poder combinarse simultáneamente. El ordenamiento se aplica sobre los resultados filtrados.
 
+### Estrategia de Paginación para Listados Extensos
+
+El catálogo de inventario y cualquier listado asociado (movimientos Kardex, historial de precios) DEBE implementar carga progresiva para manejar el crecimiento de datos con el tiempo.
+
+1. **Carga Inicial Limitada:** Todo listado DEBE cargar inicialmente un máximo de 20 elementos, ordenados según el criterio por defecto de cada vista.
+2. **Carga Bajo Demanda:** El sistema DEBE permitir al usuario cargar los siguientes 20 elementos manualmente (botón "Cargar más" o scroll al final de la lista). El sistema DEBE priorizar la fluidez de la interfaz evitando sobrecargar la pantalla.
+3. **Conteo Total:** El sistema DEBE mostrar el total de elementos que coinciden con los filtros activos (ej. "Mostrando 20 de 347 productos"), para que el usuario tenga contexto de la magnitud del listado.
+4. **Aplicabilidad Transversal:** Esta estrategia aplica como patrón de referencia para todos los listados del sistema que puedan crecer indefinidamente: productos, movimientos Kardex, ventas, clientes, transacciones de clientes, facturas por pagar y movimientos de caja.
+
 ---
 
 ## Casos de Uso
@@ -185,3 +194,4 @@ El módulo de inventario DEBE proveer mecanismos de búsqueda y filtrado para qu
 - [ ] El listado muestra solo productos activos por defecto; el Admin puede alternar para incluir inactivos.
 - [ ] Los filtros (estado, categoría, stock bajo) y la búsqueda por nombre se pueden combinar simultáneamente.
 - [ ] El listado permite ordenar por nombre, stock o precio.
+- [ ] Los listados de productos, Kardex y precios implementan carga progresiva de 20 en 20 con indicador de total.

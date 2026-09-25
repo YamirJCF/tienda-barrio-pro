@@ -98,6 +98,9 @@ Mide la productividad y mitiga el fraude o fugas de dinero en el Punto de Venta.
 - **Ticket Promedio y Unidades por Transacción (UPT):** Valor medio de cada venta por hora/turno.
 - **Auditoría de Anulaciones:** Alertas sobre cajeros con alto porcentaje de ventas anuladas o ítems eliminados del carrito.
 
+#### Filtro por Empleado en Consultas del Pilar 4
+La consulta consolidada (Sección 3) DEBE permitir un parámetro opcional de filtro por empleado. Cuando este parámetro se proporcione, los datos del Pilar 4 DEBEN retornar únicamente las métricas asociadas al empleado especificado. Si no se proporciona, DEBEN retornar el desglose por todos los empleados del período.
+
 ---
 
 ## 3. Requisito de Consulta Consolidada
@@ -133,3 +136,4 @@ El resultado DEBE contener los datos de los 4 pilares descritos en la sección 2
 - [ ] **CA-018-04:** Los datos del Pilar 3 incluyen la valoración del inventario usando el método FIFO.
 - [ ] **CA-018-05:** Los datos del Pilar 4 diferencian las operaciones por empleado o turno.
 - [ ] **CA-018-06:** Solo el Administrador puede acceder al reporte financiero consolidado. Los empleados no tienen acceso.
+- [ ] **CA-018-07:** La consulta consolidada acepta un filtro opcional por empleado que restringe los datos del Pilar 4 al empleado especificado.

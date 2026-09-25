@@ -134,6 +134,8 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 
 4. **Combinación de Filtros:** Los filtros de estado de deuda y la búsqueda textual existente (nombre, cédula, teléfono) DEBEN poder combinarse simultáneamente. El ordenamiento se aplica sobre los resultados filtrados.
 
+5. **Paginación del Historial de Transacciones:** El historial de transacciones (compras a crédito + abonos) dentro del detalle de un cliente individual DEBE implementar carga progresiva: mostrar inicialmente las últimas 20 transacciones (orden cronológico descendente), permitiendo al usuario cargar más manualmente. El sistema DEBE mostrar el total de transacciones del cliente.
+
 ---
 
 
@@ -299,3 +301,4 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 - [ ] El Admin puede activar la visualización de clientes eliminados (soft-deleted) en el listado.
 - [ ] Los filtros de estado de deuda y la búsqueda textual se pueden combinar simultáneamente.
 - [ ] El listado muestra por defecto todos los clientes activos ordenados por nombre.
+- [ ] El historial de transacciones de un cliente individual carga las últimas 20 transacciones inicialmente con opción de cargar más.

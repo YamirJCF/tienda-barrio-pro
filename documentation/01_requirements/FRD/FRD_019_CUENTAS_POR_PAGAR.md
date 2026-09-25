@@ -58,6 +58,11 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
     - **Estado y Orden por Defecto:** Al ingresar al listado, la vista por defecto DEBE mostrar "Todas" las facturas excluyendo PAGADAS, y DEBE estar ordenada por fecha de creación en dirección descendente (más reciente primero), permitiendo al usuario modificar dicho criterio o alternar a orden ascendente en cualquier momento.
     - **Combinación de filtros:** Los filtros de estado, proveedor y rango de fechas DEBEN poder combinarse simultáneamente. El ordenamiento y su dirección seleccionada se aplican sobre los resultados filtrados.
 
+22. **Normalización del Nombre de Proveedor:** El campo "Nombre del Proveedor" en las facturas por pagar es texto libre (no una entidad seleccionable de un catálogo). Para evitar duplicados y garantizar la agrupación confiable en reportes:
+    - **Normalización Automática:** El sistema DEBE aplicar normalización automática al guardar: eliminar espacios al inicio/fin (trim), y convertir a formato título (primera letra de cada palabra en mayúscula). Ejemplo: "  coca cola  " → "Coca Cola".
+    - **Sugerencias de Autocompletado:** Al escribir el nombre del proveedor, el sistema DEBE mostrar sugerencias basadas en nombres de proveedores ya registrados en facturas anteriores de la misma tienda, para fomentar la reutilización del mismo nombre y evitar variaciones.
+    - **Consistencia con Entrada de Inventario:** El campo referencial "Datos del Proveedor" en los movimientos de entrada de inventario (FRD-006-01-01) DEBE aplicar la misma normalización descrita en esta regla.
+
 ---
 
 ## Casos de Uso
@@ -297,6 +302,8 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 - [ ] CA-FRD-019-78: El listado de cuentas por pagar ofrece filtro por rango de fechas de creación.
 - [ ] CA-FRD-019-79: El listado de cuentas por pagar permite ordenar por fecha de creación, monto total, nombre de proveedor y fecha de vencimiento, pudiendo alternar la dirección entre descendente y ascendente.
 - [ ] CA-FRD-019-80: Al ingresar al módulo, el estado por defecto muestra todas las facturas no pagadas ordenadas por fecha de creación en orden descendente, con opción de modificar el criterio o alternar la dirección a ascendente.
+- [ ] CA-FRD-019-81: El nombre del proveedor se normaliza automáticamente (trim + formato título) al guardar una factura.
+- [ ] CA-FRD-019-82: Al escribir el nombre del proveedor, el sistema sugiere proveedores previamente registrados en la misma tienda.
 
 ---
 

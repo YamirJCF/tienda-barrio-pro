@@ -46,6 +46,7 @@ Cuando el sistema detecte pérdida de conexión durante una venta:
 3. Si el temporizador llega a cero, el sistema DEBE notificar: "Estás trabajando sin internet"
 4. Cuando la conexión se restablezca, el sistema DEBE notificar: "Conexión restablecida"
 5. La segunda notificación SOLO aparece si la primera fue emitida
+6. El sistema DEBE mostrar un indicador persistente del estado de la cola de sincronización (ventas pendientes / límite máximo) según lo especificado en FRD-012-01, RN-OFF-06.
 
 ### RN-011-03: Prevención de Ventas Duplicadas
 

@@ -18,6 +18,8 @@ Este documento detalla y restringe el comportamiento de los "Movimientos de Entr
     - **Compra:** Ingreso por adquisición a un proveedor. No afecta finanzas automáticamente.
     - **Ajuste Positivo:** Corrección de inventario al encontrar más unidades físicas que las del sistema.
 
+6. **Normalización de Datos del Proveedor:** El campo referencial "Datos del Proveedor" en el formulario de entrada DEBE aplicar normalización automática (trim + formato título) al guardar, idéntica a la especificada en FRD-019, Regla 22. El sistema DEBE sugerir nombres de proveedores ya utilizados en entradas anteriores o facturas por pagar de la misma tienda.
+
 ---
 
 ## Casos de Uso
@@ -55,3 +57,4 @@ Este documento detalla y restringe el comportamiento de los "Movimientos de Entr
 - [ ] CA-FRD-006-01-01-03: El sistema DEBE rechazar cualquier intento de Nueva Entrada donde la cantidad a ingresar sea menor o igual a cero.
 - [ ] CA-FRD-006-01-01-04: El registro de una entrada de inventario NO DEBE crear registros en el módulo de cuentas por pagar.
 - [ ] CA-FRD-006-01-01-05: El costo de adquisición registrado en una entrada de inventario NO DEBE generar movimientos de caja.
+- [ ] CA-FRD-006-01-01-06: El campo de proveedor en el formulario de entrada aplica normalización automática y sugiere proveedores existentes.

@@ -39,6 +39,14 @@ Si durante el apagón el Administrador cambió reglas estructurales en el servid
 - La transacción incompatible **NO SE INVALIDA ni se considera "errónea"** (la información de la venta sigue siendo un hecho real). 
 - En lugar de rechazarla, el sistema la mueve a una "Bandeja de Intervención Técnica" (DLQ). Allí esperará hasta que el sistema se actualice o un administrador resuelva la incompatibilidad estructural, garantizando que el historial de la venta no se pierda.
 
+### RN-OFF-06: Indicador Visual de Cola de Sincronización
+
+Mientras el sistema esté en modo offline con ventas encoladas, la interfaz DEBE mostrar un indicador persistente con el número de ventas pendientes de sincronización sobre el límite máximo permitido (ej. "3/50 ventas pendientes").
+
+1. **Visibilidad Permanente:** El indicador DEBE ser visible en todo momento mientras existan ventas encoladas, independientemente de la pantalla activa del POS.
+2. **Alerta Preventiva:** Cuando la cola alcance el 80% de su capacidad máxima, el sistema DEBE cambiar el indicador a un estado de alerta visual (ej. color amarillo/naranja) acompañado del mensaje: "Cola de sincronización casi llena. Reconecta a internet pronto."
+3. **Alerta Crítica:** Cuando la cola alcance el 100% de su capacidad, el indicador DEBE cambiar a estado crítico (ej. color rojo) y el POS DEBE bloquearse según RN-OFF-03, mostrando: "Límite de ventas offline alcanzado. Reconecta a internet para continuar."
+
 ---
 
 ## Casos de Uso
@@ -76,3 +84,5 @@ Si durante el apagón el Administrador cambió reglas estructurales en el servid
 - [ ] **CA-OFF-01:** Intentar ejecutar un ajuste manual de inventario sin internet resulta en un bloqueo UI y no genera un registro en IndexedDB.
 - [ ] **CA-OFF-02:** Alcanzar el límite de la cola bloquea el botón de cobrar en el POS offline.
 - [ ] **CA-OFF-03:** Las ventas fallidas van a DLQ tras 3 reintentos y solo pueden ser reintentadas o eliminadas.
+- [ ] **CA-OFF-04:** Mientras existan ventas encoladas, un indicador muestra "X/Y ventas pendientes" de forma persistente.
+- [ ] **CA-OFF-05:** Al alcanzar el 80% de la capacidad de la cola, el indicador cambia a estado de alerta visual.

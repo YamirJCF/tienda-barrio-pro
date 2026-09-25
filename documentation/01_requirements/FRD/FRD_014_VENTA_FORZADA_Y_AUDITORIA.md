@@ -51,6 +51,10 @@ Para mantener la consistencia contable (que exige no tener stock negativo), el s
 ### RN-014-05: Bloqueo de Cierre (Consecuencia)
 El uso de esta excepción (o la existencia de conflictos no resueltos derivados de ella) impide el Cierre de Caja hasta que la auditoría sea completada.
 
+### RN-014-06: Canal de Pago en Venta Forzada
+
+La venta forzada DEBE pasar por el flujo de checkout estándar del POS (selección de método de pago según FRD-007 y registro multicanal según FRD-004 Caja Estricta Multicanal). La excepción de FRD-014 aplica únicamente al bloqueo de stock — el procesamiento del cobro y la asignación a canal de caja siguen las reglas normales sin excepción.
+
 ---
 
 ## 3. Casos de Uso
@@ -82,3 +86,4 @@ El uso de esta excepción (o la existencia de conflictos no resueltos derivados 
 - [ ] El sistema habilita el flujo de excepción (FRD-014) solo para Admins.
 - [ ] La venta forzada no deja el stock en negativo (usa inyección previa).
 - [ ] Toda venta forzada queda marcada y justificada en auditoría.
+- [ ] La venta forzada pasa por el checkout estándar del POS incluyendo selección de canal de pago.

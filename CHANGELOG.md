@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.4] - 2026-09-24
+
+### Added
+- **Requirements (FRD Cross-Analysis Amendments - Medium Severity 13-20):**
+  - **FRD-006 (Inventory):** Estrategia transversal de paginación con carga progresiva de 20 en 20 bajo demanda e indicador de totales para listados de alta cardinalidad (Hallazgo 13).
+  - **FRD-003 (Employees):** Navegación del listado de empleados con filtro por estado activo/inactivo y búsqueda por nombre/alias (Hallazgo 14).
+  - **FRD-013 (Sessions):** Regla RN-013-07 y Caso E para liberación remota de sesión individual por el Administrador a través de revocación de dispositivos (Hallazgo 15).
+  - **FRD-014 (Forced Sale):** Regla RN-014-06 ratificando que la venta forzada pasa por el checkout multicanal estándar del POS (Hallazgo 16).
+  - **FRD-018 (Operational Control):** Filtro opcional por empleado en la consulta consolidada para aislar métricas del Pilar 4 (Hallazgo 17).
+  - **FRD-019 / FRD-006-01-01 (Accounts Payable & Inventory Entries):** Normalización automática del nombre de proveedor (trim + título) y autocompletado en facturas y movimientos de entrada (Hallazgo 18).
+  - **FRD-009 (Clients):** Paginación progresiva para el historial de transacciones en el perfil de cliente individual (Hallazgo 19).
+  - **FRD-012-01 / FRD-011 (Offline System & Error Handling):** Indicador visual permanente del estado de la cola offline ("X/Y ventas pendientes"), alerta al 80% y bloqueo crítico al 100% (Hallazgo 20).
+
 ## [1.5.3] - 2026-09-24
 
 ### Added

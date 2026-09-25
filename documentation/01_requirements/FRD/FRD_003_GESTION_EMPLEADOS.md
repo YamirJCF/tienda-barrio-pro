@@ -49,6 +49,12 @@ Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar 
     - Para agregar uno nuevo, el Admin DEBE desactivar previamente a uno existente.
     - Este límite se valida a nivel de servidor (RLS/RPC).
 
+8. **Navegación del Listado de Empleados:**
+   - El listado DEBE mostrar por defecto únicamente los empleados en estado **activo**.
+   - El Admin DEBE poder activar un filtro para incluir empleados **inactivos** en la vista.
+   - El listado DEBE permitir búsqueda por nombre o alias numérico.
+   - Los empleados inactivos DEBEN distinguirse visualmente (ej. texto atenuado, badge "Inactivo").
+
 ---
 
 ## Casos de Uso
@@ -113,3 +119,5 @@ Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar 
 - [ ] El sistema rechaza la creación o activación si se supera el límite `P_MAX_EMPLOYEES_PER_STORE`.
 - [ ] El rechazo por límite ocurre en el servidor (Base de datos), no solo en la interfaz.
 - [ ] Al buscar empleado por alias, el sistema lo redirige a la tienda correcta.
+- [ ] El listado de empleados muestra por defecto solo los activos, con opción de incluir inactivos.
+- [ ] El listado permite búsqueda por nombre o alias numérico.

@@ -87,6 +87,15 @@ Cuando se cierra la caja del turno:
 
 > **Nota sobre permisos:** Los permisos se evalúan en tiempo real en cada operación. Si un empleado cerró la caja hoy pero mañana le retiran el permiso de caja, al día siguiente DEBE solicitar Pase Diario como cualquier otro empleado y ya NO podrá ejecutar operaciones de caja.
 
+### RN-013-07: Liberación Manual de Sesión por el Admin
+
+El Administrador DEBE poder cerrar remotamente la sesión activa de un empleado específico para liberar un slot de sesión, sin necesidad de desactivar al empleado (FRD-003) ni cerrar la caja (FRD-027).
+
+- La operación de cierre remoto se ejecuta desde la sección de control de dispositivos descrita en FRD-015 (revocación de dispositivo conectado).
+- Al revocar un dispositivo conectado, el sistema DEBE cerrar la sesión asociada, liberar el slot de concurrencia (RN-013-02) e invalidar el Pase Diario del empleado afectado.
+- El empleado afectado DEBE ver el mensaje: "Tu sesión fue cerrada por el administrador" y ser redirigido a la pantalla de login.
+- El empleado puede solicitar un nuevo Pase Diario para volver a ingresar.
+
 ---
 
 ## Casos de Uso
@@ -144,6 +153,20 @@ Cuando se cierra la caja del turno:
     6. Empleado es redirigido a pantalla de login
 - **Postcondición:** Empleado desautenticado, no puede volver a entrar hasta reactivación
 
+### Caso E: Liberación de Slot de Sesión (Admin)
+
+- **Actor:** Administrador
+- **Precondición:** 6 sesiones activas, un nuevo empleado necesita ingresar.
+- **Flujo Principal:**
+    1. Empleado intenta hacer login → Sistema rechaza: "Límite de dispositivos alcanzado".
+    2. Admin accede al centro de notificaciones → sección de control de dispositivos (FRD-015).
+    3. Admin identifica un dispositivo inactivo o de un empleado que ya no necesita acceso.
+    4. Admin revoca el dispositivo.
+    5. Sistema cierra la sesión asociada, libera el slot e invalida el Pase Diario.
+    6. Empleado afectado ve: "Tu sesión fue cerrada por el administrador".
+    7. El nuevo empleado puede ahora hacer login exitosamente.
+- **Postcondición:** Slot liberado, nuevo empleado autenticado.
+
 ---
 
 ## Criterios de Aceptación
@@ -151,6 +174,8 @@ Cuando se cierra la caja del turno:
 ### Límites y Concurrencia
 - [ ] El sistema rechaza el 7mo intento de login mostrando mensaje de límite
 - [ ] El límite de 6 sesiones se valida en el servidor, no solo en la interfaz
+- [ ] Al revocar un dispositivo conectado, la sesión asociada se cierra y el slot de concurrencia se libera.
+- [ ] El empleado cuya sesión fue cerrada remotamente ve un mensaje explicativo y es redirigido a login.
 
 ### Cierre de Sesión
 - [ ] Al cerrar sesión, las credenciales se eliminan del dispositivo
