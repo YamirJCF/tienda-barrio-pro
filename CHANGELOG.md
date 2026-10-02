@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.5] - 2026-10-02
+
+### Added
+- **Requirements (FRD Cross-Analysis Amendments - Hallazgo 6):**
+  - **FRD-004 / FRD-020 (Cash Control & Multichannel):** Especificación de base de apertura de caja multicanal. El fondo de cambio declarado en la apertura se asigna exclusivamente al canal EFECTIVO, mientras que los canales digitales (Nequi, Llave BRE) se inicializan automáticamente con base $0 cada turno. Se conectó formalmente con el arqueo desglosado de cierre garantizando el cálculo íntegro del saldo esperado por canal.
+
 ## [1.5.4] - 2026-09-24
 
 ### Added

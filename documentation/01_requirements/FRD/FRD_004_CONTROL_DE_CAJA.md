@@ -43,6 +43,7 @@ Este documento regula el ciclo de vida operativo de la caja registradora por tur
    Saldo Esperado = Base Inicial + Ventas Efectivo + Ingresos Manuales - Gastos/Retiros
    Esta fórmula se calcula automáticamente y se muestra al cerrar.
    Las pérdidas de inventario (mermas) NO afectan esta fórmula de efectivo físico y se reportan en una sección separada del cierre, según FRD-006-01-02.
+   La base inicial declarada en la apertura de turno corresponde exclusivamente al canal EFECTIVO. Los canales digitales (Nequi, Llave BRE) inician cada turno con base $0 automáticamente, sin intervención del usuario. La conciliación por canal al cierre (FRD-020, Regla 3) utiliza esta asignación para calcular el saldo esperado de cada canal de forma independiente.
 
 7. **Separación entre Pase Diario y Caja:**
    El pase diario controla el acceso al sistema.
@@ -63,7 +64,7 @@ Este documento regula el ciclo de vida operativo de la caja registradora por tur
     1. Usuario ingresa al módulo de control de caja.
     2. Sistema verifica permisos y estado de caja.
     3. Muestra pantalla "Apertura de Turno".
-    4. Usuario ingresa monto base (fondo de cambio).
+    4. Usuario ingresa monto base de efectivo (fondo de cambio físico en el cajón). Este monto se asigna al canal EFECTIVO. Los canales digitales (Nequi, Llave BRE) inician automáticamente con base $0.
     5. Usuario confirma.
     6. Sistema abre sesión y habilita el POS.
 - **Flujo Alternativo:** Ninguno.
@@ -127,7 +128,7 @@ Este documento regula el ciclo de vida operativo de la caja registradora por tur
 - Relación con Tienda
 - Empleado que abrió
 - Empleado que cerró. El sistema acepta que este empleado sea distinto al empleado que abrió la sesión.
-- Balance de apertura
+- Balance de apertura (asignado al canal EFECTIVO; canales digitales inician en $0)
 - Balance de cierre (declarado por usuario)
 - Balance calculado (por el sistema)
 - Diferencia

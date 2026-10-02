@@ -26,6 +26,12 @@ La caja ya no es exclusivamente un control del dinero físico en el cajón. Se t
    - Esta regla APLICA TAMBIÉN para el proceso de Cierre Forzado de 24h (operación de cierre forzado en el servidor y el modal de auditoría). Si el administrador audita un turno expirado, el modal debe solicitar la conciliación multicanal.
    - A nivel de base de datos, este desglose SE DEBE soportar estructurando el balance en una tabla separada (`cash_session_balances`), y no agrupado en JSON, para favorecer consultas limpias de agregación financiera.
 
+4. **Inicialización de Canales en Apertura:**
+   - Al abrir un turno de caja, el monto base declarado por el usuario (FRD-004, Caso A) se registra como base del canal **EFECTIVO** exclusivamente.
+   - Los canales digitales (**Nequi** y **Llave BRE**) se inicializan automáticamente con base **$0**, sin requerir entrada del usuario.
+   - El saldo esperado de cada canal al cierre se calcula como: `Base Canal + Ingresos Canal − Egresos Canal`.
+   - Esta regla cierra el circuito contable entre la apertura (FRD-004) y el arqueo desglosado al cierre (Regla 3 de este documento).
+
 ## Casos de Uso
 
 **Caso A: Cierre de Turno Multicanal**
@@ -53,3 +59,4 @@ La caja ya no es exclusivamente un control del dinero físico en el cajón. Se t
 - [ ] El Cierre Forzado a 24h asimila el comportamiento multicanal, actualizando su RPC y su interfaz (ForcedCloseAuditModal).
 - [ ] Los abonos de clientes modifican el saldo esperado del canal seleccionado para el turno actual.
 - [ ] El sistema bloquea el registro de abonos si la caja está cerrada.
+- [ ] Al abrir el turno, la base declarada se asigna al canal EFECTIVO y los canales digitales inician en $0 sin intervención del usuario.
