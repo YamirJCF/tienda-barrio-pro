@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.6] - 2026-10-04
+
+### Added
+- **Requirements (FRD Cross-Analysis Amendments - Hallazgo 7):**
+  - **FRD-006-02 (Refunds Manager):** Multicanalidad y trazabilidad integral en devoluciones de clientes. Selección obligatoria de canal de egreso con Efectivo preseleccionado por defecto, registro obligatorio del canal de venta original mediante lista desplegable, validación de fondos por canal en el turno activo sin sobregiros ni compensaciones ficticias, tipificación del egreso como Reembolso para el cálculo de Ingresos Netos (FRD-018), y vinculación atómica bidireccional entre el egreso de caja y el incremento de inventario.
+
 ## [1.5.5] - 2026-10-02
 
 ### Added
