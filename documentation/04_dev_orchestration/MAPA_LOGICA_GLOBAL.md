@@ -1,4 +1,4 @@
-# 🗺️ Mapa de Lógica Global (v3.0)
+# 🗺️ Mapa de Lógica Global (v3.1)
 
 > **Módulos documentados:** 46 / 46 (100% FRD/SDD)
 
@@ -143,7 +143,7 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | **Control de Caja** | FRD-004 / SDD-004 | 🟢 Validado |
 | **Auditoría (Inviolable/Trazable)** | FRD-005 | 🟢 Validado |
 | **Inventario (Núcleo, Mov, Reembolso)**| FRD-006 / SDD-006 | 🟢 Validado |
-| **Ventas y POS** | FRD-007 / SDD-007 | 🟠 Aprobado con Deuda (RPC v3) |
+| **Ventas y POS** | FRD-007 / SDD-007 | 🟡 Aprobado (Plan Anulación H-A/B listos) |
 | **Reportes** | FRD-008 / SDD-008 | 🟢 Validado |
 | **Clientes** | FRD-009 / SDD-009 | 🟢 Validado |
 | **Valoración FIFO / Costo Ventas** | FRD-010 / SDD-010 | 🟢 Validado |
