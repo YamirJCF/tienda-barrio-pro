@@ -6,6 +6,18 @@ Catálogo de Productos y Control de Existencias (Kardex)
 #### Descripción
 Sistema central de gestión de productos que permite mantener el catálogo de mercancía de la tienda, controlar el stock disponible y auditar todos los movimientos de inventario. Es la base sobre la cual opera el módulo de Ventas.
 
+
+**Caso F: Auditar discrepancia de inventario vía Kardex**
+- **Actor:** Admin
+- **Precondición:** El Admin detecta una diferencia entre el stock físico y el digital de un producto de alta rotación.
+- **Flujo Principal:**
+    1. Usuario ingresa al detalle del producto y abre su historial Kardex.
+    2. Sistema muestra los movimientos de los últimos 7 días.
+    3. Usuario filtra el Tipo de Movimiento para mostrar únicamente "Ajuste" y "Salida".
+    4. Sistema reduce la vista ocultando los cientos de ventas y mostrando solo las correcciones o mermas recientes.
+    5. Usuario identifica qué empleado registró la merma sospechosa y revisa la razón anotada.
+- **Postcondición:** El administrador aísla rápidamente la transacción anómala sin revisar manualmente las ventas.
+
 ---
 
 ## Reglas de Negocio
@@ -101,6 +113,16 @@ El módulo de inventario DEBE proveer mecanismos de búsqueda y filtrado para qu
 
 5. **Combinación de Filtros:** Los filtros de estado, categoría y la búsqueda por nombre DEBEN poder combinarse simultáneamente. El ordenamiento se aplica sobre los resultados filtrados.
 
+
+### Navegación y Filtrado del Historial Kardex
+
+Para garantizar la auditoría operativa (POL-AUD-02), la vista de movimientos (Kardex) de un producto DEBE proveer herramientas de filtrado combinables:
+
+1. **Filtro por Rango de Fechas:** Permite aislar movimientos ocurridos entre dos fechas. Por defecto, al abrir el Kardex de un producto, el sistema muestra los movimientos de los últimos 7 días.
+2. **Filtro por Tipo de Movimiento:** Permite visualizar exclusivamente ciertos tipos de transacción. Opciones: *Todos (por defecto), Entradas, Salidas (Mermas), Ajustes, Ventas, Devoluciones*.
+3. **Filtro por Empleado:** Permite mostrar únicamente los movimientos ejecutados por un usuario específico (activo o inactivo).
+4. **Combinación y Orden:** Los filtros DEBEN poder combinarse simultáneamente (ej. "Ajustes realizados por Juan en los últimos 3 días"). El ordenamiento es fijo: cronológico descendente (el más reciente arriba).
+
 ### Estrategia de Paginación para Listados Extensos
 
 El catálogo de inventario y cualquier listado asociado (movimientos Kardex, historial de precios) DEBE implementar carga progresiva para manejar el crecimiento de datos con el tiempo.
@@ -160,6 +182,19 @@ El catálogo de inventario y cualquier listado asociado (movimientos Kardex, his
     3. Usuario revisa la lista para decidir qué reabastecer.
 - **Postcondición:** Vista filtrada que permite acción rápida de reabastecimiento.
 
+
+**Caso F: Auditar discrepancia de inventario vía Kardex**
+- **Actor:** Admin
+- **Precondición:** El Admin detecta una diferencia entre el stock físico y el digital de un producto de alta rotación.
+- **Flujo Principal:**
+    1. Usuario ingresa al detalle del producto y abre su historial Kardex.
+    2. Sistema muestra los movimientos de los últimos 7 días.
+    3. Usuario filtra el Tipo de Movimiento para mostrar únicamente "Ajuste" y "Salida".
+    4. Sistema reduce la vista ocultando los cientos de ventas y mostrando solo las correcciones o mermas recientes.
+    5. Usuario identifica qué empleado registró la merma sospechosa y revisa la razón anotada.
+- **Postcondición:** El administrador aísla rápidamente la transacción anómala sin revisar manualmente las ventas.
+
+
 ---
 
 ## Requisitos de Datos (Para Equipo Data)
@@ -195,3 +230,5 @@ El catálogo de inventario y cualquier listado asociado (movimientos Kardex, his
 - [ ] Los filtros (estado, categoría, stock bajo) y la búsqueda por nombre se pueden combinar simultáneamente.
 - [ ] El listado permite ordenar por nombre, stock o precio.
 - [ ] Los listados de productos, Kardex y precios implementan carga progresiva de 20 en 20 con indicador de total.
+- [ ] El historial Kardex de un producto permite filtrar por rango de fechas, tipo de movimiento y empleado de forma simultánea.
+- [ ] Al abrir el Kardex, se visualizan por defecto los movimientos de los últimos 7 días en orden cronológico descendente.
