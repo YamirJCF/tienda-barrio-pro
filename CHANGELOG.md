@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.8] - 2026-10-09
+
+### Added
+- **Requirements (FRD Cross-Analysis Amendments - Últimos Hallazgos):**
+  - **FRD-007 (Sales & Voiding - Hallazgos 9, A, B):** Especificación de filtros en historial de ventas por turno (Nº ticket, canal, estado). Definición estricta de "Anulación de Ventas": reversión contable atada al canal de pago original, protección de inmutabilidad en turnos cerrados (exigencia de turno abierto para la operación), y reversión logística del inventario.
+  - **FRD-006 (Inventory - Hallazgo 11):** Navegación y filtrado en el Historial Kardex. Se exigen filtros combinables por rango de fechas (7 días por defecto), tipo de movimiento y empleado responsable para facilitar la auditoría operativa.
+  - **FRD-026 / FRD-004 (Expenses - Hallazgo 12):** Categorización OPEX obligatoria. El registro de gastos ahora exige seleccionar una categoría predefinida (Servicios, Nómina, Transporte, Mantenimiento, Insumos, Reembolso) además del motivo en texto libre, garantizando la compatibilidad con el agrupamiento matemático del reporte financiero (FRD-018).
+
 ## [1.5.7] - 2026-10-09
 
 ### Added
