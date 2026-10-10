@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.7] - 2026-10-09
+
+### Added
+- **Requirements (FRD Cross-Analysis Amendments - Hallazgo 8):**
+  - **FRD-005 (Audit & Traceability - Evidence Hub):** Especificación del filtro temporal en el Evidence Hub centralizado. Selección de rango de fechas desde–hasta (extremos inclusivos, días completos) sobre el timestamp de los eventos, atajos rápidos (Hoy, Ayer, Últimos 7 días, Últimos 30 días), rango por defecto de los últimos 7 días consistente con reportes de caja, combinación con filtros de dominio y tipo de evento, respuesta contextual ante consultas vacías, integración con paginación progresiva de FRD-006 y homologación para consultas de historiales contextuales (ej. perfil de cliente).
+
 ## [1.5.6] - 2026-10-04
 
 ### Added
