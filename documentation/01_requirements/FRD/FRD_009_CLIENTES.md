@@ -148,12 +148,18 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 | **Compra a Crédito** | +Monto | Automático desde ventas cuando método = fiado |
 | **Abono / Pago** | -Monto | Manual desde detalle de cliente |
 
+> [!NOTE]
+> **Canalización Monetaria de Abonos:**
+> Todo Abono/Pago representa un ingreso real de liquidez. Por tanto, DEBE canalizarse obligatoriamente a través de un canal de pago (Efectivo, Nequi, Llave BRE) y registrarse en el turno de caja activo (FRD-020).
+
 ### Campos de Transacción
 
 - Identificador único
 - Relación con Cliente
 - Tipo: compra o pago
 - Monto (siempre positivo)
+- Canal de Pago (solo para abonos)
+- Turno de Caja (`session_id`) (solo para abonos)
 - Descripción (ej: "Abono efectivo", "Venta Ticket #045")
 - Fecha/hora
 - Referencia a venta (solo para compras)
@@ -181,16 +187,17 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 
 **Caso A: Registrar Abono**
 - **Actor:** Admin o Empleado
-- **Precondición:** Cliente con balance > 0.
+- **Precondición:** Cliente con balance > 0. Existe un turno de caja abierto.
 - **Flujo Principal:**
     1. Usuario navega a clientes → Selecciona cliente.
     2. Sistema muestra: Balance $45,000, Cupo $100,000.
     3. Usuario selecciona "Registrar Abono".
-    4. Ingresa monto $20,000.
+    4. Ingresa monto $20,000 y selecciona obligatoriamente el canal de pago (ej: "Nequi").
     5. Sistema valida: $20,000 ≤ $45,000 (balance actual) ✅.
-    6. Sistema registra transacción tipo pago.
+    6. Sistema registra transacción tipo pago asociada al canal seleccionado y al turno activo.
     7. Nuevo balance: $25,000.
-- **Postcondición:** Balance actualizado, transacción registrada.
+- **Flujo Alternativo (Caja Cerrada):** Si no hay turno abierto, el sistema bloquea el abono indicando "Debe abrir caja para recibir dinero".
+- **Postcondición:** Balance actualizado, transacción registrada, dinero sumado al canal en la caja activa.
 
 **Caso B: Venta Fiado Bloqueada por Cupo**
 - **Actor:** Empleado con permiso de venta
@@ -269,6 +276,8 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 - Relación con Cliente
 - Tipo: compra o pago
 - Monto
+- Canal de Pago (si aplica)
+- Relación con Turno de Caja (si aplica)
 - Descripción
 - Fecha/hora
 - Referencia a venta (si aplica)
@@ -283,6 +292,8 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 - [ ] No se puede eliminar cliente con balance > 0.
 - [ ] Balance nunca es negativo (validación en frontend Y backend).
 - [ ] Cupo por defecto configurable y se propaga a clientes existentes.
+- [ ] El registro de un abono exige seleccionar obligatoriamente un canal de pago.
+- [ ] El registro de un abono es rechazado si no existe un turno de caja abierto.
 
 ### UX
 - [ ] Botón "Eliminar" deshabilitado con tooltip cuando hay deuda.
