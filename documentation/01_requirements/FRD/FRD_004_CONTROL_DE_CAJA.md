@@ -95,7 +95,7 @@ Este documento regula el ciclo de vida operativo de la caja registradora por tur
 - **Flujo Principal:**
     1. Usuario saca dinero para pagar algo (ej: proveedor, almuerzo).
     2. Ingresa a "Gastos" → "Nuevo Gasto".
-    3. Digita monto y motivo obligatorio.
+    3. Digita monto, selecciona la categoría OPEX y añade un motivo obligatorio.
     4. Sistema registra el movimiento y resta del Saldo Esperado inmediatamente.
 - **Flujo Alternativo:** Ninguno.
 - **Postcondición:** Movimiento registrado, saldo actualizado.

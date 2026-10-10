@@ -42,3 +42,4 @@ Este documento detalla la política arquitectónica para el manejo de los "Gasto
 - [ ] **CA-FRD-026-01:** El sistema carece por completo de interfaces o bases de datos orientadas a almacenar gastos generales en estado "pendiente" o "por pagar".
 - [ ] **CA-FRD-026-02:** Todo registro exitoso en el módulo de gastos DEBE generar una disminución matemática inmediata en el efectivo reportado en el arqueo del turno actual.
 - [ ] **CA-FRD-026-03:** El sistema DEBE abortar cualquier registro de gasto si el balance resultante del canal asociado a la operación resulta inferior a cero.
+- [ ] **CA-FRD-026-04:** El sistema DEBE exigir la selección de una categoría OPEX al registrar un gasto, impidiendo el registro si solo se envía texto libre.
