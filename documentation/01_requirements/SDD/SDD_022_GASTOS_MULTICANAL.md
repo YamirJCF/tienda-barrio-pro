@@ -1,9 +1,9 @@
 # SDD-022: Gastos Operativos Multicanal
 
 > **Asociado a:** [FRD-022](../FRD/FRD_022_GASTOS_MULTICANAL.md)  
-> **Fase del Plan:** Fase 3 (Prioridad 1 — SDDs Faltantes)  
-> **Estado:** 🟡 Validado Localmente (Post Alineación Documental 2026-08-07)  
-> **Última Actualización:** 2026-08-07
+> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos  
+> **Estado:** 🟡 Validado Localmente (Post Alineación v1.5.8)  
+> **Última Actualización:** 2026-10-11  
 
 ---
 
@@ -12,48 +12,54 @@
 ### 0.1 Políticas Globales Activadas (ARQ-002)
 | Política ID | Dominio | Impacto Concreto en este SDD |
 |-------------|---------|------------------------------|
-| **POL-FIN-03** | Financiero | **Afectación de Canal Específico:** Toda salida de dinero por gastos del negocio (`expenses`) debe especificar el canal de origen (`payment_method`) y restar del `expected_amount` exclusivo de ese canal. |
-| **ARQ-002-R4** | Seguridad | **Validación de Tienda:** El registro de gastos ejecuta `assert_store_access()` y valida que exista una sesión de caja abierta (`status = 'OPEN'`). |
+| **POL-FIN-02** | Financiero | **Segregación Estricta de Canales:** Toda salida de dinero por gastos debe imputarse al canal de origen (`payment_method`) y debitar exclusivamente del saldo disponible de ese canal. |
+| **POL-FIN-01** | Financiero | **Prohibición de Sobregiros:** Queda vetado extraer más dinero de un canal digital o físico del que haya ingresado en el turno. |
+| **POL-AUTH-01** | Seguridad | **Validación Centralizada:** El registro invoca `assert_store_access()` y valida que exista una sesión de caja abierta. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
-| SDD Origen | Restricción Inyectada | Impacto en Gastos |
-|------------|-----------------------|-------------------|
-| **SDD_020 (Caja Multicanal)** | `cash_session_balances` desglosa `expected_amount` por `payment_method`. | El registro de un gasto resta del `expected_amount` del canal correspondiente en `cash_session_balances`. |
-| **SDD_004 (Control de Caja)** | Exige sesión en estado `OPEN`. | Bloquea la inserción de gastos si no hay caja abierta. |
+| SDD Origen | Restricción Inyectada | Impacto en Gastos Multicanal |
+|------------|-----------------------|------------------------------|
+| **SDD_026 (Política de Gastos)** | Ausencia de Pasivos. | Todo gasto es un egreso líquido inmediato con categoría OPEX obligatoria. |
+| **SDD_004 (Control de Caja)** | Exigencia de sesión `OPEN`. | Bloquea la inserción si no hay caja abierta o si la sesión tiene más de 24 horas. |
+| **SDD_020 (Caja Multicanal)** | Estructura multicanal de balances. | El egreso reduce el saldo esperado del canal correspondiente. |
 
-### 0.3 Auditoría de BD contra Realidad
-- **Verificación Real en Esquema:**
-  - Tabla `expenses` verificada con columnas: `id`, `store_id`, `session_id`, `amount`, `category`, `description`, `payment_method`, `created_at`.
-  - Tabla `cash_movements` asienta el egreso con `movement_type = 'gasto'` y `payment_method`.
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada)
+*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`):*
+
+```sql
+-- En producción NO existe tabla 'expenses'. Los gastos se asientan exclusivamente en 'cash_movements':
+-- id (uuid), session_id (uuid), sale_id (uuid), movement_type (text), amount (numeric), description (text), created_at (timestamptz)
+```
+
+| Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off | Condición de Revisión |
+|-----------------------|-----------------------|---------------------------------|-----------------------|
+| 🔴 **Inexistencia de tabla `expenses`** | Versiones preliminares proponían una tabla separada `expenses`. En la base real, todos los movimientos monetarios de salida residen en `cash_movements`. | **Decisión:** Unificar el registro en `cash_movements` con `movement_type = 'gasto'`. Evita redundancia y sincronizaciones bidireccionales frágiles. | Mantener modelo unificado en `cash_movements`. |
+| 🔴 **Discriminación de canal en movimientos** | `cash_movements` no tiene columna `payment_method` en la base de datos de producción actual. | **Decisión:** El contrato RPC exige `p_payment_method`. Temporalmente se valida sobre las ventas del canal hasta la migración multicanal. | Migración de adición de columna `payment_method` en `cash_movements`. |
 
 ---
 
 ## 1. Glosario Local
 
-- **Gasto Operativo (`expenses`):** Egreso de liquidez destinado a cubrir costos operativos inmediatos de la tienda (Servicios, Arriendo, Almuerzo, Transporte).
-- **Origen de Fondos:** Canal de pago del cual se extrajo el dinero para cubrir el gasto (Efectivo físico del cajón o transferencia digital).
+- **Gasto Operativo Multicanal:** Egreso de liquidez imputado a un canal específico (`efectivo`, `nequi`, `llave_bre`) para cubrir gastos del día.
+- **Origen de Fondos:** Medio por el cual se desembolsa el valor del gasto.
 
 ---
 
 ## 2. Diagramas de Secuencia
 
-### 2.1 Flujo de Registro de Gasto Multicanal
-
 ```mermaid
 sequenceDiagram
     participant Empleado
-    participant UI as ExpensesView
-    participant RPC as rpc_registrar_gasto_multicanal
-    participant DB as expenses / cash_movements
+    participant RPC as rpc_registrar_gasto_v2
+    participant S as cash_sessions
+    participant M as cash_movements
 
-    Empleado->>UI: Ingresa gasto ($Monto, Categoría, Descripción, Canal: Nequi)
-    UI->>RPC: POST (p_amount, p_category, p_description, p_payment_method='nequi')
-    RPC->>RPC: Valida assert_store_access() y Sesión Abierta
-    RPC->>DB: INSERT INTO expenses (amount, category, description, payment_method)
-    RPC->>DB: INSERT INTO cash_movements (movement_type='gasto', amount=-Monto, payment_method='nequi')
-    RPC->>DB: UPDATE cash_session_balances SET expected_amount = expected_amount - Monto WHERE payment_method = 'nequi'
-    DB-->>RPC: Transacción exitosa
-    RPC-->>UI: Retorna confirmación de gasto
+    Empleado->>RPC: POST (session_id, amount, payment_method, category, description)
+    RPC->>RPC: assert_store_access(store_id)
+    RPC->>S: Valida status = 'open' y antigüedad < 24h
+    RPC->>M: Valida saldo suficiente en canal
+    RPC->>M: INSERT INTO cash_movements (session_id, movement_type='gasto', amount=p_amount, description='[CATEGORIA] Motivo')
+    RPC-->>Empleado: Éxito: { movement_id, amount, payment_method, category }
 ```
 
 ---
@@ -62,10 +68,10 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> FormularioGasto : Usuario abre formulario de gasto
-    FormularioGasto --> ValidandoCaja : Ingresa datos y selecciona canal de origen
-    ValidandoCaja --> GastoRegistrado : Caja abierta y canal especificado
-    ValidandoCaja --> Rechazado : Sin sesión de caja abierta
+    [*] --> FormularioGasto : Usuario ingresa datos
+    FormularioGasto --> ValidandoCaja : Envía solicitud con canal seleccionado
+    ValidandoCaja --> GastoRegistrado : Caja abierta y fondos suficientes
+    ValidandoCaja --> Rechazado : Sin caja abierta o fondos insuficientes
     GastoRegistrado --> [*]
 ```
 
@@ -74,71 +80,93 @@ stateDiagram-v2
 ## 4. Especificación Detallada de Casos de Uso
 
 ### Caso A: Registro de Gasto Pagado con Nequi
-- **Actor:** Empleado / Administrador con permisos.
-- **Precondición:** Existe una sesión de caja en estado `OPEN`.
+- **Actor:** Empleado o Administrador con sesión activa.
+- **Precondición:** Sesión de caja en estado `open`. Saldo disponible en Nequi >= monto a pagar.
 - **Flujo Principal:**
-  1. El usuario accede al formulario de registrar gasto.
-  2. Ingresa el monto (Ej. $20.000), categoría ("Servicios"), descripción ("Pago servicio internet").
-  3. Selecciona "Nequi" en el campo Origen de Fondos.
-  4. Envía la solicitud.
-  5. El backend verifica acceso y valida que la caja esté abierta.
-  6. El backend inserta en `expenses` e inserta el egreso en `cash_movements` etiquetado con `payment_method = 'nequi'`.
-  7. El backend resta $20.000 del `expected_amount` del canal Nequi en `cash_session_balances`. El saldo de Efectivo permanece inalterado.
-- **Postcondiciones (Éxito):** Gasto registrado con trazabilidad de origen; arqueo de efectivo físico no es afectado.
+  1. El usuario ingresa monto ($20.000), selecciona canal "Nequi", categoría OPEX "Servicios" y motivo "Pago de internet".
+  2. El servidor verifica que la caja esté abierta y no caducada.
+  3. El servidor confirma que el canal Nequi tenga fondos suficientes para cubrir los $20.000.
+  4. El servidor asienta el egreso en `cash_movements`.
+  5. El saldo en Nequi disminuye inmediatamente. El saldo en Efectivo permanece intacto.
+- **Postcondición:** Gasto registrado con trazabilidad de canal; sin afectación cruzada a otros canales.
 
 ---
 
 ## 5. Contrato de Interfaz
 
-### Operación: `rpc_registrar_gasto_multicanal`
-- **Entrada esperada:**
-  - `p_amount` (NUMERIC, obligatorio, > 0)
-  - `p_category` (TEXT, obligatorio)
-  - `p_description` (TEXT, obligatorio)
-  - `p_payment_method` (TEXT, obligatorio — 'efectivo', 'nequi', 'daviplata', etc.)
-- **Reglas de transformación:**
-  - `PERFORM assert_store_access(get_current_store_id())`.
-  - Verifica `cash_sessions` en estado `OPEN`.
-  - Inserta en `expenses` y `cash_movements`.
-  - Descuenta del saldo esperado del canal en `cash_session_balances`.
-- **Salida esperada:**
-  - Éxito: `{ "success": true, "expense_id": "..." }`
-  - Catálogo de Errores: `NO_OPEN_CASH_SESSION`, `INVALID_PAYMENT_METHOD`, `INVALID_AMOUNT`.
+### Operación: `rpc_registrar_gasto_v2`
+- **Tipo:** RPC Postgres / Acción (WRITE)
+- **Entradas:**
+  ```json
+  {
+    "p_session_id": "UUID (Obligatorio)",
+    "p_amount": "NUMERIC > 0 (Obligatorio)",
+    "p_payment_method": "TEXT (Obligatorio: 'efectivo', 'nequi', 'llave_bre')",
+    "p_category": "TEXT (Obligatorio: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos', 'Reembolso')",
+    "p_description": "TEXT (Obligatorio, >= 3 caracteres)"
+  }
+  ```
+- **Salida Exitosa:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "movement_id": "UUID",
+      "amount": 20000.00,
+      "payment_method": "nequi",
+      "category": "Servicios",
+      "created_at": "TIMESTAMPTZ"
+    }
+  }
+  ```
+- **Catálogo de Errores:**
+  | Código de Error | Causa | Mensaje Técnico |
+  |-----------------|-------|-----------------|
+  | `NO_OPEN_SESSION` | Caja cerrada o inexistente | No hay una sesión de caja activa |
+  | `SESSION_EXPIRED` | Antigüedad mayor a 24 horas | Turno expirado; requiere cierre antes de operar |
+  | `INSUFFICIENT_FUNDS` | Saldo menor al monto en canal | Fondos insuficientes en el canal seleccionado |
+  | `INVALID_OPEX_CATEGORY` | Categoría no autorizada | Categoría OPEX inválida |
+  | `EMPTY_DESCRIPTION` | Descripción menor a 3 caracteres | Motivo de gasto requerido |
 
 ---
 
 ## 6. Análisis de Seguridad
 
-- **Control de Acceso:** Invocación protegida con `assert_store_access()`.
-- **Protección contra Fraude:** Obligatoriedad de seleccionar canal y justificación mediante `description`.
+- **Validación Centralizada:** Requiere `assert_store_access()`.
+- **Atomicidad y Rollback:** Fallos de fondos o de validación revierten completamente cualquier intento de inserción.
+- **Inmutabilidad:** Movimientos de tipo `'gasto'` son append-only.
 
 ---
 
 ## 7. Modelo de Datos Lógico
 
-### ERD Mermaid
-
 ```mermaid
 erDiagram
-    CASH_SESSIONS ||--o{ EXPENSES : contiene
-    CASH_SESSIONS ||--o{ CASH_MOVEMENTS : registra
+    cash_sessions ||--o{ cash_movements : "registra"
 
-    EXPENSES {
+    cash_sessions {
         uuid id PK
         uuid store_id FK
+        text status
+        timestamptz opened_at
+    }
+
+    cash_movements {
+        uuid id PK
         uuid session_id FK
         numeric amount
-        text category
+        text movement_type
         text description
-        text payment_method "Origen de fondos"
         timestamptz created_at
     }
 ```
 
 ### Diccionario de Datos
-
-| Atributo | Entidad | Tipo | Restricciones | Descripción |
-|----------|---------|------|---------------|-------------|
-| `amount` | `expenses` | NUMERIC(12,2) | NOT NULL, > 0 | Monto del gasto registrado. |
-| `payment_method` | `expenses` | TEXT | NOT NULL | Canal de pago de origen de los fondos. |
-| `category` | `expenses` | TEXT | NOT NULL | Categoría del gasto (Servicios, Nómina, etc.). |
+| Tabla | Atributo | Tipo | Nullable | Estado en BD | Descripción |
+|-------|----------|------|----------|--------------|-------------|
+| `cash_movements` | `id` | UUID | NO | ✅ Sí | Identificador único del egreso |
+| `cash_movements` | `session_id` | UUID | NO | ✅ Sí | Sesión de caja activa |
+| `cash_movements` | `amount` | NUMERIC | NO | ✅ Sí | Monto positivo del gasto |
+| `cash_movements` | `movement_type` | TEXT | NO | ✅ Sí | Fijo `'gasto'` |
+| `cash_movements` | `description` | TEXT | NO | ✅ Sí | `[CATEGORIA] Motivo` |
+| `cash_movements` | `created_at` | TIMESTAMPTZ | NO | ✅ Sí | Marca de tiempo del registro |
