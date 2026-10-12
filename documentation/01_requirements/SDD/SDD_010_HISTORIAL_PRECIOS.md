@@ -1,129 +1,206 @@
-# SDD-010: Historial de Precios
+# SDD-010: Historial de Precios y Edición de Lotes
 
 > **Asociado a:** [FRD-010](../FRD/FRD_010_HISTORIAL_PRECIOS.md)  
-> **Fase del Plan:** Fase 4 (Inventario Detallado)  
-> **Estado:** 🟢 Consolidado  
-> **Última Actualización:** 2026-08-04
+> **Fase del Plan:** Ola 2 — Inventario, Lotes y Proveedores  
+> **Estado:** 🟡 Validado Localmente (Post Alineación v1.5.8)  
+> **Última Actualización:** 2026-10-11  
 
 ---
 
-## 0. Contexto y Restricciones Aplicables (PEA-N)
+## 0. Contexto y Restricciones Aplicables
 
 ### 0.1 Políticas Globales Activadas (ARQ-002)
-| Política | Dominio | Impacto Específico en este SDD |
-|----------|---------|-------------------------------|
-| **POL-SEC-01** | Seguridad/Auditoría | Inmutabilidad de Logs. Los registros creados en el historial de precios NO pueden ser alterados (UPDATE) ni borrados (DELETE). Son evidencia de auditoría estricta. |
-| **SPEC-011** | UX/Formatos | Los precios base y nuevo deben servirse como valores numéricos precisos, pero el Frontend debe presentarlos como números enteros (sin decimales visuales). |
+| Política ID | Dominio | Impacto Concreto en este SDD |
+|-------------|---------|------------------------------|
+| **POL-AUD-01** | Auditoría | **Inmutabilidad de Registros Históricos:** Toda mutación de precio de catálogo o de lote genera un registro inmutable append-only. Prohibido `UPDATE` o `DELETE` sobre el historial. |
+| **SPEC-010 / 011** | Financiero | **Redondeo Obligatorio:** Todo precio de venta ingresado debe someterse a redondeo híbrido al múltiplo de $50 más cercano. Formato numérico entero. |
+| **POL-SEC-01** | Seguridad | **Protección de Márgenes y Costos:** Solo usuarios con rol Administrador o permiso explícito pueden visualizar el histórico de precios de compra (`purchase_price`). |
 
-### 0.2 Contratos Vecinos que Limitan el Diseño (Consulta RVC)
-| SDD Vecino / Entidad | Restricción que impone al diseño de este SDD |
-|----------------------|----------------------------------------------|
-| **SDD_010_016 (FIFO)** | El verdadero "Costo de Ventas" de un producto (COGS) reside en `inventory_batches`. El registro en este historial rastrea únicamente los cambios en la **tarifa nominal o sugerida** (precio de compra referencial y precio de venta de catálogo). No afecta el balance de costos. |
+### 0.2 Contratos Vecinos que Limitan el Diseño
+| SDD Origen | Restricción Inyectada | Impacto en Precios |
+|------------|-----------------------|--------------------|
+| **SDD_010_016 (FIFO)** | Precios por lote. | Permite actualizar el precio de venta y costo unitario de un lote activo específico (`inventory_batches`) mediante `rpc_actualizar_precio_lote`. |
+| **SDD_006 (Inventario Padre)** | Precio sugerido de catálogo. | La tabla `products` mantiene `price` y `cost_price` como valores referenciales para nuevas ventas y compras. |
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada)
+*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`):*
+
+```sql
+-- Columnas reales en product_price_history:
+-- id (uuid), product_id (uuid), purchase_price (numeric), sale_price (numeric), created_at (timestamptz), created_by (uuid)
+
+-- Columnas reales en inventory_batches:
+-- id (uuid), product_id (uuid), quantity_initial (numeric), quantity_remaining (numeric),
+-- cost_unit (numeric), sale_price (numeric), is_active (boolean), created_at (timestamptz), created_by (uuid)
+
+-- RPC real en producción:
+-- rpc_actualizar_precio_lote(p_batch_id UUID, p_cost_unit NUMERIC, p_sale_price NUMERIC)
+```
+
+| Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off | Condición de Revisión |
+|-----------------------|-----------------------|---------------------------------|-----------------------|
+| 🟡 **Estructura de `product_price_history`** | En borradores antiguos se asumían campos `previous_price` y `new_price`. La tabla real almacena instantáneas (`purchase_price`, `sale_price`, `created_at`, `created_by`). | **Decisión:** Modelar las consultas calculando el diferencial sobre la instantánea anterior ordenada cronológicamente (`LAG(sale_price) OVER (...)`). | Resuelto en este SDD. |
+| 🟡 **Edición de Precios de Lote FIFO** | Los lotes activos tienen precios de venta independientes (`sale_price`) que consumen las ventas dinámicas v2. | **Decisión:** Formalizar el contrato de `rpc_actualizar_precio_lote` para sincronizar el precio del lote y auditar el cambio. | Resuelto en este SDD. |
 
 ---
 
 ## 1. Glosario Local
-* **Precio Nominal (Catálogo):** Valor visual (`purchase_price` o `price`) que figura en la ficha del producto y que alimenta por defecto al POS y al Kardex en la siguiente transacción.
-* **Costo Real (FIFO):** Valor inmutable incrustado en `inventory_batches` por cada entrada logística, totalmente ajeno a este historial.
+
+- **Instantánea de Precio (`product_price_history`):** Registro inmutable que almacena los valores de costo y venta vigentes en un instante de tiempo junto al usuario autor.
+- **Precio de Lote Activo:** Valor específico de venta asociado a un lote remanente de mercancía (`inventory_batches.sale_price`), permitiendo valorar y vender inventarios adquiridos a diferentes costos.
 
 ---
 
-## 2. Diagrama de Secuencia (UML - Mermaid)
+## 2. Diagramas de Secuencia
 
-### Caso de Uso: Autogeneración Inmutable de Log
+### 2.1 Actualización de Precio de Lote Activo
 ```mermaid
 sequenceDiagram
     participant Admin
-    participant Catalogo_UI
-    participant BD_Products (Tabla)
-    participant Trigger (DB)
-    participant Historial (product_price_history)
+    participant RPC as rpc_actualizar_precio_lote
+    participant B as inventory_batches
+    participant H as product_price_history
 
-    Admin->>Catalogo_UI: Cambia el Precio de Venta (de $3500 a $4200)
-    Catalogo_UI->>BD_Products: UPDATE products SET price = 4200 WHERE id = UUID
-    
-    BD_Products->>Trigger: Dispara AFTER UPDATE
-    Trigger->>Trigger: Detecta diferencia (NEW.price != OLD.price)
-    Trigger->>Historial: INSERT (OLD.price, NEW.price, NOW(), User_UUID)
-    
-    Trigger-->>BD_Products: Transacción completada
-    BD_Products-->>Catalogo_UI: OK (Producto modificado)
+    Admin->>RPC: POST (batch_id, cost_unit, sale_price)
+    RPC->>RPC: assert_store_access(store_id)
+    RPC->>B: UPDATE inventory_batches SET cost_unit = p_cost_unit, sale_price = p_sale_price WHERE id = p_batch_id
+    RPC->>H: INSERT INTO product_price_history (product_id, purchase_price, sale_price, created_by)
+    RPC-->>Admin: Éxito: { batch_id, updated_sale_price }
 ```
 
 ---
 
-## 3. Diagrama de Estados
-*Esta entidad no tiene un ciclo de vida. Los registros nacen en estado `inmutable` (Solo Lectura) y permanecen en él perpetuamente.*
+## 3. Diagramas de Estado
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrecioVigente : Creado con producto / lote
+    PrecioVigente --> Modificacion : Admin cambia precio de catálogo o lote
+    Modificacion --> RegistroHistorico : Inserción inmutable append-only
+    RegistroHistorico --> PrecioVigente : Nuevo valor activo en transacciones
+```
 
 ---
 
 ## 4. Especificación Detallada de Casos de Uso
 
-### 4.1 Registro Automático del Cambio de Precio
-- **Precondiciones:** El actor debe estar autenticado con permiso para editar productos (`canManageInventory`). Debe existir un cambio real en el monto numérico del `price` o `purchase_price`.
-- **Reglas de Negocio Aplicables:** Regla 1 (Registro Automático), Regla 5 (Inmutabilidad).
+### Caso A: Modificación de Precio de Catálogo
+- **Actor:** Administrador.
+- **Precondición:** Producto activo en catálogo.
 - **Flujo Principal:**
-  1. El actor emite un UPDATE sobre la tabla `products`.
-  2. La base de datos intercepta el UPDATE mediante un trigger de bajo nivel.
-  3. El trigger verifica si hubo una mutación real en las columnas financieras.
-  4. El trigger extrae el ID del usuario del contexto (JWT de Supabase).
-  5. El sistema inyecta un nuevo registro en `product_price_history`.
-- **Flujos Alternativos:**
-  - *Actualización sin cambio de precio:* Si el UPDATE modifica el "nombre" pero no el "precio", el trigger aborta la inserción del log silenciosamente.
-- **Flujos de Excepción:**
-  - *Pérdida de Contexto JWT:* Si el `auth.uid()` no está presente en la transacción, la base de datos aborta el UPDATE del producto por completo (Protección de Auditoría Inviolable).
-- **Postcondiciones (Éxito):** El historial refleja el evento con milisegundos de precisión.
+  1. El Admin actualiza el precio de venta en la ficha del producto.
+  2. El sistema valida el múltiplo de $50 más cercano.
+  3. Se actualiza `products.price` y se asienta la instantánea en `product_price_history`.
+- **Postcondición:** Nuevas ventas en POS toman el nuevo precio; histórico preservado.
 
-### 4.2 Visualización Restringida del Historial
-- **Precondiciones:** El usuario tiene permiso explícito de lectura de inventario (`canViewInventory`).
-- **Reglas de Negocio Aplicables:** Regla 3 (Control de Acceso).
+### Caso B: Edición de Precio de Venta por Lote Activo
+- **Actor:** Administrador.
+- **Precondición:** Lote con existencias disponibles (`quantity_remaining > 0`).
 - **Flujo Principal:**
-  1. El usuario accede a la ficha del producto.
-  2. El frontend invoca la vista o consulta la tabla `product_price_history`.
-  3. El sistema valida la política RLS.
-  4. El sistema retorna la cadena cronológica descendente de cambios.
-- **Flujos de Excepción:**
-  - *Acceso Denegado:* Si un cajero raso (sin `canViewInventory`) inspecciona la red o fuerza el UI, RLS devuelve 0 registros.
+  1. El Admin ingresa al modal de historial de lotes del producto.
+  2. Selecciona un lote activo y modifica su `sale_price` o `cost_unit`.
+  3. Invoca `rpc_actualizar_precio_lote`.
+  4. El servidor actualiza el registro en `inventory_batches` y crea la auditoría en `product_price_history`.
+- **Postcondición:** El consumo FIFO valúa las ventas de este lote con el nuevo precio asignado.
 
 ---
 
 ## 5. Contrato de Interfaz
 
-### 5.1 Interfaz de Escritura (Trigger DB)
-- **Operación Lógica:** La captura ocurre a nivel base de datos (`AFTER UPDATE` en `products`), no requiere RPC. El contrato se honra forzando a que cualquier endpoint que haga `UPDATE` a `products` exponga el token JWT.
+### 5.1 Operación: `rpc_actualizar_precio_lote`
+- **Tipo:** RPC Postgres / Acción (WRITE)
+- **Entradas:**
+  ```json
+  {
+    "p_batch_id": "UUID (Obligatorio)",
+    "p_cost_unit": "NUMERIC >= 0 (Obligatorio, nuevo costo unitario)",
+    "p_sale_price": "NUMERIC >= 0 (Obligatorio, nuevo precio de venta redondeado a $50)"
+  }
+  ```
+- **Salida Exitosa:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "batch_id": "UUID",
+      "cost_unit": 3200.00,
+      "sale_price": 4500.00,
+      "updated_at": "TIMESTAMPTZ"
+    }
+  }
+  ```
+- **Catálogo de Errores:**
+  | Código de Error | Causa | Mensaje Técnico |
+  |-----------------|-------|-----------------|
+  | `STORE_ACCESS_DENIED` | Sin permisos de Administrador | Solo administradores pueden alterar precios de lotes |
+  | `BATCH_NOT_FOUND` | ID de lote inválido | Lote de inventario no encontrado |
+  | `BATCH_INACTIVE` | Lote con stock 0 o inactivo | No se puede alterar el precio de un lote agotado |
+  | `INVALID_PRICE` | Precio negativo | El precio de venta debe ser mayor o igual a cero |
 
-### 5.2 Interfaz de Lectura (Endpoint REST)
-- **Operación:** Lectura Directa sobre `product_price_history`.
-- **Entrada Esperada:** `product_id` (UUID).
-- **Reglas de Transformación:** 
-  - Orden cronológico inverso (`ORDER BY changed_at DESC`).
-- **Salida Esperada:**
-  - Arreglo de objetos (precio viejo, precio nuevo, fecha, usuario responsable, justificación opcional).
+### 5.2 Operación: Consulta de Historial de Precios
+- **Tipo:** Consulta PostgREST / Lectura (READ)
+- **Entradas (Query Params):**
+  - `product_id`: UUID (Obligatorio)
+  - `limit`: Integer (Default: 20)
+  - `offset`: Integer (Default: 0)
+- **Salida Exitosa:**
+  ```json
+  {
+    "data": [
+      {
+        "id": "UUID",
+        "purchase_price": 3000.00,
+        "sale_price": 4500.00,
+        "created_at": "TIMESTAMPTZ",
+        "created_by": "UUID_USUARIO"
+      }
+    ],
+    "count": 5
+  }
+  ```
 
 ---
 
 ## 6. Análisis de Seguridad
 
-- **Control de Acceso:** RLS `SELECT` restringido a perfiles con `canViewInventory = true`. RLS `INSERT` restringido estrictamente al rol `service_role` o al trigger interno; ningún cliente puede hacer un `POST` directo a esta tabla. RLS `UPDATE/DELETE` bloqueado universalmente (incluso para admins).
-- **Protección de Datos:** La evolución de precios revela la estrategia comercial y el margen nominal del negocio. Debe estar segregado de los operadores de caja.
-- **Superficie de Amenazas:**
-  - *Amenaza:* Manipulación directa de API. Un administrador intenta alterar el registro histórico para ocultar un alza de precios que benefició a su turno y afectó márgenes.
-  - *Mitigación:* Privilegios de BD. Las reglas de RLS en Supabase no permiten `UPDATE` o `DELETE` bajo ninguna circunstancia, garantizando que el log es de adición exclusiva (Append-Only).
-- **Trazabilidad de Auditoría:** Absoluta. Cada salto de precio está firmado por el `auth.uid()`.
+- **Restricción de Acceso:** `product_price_history` bloquea `UPDATE` y `DELETE` para todos los roles mediante políticas RLS.
+- **Auditoría Estricta:** Toda modificación firma con el `auth.uid()` del usuario autenticado; prohibido saltarse el contexto de sesión.
+- **Protección de Costos:** Cajeros solo leen `sale_price`; `purchase_price` está enmascarado para roles operativos.
 
 ---
 
 ## 7. Modelo de Datos Lógico
 
-### 7.1 Diccionario de Datos: `product_price_history`
+```mermaid
+erDiagram
+    products ||--o{ product_price_history : "audita"
+    products ||--o{ inventory_batches : "desglosa_lotes"
 
-| Atributo | Tipo Lógico | Restricciones | Descripción |
-|----------|-------------|---------------|-------------|
-| `id` | UUID | Llave Primaria. | Identificador único del evento. |
-| `product_id` | UUID | FK `products(id)`. | Anclaje referencial al catálogo. |
-| `previous_price` | Numérico | Requerido. | Costo o Precio nominal original. |
-| `new_price` | Numérico | Requerido. Diferente a previous_price. | Costo o Precio nominal actual. |
-| `price_type` | Enum | `'venta'` o `'costo_referencial'`. | Indica cuál de las dos métricas fue mutada. |
-| `changed_at` | Timestamp | Default `NOW()`. | Reloj interno del servidor, no falsificable. |
-| `changed_by` | UUID | FK `profiles(id)`. | Identificador del empleado (recuperado de JWT). |
-| `reason` | Texto | Opcional (Máx 200). | Justificación administrativa. |
+    product_price_history {
+        uuid id PK
+        uuid product_id FK
+        numeric purchase_price
+        numeric sale_price
+        uuid created_by FK
+        timestamptz created_at
+    }
+
+    inventory_batches {
+        uuid id PK
+        uuid product_id FK
+        numeric cost_unit
+        numeric sale_price
+        numeric quantity_remaining
+        boolean is_active
+    }
+```
+
+### Diccionario de Datos
+| Tabla | Atributo | Tipo | Nullable | Estado en BD | Descripción |
+|-------|----------|------|----------|--------------|-------------|
+| `product_price_history` | `id` | UUID | NO | ✅ Sí | Identificador único de la instantánea |
+| `product_price_history` | `product_id` | UUID | NO | ✅ Sí | Producto asociado |
+| `product_price_history` | `purchase_price`| NUMERIC | SÍ | ✅ Sí | Costo de adquisición registrado |
+| `product_price_history` | `sale_price` | NUMERIC | SÍ | ✅ Sí | Precio de venta registrado |
+| `product_price_history` | `created_by` | UUID | SÍ | ✅ Sí | Usuario autor del cambio |
+| `product_price_history` | `created_at` | TIMESTAMPTZ | NO | ✅ Sí | Fecha y hora del registro |
