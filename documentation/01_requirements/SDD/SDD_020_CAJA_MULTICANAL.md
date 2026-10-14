@@ -30,19 +30,16 @@
 | **SDD_021 (Historiales Multicanal)** | Consultas filtradas por canal. | Expone `rpc_obtener_historial_caja_multicanal` consumiendo `cash_movements` filtrado por `payment_method`. |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada bajo Regla 7)
-*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas a `information_schema` y `pg_proc`:*
+*Evidencia obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas a `information_schema` y `pg_proc`:*
 
-```sql
--- Tablas reales verificadas:
--- cash_sessions: id, store_id, opened_by, closed_by, opening_balance, expected_balance, actual_balance, difference, status, opened_at, closed_at, forced_close
--- cash_movements: id, session_id, movement_type, amount, description (NOT NULL), sale_id, created_at
--- client_ledger: id, client_id, store_id, amount, previous_balance, new_balance, reference_id, transaction_type, created_at, created_by
-
--- Ausencias físicas comprobadas:
--- SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE '%balance%'; -> Resultado: [] (cash_session_balances no existe)
--- cash_movements no tiene columna payment_method
--- client_ledger no tiene columna payment_method ni session_id
-```
+- **Tablas reales verificadas:**
+  - `cash_sessions`: `id`, `store_id`, `opened_by`, `closed_by`, `opening_balance`, `expected_balance`, `actual_balance`, `difference`, `status`, `opened_at`, `closed_at`, `forced_close`.
+  - `cash_movements`: `id`, `session_id`, `movement_type`, `amount`, `description` (NOT NULL), `sale_id`, `created_at`.
+  - `client_ledger`: `id`, `client_id`, `store_id`, `amount`, `previous_balance`, `new_balance`, `reference_id`, `transaction_type`, `created_at`, `created_by`.
+- **Ausencias físicas comprobadas en BD:**
+  - `cash_session_balances`: Inexistente en `pg_tables` (la base de datos opera actualmente con balances monolíticos en `cash_sessions`).
+  - `cash_movements`: Carece de la columna `payment_method` (solo 7 columnas existentes).
+  - `client_ledger`: Carece de las columnas `payment_method` y `session_id`.
 
 | # | Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off (Regla 7) | Condición de Revisión Futura |
 |---|-----------------------|-----------------------|------------------------------------------|------------------------------|
@@ -318,32 +315,15 @@ Mientras se despliega la tabla `cash_session_balances` en producción, el backen
 ## 6. Análisis de Seguridad
 
 - **Funciones Centralizadas de Autorización:**
-  Toda mutación de balance o estado de sesión invoca obligatoriamente:
-  ```sql
-  PERFORM public.assert_store_access(v_store_id);
-  ```
+  Toda mutación de balance o estado de sesión invoca obligatoriamente la función centralizada de seguridad `assert_store_access(v_store_id)` para garantizar que el usuario autenticado tiene permisos sobre la tienda activa antes de procesar cualquier cambio.
 - **Resolución Autoritativa de Identidad y Guardia Anti-Nulos:**
-  Para evitar violaciones opacas de llave foránea en `cash_sessions.opened_by` (NOT NULL):
-  ```sql
-  v_employee_id := public.get_employee_id_from_session();
-  IF v_employee_id IS NULL THEN
-      IF EXISTS (SELECT 1 FROM public.admin_profiles WHERE id = auth.uid()) THEN
-          v_employee_id := auth.uid();
-      ELSE
-          RAISE EXCEPTION 'EMPLOYEE_SESSION_REQUIRED'
-              USING HINT = 'Se requiere un empleado activo o pase diario válido para operar la caja';
-      END IF;
-  END IF;
-  ```
-- **Políticas RLS Centralizadas:**
-  Las consultas directas sobre `cash_sessions`, `cash_movements` y `cash_session_balances` emplean `store_id = public.get_current_store_id()`.
-- **Privilegios Base de Tabla (Regla 8):**
-  La migración DDL de `cash_session_balances` incluye mandatoriamente:
-  ```sql
-  GRANT ALL ON TABLE public.cash_session_balances TO anon, authenticated, service_role;
-  ```
+  Para evitar violaciones opacas de llave foránea en `cash_sessions.opened_by` (`NOT NULL`), la resolución de identidad del cajero se realiza autoritativamente mediante `get_employee_id_from_session()`. En caso de retornar `NULL`, se aplica una validación de fallback para verificar si el usuario autenticado figura en `admin_profiles` (asignando `auth.uid()`); de lo contrario, el sistema rechaza la operación de forma explícita lanzando la excepción `EMPLOYEE_SESSION_REQUIRED`.
+- **Aislamiento Multi-Tenant y Políticas RLS Centralizadas:**
+  Las consultas directas y políticas RLS sobre `cash_sessions`, `cash_movements` y `cash_session_balances` emplean obligatoriamente la función centralizada `get_current_store_id()` para filtrar el acceso por `store_id`, previniendo fugas entre tiendas sin reimplementar subconsultas ad-hoc.
+- **Garantía de Privilegios Base en Tablas Nuevas (Regla 8):**
+  La migración DDL que cree la tabla `cash_session_balances` debe otorgar explícitamente privilegios completos (`GRANT ALL`) a los roles `anon`, `authenticated` y `service_role` para evitar errores 42501 (Permission Denied) en Supabase Cloud.
 - **Protección contra Fuga de Datos de Arqueo:**
-  Los cálculos de `expected_amount` se ejecutan exclusivamente en la transacción interna de base de datos; PostgREST no expone endpoints que retornen el saldo esperado a clientes antes del cierre.
+  Los cálculos de `expected_amount` se ejecutan exclusivamente dentro de la transacción interna de base de datos durante el cierre o reconciliación; la API pública y PostgREST no exponen endpoints ni vistas que retornen el saldo esperado a los clientes antes de que estos declaren sus montos reales contados.
 
 ---
 

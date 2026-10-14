@@ -29,22 +29,11 @@
 | **SDD_019 (Cuentas por Pagar)** | Pagos a proveedores en efectivo. | La operación `rpc_pay_supplier_invoice` inyecta egresos de tipo `'pago_proveedor'` en `cash_movements`, los cuales deben ser computados obligatoriamente en la conciliación del turno. |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada bajo Regla 7)
-*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas a `information_schema` y `pg_proc`:*
+*Evidencia de esquema obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas a `information_schema` y `pg_proc`:*
 
-```sql
--- Columnas reales en cash_sessions:
--- id (uuid), store_id (uuid), opened_by (uuid), closed_by (uuid), opening_balance (numeric),
--- expected_balance (numeric), actual_balance (numeric), difference (numeric),
--- status (text), opened_at (timestamptz), closed_at (timestamptz), forced_close (boolean)
-
--- Columnas reales en cash_movements:
--- id (uuid), session_id (uuid), movement_type (text), amount (numeric), 
--- description (text, NOT NULL), sale_id (uuid), created_at (timestamptz)
-
--- Constraint real en cash_movements:
--- CHECK (movement_type = ANY (ARRAY['ingreso', 'gasto', 'pago_proveedor']))
--- CHECK (amount > 0)
-```
+- **Tabla `cash_sessions`**: Verificada físicamente con las columnas `id` (uuid), `store_id` (uuid), `opened_by` (uuid), `closed_by` (uuid), `opening_balance` (numeric), `expected_balance` (numeric), `actual_balance` (numeric), `difference` (numeric), `status` (text), `opened_at` (timestamptz), `closed_at` (timestamptz) y `forced_close` (boolean).
+- **Tabla `cash_movements`**: Verificada físicamente con las columnas `id` (uuid), `session_id` (uuid), `movement_type` (text), `amount` (numeric), `description` (text, NOT NULL), `sale_id` (uuid) y `created_at` (timestamptz).
+- **Restricciones en `cash_movements`**: Verificadas restricciones CHECK físicas para `movement_type IN ('ingreso', 'gasto', 'pago_proveedor')` y `amount > 0`.
 
 | # | Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off (Regla 7) | Condición de Revisión Futura |
 |---|-----------------------|-----------------------|------------------------------------------|------------------------------|
@@ -53,7 +42,7 @@
 | **H-3** | 🔴 **Columnas `payment_method` y `category` ausentes** | `cash_movements` no posee columnas para canal ni categoría OPEX en la base física. Solo dispone de `description (text NOT NULL)`. | **Decisión:** Parche transitorio: los RPCs exigen `p_category` obligatorio y lo concatenan en `description` como `[CATEGORIA] Motivo`. Los canales de venta se auditan vía join con `sales.payment_method`. | Migración DDL agregando `payment_method TEXT` y `category TEXT` a `cash_movements`. |
 | **H-4** | 🟡 **Nulabilidad estricta de `description`** | En BD real, `cash_movements.description` tiene restricción `is_nullable = 'NO'`. En borradores preliminares figuraba como opcional. | **Decisión:** Rectificar el contrato y diccionario de datos: `description` es estrictamente obligatoria (longitud mínima 3 caracteres). | Resuelto en esta especificación. |
 | **H-5** | 🔴 **Omisión de `pago_proveedor` en egresos legacy** | Las funciones legacy `cerrar_caja` y `get_history_caja` en BD calculan egresos filtrando únicamente `movement_type = 'gasto'`, ignorando `'pago_proveedor'`. | **Decisión:** Armonizar la especificación del cálculo de saldo esperado a: `opening_balance + ingresos - (gastos + pagos_proveedor)` para evitar falsos sobrantes al cerrar. | Despliegue del parche SQL que actualice `cerrar_caja` y `get_history_caja` en producción. |
-| **H-6** | 🔴 **Seguridad ausente en RPCs legacy de BD** | Las funciones `abrir_caja` y `cerrar_caja` existentes en producción no ejecutan `assert_store_access`. | **Decisión:** Este SDD prescribe la incorporación obligatoria de `PERFORM assert_store_access(p_store_id)` como instrucción #1. | Despliegue de las nuevas versiones securizadas de RPCs. |
+| **H-6** | 🔴 **Seguridad ausente en RPCs legacy de BD** | Las funciones `abrir_caja` y `cerrar_caja` existentes en producción no ejecutan `assert_store_access`. | **Decisión:** Este SDD prescribe la incorporación obligatoria de `assert_store_access(p_store_id)` como instrucción #1. | Despliegue de las nuevas versiones securizadas de RPCs. |
 | **H-7** | 🟡 **Fórmula invertida en legacy** | La función `cerrar_caja` en producción calcula `difference := expected - actual`. | **Decisión:** Estandarizar al criterio contable universal `difference := actual - expected` (positivo = sobrante, negativo = faltante). | Despliegue de la refactorización de `cerrar_caja`. |
 
 ---
@@ -350,24 +339,17 @@ Cuando la migración multicanal `20260727000000_multichannel_schema.sql` esté a
 ## 6. Análisis de Seguridad
 
 - **Funciones Centralizadas de Autorización:**
-  Toda mutación de caja invoca obligatoriamente:
-  ```sql
-  PERFORM public.assert_store_access(v_store_id);
-  ```
+  Toda mutación de caja (apertura, cierre, conciliación o registro de gastos) debe invocar obligatoriamente como primera instrucción la función centralizada `assert_store_access(v_store_id)` para garantizar el aislamiento multi-tenant y verificar los permisos del usuario en la tienda.
 - **Resolución Autorizada de Empleado (Anti-Suplantación):**
-  Para evitar que un cajero suplante a otro pasando un ID de empleado adulterado, el usuario responsable de la apertura, cierre o gasto se resuelve con autoridad de servidor:
-  ```sql
-  v_employee_id := public.get_employee_id_from_session();
-  IF v_employee_id IS NULL AND EXISTS (SELECT 1 FROM public.admin_profiles WHERE id = auth.uid()) THEN
-      v_employee_id := auth.uid();
-  END IF;
-  ```
+  Para evitar que un cajero suplante a otro pasando un identificador de empleado adulterado desde el cliente, la identidad del responsable de la apertura, cierre o gasto se resuelve autoritativamente en servidor mediante la función `get_employee_id_from_session()`. En caso de tratarse de un administrador autenticado sin registro directo en empleados, la identidad se resuelve mediante `auth.uid()` validado contra `admin_profiles`.
 - **Políticas RLS Estandarizadas:**
-  Las consultas directas sobre `cash_sessions`, `cash_movements` y `audit_caja` emplean `store_id = public.get_current_store_id()`.
+  Las consultas directas sobre `cash_sessions`, `cash_movements` y `audit_caja` implementan políticas de seguridad por fila (RLS) que aíslan estrictamente los registros empleando la función centralizada `get_current_store_id()`.
 - **Bloqueo RLS de Escritura Directa:**
-  Las tablas `cash_sessions` y `cash_movements` prohíben `INSERT`/`UPDATE` directo desde clientes PostgREST anónimos o no autorizados; toda alteración transaccional se ejecuta mediante RPCs `SECURITY DEFINER`.
+  Las tablas `cash_sessions` y `cash_movements` prohíben operaciones de `INSERT` o `UPDATE` directas desde clientes PostgREST anónimos o autenticados sin privilegios; toda alteración del estado transaccional se gestiona exclusivamente a través de funciones RPC definidas con `SECURITY DEFINER`.
+- **Privilegios Base de Tabla:**
+  Se garantiza el otorgamiento explícito de privilegios completos de acceso conforme a la Regla 8 (`GRANT ALL ON TABLE ... TO anon, authenticated, service_role`) sobre todas las tablas de caja para prevenir errores 42501 (Permission Denied) en tiempo de ejecución.
 - **Bitácora Forense Automática:**
-  Los triggers `trg_audit_cash_opened` y `trg_audit_cash_closed` asientan copias inmutables de los eventos en `audit_caja`.
+  Los triggers automáticos `trg_audit_cash_opened` y `trg_audit_cash_closed` asientan copias inmutables de los eventos de apertura y cierre en `audit_caja`, registrando marcas forenses con metadatos de saldos, diferencias y actor responsable.
 
 ---
 

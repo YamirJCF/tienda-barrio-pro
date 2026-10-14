@@ -29,23 +29,19 @@
 | **SDD_021 (Historiales Multicanal)** | Auditoría de movimientos desglosada por canal. | Expone consultas y filtros sobre `cash_movements` desglosando el método de pago (`payment_method`) y la categoría del gasto. |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada bajo Regla 7)
-*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas a `information_schema` y `pg_proc`:*
+*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante verificación de esquema contra `information_schema` y `pg_proc`:*
 
-```sql
--- Tablas reales verificadas:
--- cash_sessions: id, store_id, opened_by, closed_by, opening_balance, expected_balance, actual_balance, difference, status, opened_at, closed_at, forced_close
--- cash_movements: id, session_id, movement_type, amount, description (NOT NULL), sale_id, created_at
--- supplier_invoices: id, store_id, supplier_id, total_amount, amount_paid, due_date, created_at, invoice_number
-
--- Constraints verificados:
--- cash_movements_movement_type_check: CHECK ((movement_type = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'pago_proveedor'::text])))
--- cash_movements_amount_check: CHECK ((amount > 0))
-
--- Ausencias físicas comprobadas:
--- Tablas inexistentes: expenses, accounts_payable, cash_session_balances.
--- cash_movements NO tiene columnas 'category' ni 'payment_method'.
--- rpc_pay_supplier_invoice en BD real sólo inserta en cash_movements si p_payment_method IN ('efectivo', 'cash').
-```
+- **Tablas reales verificadas:**
+  - `cash_sessions`: `id`, `store_id`, `opened_by`, `closed_by`, `opening_balance`, `expected_balance`, `actual_balance`, `difference`, `status`, `opened_at`, `closed_at`, `forced_close`.
+  - `cash_movements`: `id`, `session_id`, `movement_type`, `amount`, `description` (NOT NULL), `sale_id`, `created_at`.
+  - `supplier_invoices`: `id`, `store_id`, `supplier_id`, `total_amount`, `amount_paid`, `due_date`, `created_at`, `invoice_number`.
+- **Restricciones verificadas:**
+  - `cash_movements_movement_type_check`: restricción `CHECK` que limita `movement_type` al conjunto `('ingreso', 'gasto', 'pago_proveedor')`.
+  - `cash_movements_amount_check`: restricción `CHECK (amount > 0)`.
+- **Ausencias físicas comprobadas:**
+  - Inexistencia física de las tablas `expenses`, `accounts_payable` y `cash_session_balances`.
+  - Ausencia de columnas dedicadas `category` y `payment_method` en `cash_movements`.
+  - Implementación histórica de `rpc_pay_supplier_invoice` en base de datos condicionada a registrar en `cash_movements` únicamente cuando el método es `'efectivo'` o `'cash'`.
 
 | # | Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off (Regla 7) | Condición de Revisión Futura |
 |---|-----------------------|-----------------------|------------------------------------------|------------------------------|
@@ -349,51 +345,22 @@ stateDiagram-v2
 
 ### 6.1 Reutilización Obligatoria de Funciones Centralizadas (Regla 4)
 - **Validación Multi-Tenant:**
-  Queda prohibida cualquier consulta manual ad-hoc tipo `EXISTS(SELECT 1 FROM stores ...)`. Ambas funciones (`rpc_registrar_gasto_v2` y `rpc_pay_supplier_invoice`) invocan como primera línea de ejecución:
-  ```sql
-  PERFORM public.assert_store_access(v_session.store_id);
-  ```
-  La función centralizada `assert_store_access()` resuelve la tienda legítima a través de `get_current_store_id()`, verificando en cascada el JWT (`app_metadata.store_id`), el rol en `admin_profiles`, la vinculación en `employees` y los pases aprobados en `daily_passes`.
+  Queda prohibida cualquier consulta manual ad-hoc tipo `EXISTS(SELECT 1 FROM stores ...)`. Toda operación de egreso (`rpc_registrar_gasto_v2` y `rpc_pay_supplier_invoice`) invoca obligatoriamente como primera línea de ejecución `assert_store_access(v_store_id)`. La función centralizada `assert_store_access()` resuelve la tienda legítima a través de `get_current_store_id()`, verificando en cascada los metadatos del JWT (`app_metadata.store_id`), el rol en `admin_profiles`, la vinculación contractual en `employees` y los pases de turno activos en `daily_passes`.
 - **Resolución Autoritativa del Autor:**
-  Para evitar suplantación de identidad en auditoría, el empleado que registra el gasto se resuelve en backend mediante:
-  ```sql
-  v_employee_id := public.get_employee_id_from_session();
-  ```
-  Si el usuario autenticado corresponde a un dueño o administrador directo sin registro de empleado, la función valida su existencia en `admin_profiles` antes de autorizar.
+  Para erradicar suplantaciones y dependencias de PINs en frontend, la autoría del desembolso se determina en backend mediante `get_employee_id_from_session()` y la verificación de permisos vía `is_authorized_employee()`. Si el usuario autenticado corresponde a un dueño o administrador directo sin registro de empleado, la función valida su existencia en `admin_profiles` antes de autorizar el movimiento.
 
-### 6.2 Privilegios Base en Tablas (Regla 8)
-Para evitar bloqueos por error `42501 (Permission Denied)` en Supabase Cloud, se garantiza que toda tabla involucrada en el flujo de gastos multicanal cuente con los privilegios base otorgados explícitamente:
-```sql
-GRANT ALL ON TABLE public.cash_movements TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.cash_sessions TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.supplier_invoices TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.suppliers TO anon, authenticated, service_role;
-```
+### 6.2 Garantía de Privilegios Base en Tablas (Regla 8)
+Para prevenir errores de denegación de permisos (`42501 - Permission Denied`) en Supabase Cloud, toda tabla involucrada en el flujo de egresos multicanal (`cash_movements`, `cash_sessions`, `supplier_invoices`, `suppliers`) debe contar contractualmente con privilegios base otorgados de manera explícita para los roles `anon`, `authenticated` y `service_role`.
 
 ### 6.3 Políticas de Seguridad a Nivel de Fila (RLS)
-Las tablas `cash_movements` y `supplier_invoices` operan con RLS activo:
-- **`cash_movements`:** Lectura e inserción condicionadas a que la sesión vinculada pertenezca a la tienda del usuario:
-  ```sql
-  CREATE POLICY "cash_movements_store_isolation" ON public.cash_movements
-  FOR ALL TO authenticated
-  USING (
-      session_id IN (
-          SELECT id FROM public.cash_sessions 
-          WHERE store_id = public.get_current_store_id()
-      )
-  );
-  ```
-- **`supplier_invoices`:** Aislamiento directo por tienda:
-  ```sql
-  CREATE POLICY "supplier_invoices_store_isolation" ON public.supplier_invoices
-  FOR ALL TO authenticated
-  USING (store_id = public.get_current_store_id());
-  ```
+Las tablas del dominio operan con políticas RLS obligatorias sustentadas en funciones centralizadas:
+- **Aislamiento en `cash_movements`:** Acceso condicionado estrictamente a que la sesión de caja vinculada pertenezca a la tienda del usuario autenticado, resolviendo la pertenencia mediante `get_current_store_id()`.
+- **Aislamiento en `supplier_invoices`:** Acceso restringido por tienda mediante comparación directa de `store_id` contra `get_current_store_id()`.
 
-### 6.4 Concurrencia y Control de Carrera (Regla 9)
-Toda operación que liquide fondos o amortice facturas ejecuta bloqueos pesimistas a nivel de fila (`SELECT ... FOR UPDATE`):
-1. `cash_sessions` se bloquea por fila durante la validación del turno.
-2. `supplier_invoices` se bloquea por fila para garantizar que dos pagos simultáneos sobre la misma factura no desborden el saldo pendiente (`amount_paid > total_amount`).
+### 6.4 Concurrencia y Control de Carrera (Nivel Lógico)
+Toda operación que liquide fondos o amortice facturas aplica control de concurrencia mediante bloqueo pesimista a nivel de fila (`FOR UPDATE`):
+1. La sesión en `cash_sessions` se bloquea durante la validación del turno para garantizar que no existan cierres concurrentes o deducciones simultáneas que superen el saldo disponible.
+2. La factura en `supplier_invoices` se bloquea por fila para garantizar atomicidad e impedir que dos pagos simultáneos desborden el saldo pendiente (`amount_paid > total_amount`).
 
 ---
 
@@ -483,17 +450,3 @@ erDiagram
 | `amount_paid` | `numeric` | NO | `0` | ✅ Existe | Monto acumulado amortizado mediante pagos |
 | `due_date` | `date` | NO | Fecha | ✅ Existe | Fecha de vencimiento para alertas de mora |
 | `created_at` | `timestamptz` | NO | `now()` | ✅ Existe | Fecha de causación de la factura |
-
----
-
-## 8. Verificación y Evidencia de Cumplimiento
-
-Este documento ha superado íntegramente las compuertas del **Protocolo de Pre-Análisis Contextual (PAC-SDD)**, auditado formalmente por Subagentes de Aseguramiento de Calidad (QA) independientes:
-
-- **Bloque 0 (Identificación y Fronteras):** Aprobado por Subagente QA `ab43a460` (Consistencia 100% de metadatos, fuentes y dependencias vecinas).
-- **Bloque 1 (Lectura Literal de Requisitos):** Aprobado por Subagente QA `658fa233` (3 RNs, 1 Caso de uso, 4 CAs y entidades compartidas sin paráfrasis).
-- **Bloque 2 (Esquema Real de Producción):** Aprobado por Subagente QA `f00b1240` (Verificación de `cash_movements`, `cash_sessions`, `supplier_invoices`, comprobación de ausencia de `expenses` y reconciliación de 8 hallazgos crudos).
-- **Bloque 3 (Seguridad Centralizada - Reglas 4 y 8):** Aprobado por Subagente QA `ac0c4232` (`assert_store_access`, `get_current_store_id`, `get_employee_id_from_session` y grants de privilegios).
-- **Bloque 4 (Auditoría de Impacto Cruzado - Regla 6):** Aprobado por Subagente QA `731c5128` (Inspección exhaustiva de `pg_proc`, riesgos en `rpc_pay_supplier_invoice`, check de `movement_type` y fórmulas de egreso).
-- **Bloque 5 (Contratos Vecinos):** Aprobado por Subagente QA `353a1271` (Armonización con SDD-004, SDD-020, SDD-026, SDD-019 y principio de P&L de SDD-018).
-- **Bloque 6 (Gate de Calidad Final):** Aprobado por Subagente QA `ade0a8c2` (8 preguntas G-1 a G-8 respondidas y 4 deudas técnicas formalizadas bajo Regla 7).

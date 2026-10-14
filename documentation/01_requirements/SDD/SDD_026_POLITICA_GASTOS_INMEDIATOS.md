@@ -28,23 +28,18 @@
 | **SDD_021 (Historiales Multicanal)** | Auditoría de movimientos desglosada por canal y concepto. | El historial consume `cash_movements` filtrando por `payment_method`. La adopción del formato transitorio estructurado en `description` permite exponer la categoría OPEX y el método de pago al frontend. |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada bajo Regla 7)
-*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas a `information_schema.columns`, `pg_constraint` y `pg_proc`:*
+*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas de verificación a `information_schema.columns`, `pg_constraint` y `pg_proc`:*
 
-```sql
--- Tablas reales verificadas en producción:
--- cash_sessions: id, store_id, opened_by, closed_by, opening_balance, expected_balance, actual_balance, difference, status, opened_at, closed_at, forced_close (12 columnas)
--- cash_movements: id, session_id, movement_type, amount, description (NOT NULL), sale_id, created_at (7 columnas)
-
--- Ausencia física de tablas de pasivos de gasto comprobada:
--- SELECT table_name FROM information_schema.tables WHERE table_name IN ('expenses', 'cash_session_balances', 'accounts_payable'); -> []
-
--- Constraints verificados:
--- cash_movements_amount_check: CHECK ((amount > (0)::numeric))
--- cash_movements_movement_type_check: CHECK ((movement_type = ANY (ARRAY['ingreso'::text, 'gasto'::text, 'pago_proveedor'::text])))
-
--- Estado de funciones en pg_proc:
--- No existe función rpc_registrar_gasto_v2 ni ninguna función con '%gasto%' o '%expense%' en la base física actual.
-```
+- **Tablas físicas verificadas en producción:**
+  - `cash_sessions` (12 columnas existentes): `id`, `store_id`, `opened_by`, `closed_by`, `opening_balance`, `expected_balance`, `actual_balance`, `difference`, `status`, `opened_at`, `closed_at`, `forced_close`.
+  - `cash_movements` (7 columnas existentes): `id`, `session_id`, `movement_type`, `amount`, `description` (NOT NULL), `sale_id`, `created_at`.
+- **Ausencia física de tablas de pasivos de gasto comprobada:**
+  - Se confirmó en `information_schema.tables` la inexistencia de tablas como `expenses`, `cash_session_balances` o `accounts_payable` (resultado de consulta vacío).
+- **Restricciones y Check Constraints verificados:**
+  - `cash_movements_amount_check`: Restricción estricta `amount > 0` (monto positivo obligatorio).
+  - `cash_movements_movement_type_check`: Tipos de movimiento permitidos restringidos a `'ingreso'`, `'gasto'`, `'pago_proveedor'`.
+- **Estado de funciones en catálogo `pg_proc`:**
+  - Se confirmó que no existe la función `rpc_registrar_gasto_v2` ni ninguna otra función de gasto o egreso operativo (`%gasto%` o `%expense%`) en la base física de producción.
 
 | # | Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off (Regla 7) | Condición de Revisión Futura |
 |---|-----------------------|-----------------------|------------------------------------------|------------------------------|
@@ -281,41 +276,18 @@ stateDiagram-v2
 
 ### 6.1 Reutilización Obligatoria de Funciones Centralizadas (Regla 4)
 - **Validación Multi-Tenant y de Tienda:**
-  Queda terminantemente prohibida cualquier consulta SQL ad-hoc manual (`WHERE store_id = ...`). La función `rpc_registrar_gasto_v2` recupera el registro de la sesión y ejecuta inmediatamente:
-  ```sql
-  PERFORM public.assert_store_access(v_session.store_id);
-  ```
-  La función centralizada `assert_store_access()` resuelve la pertenencia legítima a través de `get_current_store_id()`, evaluando en cascada el JWT (`app_metadata.store_id`), el perfil en `admin_profiles`, la vinculación en `employees` y los pases aprobados en `daily_passes`.
+  Queda terminantemente prohibida cualquier comprobación de pertenencia o consulta ad-hoc manual (`WHERE store_id = ...`). La función `rpc_registrar_gasto_v2` debe invocar obligatoriamente `public.assert_store_access(v_session.store_id)` como primera instrucción tras recuperar la sesión de caja. La función centralizada `assert_store_access()` resuelve la pertenencia legítima evaluando en cascada el JWT (`app_metadata.store_id`), el perfil en `admin_profiles`, la vinculación en `employees` y los pases de turno aprobados en `daily_passes`. Si la comprobación falla, la transacción aborta arrojando la excepción `STORE_ACCESS_DENIED`.
 - **Resolución Autoritativa del Cajero / Autor:**
-  Para garantizar la autoría del desembolso y prevenir suplantaciones de identidad, la identidad se resuelve mediante:
-  ```sql
-  v_employee_id := public.get_employee_id_from_session();
-  ```
-  Si el usuario no es empleado pero existe en `admin_profiles`, la función valida su acceso como administrador/propietario invocando `public.is_authorized_employee()`.
+  Para garantizar la autoría del desembolso y prevenir suplantaciones de identidad, la identidad del autor se resuelve mediante la función centralizada `public.get_employee_id_from_session()`. Si el usuario no está registrado en `employees` pero figura en `admin_profiles`, la función valida su acceso como administrador/propietario invocando `public.is_authorized_employee()`. Queda prohibido confiar en identificadores de cajero enviados desde el frontend o exigir PINs locales.
 
-### 6.2 Privilegios Base en Tablas (Regla 8)
-Para prevenir errores de denegación de permisos `42501 (Permission Denied)` en Supabase Cloud, se garantiza que las tablas involucradas cuenten explícitamente con los grants correspondientes:
-```sql
-GRANT ALL ON TABLE public.cash_movements TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.cash_sessions TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.rpc_registrar_gasto_v2 TO authenticated, anon, service_role;
-```
+### 6.2 Privilegios Base en Tablas y Funciones (Regla 8)
+Para prevenir errores de denegación de permisos `42501 (Permission Denied)` en Supabase Cloud, el diseño exige que las tablas base involucradas (`cash_movements`, `cash_sessions`) y la función RPC `rpc_registrar_gasto_v2` cuenten explícitamente con los privilegios otorgados (`GRANT ALL` y `GRANT EXECUTE`) a los roles `anon`, `authenticated` y `service_role`. La función opera con `SECURITY DEFINER` y `search_path = public, pg_temp` para blindar el contexto de ejecución.
 
-### 6.3 Políticas de Seguridad a Nivel de Fila (RLS)
-La tabla `cash_movements` opera con RLS estricto activo, garantizando aislamiento multi-tenant:
-```sql
-CREATE POLICY "cash_movements_store_isolation" ON public.cash_movements
-FOR ALL TO authenticated
-USING (
-    session_id IN (
-        SELECT id FROM public.cash_sessions 
-        WHERE store_id = public.get_current_store_id()
-    )
-);
-```
+### 6.3 Políticas de Seguridad a Nivel de Fila (RLS) y Aislamiento Multi-Tenant
+La tabla `cash_movements` opera con políticas RLS estrictas y activas, garantizando aislamiento multi-tenant absoluto para roles autenticados. La política de seguridad condiciona el acceso a que la sesión vinculada (`session_id`) pertenezca a la tienda identificada autoritativamente mediante la función centralizada `public.get_current_store_id()`. Ningún usuario puede consultar, insertar ni visualizar movimientos pertenecientes a tiendas ajenas.
 
-### 6.4 Concurrencia y Control de Carrera
-Toda extracción monetaria ejecuta bloqueo pesimista `SELECT ... FOR UPDATE` sobre la fila de `cash_sessions`. Esto asegura que dos solicitudes simultáneas de gasto o una colisión con el cierre de turno se serialicen atómicamente, garantizando que el saldo resultante nunca sea inferior a cero (`balance >= 0`).
+### 6.4 Concurrencia y Control de Carrera (Bloqueo Pesimista)
+Toda extracción monetaria exige control de concurrencia a nivel lógico mediante bloqueo pesimista (`FOR UPDATE`) sobre la fila de la sesión en `cash_sessions` antes de computar saldos o insertar movimientos. Esto garantiza que múltiples solicitudes simultáneas de egreso, o una colisión entre un gasto operativo y un cierre de turno concurrente, se serialicen atómicamente, impidiendo condiciones de carrera y asegurando que el saldo resultante nunca sea negativo ni viole la regla de no-sobregiro (`balance >= 0`).
 
 ---
 
@@ -388,17 +360,3 @@ erDiagram
 | `opened_at` | `timestamptz` | NO | `now()` | ✅ Existe | Inicio de la sesión para cálculo de vigencia de 24h |
 | `closed_at` | `timestamptz` | SÍ | Timestamp | ✅ Existe | Fin del turno de caja |
 | `forced_close` | `boolean` | NO | `false` | ✅ Existe | Marca de cierre forzado por caducidad |
-
----
-
-## 8. Verificación y Evidencia de Cumplimiento
-
-Este documento ha transitado y superado formalmente las compuertas del **Protocolo de Pre-Análisis Contextual (PAC-SDD)**, certificado por Subagentes de Aseguramiento de Calidad (QA) independientes:
-
-- **Bloque 0 (Identificación y Fronteras):** Aprobado por Subagente QA `b17ed88a` (Metadatos, FRD fuente, asignación a Ola 1 y trazabilidad de los 5 vecinos).
-- **Bloque 1 (Lectura Literal de Requisitos):** Aprobado por Subagente QA `7a922dd5` (4 RNs, 2 Casos de Uso, 4 Criterios de Aceptación y Entidades compartidas verificadas con cero paráfrasis).
-- **Bloque 2 (Esquema Real de Producción):** Aprobado por Subagente QA `8a9c2dc0` (Comprobación de ausencia de `expenses`/`cash_session_balances`, 7 columnas de `cash_movements` y 12 columnas de `cash_sessions`).
-- **Bloque 3 (Seguridad Centralizada - Reglas 4 y 8):** Aprobado por Subagente QA `2f79ef23` (`assert_store_access`, `get_current_store_id`, `get_employee_id_from_session`, `is_authorized_employee` y privilegios base).
-- **Bloque 4 (Auditoría de Impacto Cruzado - Regla 6):** Aprobado por Subagente QA `00431328` (Exhaustividad 100% en `pg_proc`, mitigación de 5 riesgos contables y de cierre de turno).
-- **Bloque 5 (Lectura de Contratos Vecinos):** Aprobado por Subagente QA `111262b5` (Reconciliación mecánica de N=5 hallazgos, paridad total con `SDD_022` y armonización de catálogo de 8 errores).
-- **Bloque 6 (Gate de Calidad Final):** Aprobado por Subagente QA `29666f22` (8/8 preguntas G-1 a G-8 respondidas con evidencia y 4 deudas técnicas formalizadas bajo Regla 7 con autorización emitida).
