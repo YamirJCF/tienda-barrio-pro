@@ -1,281 +1,553 @@
-# SDD-007-01: Núcleo del Punto de Venta (POS) Desacoplado
+# SDD-007-01: Núcleo del Punto de Venta (POS) Desacoplado y Contratos de Checkout Multicanal
 
 > **Asociado a:** [FRD-007-01](../FRD/FRD_007_01_NUCLEO_POS.md)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Deuda: Migración SQL `rpc_procesar_venta_v3` pendiente)  
-> **Última Actualización:** 2026-08-07
+> **Fase del Plan:** Ola 3: Ventas, POS y Clientes (Ítem 2)  
+> **Estado:** 🟢 Aprobado y Consolidado (Post PAC-SDD v2.0)  
+> **Última Actualización:** 2026-10-15  
 
 ---
 
-## 0. Auditoría Contextual PAC-R
+## 0. Auditoría Contextual PAC-SDD (Etapa 1.5 - Mapa de Dependencias)
 
-> **Fecha de auditoría:** 2026-08-04  
-> **Resultado:** 🔴 Diseño Funcional Aprobado / Deuda Técnica Crítica en BD
+### 0.1 Políticas Globales Activadas (ARQ-002)
 
-### 0.1 Restricciones Transversales Inyectadas (Fase 0)
-Las siguientes restricciones fueron generadas por los módulos base de Fase 0 y son de cumplimiento obligatorio para este documento:
-| SDD Origen | Restricción Inyectada | Impacto en el POS |
-|------------|-----------------------|-------------------|
-| **SDD_027 (Caja Multicanal)** | Prohibido usar saldos globales. Todo movimiento debe especificar `payment_method_id` hacia `cash_movements`. | El POS no puede inyectar efectivo en caja sin declarar explícitamente el canal de pago en el payload. |
-| **SDD_010_016 (FIFO)** | Prohibido calcular costo de venta sobre `purchase_price`. Obligatorio desglosar ventas en `sale_item_batches`. | El motor del POS debe llamar a `consume_stock_fifo` y volcar el resultado íntegro por lote para proteger la utilidad. |
+| Política ID | Dominio | Mandato Arquitectónico Concreto |
+|---|---|---|
+| **POL-AUTH-01** | Seguridad | Aislamiento multi-tenant estricto. La primera instrucción de `rpc_procesar_venta_v3` debe ser `PERFORM assert_store_access(p_store_id);`. Aislamiento en RLS mediante `get_current_store_id()`. |
+| **POL-AUD-01** | Auditoría | Inviolabilidad histórica append-only. Ninguna venta ni despiece de lotes se muta ni elimina tras su consolidación transaccional. |
+| **POL-AUD-02** | Auditoría | Inmutabilidad de turnos cerrados. Todo cobro comercial exige sesión activa (`status = 'open'`) imputando al `session_id` del turno corriente; turnos cerrados permanecen sellados. Totalización previa al `INSERT INTO sales` para que `trg_audit_sale_created` capture el monto real (> $0). |
+| **POL-FIN-01** | Financiero | Fidelidad absoluta de flujo de efectivo. Ventas fiadas (`p_payment_method = 'fiado'`) registran estrictamente $0 en la caja diaria. Prohibido sumar fiados como efectivo virtual. |
+| **POL-FIN-02** | Financiero | Prevención de desbalance y sobregiro. Cobros en efectivo y transferencias digitales ingresan de forma atómica a `cash_movements` vinculados a la sesión de caja abierta. |
+| **POL-FIN-03** | Financiero | Límite estricto de endeudamiento. La venta fiada valida bajo bloqueo pesimista que `balance + total <= credit_limit`. Si excede, aborta la venta completa. |
+| **POL-LOG-01** | Logística | Consumo FIFO y trazabilidad de lotes. Toda salida de mercancía consume capas cronológicas en `inventory_batches` mediante `consume_stock_fifo`, sellando `sale_items.unit_cost` y `sale_item_batches`. |
+| **POL-LOG-02** | Logística | Bloqueo logístico preventivo. Si el inventario disponible es insuficiente para cubrir la demanda, el motor rechaza la adición al carrito o el checkout abortando la transacción atómica. |
+| **POL-SEC-01** | Seguridad | Ceguera financiera en el punto de venta. Los cajeros y terminales POS tienen prohibido conocer o recibir el costo de adquisición de los productos (`unit_cost`). |
+| **SPEC-010** | Financiero | Redondeo comercial a $50 COP. Subtotales de pesables calculados en backend con `FLOOR(subtotal / 50.0) * 50`. Total de venta suma subtotales ya redondeados. Vueltas con algoritmo híbrido de empate hacia abajo. |
+| **SPEC-011** | Datos | Formato y precisión numérica. Importes en moneda legal entera COP sin decimales. Cantidades de productos unitarios enteras; pesables con máximo 2 decimales. Persistencia de `rounding_difference`. |
 
-### 0.2 Hallazgos Críticos Históricos (🔴)
-| # | Descripción del hallazgo | Sección afectada | Corrección requerida |
-|---|--------------------------|-----------------|----------------------|
-| 1 | **Ausencia de Flujo de Devolución de Cliente:** Según `POL-LOG-03`, el POS es el embudo único. | 2, 3 y 5.1 | Crear el estado y flujo "Devolución Cliente". |
-| 2 | **Fuga de Verdad en Payload de Salida:** El backend recalcula precios pero no los retorna. | 5.2 | Retornar el total cobrado oficial y el arreglo de ítems procesados. |
-| 3 | **Falta de Idempotencia en el Contrato:** Prevención de doble deducción por latencia. | 5.1 | Agregar `idempotency_key` como campo obligatorio. |
-| 4 | **Trazabilidad de Cuentas por Pagar Rota:** Falta `supplier_id` y `reference_invoice_id` (FRD-019). | 5.1 | Agregar estos campos al payload para `devolucion_proveedor`. |
-| 5 | **Trazabilidad de Devolución de Cliente Rota:** Falta enlazar a la venta original para validar precio devuelto. | 5.1 y 6.3 | Requerir `original_sale_item_id` en el carrito y validar contra el precio congelado. |
-| 6 | **Ambigüedad de Consumo FIFO (Riesgo Doble Consumo):** No aclara si rpc consume directo o delega a trigger. | 3.1 y 7 | Explicitar que el RPC consume FIFO directo y usa `movement_type = 'venta'` (exento de trigger). |
-| 7 | **Canal de Pago Omitido en Devolución:** Falta especificar el origen de los fondos al reembolsar. | 5.1 y 3.2 | Hacer `payment_method_id` obligatorio también para `devolucion_cliente`. |
-| 8 | **Alucinación de Nombres de Tabla:** Usa `caja_diaria` y `daily_cash_movements` en vez del real. | 3 y 7 | Unificar todo a la tabla `cash_movements`. |
+---
 
-### 0.2 Hallazgos de Mejora (🟡)
-| # | Descripción del hallazgo | Sección afectada | Corrección requerida |
-|---|--------------------------|-----------------|----------------------|
-| 1 | **Bloqueo Transaccional Débil:** Falta `FOR UPDATE`. | 3.1 | Explicitar uso de `FOR UPDATE` en stock. |
-| 2 | **Falta Tipología en Bitácora:** `POL-AUD-02`. | 3.1 y 3.2 | Explicitar motivo de movimiento de inventario. |
-| 3 | **Enum payment_type Hardcodeado:** Mezcla cierre contable con canal y no es extensible (FRD-020, FRD-022). | 5.1 y 3 | Separar `closure_type` de `payment_method_id`. |
-| 4 | **Validación "Teórica" Multitenant:** Falla el patrón de seguridad, propiciando BUG-001. | 6.1 | Nombrar explícitamente `get_current_store_id()` y `assert_store_access()`. |
-| 5 | **Idempotencia sin Constraint Fuerte:** La validación lógica es insuficiente contra race conditions reales. | 6.3 | Exigir `UNIQUE(idempotency_key)` en tabla `sales` y capturar la excepción. |
+### 0.2 Restricciones Transversales Inyectadas (Fase 0)
 
-### 0.3 Hallazgos Capa E y Etapa 1.5 (Auditoría contra Realidad DB)
-> **Advertencia de Deuda Técnica:** Las correcciones funcionales agregadas en las rondas previas de PAC-R rediseñaron teóricamente el POS (creando `rpc_procesar_venta_v3`), pero **no se implementaron en la base de datos**.
+| SDD Origen | Restricción Inyectada | Impacto en el Punto de Venta (POS) |
+|---|---|---|
+| **SDD_007 (Núcleo de Ventas Padre)** | Contrato canónico de checkout transaccional y cabecera de venta. | `rpc_procesar_venta_v3` implementa la consolidación atómica con numeración secuencial única por tienda (`ticket_number`), sellado de auditoría y rollback integral. |
+| **SDD_004 / SDD_020 (Caja Diaria y Multicanal)** | Turno de caja abierto mandatorio (`status = 'open'`) y menor a 24 horas. | Si no existe turno activo, el POS bloquea el checkout de pagos de contado (efectivo y transferencias) con código `NO_OPEN_CASH_SESSION`. |
+| **SDD_006 / SDD_010_016 (Lotes y Valoración FIFO)** | Descuento atómico por capas cronológicas mediante `consume_stock_fifo`. | El carrito no interactúa directamente con los lotes; el backend despieza las capas en `sale_item_batches` y estampa el costo promedio ponderado en `sale_items.unit_cost`. |
+| **SDD_006_02 (Gestor de Reembolsos)** | Trazabilidad por ítem vendido y prevención de doble restitución. | Cada ítem consolidado en `sale_items` constituye la base inmutable para eventuales reembolsos parciales posteriores. |
+| **SDD_007_02 (Ticket de Venta)** | Secuencia transaccional segura `COALESCE(MAX(ticket_number), 0) + 1`. | El POS recibe del backend el entero secuencial oficial para presentarlo en pantalla, absteniéndose de calcular consecutivos locales. |
+| **SDD_009 / SDD_024 (Cartera y Fiados)** | Validación de cupo bajo `SELECT ... FOR UPDATE` y $0 efectivo en caja. | El POS evalúa solvencia crediticia y registra el cargo en `client_ledger`, omitiendo la columna calculada `new_balance`. |
+| **SDD_005 (Auditoría Forense)** | Inviolabilidad append-only y trazabilidad de eventos. | La inserción en `sales` activa el trigger `trg_audit_sale_created` en `audit_ventas` capturando el payload y monto total real. |
+| **SDD_018 (Control Operacional y P&L)** | Exclusión de ventas anuladas y preservación de ingresos comerciales reales. | Mermas y devoluciones a proveedor no generan tickets de venta; se canalizan por inventarios y cuentas por pagar/gastos operativos. |
 
-| # | Descripción del hallazgo | Sección afectada | Acción requerida (Deuda Técnica) |
-|---|--------------------------|-----------------|----------------------|
-| 1 | **Alucinación de RPC y Payload:** El SDD exige `rpc_procesar_venta_v3` con `closure_type`, `idempotency_key`, `supplier_id`, etc. La BD real sigue en `v2` recibiendo solo 5 parámetros básicos. | 5.1, 3.1, 3.2 | **Deuda Técnica Crítica:** Construir la migración SQL para el `rpc_procesar_venta_v3` que soporte los nuevos cierres (mermas, devoluciones). |
-| 2 | **Alucinación de `idempotency_key`:** El SDD requiere `UNIQUE(idempotency_key)`. La tabla `sales` real no tiene esta columna. | 5.1, 6.3 | **Deuda Técnica:** Agregar columna `idempotency_key` (UUID, UNIQUE) a `sales`. |
-| 3 | **Tipado del Canal de Pago:** El SDD exige FK `payment_method_id` hacia `payment_methods`. La BD actual lo mapea a un `TEXT` con un CHECK enum en `sales`. | 5.1 | **Deuda Técnica:** Alinear el código del RPC v3 para manejar el ID foráneo del sistema multicanal (FRD-022). |
-| 4 | **Spoofing de Sesión:** El SDD exigía que el Frontend envíe el `session_id`. El RPC actual (`v2`) lo descubre desde la BD por seguridad. | 5.1 | **Corregido en Documento:** Se eliminó `session_id` del payload de entrada. El backend mantiene la autoridad de descubrimiento. |
+---
+
+### 0.3 Auditoría de BD contra Realidad (Deudas Técnicas Formalizadas bajo Regla 7)
+
+En cumplimiento de las Reglas 2, 4, 6, 7 y 9 de `AGENTS.md`, se identificaron y formalizaron **N = 5** deudas técnicas sobre el esquema físico de producción (`ihtjocmhzuliwwvdzfnz`):
+
+| ID | Hallazgo / Brecha en Esquema Real | Qué se Decidió | Por qué (Trade-off Concreto) | Condición de Revisión Futura |
+|:--:|---|---|---|---|
+| **D-1** | **Ausencia física de `idempotency_key` en tabla `sales`.** La tabla en producción cuenta con `local_id (text)`, pero carece de `idempotency_key (uuid unique)`. | Definir `idempotency_key` en el contrato canónico de V3 y convivir transitoriamente con `local_id` para trazabilidad de peticiones offline. | Previene doble cobro por reintentos de red sin ejecutar DDL en caliente sobre la tabla más crítica del sistema en producción. | Despliegue de la migración DDL de Ola 3 (`ALTER TABLE sales ADD COLUMN idempotency_key UUID UNIQUE;`). |
+| **D-2** | **Constraint físico `sales_payment_method_check` limitado a 4 valores.** En producción solo admite `['efectivo', 'nequi', 'daviplata', 'fiado']`, excluyendo `'llave_bre'`. | Restringir contractualmente los métodos de pago de `rpc_procesar_venta_v3` a los 4 métodos admitidos por el CHECK físico. | Garantiza estabilidad inmediata y previene fallos transaccionales con error PostgreSQL `23514 (check_violation)`. | Despliegue de la migración multicanal en la Ola 4 (`WO_MIGRATION_OLA4_PAYMENTS`). |
+| **D-3** | **Desacoplamiento de Cierres No Comerciales (Mermas y Devoluciones a Proveedor).** El texto original de FRD-007-01 proyectaba canalizar mermas por el POS. | Enrutar mermas y devoluciones a proveedor exclusivamente mediante `inventory_movements` (`'merma'`, `'devolucion'` con `supplier_id`) y módulos contables, prohibiendo filas en `sales`. | Protege la pureza de ingresos comerciales brutos, ticket promedio y cálculo de utilidad bruta en el P&L operacional de `SDD_018`. | Consolidación del módulo de inventario y bajas logísticas en Ola 2/3. |
+| **D-4** | **Restricción de columna física generada `client_ledger.new_balance`.** En PostgreSQL real, `new_balance` está definida como `GENERATED ALWAYS AS (previous_balance + amount)`. | Prohibir explícitamente incluir `new_balance` en sentencias `INSERT INTO client_ledger` dentro del procedimiento de venta fiada. | Cumplimiento estricto del estándar de PostgreSQL evitando el error fatal `428C9 (cannot insert into a generated column)`. | Invariante arquitectónico permanente de esquema físico en la base de datos. |
+| **D-5** | **Dependencia de retrocompatibilidad de `rpc_force_sale`.** La función de auditoría administrativa `rpc_force_sale` invoca directamente en producción a `rpc_procesar_venta_v2`. | Mantener intacta la función `rpc_procesar_venta_v2` en PostgreSQL durante el despliegue de V3 como capa de compatibilidad. | Evita la rotura inmediata del subsistema de auditoría de ventas forzadas mientras se completa la migración integral. | Refactorización de `rpc_force_sale` en el marco de `SDD_014_VENTA_FORZADA_Y_AUDITORIA` (Ola 5). |
 
 ---
 
 ## 1. Glosario Técnico y Entidades
 
-Este glosario define los conceptos estandarizados para que Frontend y Backend hablen el mismo idioma durante la implementación, eliminando ambigüedades.
-
 | Término / Entidad | Definición en el Contexto de este SDD |
-|-------------------|---------------------------------------|
-| **POS Engine (Motor)** | Función RPC atómica en Supabase (`rpc_procesar_venta`) que recibe el carrito, descuenta inventario (vía FIFO) y enruta el flujo financiero a la caja o deudas. |
-| **Cart Payload (Carrito)** | Arreglo JSON in-memory en el Frontend (Store) que contiene únicamente `product_id` y `quantity`. No maneja costos. |
-| **Transacción Atómica** | Propiedad obligatoria de la venta. Si falla el descuento de inventario o falla el registro de caja, NADA se guarda (Rollback total). |
-| **Bloqueo Logístico** | Regla de validación en Backend que rechaza la transacción si `cantidad_solicitada > stock_actual`. |
-| **Cierre de Efectivo / Nequi** | Venta comercial normal. Backend descuenta inventario y registra un INGRESO en Caja Diaria por el valor cobrado. Contrapartida: Activo (Caja). |
-| **Cierre de Fiado** | Venta a crédito. Backend descuenta inventario y genera una DEUDA en Cuentas por Cobrar. No toca la caja ($0 efectivo). Contrapartida: Activo (Cuentas por Cobrar). |
-| **Cierre de Merma / Consumo Interno** | Pérdida operativa. Backend descuenta inventario y genera un EGRESO en Gastos Operativos por el costo del bien perdido. No toca la caja ($0 efectivo). Contrapartida: Gasto. |
-| **Cierre de Devolución a Proveedor** | Ajuste de inventario. Backend descuenta inventario y genera un AJUSTE (nota crédito) en Cuentas por Pagar. No toca la caja ($0 efectivo). Contrapartida: Pasivo (Cuentas por Pagar). |
-| **Cierre de Devolución de Cliente** | Reversión de venta. Backend ingresa inventario (crea lote 'returned') y genera un EGRESO en Caja Diaria por el dinero devuelto. Contrapartida: Activo (Caja). |
+|---|---|
+| **Terminal POS (Punto de Venta)** | Interfaz desacoplada y reactiva operada por cajeros o administradores, responsable de capturar la intención de compra, validar existencias y disparar el cobro atómico. |
+| **Carrito In-Memory** | Estructura temporal y volátil en el frontend que almacena los ítems seleccionados, cantidades y modo de pago sin calcular costos ni realizar cierres fiscales locales. |
+| **Embudo Universal de Egresos Comerciales** | Principio por el cual toda venta rutinaria que reste inventario y genere ingresos comerciales debe canalizarse obligatoriamente a través del motor de cobro del POS. |
+| **Desacoplamiento Contable** | Separación estricta de responsabilidades según el medio de pago: el efectivo/digital imputa a caja diaria; el fiado imputa a cuentas por cobrar; las mermas se desvían al kardex logístico sin tocar ventas. |
+| **Bloqueo Logístico** | Mecanismo preventivo que impide agregar productos al carrito o procesar el cobro si el inventario disponible en catálogo o lotes es insuficiente. |
+| **Ceguera Financiera** | Restricción de seguridad (`POL-SEC-01`) que oculta totalmente el costo de compra (`unit_cost`) al rol cajero para proteger márgenes y confidencialidad. |
+| **Venta Consolidada** | Estado final irreversible de una venta en base de datos (`sales`), donde el comprobante adquiere consecutivo seguro, sella su COGS en lotes y genera contrapartida de caja o cartera. |
 
 ---
 
-## 2. Máquina de Estados (Ciclo de Vida de la Venta)
+## 2. Modelado de Flujos y Ciclos de Vida
 
-El flujo del POS es una máquina de estados finita. El Frontend controla la experiencia (UX), pero el estado crítico de transición (`Procesando`) pertenece enteramente al Backend.
+### 2.1 Flujo Transaccional de Checkout Desacoplado
+
+El procesamiento de una venta en el POS desacoplado sigue una secuencia estricta de validaciones y doble asiento atómico gobernada exclusivamente por el backend:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as Cajero (UI POS)
+    participant S as Pinia Store (POS)
+    participant RPC as PostgreSQL (rpc_procesar_venta_v3)
+    participant CS as cash_sessions / cash_movements
+    participant CL as clients / client_ledger
+    participant FIFO as consume_stock_fifo / inventory_batches
+    participant V as sales / sale_items / sale_item_batches
+    participant AV as audit_ventas (Triggers)
+
+    C->>S: Presiona "Procesar Cobro" (Canal, Cliente opcional)
+    S->>RPC: POST rpc_procesar_venta_v3(store_id, client_id, payment_method, amount_received, items)
+    
+    Note over RPC: FASE 1: Verificación de Seguridad y Permisos
+    RPC->>RPC: assert_store_access(p_store_id)
+    RPC->>RPC: get_employee_id_from_session() -> Valida canSell = true
+
+    Note over RPC: FASE 2: Validación de Precondiciones de Pago
+    alt Pago Efectivo / Nequi / Daviplata
+        RPC->>CS: SELECT id FROM cash_sessions WHERE store_id = p_store_id AND status = 'open'
+        opt Si no hay turno abierto o sesión > 24H
+            RPC-->>S: ERROR NO_OPEN_CASH_SESSION
+        end
+    else Pago Fiado (Crédito)
+        RPC->>CL: SELECT balance, credit_limit FROM clients WHERE id = p_client_id FOR UPDATE
+        opt Si balance + total_calculado > credit_limit
+            RPC-->>S: ERROR CREDIT_LIMIT_EXCEEDED
+        end
+    end
+
+    Note over RPC: FASE 3: Totalización y Redondeo Oficial (Backend)
+    RPC->>RPC: Calcula subtotales con redondeo a $50 (pesables)
+    RPC->>RPC: Calcula total_venta, rounding_difference y change_given
+    RPC->>RPC: Obtiene COALESCE(MAX(ticket_number), 0) + 1
+
+    Note over RPC: FASE 4: Consolidación Transaccional ACID
+    RPC->>V: INSERT INTO sales (ticket_number, total, rounding_difference, payment_method, ...)
+    V->>AV: trg_audit_sale_created asienta evento con total real
+
+    loop Por cada ítem del carrito (Orden determinista por product_id)
+        RPC->>FIFO: consume_stock_fifo(product_id, quantity) -> Bloqueo FOR UPDATE
+        opt Si stock remanente insuficiente
+            RPC-->>S: ERROR INSUFFICIENT_STOCK (Rollback total)
+        end
+        RPC->>V: INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal, unit_cost)
+        RPC->>V: INSERT INTO sale_item_batches (sale_item_id, batch_id, quantity_consumed, unit_cost)
+    end
+
+    Note over RPC: FASE 5: Contrapartida Contable Desacoplada
+    alt Si Efectivo / Digital
+        RPC->>CS: INSERT INTO cash_movements (session_id, movement_type = 'ingreso', amount = total, sale_id)
+    else Si Fiado
+        RPC->>CL: UPDATE clients SET balance = balance + total WHERE id = p_client_id
+        RPC->>CL: INSERT INTO client_ledger (client_id, store_id, amount = total, transaction_type = 'venta_fiado')
+        Note over RPC: Cero movimiento monetario en gaveta física ($0)
+    end
+
+    RPC-->>S: HTTP 200 { success: true, data: { sale_id, ticket_number, total, change_given } }
+    S-->>C: Notificación de Venta Exitosa y Renderizado de Comprobante
+```
+
+---
+
+### 2.2 Diagrama de Estados del Carrito y la Venta
 
 ```mermaid
 stateDiagram-v2
-    [*] --> CarritoVacio: Cajero entra al POS
+    [*] --> CarritoVacio: Terminal iniciada por cajero autorizado
     
-    CarritoVacio --> AgregandoItems: Escanea/Selecciona Producto
-    AgregandoItems --> AgregandoItems: Ajusta Cantidad / Elimina Item
+    CarritoVacio --> CarritoEnConstruccion: Adición de producto con stock disponible
+    CarritoEnConstruccion --> CarritoEnConstruccion: Modificación de cantidades / Adición de ítems (<= 50)
+    CarritoEnConstruccion --> CarritoVacio: Cancelación o vaciado de carrito
     
-    AgregandoItems --> SeleccionandoCierre: Click en "Cobrar"
-    SeleccionandoCierre --> AgregandoItems: Cancela o vuelve atrás
+    CarritoEnConstruccion --> EnCheckout: Cajero presiona "Cobrar"
+    EnCheckout --> CarritoEnConstruccion: Regresar para modificar ítems
     
-    SeleccionandoCierre --> Procesando: Confirma Método (Venta, Fiado, Merma, Devolución...)
+    EnCheckout --> ValidandoTransaccion: Envío de payload a rpc_procesar_venta_v3
     
-    note right of Procesando
-        UI Bloqueada.
-        Promesa pending.
-        Control total del Backend.
-    end note
+    ValidandoTransaccion --> RechazoCajaCerrada: Sin sesión open (NO_OPEN_CASH_SESSION)
+    ValidandoTransaccion --> RechazoCupo: Saldo + total > límite (CREDIT_LIMIT_EXCEEDED)
+    ValidandoTransaccion --> RechazoStock: Déficit en lotes FIFO (INSUFFICIENT_STOCK)
+    ValidandoTransaccion --> RechazoPermiso: Sin permiso canSell (STORE_ACCESS_DENIED)
     
-    Procesando --> VentaExitosa: Supabase responde HTTP 200 OK
-    Procesando --> ErrorLogica: Supabase responde HTTP 400 (Ej. Stock Insuficiente, Sesión Expirada)
+    RechazoCajaCerrada --> [*]: Instrucción de apertura de turno
+    RechazoCupo --> EnCheckout: Ajuste de carrito o cambio de método de pago
+    RechazoStock --> EnCheckout: Ajuste de unidades según inventario real
+    RechazoPermiso --> [*]: Bloqueo de terminal
     
-    ErrorLogica --> SeleccionandoCierre: Cajero lee el error (Toast) y corrige
-    VentaExitosa --> [*]: Imprime ticket y limpia UI
+    ValidandoTransaccion --> VentaConsolidada: Transacción ACID completada
+    VentaConsolidada --> [*]: Comprobante emitido e inmutable en BD
 ```
-
-> **Nota de Arquitectura (Clean Code Guard):** El estado `Procesando` exige protección contra reentradas. El botón de confirmación en Vue debe pasar a `disabled=true` (o mostrar un spinner) inmediatamente después del primer click para mitigar el riesgo de doble cobro por latencia de red.
 
 ---
 
-## 3. Modelado de Flujos (Secuencia de Eventos)
+### 2.3 Regla de Cero Cálculos en Frontend (Flujo Unidireccional)
 
-### 3.1. Flujo Principal (Venta Comercial)
+1. **El Frontend NO Calcula Importes Financieros:** El cliente tiene estrictamente prohibido computar subtotales, impuestos, descuentos o el total oficial de la venta. Su responsabilidad se limita a acumular `{ product_id, quantity }` en memoria.
+2. **El Frontend NO Calcula Vueltas ni Redondeos:** Los redondeos comerciales al múltiplo inferior de $50 COP, el cambio exacto (`change_given`) y la diferencia fiscal (`rounding_difference`) son calculados y certificados exclusivamente por el motor de base de datos.
+3. **El Frontend NO Conoce Costos ni Lotes:** La interfaz de usuario opera bajo ceguera financiera total (`POL-SEC-01`). No recibe ni presenta costos de lote (`unit_cost`) ni capas FIFO.
+4. **Presentación de la Verdad:** El cliente Vue/Pinia formatea y presenta los datos crudos retornados por el servidor, garantizando que lo que ve el cajero coincida al 100% con los libros contables.
 
-Este es el camino feliz de una venta estándar pagada de inmediato (Efectivo o Nequi). Muestra cómo el POS interactúa con la base de datos de manera atómica.
+---
+
+## 3. Seguridad y Multi-Tenant
+
+### 3.1 Aislamiento Multi-Tenant (Reglas 4 y 8)
+
+- **Instrucción #1 Mandatoria:** Todo procedimiento de checkout o consulta del POS ejecuta como primera sentencia:
+  `PERFORM assert_store_access(p_store_id);`
+  garantizando que ninguna venta se procese ni se consulte fuera de la tienda del usuario autenticado.
+- **Políticas RLS en Tablas del Módulo:**
+  - `sales`: `store_id = get_current_store_id()`.
+  - `sale_items`: `EXISTS (SELECT 1 FROM sales s WHERE s.id = sale_items.sale_id AND s.store_id = get_current_store_id())`.
+  - `sale_item_batches`: Vinculada mediante JOIN jerárquico hasta `sales.store_id = get_current_store_id()`.
+  - `clients` y `client_ledger`: `store_id = get_current_store_id()`.
+  - `cash_sessions` y `cash_movements`: `store_id = get_current_store_id()`.
+  - `audit_ventas`: Homogeneizada con `store_id = get_current_store_id()`.
+- **Privilegios Base de Esquema (Regla 8):** Todas las tablas del módulo cuentan con `GRANT ALL` otorgado a los roles `anon`, `authenticated` y `postgres`, delegando la seguridad a nivel de fila exclusivamente a las políticas RLS y los RPCs `SECURITY DEFINER`.
+
+---
+
+### 3.2 Matriz de Control de Acceso (RBAC) y Permisos
+
+| Acción del Sistema | Administrador | Cajero con `canSell` | Cajero sin `canSell` | Mecanismo de Seguridad |
+|---|:---:|:---:|:---:|---|
+| **Acceso a Terminal POS** | ✅ | ✅ | ❌ | Bloqueado en UI y en RPC (`STORE_ACCESS_DENIED`). |
+| **Venta Contado (Efectivo / Transferencia)** | ✅ | ✅ | ❌ | Exige sesión de caja activa (`status = 'open'`). |
+| **Venta Fiado (Crédito a Cliente)** | ✅ | ✅ | ❌ | Valida cupo bajo `FOR UPDATE` en `clients`. |
+| **Cierre Logístico (Mermas / Devolución)** | ✅ | ❌ | ❌ | Enrutado por `inventory_movements`, restringido a Admin. |
+| **Anulación de Venta Consolidada** | ✅ | ❌ | ❌ | Prohibido para cajeros; validado en `rpc_anular_venta`. |
+| **Visualización de Costos (`unit_cost`)** | ✅ | ❌ | ❌ | Oculto en frontend y omitido en payloads de cajero. |
+
+---
+
+### 3.3 Inviolabilidad Contable (Append-Only)
+
+- Las tablas `sales`, `sale_items`, `sale_item_batches` y `client_ledger` no exponen políticas de `UPDATE` ni `DELETE` a clientes de PostgREST.
+- Una vez confirmada una venta, los registros son permanentes e inmutables.
+- Errores operativos se corrigen exclusivamente mediante el procedimiento administrativo formal de anulación (`rpc_anular_venta`), el cual sella la cabecera mediante `is_voided = true` y genera contra-asientos inmutables.
+
+---
+
+## 4. Casos Límite y Concurrencia (Regla 5 de AGENTS.md)
+
+| ID | Escenario de Caso Límite | Comportamiento del Motor / Backend | Código de Excepción / Error | Respuesta Visual en UI |
+|---|---|---|---|---|
+| **CL-01** | **Venta de Contado con Caja Cerrada** | El motor verifica `cash_sessions`. Al no encontrar turno abierto y vigente (< 24H), aborta la transacción sin tocar inventario. | `NO_OPEN_CASH_SESSION` | Modal de bloqueo: *"Para registrar ventas en efectivo o digital, primero debe abrir el turno de caja."* Redirige a Apertura. |
+| **CL-02** | **Venta Fiado con Cupo Excedido** | Evalúa bajo `SELECT ... FOR UPDATE` si `balance + total > credit_limit`. Si se supera el límite de crédito, aborta la transacción completa. | `CREDIT_LIMIT_EXCEEDED` | Toast de advertencia: *"Cupo insuficiente. Saldo actual: $X, Cupo total: $Y, Total venta: $Z."* |
+| **CL-03** | **Déficit de Stock en Consumo FIFO** | `consume_stock_fifo` detecta que la suma de remanentes en `inventory_batches` es inferior a la cantidad solicitada. Rollback total. | `INSUFFICIENT_STOCK` | Alerta roja: *"Stock insuficiente para completar la venta del producto [Nombre]. Disponible: X unidades."* |
+| **CL-04** | **Venta Concurrente del Mismo Producto** | Dos cajas intentan cobrar el último ítem simultáneamente. El cursor `FOR UPDATE` sobre `inventory_batches` serializa el consumo. | Serialización Transaccional | La primera venta descuenta el stock; la segunda recibe `INSUFFICIENT_STOCK` sin generar saldos negativos. |
+| **CL-05** | **Venta Fiado Simultánea al Mismo Cliente** | Dos terminales cargan ventas a crédito al mismo cliente. El bloqueo pesimista en `clients` previene carreras sobre el saldo. | Serialización Transaccional | Ambas ventas evalúan el cupo secuencialmente, bloqueando la que supere el límite sin desincronizar `balance`. |
+| **CL-06** | **Producto Vendido Sin Costo Registrado** | El producto fue creado sin costo o ingresó con costo cero. El motor asigna `unit_cost = 0` y completa la venta sin abortar (FRD-016 Regla 4). | Transacción Exitosa | Venta concretada con normalidad. Margen de ganancia bruta no calculable para ese ítem. |
+| **CL-07** | **Límite de Carrito Superado (> 50 Ítems)** | El cajero intenta ingresar más de 50 ítems al carrito. El sistema emite advertencia de contención operativa. | `CART_LIMIT_EXCEEDED` | Mensaje informativo: *"Máximo 50 productos por venta. Procese este ticket e inicie una nueva transacción."* |
+| **CL-08** | **Reintento Idempotente por Latencia de Red** | El cliente reenvía la petición con la misma `idempotency_key` o `local_id`. El motor detecta el ticket ya existente y retorna el comprobante. | Retorno Idempotente (HTTP 200) | La interfaz recupera el comprobante oficial sin duplicar cobros, stock ni deuda. |
+
+---
+
+## 5. Contrato de Interfaz
+
+### 5.1 Operación: `rpc_procesar_venta_v3` (Procesamiento de Venta Atómica)
+
+- **Tipo:** RPC Postgres / Acción (WRITE)
+- **Propósito:** Consolidar una transacción de venta en el POS, descontando inventario en cascada FIFO, generando consecutivo seguro y asentando la contrapartida en caja o cartera.
+- **Entrada (Request JSON):**
+  ```json
+  {
+    "p_store_id": "UUID (Obligatorio)",
+    "p_client_id": "UUID (Opcional, obligatorio si p_payment_method = 'fiado')",
+    "p_payment_method": "TEXT (Obligatorio: 'efectivo', 'nequi', 'daviplata', 'fiado')",
+    "p_amount_received": "NUMERIC >= 0 (Opcional, requerido si p_payment_method = 'efectivo')",
+    "p_idempotency_key": "UUID (Opcional, identificador único de transacción para reintentos seguros)",
+    "p_local_id": "TEXT (Opcional, identificador local de sincronización offline)",
+    "p_items": [
+      {
+        "product_id": "UUID (Obligatorio)",
+        "quantity": "NUMERIC > 0 (Obligatorio, entero en unitarios, máx 2 decimales en pesables)"
+      }
+    ]
+  }
+  ```
+- **Salida Exitosa (HTTP 200 - Response JSON):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "sale_id": "UUID",
+      "ticket_number": 1045,
+      "total": 35000,
+      "rounding_difference": 0,
+      "amount_received": 50000,
+      "change_given": 15000,
+      "payment_method": "efectivo",
+      "items_count": 3,
+      "created_at": "2026-10-15T14:30:00Z"
+    }
+  }
+  ```
+- **Salida de Error (Excepciones Tipificadas):**
+  ```json
+  {
+    "success": false,
+    "error": "Mensaje técnico descriptivo de la falla",
+    "code": "NO_OPEN_CASH_SESSION | CREDIT_LIMIT_EXCEEDED | INSUFFICIENT_STOCK | STORE_ACCESS_DENIED | INVALID_PAYMENT_METHOD | CART_LIMIT_EXCEEDED"
+  }
+  ```
+
+---
+
+### 5.2 Operación: `get_active_cash_session` (Verificación Previa de Turno para POS)
+
+- **Tipo:** RPC Postgres / Lectura (READ)
+- **Propósito:** Validar el estado del turno de caja previo a habilitar el cobro en efectivo o transferencias en la terminal POS.
+- **Entrada (Request JSON):**
+  ```json
+  {
+    "p_store_id": "UUID (Obligatorio)"
+  }
+  ```
+- **Salida Exitosa (HTTP 200 - Response JSON):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "session_id": "UUID",
+      "status": "open",
+      "opened_at": "2026-10-15T08:00:00Z",
+      "opened_by": "UUID",
+      "cashier_name": "Carlos Cajero",
+      "is_expired": false
+    }
+  }
+  ```
+- **Salida Sin Turno Abierto (HTTP 200):**
+  ```json
+  {
+    "success": true,
+    "data": null
+  }
+  ```
+
+---
+
+### 5.3 Operación: `get_client_credit_status` (Consulta de Cupo de Fiado para POS)
+
+- **Tipo:** RPC Postgres / Lectura (READ)
+- **Propósito:** Consultar el saldo adeudado y cupo disponible de un cliente antes de autorizar el cierre a crédito.
+- **Entrada (Request JSON):**
+  ```json
+  {
+    "p_store_id": "UUID (Obligatorio)",
+    "p_client_id": "UUID (Obligatorio)"
+  }
+  ```
+- **Salida Exitosa (HTTP 200 - Response JSON):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "client_id": "UUID",
+      "name": "María González",
+      "credit_limit": 200000,
+      "current_balance": 85000,
+      "available_credit": 115000,
+      "is_blocked": false
+    }
+  }
+  ```
+
+---
+
+## 6. Matriz de Trazabilidad y Políticas Globales
+
+| Código de Política | Dominio | Mandato Arquitectónico | Implementación en SDD-007-01 |
+|---|---|---|---|
+| **POL-AUTH-01** | Seguridad | Multi-tenant estricto por tienda | Invocación mandatoria de `assert_store_access(p_store_id)` en la línea #1 de `rpc_procesar_venta_v3`; políticas RLS gobernadas por `get_current_store_id()`. |
+| **POL-AUD-01** | Auditoría | Inviolabilidad append-only absoluta | `sales`, `sale_items`, `sale_item_batches` y `client_ledger` no poseen políticas de `UPDATE` ni `DELETE`. |
+| **POL-AUD-02** | Auditoría | Inmutabilidad de turnos cerrados | Todo ingreso comercial se imputa a la sesión de caja activa actual; totalización previa al `INSERT INTO sales` para poblar `audit_ventas` con el monto real (> $0). |
+| **POL-FIN-01** | Financiero | Fidelidad absoluta de caja | Ventas fiadas registran estrictamente $0 en los movimientos de efectivo de la caja diaria. |
+| **POL-FIN-02** | Financiero | Prevención de desbalance por canal | Asiento atómico en `cash_movements` vinculando `sale_id`, monto oficial y canal recibido. |
+| **POL-FIN-03** | Financiero | Límite estricto de endeudamiento | Validación pesimista de solvencia (`balance + total <= credit_limit`) bajo `FOR UPDATE` en `clients`. |
+| **POL-LOG-01** | Logística | Despiece FIFO por capas de lote | Descuento atómico mediante `consume_stock_fifo`, sellando capas en `sale_item_batches` y costo promedio ponderado en `sale_items.unit_cost`. |
+| **POL-LOG-02** | Logística | Bloqueo logístico preventivo | Control de existencias impidiendo el despacho si el inventario disponible es insuficiente. |
+| **POL-SEC-01** | Seguridad | Ceguera financiera en el POS | Los cajeros tienen prohibido conocer o recibir el costo de adquisición de los productos (`unit_cost`). |
+| **SPEC-010** | Financiero | Redondeo comercial a $50 COP | Redondeo forzado en servidor: pesables al múltiplo inferior de $50, vueltas con redondeo híbrido y persistencia de `rounding_difference`. |
+| **SPEC-011** | Datos | Precisión de enteros y decimales | Importes monetarios en enteros COP; unitarios enteros, pesables con máximo 2 decimales. |
+
+---
+
+## 7. Modelo de Datos Lógico
+
+### 7.1 Diagrama Entidad-Relación (Mermaid erDiagram)
 
 ```mermaid
-sequenceDiagram
-    participant UI as Cajero (Frontend)
-    participant Store as Estado Global (Pinia)
-    participant API as POS Engine (Supabase RPC)
-    participant DB as Base de Datos
+erDiagram
+    STORES ||--o{ SALES : posee
+    EMPLOYEES ||--o{ SALES : atiende
+    CLIENTS ||--o{ SALES : compra_a_credito
+    SALES ||--o{ SALE_ITEMS : contiene
+    PRODUCTS ||--o{ SALE_ITEMS : referencia
+    SALE_ITEMS ||--o{ SALE_ITEM_BATCHES : costea_fifo
+    INVENTORY_BATCHES ||--o{ SALE_ITEM_BATCHES : aporta_capa
+    CASH_SESSIONS ||--o{ CASH_MOVEMENTS : registra_flujo
+    SALES ||--o{ CASH_MOVEMENTS : genera_ingreso
+    CLIENTS ||--o{ CLIENT_LEDGER : asienta_deuda
+    SALES ||--o{ CLIENT_LEDGER : referencia_origen
+    SALES ||--o{ AUDIT_VENTAS : audita_evento
 
-    UI->>Store: Agrega productos al carrito
-    Store->>Store: Valida stock en memoria (UX Optimista)
-    UI->>Store: Selecciona "Efectivo" y hace Click en "Cobrar"
-    
-    note over UI,Store: ESTADO: Procesando (UI Bloqueada)
-    
-    Store->>API: Ejecuta rpc_procesar_venta_v3(cart, closure_type: 'venta', payment_method_id, idempotency_key)
-    API->>DB: INICIA TRANSACCIÓN ATÓMICA
-    
-    API->>DB: Intenta INSERT en sales (Falla si idempotency_key duplicado - UNIQUE Constraint)
-    API->>DB: Autodescubre session_id y verifica que no caducó
-    API->>DB: Lee stock físico real (SELECT SUM... FOR UPDATE)
-    
-    alt Error de Precondición
-        DB-->>API: Falla por Stock Insuficiente o Sesión Caducada
-        API-->>Store: Error 400 (Mensaje específico)
-        Store-->>UI: Muestra Toast de error y desbloquea UI
-    else Precondiciones Cumplidas
-        API->>DB: 1. Ejecuta motor FIFO: Descuenta lotes activos internamente (sale_item_batches)
-        API->>DB: 2. Registra salida en tabla inventory_movements (motivo: 'venta' - EXENTO DE TRIGGER)
-        API->>DB: 3. Guarda la venta en tabla sales y sale_items (congela precios)
-        API->>DB: 4. Registra el INGRESO en tabla cash_movements (Contrapartida)
-        DB-->>API: Transacción Exitosa (COMMIT)
-        API-->>Store: Éxito 200 OK + Datos del Ticket
-        Store-->>UI: Limpia Carrito, desbloquea y muestra modal de Ticket
-    end
+    SALES {
+        uuid id PK
+        uuid store_id FK
+        integer ticket_number
+        uuid employee_id FK
+        uuid client_id FK
+        numeric total
+        numeric rounding_difference
+        text payment_method
+        numeric amount_received
+        numeric change_given
+        text sync_status
+        text local_id
+        boolean is_voided
+        uuid voided_by
+        text void_reason
+        timestamptz created_at
+    }
+
+    SALE_ITEMS {
+        uuid id PK
+        uuid sale_id FK
+        uuid product_id FK
+        numeric quantity
+        numeric unit_price
+        numeric subtotal
+        numeric unit_cost
+        timestamptz created_at
+    }
+
+    SALE_ITEM_BATCHES {
+        uuid id PK
+        uuid sale_item_id FK
+        uuid batch_id FK
+        numeric quantity_consumed
+        numeric unit_cost
+        numeric unit_price
+        timestamptz created_at
+    }
+
+    INVENTORY_BATCHES {
+        uuid id PK
+        uuid product_id FK
+        numeric quantity_initial
+        numeric quantity_remaining
+        numeric cost_unit
+        numeric sale_price
+        boolean is_active
+        timestamptz created_at
+        uuid created_by
+        uuid source_movement_id
+    }
+
+    CASH_SESSIONS {
+        uuid id PK
+        uuid store_id FK
+        uuid employee_id FK
+        text status
+        timestamptz opened_at
+        timestamptz closed_at
+    }
+
+    CASH_MOVEMENTS {
+        uuid id PK
+        uuid session_id FK
+        text movement_type
+        numeric amount
+        text description
+        uuid sale_id FK
+        timestamptz created_at
+    }
+
+    CLIENTS {
+        uuid id PK
+        uuid store_id FK
+        text name
+        text id_number
+        text phone
+        numeric credit_limit
+        numeric balance
+        boolean is_deleted
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    CLIENT_LEDGER {
+        uuid id PK
+        uuid client_id FK
+        uuid store_id FK
+        numeric amount
+        numeric previous_balance
+        numeric new_balance
+        uuid reference_id
+        text transaction_type
+        uuid created_by
+        timestamptz created_at
+    }
+
+    AUDIT_VENTAS {
+        uuid id PK
+        uuid sale_id FK
+        uuid store_id FK
+        text event_type
+        uuid actor_id
+        timestamptz created_at
+        jsonb metadata
+    }
 ```
 
-### 3.2. Enrutamiento de Contrapartidas (Flujos Alternativos)
-
-El paso 4 del diagrama anterior cambia drásticamente dependiendo de la tipología de cierre que seleccionó el usuario, garantizando siempre una contrapartida contable (partida doble).
-
-```mermaid
-sequenceDiagram
-    participant API as rpc_procesar_venta
-    participant Inv as Módulo Inventario
-    participant Caja as Módulo Caja Diaria (cash_movements)
-    participant Deuda as Módulo Cuentas (Por Cobrar / Por Pagar)
-    participant Gasto as Módulo Gastos Operativos
-    
-    alt closure_type == 'devolucion_cliente'
-        API->>Inv: 1. Ingresa Stock (Crea Lote 'returned') validando original_sale_item_id
-        API->>Caja: 2a. Registra EGRESO ($) en cash_movements usando payment_method_id
-    else
-        API->>Inv: 1. Descuenta Stock (FIFO Lotes)
-        
-        alt closure_type == 'venta'
-            API->>Caja: 2b. Registra INGRESO ($) en cash_movements usando payment_method_id
-        else closure_type == 'fiado'
-            API->>Deuda: 2c. Verifica Cupo del Cliente
-            API->>Deuda: 3c. Registra DEUDA (Cuentas por Cobrar)
-        else closure_type == 'merma'
-            API->>Gasto: 2d. Registra EGRESO (Gasto Operativo) por costo FIFO
-        else closure_type == 'devolucion_proveedor'
-            API->>Deuda: 2e. Registra AJUSTE (Nota Crédito en Cuentas por Pagar)
-        end
-    end
-    
-    API-->>-Frontend: Retorna OK
-```
-
 ---
 
-## 4. Responsabilidades del Frontend (UI/UX)
+### 7.2 Diccionario de Entidades y Columnas Físicas Verificadas
 
-Siguiendo el principio de **Autoridad del Backend**, el Frontend actúa exclusivamente como un recolector de intención y visualizador de datos, sometido a las siguientes reglas estrictas:
-
-1. **Cálculo de Previsualización:** El Frontend debe calcular el `Total = Precio * Cantidad` en tiempo real **únicamente para mostrarle al cajero cuánto cobrar**. Este cálculo en el navegador es manipulable, por lo que **TIENE PROHIBIDO** enviarse al backend. El backend ignora el total visual y recalcula todo desde cero consultando los precios seguros en la base de datos. Se hace en el frontend solo para garantizar una interfaz rápida sin tiempos de carga por cada clic.
-2. **Formato Visual (SPEC-011):** Toda presentación de dinero en el carrito DEBE mostrarse sin decimales y con separador de miles (ej. `$5.000`).
-3. **Bloqueo Interactivo (Loading State):** Al hacer click en procesar, el botón DEBE deshabilitarse instantáneamente. El estado de la UI permanece en "Cargando" (Spinner) hasta que el motor retorne una respuesta.
-4. **UX Optimista Prohibida:** Está **estrictamente prohibido** limpiar el carrito o mostrar un mensaje de éxito asumiendo que la venta pasará. La UI solo puede mostrar éxito si el backend confirma la creación del registro.
-
----
-
-## 5. Contrato de Interfaz Backend (RPC Payload)
-
-La comunicación se centraliza en un único Remote Procedure Call (RPC) de Supabase.
-
-**Nombre del RPC:** `rpc_procesar_venta_v3`
-
-### 5.1. Payload de Entrada (Request)
-
-El Frontend envía la intención de venta. **Observe que no se envían precios, totales ni costos**, evitando cualquier manipulación desde el navegador.
-
-| Propiedad Lógica | Requisito | Descripción |
-|------------------|-----------|-------------|
-| `idempotency_key`| Obligatorio | UUID generado por el Frontend para prevenir doble deducción. Protegido por `UNIQUE` en BD. |
-| `closure_type` | Obligatorio | El método de cierre contable (`venta`, `fiado`, `merma`, `devolucion_proveedor`, `devolucion_cliente`). |
-| `payment_method_id`| Condicional | Obligatorio si `closure_type IN ('venta', 'devolucion_cliente')`. FK a `payment_methods` (Efectivo, Nequi, Daviplata...). |
-| `client_id` | Condicional | Identificador del cliente. Obligatorio ÚNICAMENTE si `closure_type == 'fiado'`. |
-| `supplier_id` | Condicional | Obligatorio si `closure_type == 'devolucion_proveedor'` (Fallback FIFO). |
-| `reference_invoice_id`| Opcional | Opcional si `closure_type == 'devolucion_proveedor'` para selección explícita. |
-| `cart_items` | Obligatorio | Lista de productos a despachar (o reingresar). |
-| ↳ `product_id` | Obligatorio | Identificador del producto específico. |
-| ↳ `quantity` | Obligatorio | Cantidad física a despachar (o reingresar). |
-| ↳ `original_sale_item_id` | Condicional | Obligatorio si `closure_type == 'devolucion_cliente'` para validar precio de egreso. |
-
-*(Nota de Seguridad: El `session_id` ya no se envía desde el Frontend; el backend lo autodescubre consultando la caja abierta del empleado autenticado).*
-
-### 5.2. Payload de Salida (Response)
-
-Si la transacción atómica es exitosa, el backend retorna los datos mínimos necesarios para que la UI pueda imprimir el ticket de venta.
-
-| Propiedad Lógica | Requisito | Descripción |
-|------------------|-----------|-------------|
-| `success` | Obligatorio | Bandera de éxito (verdadero). |
-| `data` | Obligatorio | Objeto con la información resultante. |
-| ↳ `sale_id` | Obligatorio | Identificador único de la venta generada en la base de datos. |
-| ↳ `created_at` | Obligatorio | Marca de tiempo oficial dictada por el servidor, no por el navegador. |
-| ↳ `total_charged`| Obligatorio | Valor monetario total calculado y registrado oficialmente en el backend. |
-| ↳ `items`        | Obligatorio | Arreglo de los productos procesados para impresión del ticket (`SDD_007_02`). |
-| ↳↳ `product_id`  | Obligatorio | Identificador del producto. |
-| ↳↳ `quantity`    | Obligatorio | Cantidad física despachada. |
-| ↳↳ `unit_price`  | Obligatorio | Precio de venta congelado oficial con el que se cobró este ítem. |
-
-### 5.3. Códigos de Error (Manejo de Excepciones)
-
-Si ocurre un fallo, la transacción hace rollback y el backend emite un error estructurado. El Frontend debe mapear el `code` a un mensaje amigable.
-
-| Code | Razón Técnica | Comportamiento UI Esperado |
-|------|---------------|----------------------------|
-| `SESSION_INVALID` | El `session_id` no existe, no pertenece a la tienda, o el turno ya excedió las 24 horas (FRD-027-02). | Mostrar: "Turno cerrado o caducado. Debe abrir caja nuevamente." Bloquear el POS. |
-| `STOCK_INSUFFICIENT` | Un producto en el carrito tiene cantidad física menor a la solicitada. | Mostrar: "Inventario insuficiente para: [Nombre Producto]. Ajuste la cantidad." |
-| `CREDIT_LIMIT_EXCEEDED` | El cliente seleccionado no tiene cupo para absorber el total de la venta por fiado. | Mostrar: "Cupo de crédito insuficiente para el cliente." |
-| `MISSING_CLIENT` | Se intentó hacer un "Fiado" sin proveer el `client_id`. | Mostrar: "Debe seleccionar un cliente para vender a crédito." |
-
----
-
-## 6. Análisis de Seguridad
-
-De acuerdo a las Políticas Globales (ARQ-002), el POS es un embudo crítico que debe estar protegido contra fraudes y errores operativos.
-
-### 6.1. Control de Acceso y RLS (Implementación Explícita)
-- La función de procesamiento (`rpc_procesar_venta_v3`) exige un JWT válido (usuario autenticado).
-- **Validación de Propiedad:** El sistema DEBE llamar explícitamente a `assert_store_access()` y usar `get_current_store_id()` para verificar que el `session_id` proporcionado pertenezca a la tienda del usuario actual. No se asume contexto implícito (Mitigación BUG-001).
-
-### 6.2. Protección de Datos (Costos Ocultos)
-- Como se evidenció en la especificación del payload, el margen de ganancia (Precio Venta - Costo FIFO) es un cálculo 100% interno del servidor.
-- El costo de adquisición de la mercancía JAMÁS viaja hacia el Frontend durante la operación del POS para evitar fugas de información financiera sensible hacia empleados de rango bajo.
-
-### 6.3. Superficie de Amenazas y Mitigaciones
-| Amenaza | Vector de Ataque / Error | Mitigación en el Diseño |
-|---------|--------------------------|-------------------------|
-| **Venta Fantasma (Stock Negativo)** | Dos cajeros venden la última Coca-Cola al mismo tiempo. | El backend verifica el stock físico *dentro* de la transacción atómica. Si la consulta concurrente agota el stock, la segunda transacción falla con `STOCK_INSUFFICIENT`. |
-| **Doble Cobro** | El cajero presiona "Cobrar" 5 veces rápidamente por lentitud del internet. | **Decisión D-04 (Autoridad del Backend):** La idempotencia no recae en la UI. A nivel de Base de Datos, el `idempotency_key` es una restricción `UNIQUE` obligatoria en la tabla `sales`. El backend es la única fuente de verdad y rechaza transacciones duplicadas por constraint de BD. El Frontend colabora bloqueando el botón, pero no es la última línea de defensa. |
-| **Manipulación de Precios** | Un atacante modifica el payload JSON enviando `total: 0.50` a la API. | Mitigado por diseño de payload. El backend no acepta totales, recalcula basándose en `product_id` y su precio vigente en base de datos. |
-| **Fraude de Devolución / Evasión** | Un cajero inventa una devolución por un monto superior al real para robar efectivo. | El payload exige `original_sale_item_id`. El backend valida el monto de egreso estrictamente contra el `unit_price` congelado de la venta original, imposibilitando montos libres. |
-
----
-
-## 7. Modelo de Datos Lógico (Tablas Impactadas)
-
-La consolidación de un carrito en el POS es la operación más interconectada del sistema. Afecta lógicamente a las siguientes entidades (sin definir SQL):
-
-| Entidad Lógica | Acción | Descripción del Impacto |
-|----------------|--------|-------------------------|
-| **Sesión de Caja** | Lectura | Validar que el turno está abierto y vigente (< 24h). |
-| **Lotes de Inventario (FIFO)** | Actualización | El RPC descuenta directamente la cantidad de los lotes (`inventory_batches`) e inserta en `sale_item_batches`. |
-| **Cabecera de Venta** | Creación | Se registra el identificador global de la venta (`sales`). |
-| **Detalle de Venta** | Creación | Se registra línea por línea lo vendido. **Crucial:** Aquí el backend asienta el Precio Real de Venta y Costo Promedio consumido, congelándolos (`sale_items`). |
-| **Movimientos Logísticos** | Creación | Se asienta la salida física (`inventory_movements`). **Importante:** El tipo exacto es `venta`, el cual está en la lista de exclusión del trigger `bridge_movement_to_batch` para evitar un doble consumo accidental de stock. |
-| **Movimientos de Caja** | Creación (Condicional) | Si la operación requiere un canal, se inserta el registro de ingreso/egreso en `cash_movements`. |
-| **Cuentas por Cobrar** | Creación (Condicional) | Si el pago fue Fiado, se genera un registro de deuda al cliente. |
-| **Gastos Operativos** | Creación (Condicional) | Si fue Merma/Consumo, se registra el gasto por pérdida. |
+| Entidad Física en BD | Columna Física | Tipo de Dato | Nullable | Restricción / Invariante Arquitectónico |
+|---|---|---|:---:|---|
+| **`sales`** | `id` | `uuid` | NO | Clave primaria (`gen_random_uuid()`). |
+| | `store_id` | `uuid` | NO | Clave foránea a `stores(id)`. Partición multi-tenant. |
+| | `ticket_number` | `integer` | NO | Consecutivo numérico seguro. `UNIQUE(store_id, ticket_number)`. |
+| | `employee_id` | `uuid` | NO | Clave foránea a `employees(id)`. Cajero responsable. |
+| | `client_id` | `uuid` | SÍ | Clave foránea a `clients(id)`. Obligatorio si fiado. |
+| | `total` | `numeric` | NO | Total oficial consolidado en backend. Moneda entera COP. |
+| | `rounding_difference` | `numeric` | NO | Diferencia entre total matemático y redondeado (`SPEC-010`). |
+| | `payment_method` | `text` | NO | CHECK: `'efectivo'`, `'nequi'`, `'daviplata'`, `'fiado'`. |
+| | `amount_received` | `numeric` | SÍ | Dinero entregado por el cliente en efectivo. |
+| | `change_given` | `numeric` | SÍ | Vueltas calculadas con algoritmo de empate hacia abajo. |
+| | `sync_status` | `text` | NO | CHECK: `'synced'`, `'pending'`, `'failed'`. Default `'synced'`. |
+| | `local_id` | `text` | SÍ | Identificador local temporal para sincronización offline. |
+| | `is_voided` | `boolean` | NO | Marca lógica de anulación. Default `false`. |
+| | `voided_by` | `uuid` | SÍ | Administrador que ejecutó la anulación. |
+| | `void_reason` | `text` | SÍ | Motivo explícito de la anulación (mínimo 5 caracteres). |
+| | `created_at` | `timestamptz` | NO | Marca temporal de consolidación transaccional. |
+| **`sale_items`** | `id` | `uuid` | NO | Clave primaria (`gen_random_uuid()`). |
+| | `sale_id` | `uuid` | NO | Clave foránea a `sales(id)` con `ON DELETE CASCADE`. |
+| | `product_id` | `uuid` | NO | Clave foránea a `products(id)`. |
+| | `quantity` | `numeric` | NO | Cantidad vendida (> 0, entero en unidades, máx 2 decimales pesables). |
+| | `unit_price` | `numeric` | NO | Precio de venta congelado al momento del cobro. |
+| | `subtotal` | `numeric` | NO | Subtotal con redondeo a $50 aplicado en pesables. |
+| | `unit_cost` | `numeric` | SÍ | Costo promedio ponderado congelado de los lotes FIFO. |
+| | `created_at` | `timestamptz` | NO | Marca temporal de inserción. |
+| **`sale_item_batches`** | `id` | `uuid` | NO | Clave primaria (`gen_random_uuid()`). |
+| | `sale_item_id` | `uuid` | NO | Clave foránea a `sale_items(id)` con `ON DELETE CASCADE`. |
+| | `batch_id` | `uuid` | NO | Clave foránea a `inventory_batches(id)`. |
+| | `quantity_consumed` | `numeric` | NO | Unidades descontadas de la capa específica del lote. |
+| | `unit_cost` | `numeric` | NO | Costo de adquisición de la capa del lote consumida. |
+| | `unit_price` | `numeric` | NO | Precio de venta asignado a la capa del lote. |
+| | `created_at` | `timestamptz` | NO | Marca temporal de despiece inmutable. |
+| **`clients`** | `id` | `uuid` | NO | Clave primaria (`gen_random_uuid()`). |
+| | `store_id` | `uuid` | NO | Clave foránea a `stores(id)`. |
+| | `name` | `text` | NO | Nombre o razón social del cliente. |
+| | `id_number` | `text` | SÍ | Documento de identidad fiscal. |
+| | `phone` | `text` | SÍ | Teléfono de contacto. |
+| | `credit_limit` | `numeric` | NO | Cupo máximo de crédito autorizado. |
+| | `balance` | `numeric` | NO | Saldo deudor acumulado actual. Default `0`. |
+| | `is_deleted` | `boolean` | NO | Eliminación lógica del cliente. Default `false`. |
+| | `created_at` | `timestamptz` | NO | Fecha de registro. |
+| | `updated_at` | `timestamptz` | NO | Fecha de última actualización de perfil. |
+| **`client_ledger`** | `id` | `uuid` | NO | Clave primaria (`gen_random_uuid()`). |
+| | `client_id` | `uuid` | NO | Clave foránea a `clients(id)`. |
+| | `store_id` | `uuid` | NO | Clave foránea a `stores(id)`. |
+| | `amount` | `numeric` | NO | Importe de la transacción (positivo cargo, negativo abono). |
+| | `previous_balance` | `numeric` | NO | Saldo anterior congelado antes de la operación. |
+| | `new_balance` | `numeric` | NO | **GENERATED ALWAYS AS (`previous_balance + amount`)**. |
+| | `reference_id` | `uuid` | SÍ | Referencia al `sale_id` en ventas fiadas. |
+| | `transaction_type` | `text` | NO | CHECK: `'venta_fiado'`, `'abono'`, `'anulacion_fiado'`, etc. |
+| | `created_by` | `uuid` | SÍ | Empleado que registró la transacción de cartera. |
+| | `created_at` | `timestamptz` | NO | Marca temporal inmutable del asiento. |
