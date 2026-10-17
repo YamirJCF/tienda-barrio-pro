@@ -126,7 +126,6 @@ DECLARE
     v_current_stock NUMERIC;
     v_store_id UUID;
     v_product_name TEXT;
-    v_pending_invoices BOOLEAN;
 BEGIN
     SELECT current_stock, store_id, name 
     INTO v_current_stock, v_store_id, v_product_name
@@ -141,32 +140,19 @@ BEGIN
     -- Validación multi-tenant obligatoria (Regla 4)
     PERFORM public.assert_store_access(v_store_id);
 
-    -- Regla 1: Validar si existen deudas vinculadas con saldo pendiente
-    SELECT EXISTS (
-        SELECT 1 
-        FROM public.inventory_movements im
-        JOIN public.supplier_invoices si ON im.reference_invoice_id = si.id
-        WHERE im.product_id = p_product_id
-          AND LOWER(im.movement_type) = 'entrada'
-          AND si.amount_paid < si.total_amount
-    ) INTO v_pending_invoices;
-
-    IF v_pending_invoices THEN
-        RAISE EXCEPTION 'PENDING_PAYABLES: El producto está vinculado a una cuenta por pagar pendiente. Debe saldar la deuda con el proveedor antes de eliminarlo.'
-            USING ERRCODE = 'P0001';
-    END IF;
-
-    -- Regla 2: Validar si hay existencias físicas en stock
-    IF v_current_stock > 0 THEN
+    -- Regla 1: Validar si hay existencias físicas en stock (POL-LOG-02)
+    IF COALESCE(v_current_stock, 0) > 0 THEN
         RAISE EXCEPTION 'STOCK_REMAINING: El producto tiene existencias (%). Debe registrar un Ajuste de Salida o Merma antes de darlo de baja.', v_current_stock
             USING ERRCODE = 'P0001';
     END IF;
 
-    -- Regla 3: Mutación de Naturaleza y Liberación de PLU para reciclaje
+    -- Regla 2: Mutación de Naturaleza y Liberación de PLU para reciclaje
+    -- Conforme a POL-LOG-02 (Independencia Logística y Contable), las cuentas por pagar
+    -- y movimientos históricos en Kardex permanecen intactos sin bloquear la baja del catálogo.
     UPDATE public.products 
     SET is_active = false,
         plu = 'DEL-' || substr(id::text, 1, 8),
-        name = '[ELIMINADO] ' || v_product_name,
+        name = CASE WHEN name LIKE '[ELIMINADO] %' THEN name ELSE '[ELIMINADO] ' || v_product_name END,
         updated_at = now()
     WHERE id = p_product_id;
 

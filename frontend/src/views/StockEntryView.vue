@@ -281,12 +281,22 @@ const { formatCurrency } = useCurrencyFormat();
 const { execute: executeSave, isLoading: isSaving } = useAsyncAction();
 const { showSuccess, showWarning, showError } = useNotifications();
 
-// Fetch suppliers on mount
-onMounted(async () => {
-  const storeId = authStore.currentStore?.id;
+const loadSuppliersAndInvoices = async () => {
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
   if (storeId) {
     await suppliersStore.fetchSuppliers(storeId);
     await payablesStore.fetchInvoices();
+  }
+};
+
+// Fetch suppliers on mount
+onMounted(async () => {
+  await loadSuppliersAndInvoices();
+});
+
+watch(() => authStore.currentUser?.storeId || authStore.currentStore?.id, async (newStoreId) => {
+  if (newStoreId) {
+    await loadSuppliersAndInvoices();
   }
 });
 

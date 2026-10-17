@@ -248,11 +248,14 @@ const emptyStateMessage = computed(() => {
 });
 
 const loadData = async () => {
-  if (authStore.currentStore?.id) {
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+  if (storeId) {
     await Promise.all([
-      suppliersStore.fetchSuppliers(authStore.currentStore.id),
+      suppliersStore.fetchSuppliers(storeId),
       payablesStore.fetchInvoices()
     ]);
+  } else {
+    await payablesStore.fetchInvoices();
   }
 };
 
@@ -260,7 +263,7 @@ onMounted(() => {
   loadData();
 });
 
-watch(() => authStore.currentStore?.id, (newStoreId) => {
+watch(() => authStore.currentUser?.storeId || authStore.currentStore?.id, (newStoreId) => {
   if (newStoreId) {
     loadData();
   }

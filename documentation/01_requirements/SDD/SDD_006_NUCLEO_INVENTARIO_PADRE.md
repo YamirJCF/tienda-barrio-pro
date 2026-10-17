@@ -116,13 +116,9 @@ sequenceDiagram
     alt current_stock > 0
         RPC-->>Admin: RAISE EXCEPTION 'STOCK_REMAINING' (No se puede eliminar con existencias)
     else current_stock == 0
-        RPC->>SI: SELECT 1 FROM supplier_invoices WHERE ... AND amount_paid < total_amount
-        alt Tiene facturas impagas
-            RPC-->>Admin: RAISE EXCEPTION 'PENDING_PAYABLES' (Deudas pendientes asociadas)
-        else Sin deudas pendientes
-            RPC->>P: UPDATE products SET is_active = false, plu = 'DEL-' || substr(id::text, 1, 8) WHERE id = p_product_id
-            RPC-->>Admin: Retorna { success: true, product_id, is_active: false }
-        end
+        Note over RPC: POL-LOG-02: Independencia Logística y Contable (Deudas en supplier_invoices preservadas)
+        RPC->>P: UPDATE products SET is_active = false, plu = 'DEL-' || substr(id::text, 1, 8) WHERE id = p_product_id
+        RPC-->>Admin: Retorna { success: true, product_id, is_active: false }
     end
 ```
 
@@ -146,8 +142,8 @@ stateDiagram-v2
     Agotado --> ConStockBajo : Entrada parcial (0 < stock <= min_stock)
     Agotado --> ActivoNormal : Entrada completa (stock > min_stock)
     
-    Agotado --> InactivoLógico : rpc_soft_delete_product (Admin, sin deudas)
-    Note right of InactivoLógico : is_active = false, libera PLU con prefijo 'DEL-'
+    Agotado --> InactivoLógico : rpc_soft_delete_product (Admin, stock = 0)
+    Note right of InactivoLógico : is_active = false, libera PLU con prefijo 'DEL-'. Deudas en supplier_invoices preservadas (POL-LOG-02).
     
     InactivoLógico --> [*]
 ```
@@ -180,15 +176,13 @@ stateDiagram-v2
   1. El Administrador selecciona "Eliminar Producto" en la ficha del artículo.
   2. El sistema solicita confirmación advirtiendo que la acción es definitiva.
   3. Al confirmar, el frontend invoca `rpc_soft_delete_product(p_product_id)`.
-  4. El servidor verifica que el usuario sea Administrador.
+  4. El servidor verifica acceso multi-tenant vía `assert_store_access(store_id)`.
   5. El servidor verifica que `current_stock == 0`.
-  6. El servidor verifica que no existan facturas pendientes por pagar a proveedores vinculadas al producto.
-  7. El servidor conmuta `is_active = false` y renombra el PLU a `'DEL-' || substr(id::text, 1, 8)` para liberar el código numérico original.
-  8. Las claves foráneas en históricos de ventas (`sale_items`) y Kardex (`inventory_movements`) se preservan intactas.
+  6. El servidor conmuta `is_active = false`, renombra el PLU a `'DEL-' || substr(id::text, 1, 8)` para liberar el código numérico original y prefija el nombre con `'[ELIMINADO] '`.
+  7. Las claves foráneas en históricos de ventas (`sale_items`), Kardex (`inventory_movements`) y facturas de compras (`supplier_invoices`) se preservan intactas en cumplimiento del principio de Independencia Logística y Contable (`POL-LOG-02`).
 - **Flujos Alternativos:**
   - *Existencias remanentes (`current_stock > 0`):* Aborta con `STOCK_REMAINING` indicando las existencias que deben darse de baja previamente.
-  - *Facturas impagas pendientes:* Aborta con `PENDING_PAYABLES`.
-  - *Usuario no administrador:* Aborta con `UNAUTHORIZED`.
+  - *Acceso denegado o no autorizado:* Aborta con `STORE_ACCESS_DENIED`.
 - **Postcondición:** Producto retirado de la vista comercial sin corromper la integridad referencial.
 
 ### Caso C: Búsqueda Rápida por PLU
@@ -346,10 +340,9 @@ stateDiagram-v2
   | Código de Error | Causa | Mensaje Técnico |
   |-----------------|-------|-----------------|
   | `STORE_ACCESS_DENIED` | Usuario no pertenece a la tienda propietaria | El usuario no tiene acceso a esta tienda |
-  | `UNAUTHORIZED` | Usuario no posee rol Administrador | Solo los administradores pueden eliminar productos del catálogo |
-  | `PRODUCT_NOT_FOUND` | `p_product_id` no existe en la tienda | Producto no encontrado en el catálogo |
-  | `STOCK_REMAINING` | El producto tiene existencias (`current_stock > 0`) | No se puede eliminar un producto con existencias en inventario. Debe dar de baja o transferir el stock primero |
-  | `PENDING_PAYABLES` | Existen facturas de proveedores impagas asociadas | No se puede eliminar el producto porque tiene facturas pendientes de pago a proveedores |
+  | `PRODUCT_NOT_FOUND` | `p_product_id` no existe en la tienda | El producto especificado (%) no existe |
+  | `STOCK_REMAINING` | El producto tiene existencias (`current_stock > 0`) | El producto tiene existencias (%). Debe registrar un Ajuste de Salida o Merma antes de darlo de baja |
+  | `PENDING_PAYABLES` *(Desacoplado / POL-LOG-02)* | Anteriormente bloqueaba la baja; desacoplado en favor de la Independencia Logística y Contable, manteniendo las deudas vivas en Cuentas por Pagar sin impedir la baja física de catálogo cuando `current_stock = 0`. | N/A (Desacoplado) |
 
 ---
 
@@ -532,3 +525,13 @@ erDiagram
 | `sale_price` | `numeric` | NO | `numeric` | ✅ Existe | Nuevo precio de venta establecido |
 | `created_by` | `uuid` | SÍ | FK `employees(id)` / `admin_profiles` | ✅ Existe | Usuario que autorizó la modificación |
 | `created_at` | `timestamptz` | NO | `now()` | ✅ Existe | Marca de tiempo inmutable del cambio |
+
+---
+
+## 8. Registro de Trade-offs y Decisiones de Alcance (Regla 7)
+
+### D-006-01: Desacoplamiento de Cuentas por Pagar en Baja Lógica de Producto (`POL-LOG-02`)
+- **Qué se decidió:** Remover la validación bloqueante `PENDING_PAYABLES` de `rpc_soft_delete_product`, permitiendo la baja lógica (`is_active = false`, prefijo `DEL-` en PLU) de cualquier artículo con `current_stock = 0`, sin exigir la liquidación previa de las facturas en `supplier_invoices`.
+- **Por qué (trade-off concreto):** La baja lógica preserva íntegramente las filas y relaciones de clave foránea en `inventory_movements` y `supplier_invoices`. Las facturas impagas continúan registradas, visibles y exigibles en el módulo de Cuentas por Pagar (SDD-019). Bloquear la baja de un producto con stock en 0 violaba la Independencia Logística y Contable (`POL-LOG-02`) e impedía a los tenderos depurar su catálogo activo de productos descontinuados mientras mantuviesen créditos vigentes con proveedores mayoristas.
+- **Bajo qué condición futura se revisará:** Solo en caso de requerirse un proceso de absorción o condonación de deudas vinculadas directamente a la liquidación judicial del comercio.
+

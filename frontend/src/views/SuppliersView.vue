@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSuppliersStore } from '../stores/suppliers';
 import { useAuthStore } from '../stores/auth';
@@ -20,10 +20,20 @@ const router = useRouter();
 const suppliersStore = useSuppliersStore();
 const authStore = useAuthStore();
 
-onMounted(async () => {
-  const storeId = authStore.currentStore?.id;
+const fetchSuppliersForStore = async () => {
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
   if (storeId) {
     await suppliersStore.fetchSuppliers(storeId);
+  }
+};
+
+onMounted(async () => {
+  await fetchSuppliersForStore();
+});
+
+watch(() => authStore.currentUser?.storeId || authStore.currentStore?.id, async (newStoreId) => {
+  if (newStoreId) {
+    await suppliersStore.fetchSuppliers(newStoreId);
   }
 });
 
@@ -68,7 +78,7 @@ const openNewSupplier = () => {
 };
 
 const handleSave = async () => {
-  const storeId = authStore.currentStore?.id;
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
   if (!storeId || !newSupplier.value.name.trim()) return;
 
   const result = await suppliersStore.createSupplier({
