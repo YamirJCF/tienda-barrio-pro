@@ -535,7 +535,7 @@ BEGIN
 END;
 $function$;
 
--- Alias get_financial_Summary
+-- Alias get_financial_Summary (Retrocompatible RVC L44)
 CREATE OR REPLACE FUNCTION public.get_financial_Summary(
     p_store_id UUID,
     p_start_date DATE DEFAULT CURRENT_DATE,
@@ -547,7 +547,16 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $function$
+DECLARE
+    v_report JSONB;
 BEGIN
-    RETURN public.rpc_get_comprehensive_financial_report(p_store_id, p_start_date, p_end_date, p_employee_id);
+    v_report := public.rpc_get_comprehensive_financial_report(p_store_id, p_start_date, p_end_date, p_employee_id);
+    RETURN v_report || jsonb_build_object(
+        'total_sales',     v_report->'revenue',
+        'total_cost',      v_report->'cogs',
+        'profit_margin',   v_report->'gross_margin',
+        'money_breakdown', v_report->'payment_breakdown'
+    );
 END;
 $function$;
+
