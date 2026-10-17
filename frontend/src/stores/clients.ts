@@ -186,10 +186,11 @@ export const useClientsStore = defineStore(
       // The RPC validates balance, updates clients.balance, and writes to client_ledger atomically.
       if (isSupabaseConfigured() && navigator.onLine) {
         const supabase = getSupabaseClient()!;
-        const { data, error } = await supabase.rpc('registrar_abono', {
+        const { data, error } = await supabase.rpc('rpc_registrar_abono', {
           p_client_id: clientId,
           p_amount: amount.toNumber(),
-          p_payment_method: paymentMethod
+          p_payment_method: paymentMethod,
+          p_notes: description
         });
 
         if (error || !data?.success) {
@@ -197,7 +198,7 @@ export const useClientsStore = defineStore(
           throw new Error(msg);
         }
 
-        // Update local Pinia state optimistically after confirmed RPC success
+        // Update local Pinia state with backend calculated new_balance
         const txStub: ClientTransaction = {
           id: generateUUID(),
           clientId,
@@ -208,7 +209,11 @@ export const useClientsStore = defineStore(
         };
         const client = getClientById(clientId);
         if (client) {
-          client.totalDebt = client.totalDebt.minus(amount);
+          if (data.data?.new_balance !== undefined) {
+            client.totalDebt = new Decimal(data.data.new_balance);
+          } else {
+            client.totalDebt = client.totalDebt.minus(amount);
+          }
           client.updatedAt = new Date().toISOString();
         }
         transactions.value.push(txStub);

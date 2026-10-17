@@ -44,6 +44,17 @@ vi.mock('../stores/auth', () => ({
   })
 }));
 
+const mockShowWarning = vi.fn();
+const mockShowSuccess = vi.fn();
+vi.mock('@/composables/useNotifications', () => ({
+  useNotifications: () => ({
+    showWarning: mockShowWarning,
+    showSuccess: mockShowSuccess,
+    showError: vi.fn(),
+    showInfo: vi.fn()
+  })
+}));
+
 describe('ClientDetailView.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -116,9 +127,9 @@ describe('ClientDetailView.vue', () => {
 
     expect(wrapper.text()).toContain('John Doe');
     expect(wrapper.text()).toContain('C.C. 1.020.304.050');
-    expect(wrapper.text()).toContain('$150.000'); // total debt
+    expect(wrapper.text()).toContain('150.000'); // total debt
     expect(wrapper.text()).toContain('Cupo de Crédito');
-    expect(wrapper.text()).toContain('Disponibles: $350.000');
+    expect(wrapper.text()).toContain('Disponibles: 350.000');
   });
 
   it('renders recent transactions list', async () => {
@@ -127,9 +138,9 @@ describe('ClientDetailView.vue', () => {
     await wrapper.vm.$nextTick();
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.text()).toContain('Movimientos Recientes');
+    expect(wrapper.text()).toContain('Historial de Transacciones');
     expect(wrapper.text()).toContain('Venta #1001');
-    expect(wrapper.text()).toContain('+$150.000');
+    expect(wrapper.text()).toContain('+150.000');
   });
 
   it('restricts edit access to non-admin roles', async () => {
@@ -223,15 +234,14 @@ describe('ClientDetailView.vue', () => {
     const input = modal.find('input');
     await input.setValue('160000'); // 160,000 > 150,000
 
-    // Spy on window.alert
-    window.alert = vi.fn();
-
     // Click confirm payment button
     const confirmBtn = modal.findAll('button').find(b => b.text().includes('Confirmar'));
     await confirmBtn?.trigger('click');
 
-    // Should trigger validation alert and not call registerPayment
-    expect(window.alert).toHaveBeenCalled();
+    // Should trigger validation warning and not call registerPayment
+    expect(mockShowWarning).toHaveBeenCalledWith(
+      expect.stringContaining('El abono no puede superar la deuda actual')
+    );
     expect(mockRegisterPayment).not.toHaveBeenCalled();
   });
 
@@ -252,6 +262,6 @@ describe('ClientDetailView.vue', () => {
     await confirmBtn?.trigger('click');
 
     // Verify registerPayment was called with correct arguments
-    expect(mockRegisterPayment).toHaveBeenCalledWith('cli-123', new Decimal(50000), 'Abono Efectivo');
+    expect(mockRegisterPayment).toHaveBeenCalledWith('cli-123', new Decimal(50000), 'Abono Efectivo', 'efectivo');
   });
 });

@@ -6,13 +6,17 @@
  */
 import { ref, watch } from 'vue';
 import BaseModal from '../ui/BaseModal.vue';
+import BaseButton from '../ui/BaseButton.vue';
 import { getSupabaseClient } from '../../data/supabaseClient';
-import { formatCurrency } from '../../utils/currency';
+import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
+import { useNotifications } from '../../composables/useNotifications';
+import { useAuthStore } from '../../stores/auth';
+import { saleRepository } from '../../data/repositories/saleRepository';
 import { formatRelativeTime } from '../../composables/useRelativeTime';
 import { logger } from '../../utils/logger';
 import {
   ShoppingCart, User, CreditCard, Clock,
-  AlertTriangle, Package
+  AlertTriangle, Package, XCircle
 } from 'lucide-vue-next';
 
 interface Props {
@@ -38,11 +42,48 @@ interface SaleDetail {
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
+  'voided': [saleId: string];
 }>();
+
+const authStore = useAuthStore();
+const { formatCurrency } = useCurrencyFormat();
+const { showWarning, showSuccess, showError } = useNotifications();
 
 const isLoading = ref(false);
 const detail = ref<SaleDetail | null>(null);
 const fetchError = ref<string | null>(null);
+const isVoiding = ref(false);
+const voidReason = ref('');
+const showVoidModal = ref(false);
+
+const handleVoidSale = async () => {
+  if (voidReason.value.trim().length < 10) {
+    showWarning('El motivo de anulación debe tener al menos 10 caracteres');
+    return;
+  }
+  if (!props.saleId) return;
+
+  isVoiding.value = true;
+  try {
+    const res = await saleRepository.voidSale(props.saleId, voidReason.value.trim());
+    if (res.success) {
+      showSuccess('Venta anulada correctamente');
+      showVoidModal.value = false;
+      if (detail.value) {
+        detail.value.is_voided = true;
+        detail.value.void_reason = voidReason.value.trim();
+      }
+      voidReason.value = '';
+      emit('voided', props.saleId);
+    } else {
+      showError(res.error || 'No se pudo anular la venta');
+    }
+  } catch (err: any) {
+    showError(err.message || 'Error al anular la venta');
+  } finally {
+    isVoiding.value = false;
+  }
+};
 
 const paymentLabels: Record<string, string> = {
   'efectivo': '💵 Efectivo',
@@ -188,6 +229,57 @@ watch(() => props.modelValue, async (open) => {
           <span class="font-bold text-lg text-emerald-600 dark:text-emerald-400">{{ formatCurrency(detail.total) }}</span>
         </div>
       </div>
+
+      <!-- Actions: Void Sale (Admin Only) -->
+      <div v-if="authStore.isAdmin && !detail.is_voided" class="pt-2">
+        <BaseButton
+          variant="danger"
+          class="w-full justify-center"
+          @click="showVoidModal = true"
+        >
+          <XCircle :size="16" class="mr-1.5" />
+          Anular Venta (Admin)
+        </BaseButton>
+      </div>
     </div>
+
+    <!-- Modal Confirmación Anulación -->
+    <BaseModal
+      v-model="showVoidModal"
+      title="Anular Venta"
+      maxHeight="500px"
+    >
+      <div class="p-4 space-y-4">
+        <div class="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-3 rounded-xl border border-red-200 dark:border-red-800 text-sm">
+          <AlertTriangle :size="20" class="shrink-0" />
+          <span>Esta acción revertirá los fondos en caja/deuda y reingresará los productos al inventario.</span>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">
+            Motivo de anulación (mínimo 10 caracteres)
+          </label>
+          <textarea
+            v-model="voidReason"
+            rows="3"
+            class="w-full p-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500"
+            placeholder="Describa el motivo de la anulación..."
+          ></textarea>
+          <p class="text-[11px] text-slate-400 mt-1">{{ voidReason.length }}/10 caracteres mínimos</p>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <BaseButton variant="secondary" @click="showVoidModal = false" :disabled="isVoiding">
+            Cancelar
+          </BaseButton>
+          <BaseButton 
+            variant="danger" 
+            @click="handleVoidSale" 
+            :loading="isVoiding" 
+            :disabled="isVoiding || voidReason.trim().length < 10"
+          >
+            Confirmar Anulación
+          </BaseButton>
+        </div>
+      </div>
+    </BaseModal>
   </BaseModal>
 </template>

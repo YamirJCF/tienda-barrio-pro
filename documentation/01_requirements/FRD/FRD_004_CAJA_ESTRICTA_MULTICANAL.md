@@ -1,3 +1,10 @@
+> [!WARNING]
+> **DOCUMENTO DEPRECATED / CONSOLIDADO**  
+> Este documento preliminar fue absorbido y reemplazado normativamente por [`FRD_004_CONTROL_DE_CAJA.md`](./FRD_004_CONTROL_DE_CAJA.md) y [`FRD_020_CAJA_MULTICANAL.md`](./FRD_020_CAJA_MULTICANAL.md), y su diseño técnico reside en [`SDD_004_CONTROL_DE_CAJA.md`](../SDD/SDD_004_CONTROL_DE_CAJA.md), [`SDD_020_CAJA_MULTICANAL.md`](../SDD/SDD_020_CAJA_MULTICANAL.md) y [`SDD_023_IMPACTO_CRUZADO_MULTICANAL.md`](../SDD/SDD_023_IMPACTO_CRUZADO_MULTICANAL.md).  
+> Se conserva únicamente por trazabilidad histórica.
+
+---
+
 # FRD-004: Caja Estricta Multicanal (Canales Fijos Limitados)
 
 ### Nombre de la Funcionalidad

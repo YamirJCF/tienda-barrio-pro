@@ -1,5 +1,10 @@
 # SDD-018: Control Operacional y Análisis Financiero Integral
 
+> **Asociado a:** [FRD-018](../FRD/FRD_018_CONTROL_OPERACIONAL_Y_ANALISIS_FINANCIERO.md)
+> **Fase del Plan:** Ola 4 — Reportes, Auditoría y Cuentas por Pagar (Ítem 5)
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
+> **Última Actualización:** 2026-10-17
+
 ---
 
 ## 0. Control de Versiones y Metadatos
@@ -19,6 +24,16 @@
 | 1.0 | 2026-07-25 | Arquitecto de Datos | Borrador preliminar de análisis operacional con payload plano simple. |
 | 1.5 | 2026-08-07 | Arquitecto de Datos | Saneamiento documental inicial removiendo código SQL embebido en FRD. |
 | 2.0 | 2026-10-16 | Orquestador Técnico & Auditor QA | Saneamiento total bajo protocolo PAC-SDD v2.0: erradicación total de código SQL/PLpgSQL, estructuración canónica en 4 Pilares Financieros independientes, especificación del RPC consolidado `rpc_get_comprehensive_financial_report` v2.0 con parámetro opcional `p_employee_id`, guardia RBAC estricto exclusivo para Administradores (`admin_profiles`), segregación contable absoluta de OPEX frente a pagos a proveedor, formalización de N=6 deudas técnicas bajo Regla 7 y contratos JSON Schema en Sección 5. |
+
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
+La inspección empírica del esquema físico de producción (`ihtjocmhzuliwwvdzfnz`) identifica **N=6 deudas técnicas** formalizadas bajo la Regla 7 (cuyo desglose completo reside en la Sección 7):
+- **D-1:** Expansión de `rpc_get_comprehensive_financial_report` para cubrir íntegramente los 4 Pilares Financieros (P&L con devoluciones como ingreso negativo según H7, Flujo de Caja, Inventario DIO y KPIs de Empleados).
+- **D-2:** Guardia RBAC estricto en servidor (`admin_profiles`) + `assert_store_access(p_store_id)` para garantizar ceguera financiera a cajeros (`POL-SEC-01`).
+- **D-3:** Incorporación del parámetro opcional `p_employee_id UUID DEFAULT NULL` para filtrar el Pilar 4 (Hallazgo H17).
+- **D-4:** Segregación contable estricta entre COGS FIFO (`sale_items.unit_cost`), gastos OPEX (`movement_type = 'gasto'`) y pagos a proveedores (`movement_type = 'pago_proveedor'`).
+- **D-5:** Estratificación canónica de cartera por tramos de antigüedad (Aging) en el Pilar 2.
+- **D-6:** Regularización de privilegios base (`GRANT ALL`) conforme a la Regla 8 de `AGENTS.md`.
 
 ---
 

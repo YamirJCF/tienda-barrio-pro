@@ -1,5 +1,10 @@
 # SDD-023: Matriz de Impacto Cruzado Transversal — Consistencia Multicanal y Transición Arquitectónica
 
+> **Asociado a:** [FRD-023](../FRD/FRD_023_IMPACTO_CRUZADO_MULTICANAL.md), [FRD-020](../FRD/FRD_020_CAJA_MULTICANAL.md) y [FRD-022](../FRD/FRD_022_GASTOS_MULTICANAL.md)
+> **Fase del Plan:** Ola 4 — Reportes, Auditoría y Cuentas por Pagar (Ítem 6)
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
+> **Última Actualización:** 2026-10-17
+
 ---
 
 ## 0. Control de Versiones y Metadatos
@@ -18,6 +23,16 @@
 |---|---|---|---|
 | 1.0 | 2026-08-07 | Arquitecto de Datos | Borrador preliminar de impacto cruzado asumiendo la creación en producción de la tabla `cash_session_balances` y de la columna `payment_method` en `cash_movements`. |
 | 2.0 | 2026-10-16 | Orquestador Técnico & Auditor QA | Saneamiento total bajo protocolo PAC-SDD v2.0: erradicación definitiva de la alucinación de la tabla `cash_session_balances` y de la columna `payment_method` en `cash_movements` tras verificación empírica en Supabase producción (`ihtjocmhzuliwwvdzfnz`); formalización de la arquitectura física real basada en `cash_sessions` (12 columnas) y `cash_movements` (7 columnas); especificación de no-regresión para los 10 procedimientos y 2 triggers dependientes; armonización de flujos multicanal entre POS, Cartera, Proveedores, OPEX y P&L; formalización de N=6 deudas técnicas bajo Regla 7 y contratos JSON Schema en Sección 5. |
+
+
+### 0.3 Auditoría de BD contra Realidad (Consenso Arquitectónico y Deuda Técnica)
+En cumplimiento de las Reglas 2, 6 y 7 de `AGENTS.md`, se formalizan las **N=6 decisiones y deudas técnicas** (desglosadas en la Sección 7) armonizadas con `SDD_020_CAJA_MULTICANAL.md`:
+- **D-1 (Consenso SDD_020 / SDD_023):** Preservación de las 12 columnas físicas de `cash_sessions` para proteger las 10 funciones y 2 triggers existentes (`fn_audit_cash_closed`, `fn_audit_cash_opened`), descartando la creación disruptiva de `cash_session_balances` en esta fase.
+- **D-2 (Migración P1):** Adición de la columna física `payment_method TEXT NOT NULL DEFAULT 'efectivo'` en `cash_movements` (actualmente de 7 columnas) para discriminar de forma nativa los ingresos y egresos por canal monetario sin depender a largo plazo de tags en `description`.
+- **D-3:** Reconciliación transaccional de ventas digitales en `rpc_procesar_venta_v3`.
+- **D-4:** Integración atómica de `rpc_registrar_abono` en `cash_movements` sin duplicar ingresos en el P&L.
+- **D-5:** Blindaje de triggers de auditoría (`fn_audit_cash_closed` y `audit_caja`).
+- **D-6:** Regularización de privilegios base (`GRANT ALL`) en tablas del núcleo de caja (Regla 8).
 
 ---
 

@@ -21,9 +21,12 @@ import {
   Plus 
 } from 'lucide-vue-next';
 
+import { useNotifications } from '../composables/useNotifications';
+
 const router = useRouter();
 const authStore = useAuthStore();
 const employeesStore = useEmployeesStore();
+const { showWarning } = useNotifications();
 
 // Initialize store on mount
 onMounted(async () => {
@@ -78,7 +81,7 @@ const getAvatarColor = (name: string) => {
 
 const openNewEmployee = () => {
   if (employeesStore.activeEmployees.length >= 5) {
-      alert("Límite de empleados activos alcanzado. Desactiva uno existente para crear nuevo.");
+      showWarning("Límite de empleados activos alcanzado (5/5). Desactiva uno existente para crear nuevo.");
       return;
   }
   editingEmployeeId.value = undefined;

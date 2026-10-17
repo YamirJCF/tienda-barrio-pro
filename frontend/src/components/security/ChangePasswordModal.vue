@@ -31,10 +31,14 @@ const showCurrentPassword = ref(false);
 const showNewPassword = ref(false);
 const isSuccess = ref(false);
 
+const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+
 // Validation
 const newPasswordError = computed(() => {
   if (!newPassword.value) return '';
-  if (newPassword.value.length < 6) return 'Mínimo 6 caracteres';
+  if (!PASSWORD_REGEX.test(newPassword.value)) {
+    return 'Mínimo 8 caracteres, al menos una letra y un número';
+  }
   return '';
 });
 
@@ -47,7 +51,7 @@ const confirmPasswordError = computed(() => {
 const isFormValid = computed(() => {
   return (
     currentPassword.value.length > 0 &&
-    newPassword.value.length >= 6 &&
+    PASSWORD_REGEX.test(newPassword.value) &&
     confirmPassword.value === newPassword.value
   );
 });
@@ -170,7 +174,7 @@ const close = () => {
           id="new-password"
           label="Nueva Contraseña"
           required
-          placeholder="Mínimo 6 caracteres"
+          placeholder="Mínimo 8 caracteres (letras y números)"
           autocomplete="new-password"
           :error="newPasswordError"
         >

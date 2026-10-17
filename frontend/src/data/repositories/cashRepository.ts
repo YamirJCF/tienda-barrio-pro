@@ -267,7 +267,26 @@ export const cashRepository: CashRepository = {
     async addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; error?: string }> {
         const supabase = getSupabaseClient()!;
         try {
-            const movementType = transaction.type === 'income' ? 'ingreso' : 'gasto';
+            if (transaction.type === 'expense') {
+                const { data, error } = await supabase.rpc('rpc_registrar_gasto_v2', {
+                    p_session_id: sessionId,
+                    p_amount: transaction.amount.toNumber(),
+                    p_description: transaction.description,
+                    p_category: transaction.category || 'Servicios',
+                    p_payment_method: transaction.paymentMethod || 'efectivo'
+                });
+
+                if (error) {
+                    return { success: false, error: error.message };
+                }
+                const res = data as any;
+                if (res && res.success === false) {
+                    return { success: false, error: res.error || res.message || 'Error al registrar gasto' };
+                }
+                return { success: true };
+            }
+
+            const movementType = 'ingreso';
 
             const { error } = await supabase
                 .from('cash_movements')

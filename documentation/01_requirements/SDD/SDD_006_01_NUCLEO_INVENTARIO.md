@@ -1,125 +1,61 @@
-# SDD-006-01: Núcleo de Inventario Desacoplado
+# SDD-006-01: Núcleo de Inventario Desacoplado (DEROGADO / ABSORBIDO)
+
+> [!WARNING]
+> **DOCUMENTO DEROGADO Y ABSORBIDO POR CONSOLIDACIÓN ARQUITECTÓNICA (PAC-SDD v2.0)**  
+> Este documento se conserva únicamente para trazabilidad histórica del repositorio.  
+> **Documento Rector Vigente:** [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md)  
+> **Justificación:** Consolidado íntegramente en el documento maestro SDD_006_NUCLEO_INVENTARIO_PADRE.md durante la rectificación de la Ola 1.  
+> **Prohibición:** Los equipos de Backend (`/data`) y Frontend (`/ux`) TIENEN PROHIBIDO implementar contratos a partir de este archivo; deben regirse exclusivamente por el SDD absorbente indicado arriba.
 
 > **Asociado a:** [FRD-006-01](../FRD/FRD_006_01_NUCLEO_INVENTARIO.md)  
-> **Fase del Plan:** Fase 1 (Núcleo Transaccional)  
-> **Estado:** 🟢 Auditado y Corregido (QA Manual)  
-> **Última Actualización:** 2026-08-05
+> **Fase del Plan:** Consolidación Documental Pre-Código (Archivo Histórico)  
+> **Estado:** ⚪ Derogado / Absorbido por Suite Consolidada (2026-10-17)  
+> **Última Actualización:** 2026-10-17  
 
 ---
 
-## § 0. Contexto y Restricciones Aplicables (PEA-N)
+## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas
-| Política | Impacto Específico en este SDD |
-|----------|-------------------------------|
-| **Independencia Logística-Financiera (POL-LOG-01)** | El inventario ignora si la venta fue fiada o pagada; el stock se descuenta en base a la cantidad física. |
-| **Auditoría Inviolable (POL-SEG-02)** | Todo movimiento físico debe reflejarse en la Bitácora de Movimientos (Kardex). |
+### 0.1 Políticas Globales Activadas (ARQ-002)
+Las políticas originalmente listadas en este documento (`POL-AUTH-01`, `POL-SEC-01`, `POL-FIN-01`, `POL-LOG-01`, `POL-AUD-01`) se encuentran activas y gobernadas en [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
----
+### 0.2 Contratos Vecinos que Limitan el Diseño
+Todos los contratos vecinos han sido redirigidos hacia [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
-## § 1. Glosario Local
-
-* **Frontera Logística:** Límite arquitectónico del inventario. El inventario conoce existencias y movimientos, pero es ciego a los canales de pago o deudas.
-* **Bitácora Logística:** Registro inmutable que asienta la historia de todo lo que entra y sale. 
-* **Bloqueo de Déficit:** Regla de validación que aborta de inmediato cualquier transacción de salida que intente dejar el stock físico por debajo de cero (0).
-* **Operación Asíncrona:** Capacidad del inventario para recibir mercancía independientemente del estado de los turnos de caja.
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica)
+Sin deuda técnica propia abierta en este archivo por encontrarse absorbido. Toda brecha de migración sobre las entidades de este dominio reside formalizada bajo la Regla 7 en la sección `§0.3` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
 ---
 
-## § 2. Diagrama de Secuencia
-
-### Caso de Uso: Deducción Lógica y Bloqueo Concurrente
-```mermaid
-sequenceDiagram
-    participant Orquestador as Controlador Externo
-    participant Motor as Motor de Inventario
-    participant Lotes as Capas de Existencia
-    
-    Orquestador->>Motor: Solicita deducción (ID Producto, Cantidad)
-    Motor->>Motor: Verifica total disponible
-    
-    alt Déficit Logístico
-        Motor-->>Orquestador: Rechazo (Stock Insuficiente)
-    else Cobertura Total
-        loop Capas Activas (Ordenadas por Antigüedad)
-            Motor->>Lotes: Bloquea recurso (Prevención de Carrera)
-            Motor->>Lotes: Deduce cantidad de la capa
-        end
-        Motor-->>Orquestador: Retorna desglose de capas consumidas y costos asociados
-    end
-```
+## 1. Glosario Local
+Los términos de dominio de este submódulo forman parte del glosario unificado de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
 ---
 
-## § 3. Diagrama de Estados
-
-### Ciclo de Vida de Disponibilidad
-```mermaid
-stateDiagram-v2
-    [*] --> Recibido: Entrada Física
-    Recibido --> Disponible: Asignación a Lote
-    Disponible --> Disponible: Movimiento Parcial
-    Disponible --> Agotado: Consumo Total del Lote
-    Agotado --> [*]
-```
+## 2. Diagramas de Secuencia
+Los flujos de interacción actualizados bajo el protocolo PAC-SDD v2.0 se encuentran especificados en la sección `§2` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
 ---
 
-## § 4. Especificación Detallada de Casos de Uso
-
-### Caso A: Entrada de Mercancía
-- **Precondiciones:** El operario tiene permisos logísticos.
-- **Flujo Principal:**
-  1. El operario transmite la cantidad física y el costo de adquisición unitario.
-  2. El servidor valida que ambas variables sean mayores a cero.
-  3. El servidor crea una nueva capa de existencia (lote) congelando el costo.
-  4. El servidor asienta un registro de "Ingreso" en la bitácora logística.
-- **Postcondiciones:** Existencia física incrementada.
-
-### Caso B: Deducción Logística (Despacho)
-- **Precondiciones:** Se invoca a través de un controlador superior (Ej. Ventas).
-- **Flujo Principal:**
-  1. El controlador superior solicita "N" cantidad de un producto.
-  2. El motor logístico verifica la suma de todas las capas activas.
-  3. Al confirmar suficiencia, el motor bloquea el recurso para lectura concurrente.
-  4. El motor itera desde la capa más antigua, restando la cantidad hasta satisfacer la demanda.
-  5. Retorna al controlador la colección de sustracciones.
-- **Postcondiciones:** Capas reducidas. El controlador superior es responsable de asentar el egreso.
-
-### Caso C: Devolución y Reingreso
-- **Precondiciones:** Un producto despachado es retornado.
-- **Flujo Principal:**
-  1. El administrador emite la instrucción de reingreso referenciando el movimiento original.
-  2. El servidor no reabre la capa original; crea una nueva capa de estado "Devuelto", heredando el costo exacto con el que salió.
-  3. El servidor asienta un registro de "Reingreso" en la bitácora logística.
-- **Postcondiciones:** Existencia física incrementada bajo una capa de retorno.
+## 3. Diagramas de Estado
+Las máquinas de estado vigentes de las entidades relacionadas se encuentran modeladas en la sección `§3` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
 ---
 
-## § 5. Contrato de Interfaz
-
-### Operación: Deducción Estricta por Capas
-- **Entrada esperada:** 
-  - Identificador lógico del producto.
-  - Cantidad demandada (Estrictamente > 0).
-- **Reglas de transformación / cálculo:**
-  - El motor DEBE aplicar candados de exclusividad en las capas físicas procesadas para prevenir que dos deducciones concurrentes consuman la misma unidad.
-  - El motor NO DEBE asentar el movimiento de salida final en la bitácora logística; esa responsabilidad recae en el controlador invocador (quien conoce la razón: venta, merma, etc.) para mantener un solo bloque transaccional.
-- **Salida esperada:** Un arreglo desglosado de identificadores de capa, cantidades extraídas por cada capa y el costo unitario de las mismas.
+## 4. Especificación Detallada de Casos de Uso
+Los casos de uso de este requerimiento están cubiertos de forma íntegra en la sección `§4` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
 ---
 
-## § 6. Análisis de Seguridad
-
-- **Control de Acceso:** Las operaciones logísticas puras de ingreso asumen la validación territorial del servidor.
-- **Protección de Datos:** La bitácora logística es estrictamente de adición (append-only); no admite mutaciones ni borrados para garantizar la inviolabilidad de las auditorías.
-- **Superficie de Amenazas:** 
-  - *Amenaza:* Agotamiento concurrente (Dos ventas simultáneas sobre la última unidad).
-  - *Mitigación:* Se previene empleando bloqueos lógicos a nivel de fila durante la fase de deducción, encolando la segunda solicitud hasta que la primera finalice.
+## 5. Contrato de Interfaz
+Los payloads JSON, firmas de procedimientos almacenados y catálogos de códigos de error vigentes están normados en la sección `§5` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
 ---
 
-## § 7. Modelo de Datos Lógico
+## 6. Análisis de Seguridad
+Las directivas de seguridad centralizada (`assert_store_access`, `get_current_store_id`, `is_authorized_employee`) aplicables se encuentran especificadas en la sección `§6` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
 
-- **Capas de Existencia (Lotes):** Deben rastrear la cantidad original, la cantidad remanente y el costo de adquisición inmutable.
-- **Bitácora Logística:** Debe enlazar obligatoriamente el tipo de movimiento, la cantidad neta mutada, el actor, y referencias opcionales a operaciones de facturación externa.
+---
+
+## 7. Modelo de Datos Lógico
+El diagrama Entidad-Relación y el diccionario de columnas físicas verificadas contra `information_schema.columns` residen en la sección `§7` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).

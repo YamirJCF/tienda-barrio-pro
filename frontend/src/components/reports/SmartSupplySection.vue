@@ -211,7 +211,7 @@ const totalRisk = computed(() =>
               {{ item.product_name }}
             </p>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Se agotará antes de que llegue el proveedor
+              {{ item.suggestion || 'Se agotará antes de que llegue el proveedor' }}
             </p>
           </div>
         </div>
@@ -233,7 +233,7 @@ const totalRisk = computed(() =>
               {{ item.product_name }}
             </p>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Incluirlo en el próximo pedido al proveedor
+              {{ item.suggestion || 'Incluirlo en el próximo pedido al proveedor' }}
             </p>
           </div>
         </div>

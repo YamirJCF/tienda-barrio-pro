@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { useCashRegisterStore } from '../../stores/cashRegister';
 import Decimal from 'decimal.js';
-import { Store, CheckCircle, AlertTriangle, Loader2 } from 'lucide-vue-next';
+import { Store, CheckCircle, AlertTriangle, Loader2, ShieldCheck } from 'lucide-vue-next';
 import { useNotifications } from '@/composables/useNotifications';
 import { useNotificationsStore } from '../../stores/notificationsStore';
 
@@ -23,45 +23,32 @@ const cashRegisterStore = useCashRegisterStore();
 const physicalCounts = ref<Record<string, string>>({});
 const notes = ref('');
 const isLoading = ref(false);
-const { showError, showSuccess } = useNotifications(); // Hook
+const closedReport = ref<{
+  expected: number;
+  actual: number;
+  difference: number;
+} | null>(null);
+
+const { showError, showSuccess } = useNotifications();
 
 // Initialize counts
 import { watch } from 'vue';
 watch(() => props.modelValue, (isOpen) => {
   if (isOpen) {
     physicalCounts.value = {};
+    closedReport.value = null;
     Object.keys(cashRegisterStore.balancesByMethod).forEach(method => {
       physicalCounts.value[method] = '';
     });
   }
 });
 
-// Computed
-const systemExpected = computed(() => cashRegisterStore.currentBalance);
-const openingBalance = computed(() => cashRegisterStore.currentSession?.openingBalance || new Decimal(0));
-const totalIncome = computed(() => cashRegisterStore.totalIncome);
-const totalExpenses = computed(() => cashRegisterStore.totalExpenses);
-
 const balancesByMethod = computed(() => cashRegisterStore.balancesByMethod);
-
-const differences = computed(() => {
-  const diffs: Record<string, Decimal> = {};
-  for (const [method, expected] of Object.entries(balancesByMethod.value)) {
-    const physical = new Decimal(physicalCounts.value[method] || 0);
-    diffs[method] = physical.minus(expected);
-  }
-  return diffs;
-});
 
 const totalPhysical = computed(() => {
   return Object.values(physicalCounts.value).reduce((sum, count) => sum.plus(new Decimal(count || 0)), new Decimal(0));
 });
 
-const difference = computed(() => {
-  return totalPhysical.value.minus(systemExpected.value);
-});
-
-const isBalanced = computed(() => difference.value.equals(0));
 const isValid = computed(() => {
   // All methods must have a valid number entered
   return Object.keys(balancesByMethod.value).every(method => {
@@ -70,48 +57,35 @@ const isValid = computed(() => {
   });
 });
 
-const differenceColor = (diff: Decimal) => {
-  if (diff.greaterThan(0)) return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20';
-  if (diff.lessThan(0)) return 'text-red-600 bg-red-50 dark:bg-red-900/20';
-  return 'text-gray-600 bg-gray-50 dark:text-gray-300 dark:bg-slate-700';
-};
-
-const differenceLabel = (diff: Decimal) => {
-  if (diff.greaterThan(0)) return 'Sobrante';
-  if (diff.lessThan(0)) return 'Faltante';
-  return 'Cuadrado';
-};
-
 // Methods
-const formatCurrency = (val: Decimal) => {
+const formatCurrency = (val: Decimal | number) => {
+  const num = typeof val === 'number' ? val : val.toNumber();
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
     currency: 'COP',
     minimumFractionDigits: 0
-  }).format(val.toNumber());
+  }).format(num);
 };
 
 const close = () => {
   emit('update:modelValue', false);
   physicalCounts.value = {};
   notes.value = '';
+  closedReport.value = null;
 };
 
-const handleClose = () => {
+const handleClose = async () => {
   if (!isValid.value) return;
-  if (!confirm('¿Estás seguro de cerrar la caja? Esta acción no se puede deshacer.')) return;
+  if (!confirm('¿Estás seguro de registrar el arqueo y cerrar el turno?')) return;
 
   try {
     isLoading.value = true;
-    // Note: The store `closeRegister` currently accepts a single number.
-    // For FRD-020 we might need to send the individual counts or a JSON,
-    // but right now it sends the total. (Store will send amount_declared).
-    cashRegisterStore.closeRegister(
+    const result = await cashRegisterStore.closeRegister(
       totalPhysical.value,
       notes.value
-    );
+    ) as any;
 
-    // NOTIFICATION INTEGRATION (Level 2: Cash Closing)
+    // NOTIFICATION INTEGRATION
     const notifStore = useNotificationsStore();
     notifStore.addNotification({
       type: 'finance',
@@ -123,14 +97,25 @@ const handleClose = () => {
       metadata: { amount: totalPhysical.value.toNumber() }
     });
 
-    emit('closed');
-    close();
-  } catch (error) {
+    // Certificación post-cierre por backend
+    closedReport.value = {
+      expected: Number(result?.expected_balance ?? 0),
+      actual: Number(result?.actual_balance ?? totalPhysical.value.toNumber()),
+      difference: Number(result?.difference ?? 0)
+    };
+
+    showSuccess('Cierre registrado correctamente');
+  } catch (error: any) {
     console.error(error);
-    showError('Error al cerrar la caja');
+    showError(error.message || 'Error al cerrar la caja');
   } finally {
     isLoading.value = false;
   }
+};
+
+const finish = () => {
+  emit('closed');
+  close();
 };
 </script>
 
@@ -151,41 +136,27 @@ const handleClose = () => {
               </div>
               <div>
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white">Cierre de Caja</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400">Arqueo y finalización de turno</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Arqueo Ciego y finalización de turno</p>
               </div>
             </div>
           </div>
 
-          <!-- Body -->
-          <div class="flex-1 overflow-y-auto p-6 space-y-6">
-            <div class="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-4 space-y-3">
-              <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Resumen del Sistema</h3>
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-500 dark:text-gray-400">Base Inicial</span>
-                <span class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(openingBalance) }}</span>
-              </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-500 dark:text-gray-400">(+) Ventas/Ingresos</span>
-                <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ formatCurrency(totalIncome) }}</span>
-              </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-500 dark:text-gray-400">(-) Gastos/Salidas</span>
-                <span class="font-medium text-red-600 dark:text-red-400">{{ formatCurrency(totalExpenses) }}</span>
-              </div>
-              <div class="border-t border-gray-200 dark:border-gray-600 pt-2 flex justify-between font-bold">
-                <span class="text-gray-700 dark:text-gray-300">Total Esperado</span>
-                <span class="text-gray-900 dark:text-white text-lg">{{ formatCurrency(systemExpected) }}</span>
-              </div>
+          <!-- Body: Formulario de Conteo (Arqueo Ciego) -->
+          <div v-if="!closedReport" class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- Banner Arqueo Ciego -->
+            <div class="flex items-start gap-3 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40">
+              <ShieldCheck :size="22" class="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <p class="text-xs text-blue-800 dark:text-blue-200 leading-relaxed">
+                Por política de control estricto (<strong>Arqueo Ciego</strong>), digita el valor total físico contado por cada canal. Los cálculos de cuadre se validarán en el servidor.
+              </p>
             </div>
 
-            <div class="space-y-6">
-              <div v-for="(expected, method) in balancesByMethod" :key="method" class="space-y-3">
-                <div class="flex justify-between text-sm">
-                  <label class="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                    Saldo Real en {{ method }}
-                  </label>
-                  <span class="text-gray-500 dark:text-gray-400">Esperado: {{ formatCurrency(expected) }}</span>
-                </div>
+            <!-- Inputs por Método de Pago -->
+            <div class="space-y-4">
+              <div v-for="(_, method) in balancesByMethod" :key="method" class="space-y-1.5">
+                <label class="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400 tracking-wider capitalize">
+                  Monto Físico Contado en {{ method }}
+                </label>
                 <div class="relative">
                   <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span>
                   <input 
@@ -194,56 +165,90 @@ const handleClose = () => {
                     min="0"
                     step="100"
                     placeholder="0"
-                    class="w-full h-14 pl-10 pr-4 text-2xl font-bold text-gray-900 dark:text-white bg-white dark:bg-slate-700 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-blue-500 focus:ring-0 transition-colors"
+                    class="w-full h-12 pl-10 pr-4 text-xl font-bold text-gray-900 dark:text-white bg-white dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:border-blue-500 focus:ring-0 transition-colors"
                   />
-                </div>
-                <div 
-                  v-if="physicalCounts[method] !== ''"
-                  class="flex items-center justify-between p-2 rounded-lg border border-transparent text-sm"
-                  :class="differenceColor(differences[method])"
-                >
-                  <div class="flex items-center gap-1.5 font-medium">
-                    <component :is="differences[method].equals(0) ? CheckCircle : AlertTriangle" :size="16" />
-                    <span>{{ differenceLabel(differences[method]) }}</span>
-                  </div>
-                  <span class="font-bold">{{ formatCurrency(differences[method].abs()) }}</span>
                 </div>
               </div>
 
-            <div class="space-y-4">
-
-
-              <div class="space-y-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Notas del Cierre
+              <div class="space-y-2 pt-2">
+                <label class="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                  Notas u Observaciones del Cierre
                 </label>
                 <textarea 
                   v-model="notes"
-                  rows="3"
+                  rows="2"
                   class="w-full p-3 text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:border-blue-500 focus:ring-blue-500 transition-colors resize-none"
-                  placeholder="Observaciones..."
+                  placeholder="Detalles sobre el turno..."
                 ></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Body: Acta Post-Cierre (Certificación del Servidor) -->
+          <div v-else class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="text-center">
+              <div class="size-14 rounded-2xl mx-auto flex items-center justify-center mb-3"
+                   :class="Math.abs(closedReport.difference) < 50 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : (closedReport.difference > 0 ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30')">
+                <CheckCircle v-if="Math.abs(closedReport.difference) < 50" :size="32" />
+                <AlertTriangle v-else :size="32" />
+              </div>
+              <h3 class="text-lg font-bold text-gray-900 dark:text-white">Acta Oficial de Cierre</h3>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Balance contable certificado por el servidor</p>
+            </div>
+
+            <div class="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 space-y-3 text-sm border border-slate-100 dark:border-slate-700">
+              <div class="flex justify-between items-center">
+                <span class="text-gray-500 dark:text-gray-400">Total Declarado:</span>
+                <span class="font-bold text-gray-900 dark:text-white">{{ formatCurrency(closedReport.actual) }}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-gray-500 dark:text-gray-400">Esperado en Sistema:</span>
+                <span class="font-medium text-gray-700 dark:text-gray-300">{{ formatCurrency(closedReport.expected) }}</span>
+              </div>
+              <div class="border-t border-gray-200 dark:border-gray-700 pt-2 flex justify-between items-center font-bold">
+                <span>Diferencia:</span>
+                <span :class="Math.abs(closedReport.difference) < 50 ? 'text-emerald-600' : (closedReport.difference > 0 ? 'text-blue-600' : 'text-red-600')">
+                  {{ closedReport.difference > 0 ? '+' : '' }}{{ formatCurrency(closedReport.difference) }}
+                  <span class="text-xs font-normal">
+                    ({{ Math.abs(closedReport.difference) < 50 ? 'Cuadrada' : (closedReport.difference > 0 ? 'Sobrante' : 'Faltante') }})
+                  </span>
+                </span>
               </div>
             </div>
           </div>
 
           <!-- Footer -->
           <div class="p-6 pt-2 shrink-0 flex gap-3">
-            <button 
-              @click="close"
-              class="flex-1 h-12 rounded-xl text-gray-600 dark:text-gray-300 font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button 
-              @click="handleClose"
-              :disabled="!isValid || isLoading"
-              class="flex-1 h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <Loader2 v-if="isLoading" class="animate-spin" :size="24" />
-              <span v-else>Cerrar Turno</span>
-            </button>
+            <template v-if="!closedReport">
+              <button 
+                type="button"
+                @click="close"
+                class="flex-1 h-12 rounded-xl text-gray-600 dark:text-gray-300 font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                :disabled="isLoading"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button"
+                @click="handleClose"
+                :disabled="!isValid || isLoading"
+                class="flex-1 h-12 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 transition-all"
+              >
+                <Loader2 v-if="isLoading" class="animate-spin" :size="20" />
+                <span>{{ isLoading ? 'Cerrando...' : 'Cerrar Turno' }}</span>
+              </button>
+            </template>
+            <template v-else>
+              <button 
+                type="button"
+                @click="finish"
+                class="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 transition-all"
+              >
+                Finalizar y Continuar
+              </button>
+            </template>
           </div>
+
         </div>
       </div>
     </Transition>
@@ -251,8 +256,13 @@ const handleClose = () => {
 </template>
 
 <style scoped>
-.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
-.modal-enter-from, .modal-leave-to { opacity: 0; }
-.animate-scale-in { animation: scaleIn 0.2s ease-out; }
-@keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
 </style>

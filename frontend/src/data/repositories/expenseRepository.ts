@@ -41,7 +41,7 @@ const expenseMapper: RepositoryMappers<CashMovementDB, Expense> = {
             store_id: '', // Cannot know from row alone, query fills it
             amount: row.amount,
             description: description,
-            category: category,
+            category: row.category || category,
             created_at: row.created_at
         };
     },
@@ -50,6 +50,9 @@ const expenseMapper: RepositoryMappers<CashMovementDB, Expense> = {
             id: entity.id,
             amount: entity.amount,
             description: `[${entity.category || 'General'}] ${entity.description}`,
+            category: entity.category || 'General',
+            payment_method: 'efectivo',
+            voucher_ref: null,
             movement_type: 'expense',
             created_at: entity.created_at || new Date().toISOString(),
             session_id: '', // Must be filled by creator
@@ -197,15 +200,38 @@ export const expenseRepository: ExpenseRepository = {
         const isOnline = navigator.onLine && isSupabaseConfigured();
         if (isOnline) {
             const supabase = getSupabaseClient()!;
-            const { data, error } = await supabase.from('cash_movements').insert(dbRow).select().single();
-            if (!error && data) {
-                return expenseMapper.toDomain(data);
+            const { data, error } = await supabase.rpc('rpc_registrar_gasto_v2', {
+                p_session_id: sessionId,
+                p_amount: expense.amount,
+                p_description: expense.description,
+                p_category: expense.category || 'Servicios',
+                p_payment_method: 'efectivo'
+            });
+
+            if (error) {
+                logger.error('[ExpenseRepo] RPC Error registering expense:', error);
+                throw new Error(error.message);
             }
+
+            const res = data as any;
+            if (res && res.success === false) {
+                logger.error('[ExpenseRepo] Failed registering expense:', res.error);
+                throw new Error(res.error || res.message || 'Error al registrar gasto');
+            }
+
+            return {
+                id: res?.data?.movement_id || crypto.randomUUID(),
+                store_id: expense.store_id || '',
+                amount: expense.amount,
+                description: expense.description,
+                category: expense.category || 'Servicios',
+                created_at: new Date().toISOString()
+            };
         }
 
-        // If we reached here, online insert failed
-        logger.error('[ExpenseRepo] Expense creation failed');
-        return null;
+        // If offline
+        logger.error('[ExpenseRepo] Expense creation failed: offline not supported for minor cash expenses');
+        throw new Error('No es posible registrar gastos en modo sin conexión');
     }
 };
 

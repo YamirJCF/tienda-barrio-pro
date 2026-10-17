@@ -3,17 +3,40 @@
 > **Asociado a:** [FRD-009](../FRD/FRD_009_CLIENTES.md)  
 > **Módulo:** Clientes, Cartera y Fiados  
 > **Fase del Plan:** Ola 3 (Ítem 5)  
-> **Estado:** 🟢 Rectificado y Sanitizado (Protocolo PAC-SDD v2.0 / Auditoría QA Aprobada)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
+> **Última Actualización:** 2026-10-17
 > **Políticas Aplicables:** ARQ-002 (POL-AUTH-01, POL-AUD-01/02, POL-FIN-01/02/03, POL-LOG-01/02, POL-SEC-01, SPEC-010, SPEC-011)
 
 ---
 
-## 0. Control de Versiones
+## 0. Contexto y Restricciones Aplicables
 
-| Versión | Fecha | Autor | Descripción del Cambio |
-| :--- | :--- | :--- | :--- |
-| 1.0.0 | 2026-03-29 | Arquitecto de Software | Creación inicial del documento de diseño para clientes y fiados. |
-| 2.0.0 | 2026-10-15 | Orquestador / Auditor QA | Rectificación integral bajo protocolo PAC-SDD v2.0. Erradicación de código fuente embebido, adopción estricta de nombres físicos de PostgreSQL (`id_number`, `is_deleted`, `deleted_at`), formalización de N=6 deudas técnicas bajo Regla 7, canalización obligatoria de abonos a `cash_movements` con validación de caja abierta, protección de columna generada `client_ledger.new_balance` y contratos JSON canónicos en Sección 5. |
+### 0.1 Políticas Globales Activadas (ARQ-002)
+
+| Política ID | Dominio | Impacto Concreto en este SDD |
+| :--- | :--- | :--- |
+| **POL-AUTH-01** | Seguridad | Aislamiento multi-tenant estricto mediante `assert_store_access(p_store_id)` en RPCs y `get_current_store_id()` en políticas RLS de `clients` y `client_ledger`. |
+| **POL-FIN-01** | Financiero | Fidelidad de caja: las ventas fiadas impactan `$0` en caja; los abonos exigen turno de caja abierto (`< 24h`) e inyectan un ingreso real en `cash_movements`. |
+| **POL-FIN-03** | Financiero | Invariante de saldo no negativo (`clients.balance >= 0`) y respeto estricto del cupo (`balance + total <= credit_limit`). |
+| **POL-AUD-01 / 02** | Auditoría | Inviolabilidad append-only en `client_ledger` y borrado exclusivamente lógico (`is_deleted = true`) bloqueado si `balance > 0`. |
+
+### 0.2 Contratos Vecinos que Limitan el Diseño
+
+| SDD Vecino | Restricción que Impone |
+| :--- | :--- |
+| **SDD_004 / SDD_020 / SDD_023 (Caja)** | `rpc_registrar_abono` exige sesión de caja en estado `'open'` e inserta en `cash_movements` especificando el `payment_method`. |
+| **SDD_007 / SDD_007_01 (Ventas y POS)** | `rpc_procesar_venta_v3` incrementa `clients.balance` bajo `SELECT ... FOR UPDATE` y asienta en `client_ledger` sin tocar `cash_movements`. |
+| **SDD_024 (Política de Fiados)** | Armoniza la firma de `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` y la reversión de deuda en `rpc_anular_venta`. |
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
+
+En cumplimiento de las Reglas 2 y 7 de `AGENTS.md`, se declaran las **N=6 deudas técnicas** verificadas contra producción (`ihtjocmhzuliwwvdzfnz`), cuyo desglose completo también se referencia en la Sección 7:
+- **D-1:** Transición de `registrar_abono(p_client_id, p_amount)` a `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` con validación de sesión de caja abierta e inserción en `cash_movements` (Hallazgo H10).
+- **D-2:** Adopción estricta de nombres físicos reales en `clients` (`id_number`, `is_deleted`, `deleted_at`).
+- **D-3:** Prohibición de insertar en la columna generada `client_ledger.new_balance` (`GENERATED ALWAYS AS (previous_balance + amount)`).
+- **D-4:** Creación de `rpc_admin_get_clients` con filtros de deuda (Todos/Con Deuda/Al Día), búsqueda parcial, paginación 20 en 20 (`count`) y toggle de inactivos para el Administrador (Hallazgos H4, H13, H19).
+- **D-5:** Remediación de `get_history_creditos` para eliminar la referencia a la columna inexistente `cl.description`.
+- **D-6:** Inclusión obligatoria de `PERFORM public.assert_store_access(p_store_id);` como instrucción #1 en `get_client_ledger_summary`.
 
 ---
 
@@ -75,6 +98,34 @@ sequenceDiagram
 
     RPC-->>UI: HTTP 200 { success: true, data: { new_balance, amount_paid, session_id } }
     UI-->>User: Muestra comprobante de abono y actualiza saldo en pantalla
+```
+
+### 2.2 Diagrama de Estados de Interfaz y Cartera (stateDiagram-v2)
+
+```mermaid
+stateDiagram-v2
+    [*] --> IdleList: Carga de ClientListView
+    
+    state "Directorio de Clientes (ClientListView)" as ListView {
+        [*] --> LoadingClients: Consulta rpc_admin_get_clients (Skeleton activo)
+        LoadingClients --> DisplayingClients: Datos cargados { data, count }
+        LoadingClients --> ListError: Fallo de red / RLS
+        ListError --> DisplayingClients: Banner visible de error (anti-$0)
+        DisplayingClients --> SearchingClient: Filtro por nombre o cédula
+        SearchingClient --> DisplayingClients: Lista filtrada reactivamente
+    }
+
+    state "Detalle y Abonos (ClientDetailView)" as DetailView {
+        [*] --> LoadingDetail: Carga de ledger y saldo
+        LoadingDetail --> DisplayingProfile: Saldo oficial y cupo disponible
+        DisplayingProfile --> SubmittingPayment: Modal de abono (Botón disabled + Spinner)
+        SubmittingPayment --> PaymentSuccess: rpc_registrar_abono exitoso
+        SubmittingPayment --> PaymentError: Error (NO_OPEN_CASH_SESSION, AMOUNT_EXCEEDS_BALANCE)
+        PaymentError --> DisplayingProfile: Alerta visible de error (sin alterar saldo en cliente)
+        PaymentSuccess --> DisplayingProfile: Saldo refrescado desde el servidor
+    }
+
+    DisplayingClients --> DetailView: Selección de cliente en lista
 ```
 
 ---
@@ -268,7 +319,7 @@ A continuación se formalizan con rigor las **N=6 deudas técnicas y trade-offs*
 
 | ID Deuda | Dimensión Afectada | 1. Qué se Decidió | 2. Por qué (Trade-off Concreto) | 3. Condición de Revisión Futura |
 | :--- | :--- | :--- | :--- | :--- |
-| **D-1** | Transición de Contrato de Abonos (`registrar_abono`) | Normar en SDD-009 el contrato canónico `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` exigiendo turno de caja activo e inyección a `cash_movements`, manteniendo transitoriamente la función legacy en producción. | **Trade-off:** Preservar la compatibilidad operativa del frontend actual (`clients.ts`) sin forzar caídas en caliente mientras se despliega la suite multicanal. | Despliegue de la migración de caja multicanal de la Ola 3/4. |
+| **D-1** | Transición de Contrato de Abonos (`registrar_abono`) | Normar en SDD-009 el contrato canónico `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` exigiendo turno de caja activo e inyección a `cash_movements`, manteniendo transitoriamente la función legacy en producción. | **Trade-off:** Preservar la compatibilidad operativa del frontend actual (el módulo de cartera del cliente) sin forzar caídas en caliente mientras se despliega la suite multicanal. | Despliegue de la migración de caja multicanal de la Ola 3/4. |
 | **D-2** | Sinceramiento de Esquema Físico en `clients` | Adoptar de forma estricta los nombres físicos reales de PostgreSQL (`id_number`, `is_deleted`, `deleted_at`) en lugar de los nombres conceptuales del FRD (`cedula`, `deleted`, `deletedAt`). | **Trade-off:** Erradicar alucinaciones de nombres y prevenir errores de columna inexistente (`42703`) sin requerir alteraciones destructivas de DDL en producción. | Permanente / Invariante estructural. |
 | **D-3** | Invariante de Columna Generada en `client_ledger` | Prohibir categóricamente suministrar `new_balance` en los `INSERT` sobre `client_ledger`, adoptando la convención de signos (`amount > 0` para fiados, `amount < 0` para abonos y anulaciones). | **Trade-off:** Respetar la arquitectura física de base de datos (`ALWAYS GENERATED`), evitando el error fatal PostgreSQL `428C9`. | Permanente / Invariante estructural. |
 | **D-4** | Filtro Administrativo de Clientes Eliminados | Especificar la operación administrativa `rpc_admin_get_clients` (`SECURITY DEFINER`) con validación de `admin_profiles` y `assert_store_access` para consultar eliminados. | **Trade-off:** Satisfacer el requerimiento de auditoría de FRD-009 sin debilitar la política RLS pública `clients_select_store` que protege la privacidad de registros inactivos. | Migración de funciones administrativas de Ola 3/5. |

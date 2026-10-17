@@ -1,35 +1,23 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { useInventoryStore } from '../../stores/inventory';
+import { onMounted, computed } from 'vue';
+import { useFinancialStore } from '../../stores/financial';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
 import { Package } from 'lucide-vue-next';
 
-const inventoryStore = useInventoryStore();
+const financialStore = useFinancialStore();
 const { formatCurrency } = useCurrencyFormat();
 
-const valuation = computed(() => {
-  let totalCost = 0;
-  let totalRetail = 0;
-
-  inventoryStore.products.forEach(p => {
-    const stock = p.stock.toNumber();
-    const cost = p.cost ? p.cost.toNumber() : (p.price.toNumber() * 0.7); // Fallback assumption
-    const price = p.price.toNumber();
-
-    totalCost += stock * cost;
-    totalRetail += stock * price;
-  });
-
-  const potentialProfit = totalRetail - totalCost;
-  const margin = totalRetail > 0 ? (potentialProfit / totalRetail) * 100 : 0;
-
-  return {
-    cost: totalCost,
-    retail: totalRetail,
-    profit: potentialProfit,
-    margin: margin
-  };
+onMounted(async () => {
+  if (!financialStore.summary) {
+    const today = new Date().toISOString().split('T')[0];
+    await financialStore.fetchFinancialReport(today, today).catch(() => {});
+  }
 });
+
+const totalCost = computed(() => financialStore.summary?.inventory_value ?? 0);
+const revenue = computed(() => financialStore.summary?.revenue ?? 0);
+const grossProfit = computed(() => financialStore.summary?.gross_profit ?? 0);
+const grossMargin = computed(() => financialStore.summary?.gross_margin ?? 0);
 </script>
 
 <template>
@@ -49,28 +37,28 @@ const valuation = computed(() => {
       
       <!-- Cost -->
       <div class="flex flex-col gap-1">
-        <span class="text-xs font-bold uppercase text-slate-400 tracking-wider">Costo Total</span>
-        <span class="text-2xl font-bold text-white">{{ formatCurrency(valuation.cost) }}</span>
+        <span class="text-xs font-bold uppercase text-slate-400 tracking-wider">Costo Total (FIFO)</span>
+        <span class="text-2xl font-bold text-white">{{ formatCurrency(totalCost) }}</span>
       </div>
 
-       <!-- Retail -->
+       <!-- Retail / Revenue -->
       <div class="flex flex-col gap-1">
-        <span class="text-xs font-bold uppercase text-slate-400 tracking-wider">Valor Venta</span>
-        <span class="text-2xl font-bold text-emerald-400">{{ formatCurrency(valuation.retail) }}</span>
+        <span class="text-xs font-bold uppercase text-slate-400 tracking-wider">Ingresos Período</span>
+        <span class="text-2xl font-bold text-emerald-400">{{ formatCurrency(revenue) }}</span>
       </div>
 
        <!-- Profit -->
       <div class="col-span-2 pt-4 border-t border-white/10 flex justify-between items-center">
         <div class="flex flex-col">
-            <span class="text-xs font-bold uppercase text-slate-400 tracking-wider">Margen Potencial</span>
+            <span class="text-xs font-bold uppercase text-slate-400 tracking-wider">Margen Bruto</span>
              <div class="flex items-baseline gap-2">
-                <span class="text-xl font-bold text-white">{{ formatCurrency(valuation.profit) }}</span>
-                <span class="text-sm font-medium text-emerald-400">({{ valuation.margin.toFixed(1) }}%)</span>
+                <span class="text-xl font-bold text-white">{{ formatCurrency(grossProfit) }}</span>
+                <span class="text-sm font-medium text-emerald-400">({{ grossMargin.toFixed(1) }}%)</span>
              </div>
         </div>
         <div class="text-right max-w-[120px]">
              <p class="text-[10px] leading-tight text-slate-500">
-                Calculado sobre todo el stock actual y sus costos registrados. 
+                Valoración oficial calculada por motor financiero backend (FIFO).
              </p>
         </div>
       </div>

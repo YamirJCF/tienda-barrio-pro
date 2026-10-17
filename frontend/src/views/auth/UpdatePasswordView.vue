@@ -22,7 +22,7 @@
               autocomplete="new-password"
               required
               class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="Nueva Contraseña (min. 6 caracteres)"
+              placeholder="Nueva Contraseña (mín. 8 caracteres, letras y números)"
             />
           </div>
           <div>
@@ -78,6 +78,8 @@ const confirmPassword = ref('');
 const loading = ref(false);
 const error = ref<string | null>(null);
 
+const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+
 onMounted(async () => {
     // Verify we actually have a session (from the recovery link)
     const { data: { session } } = await supabase.auth.getSession();
@@ -89,8 +91,8 @@ onMounted(async () => {
 
 const handlePasswordUpdate = async () => {
     error.value = null;
-    if (password.value.length < 6) {
-        error.value = 'La contraseña debe tener al menos 6 caracteres';
+    if (!PASSWORD_REGEX.test(password.value)) {
+        error.value = 'La contraseña debe tener al menos 8 caracteres e incluir letras y números';
         return;
     }
     if (password.value !== confirmPassword.value) {
@@ -106,9 +108,10 @@ const handlePasswordUpdate = async () => {
 
         if (updateError) throw updateError;
 
+        // Invalidate other active sessions per POL-SEC-03
+        await supabase.auth.signOut({ scope: 'others' });
+
         // Success: Redirect to dashboard
-        // Note: authStore doesn't have checkUser, we rely on persistence or re-login
-        // For safety, force re-login or just go to dashboard if session persists
         router.push('/');
     } catch (e: any) {
         error.value = e.message || 'Error al actualizar contraseña';

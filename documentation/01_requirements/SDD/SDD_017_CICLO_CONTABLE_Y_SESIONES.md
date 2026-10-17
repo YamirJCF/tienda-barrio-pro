@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-017: Alineación del Ciclo Contable de Caja y Ciclo de Vida de Sesiones](../FRD/FRD_017_CICLO_CONTABLE_Y_SESIONES.md)  
 > **Fase del Plan:** Ola 5: Sesiones, Autenticación y Offline (Ítem 3)  
-> **Estado:** 🟢 Consolidado (Auditoría PAC-SDD v2.0 Aprobada)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-16  
 
 ---

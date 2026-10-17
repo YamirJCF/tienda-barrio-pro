@@ -1,9 +1,9 @@
 # SDD-007: Núcleo Transaccional de Ventas, Anulación y Consulta de Historial
 
-> **Asociado a:** [FRD-007: Sistema de Ventas (Módulo Primario)](../FRD/FRD_007_VENTAS.md)  
+> **Asociado a:** [FRD-007: Sistema de Ventas (Módulo Primario)](../FRD/FRD_007_VENTAS.md), [FRD_001_AUTORIDAD_DEL_SERVIDOR.md](../FRD/FRD_001_AUTORIDAD_DEL_SERVIDOR.md)  
 > **Fase del Plan:** Ola 3: Ventas, POS y Clientes (Ítem 1)  
-> **Estado:** 🟢 Aprobado con Certificación PAC-SDD (Protocolo Estricto v2.0)  
-> **Última Actualización:** 2026-10-15  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
+> **Última Actualización:** 2026-10-17  
 
 ---
 

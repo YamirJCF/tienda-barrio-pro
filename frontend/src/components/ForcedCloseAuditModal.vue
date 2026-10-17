@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { AlertTriangle, CheckCircle, Info } from 'lucide-vue-next';
+import { AlertTriangle, Info, ShieldCheck } from 'lucide-vue-next';
 import BaseButton from './ui/BaseButton.vue';
 import FormInputCurrency from './ui/FormInputCurrency.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
@@ -35,7 +35,7 @@ const emit = defineEmits<{
 // STATE
 // =============================================
 const { formatCurrency } = useCurrencyFormat();
-const physicalCounts = ref<Record<string, string>>({});
+const physicalCounts = ref<Record<string, number>>({});
 
 // La sesión que se está conciliando ahora es siempre la primera de la lista (más antigua primero)
 const currentSession = computed(() => props.pendingSessions[0] ?? null);
@@ -45,7 +45,7 @@ watch(() => currentSession.value, (session) => {
   if (session && session.balancesByMethod) {
     physicalCounts.value = {};
     Object.keys(session.balancesByMethod).forEach(method => {
-      physicalCounts.value[method] = '';
+      physicalCounts.value[method] = 0;
     });
   }
 }, { immediate: true });
@@ -53,50 +53,15 @@ watch(() => currentSession.value, (session) => {
 const remainingCount = computed(() => props.pendingSessions.length);
 
 const totalPhysical = computed(() => {
-  return Object.values(physicalCounts.value).reduce((sum, count) => sum + (parseFloat(count) || 0), 0);
-});
-
-const differences = computed(() => {
-  const diffs: Record<string, number> = {};
-  if (!currentSession.value?.balancesByMethod) return diffs;
-  
-  for (const [method, expected] of Object.entries(currentSession.value.balancesByMethod)) {
-    const physical = parseFloat(physicalCounts.value[method]) || 0;
-    diffs[method] = physical - expected;
-  }
-  return diffs;
-});
-
-const difference = computed(() => {
-  if (!currentSession.value) return 0;
-  return totalPhysical.value - currentSession.value.expectedBalance;
+  return Object.values(physicalCounts.value).reduce((sum, count) => sum + (Number(count) || 0), 0);
 });
 
 const isValid = computed(() => {
   if (!currentSession.value?.balancesByMethod) return false;
   return Object.keys(currentSession.value.balancesByMethod).every(method => {
     const val = physicalCounts.value[method];
-    return val !== '' && !isNaN(parseFloat(val));
+    return typeof val === 'number' && !isNaN(val) && val >= 0;
   });
-});
-
-const differenceColor = (diff: number) => {
-  if (diff > 0) return 'text-blue-500 bg-blue-50 dark:bg-blue-900/20';
-  if (diff < 0) return 'text-red-500 bg-red-50 dark:bg-red-900/20';
-  return 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20';
-};
-
-const differenceLabel = (diff: number) => {
-  if (diff > 0) return 'Sobrante';
-  if (diff < 0) return 'Faltante';
-  return 'Cuadra';
-};
-
-const differenceStatus = computed(() => {
-  const diff = difference.value;
-  if (Math.abs(diff) < 50) return { color: 'text-emerald-500', label: 'Cuadra' };
-  if (diff > 0)             return { color: 'text-blue-500',    label: 'Sobrante' };
-  return                           { color: 'text-red-500',     label: 'Faltante' };
 });
 
 const formattedOpenedAt = computed(() => {
@@ -113,7 +78,6 @@ const formattedOpenedAt = computed(() => {
 const handleConfirm = () => {
   if (!currentSession.value || !isValid.value) return;
   emit('confirm', currentSession.value.id, totalPhysical.value);
-  // Reset will happen in the watcher when currentSession changes
 };
 </script>
 
@@ -148,54 +112,33 @@ const handleConfirm = () => {
             </div>
           </div>
 
-          <!-- Context info -->
-          <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 space-y-2">
-            <p class="text-xs font-bold uppercase text-amber-700 dark:text-amber-400 tracking-wider">Turno cerrado automáticamente</p>
+          <!-- Context info (Arqueo Ciego: Sin mostrar saldo esperado del sistema) -->
+          <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 space-y-1">
+            <p class="text-xs font-bold uppercase text-amber-700 dark:text-amber-400 tracking-wider">Turno cerrado automáticamente (>24 Horas)</p>
             <p class="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
-              Apertura: <strong>{{ formattedOpenedAt }}</strong>
-            </p>
-            <p class="text-sm font-bold text-amber-800 dark:text-amber-200">
-              Saldo esperado: {{ formatCurrency(currentSession.expectedBalance) }}
+              Fecha de apertura: <strong>{{ formattedOpenedAt }}</strong>
             </p>
           </div>
 
-          <!-- Info note -->
-          <div class="flex items-start gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40">
-            <Info :size="14" class="text-blue-500 mt-0.5 flex-shrink-0" />
+          <!-- Protocolo de Arqueo Ciego -->
+          <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40">
+            <ShieldCheck :size="18" class="text-blue-500 mt-0.5 flex-shrink-0" />
             <p class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-              Debes ingresar el conteo físico real antes de abrir un nuevo turno.
-              Esta acción queda registrada en el historial de auditoría.
+              Por control de seguridad (<strong>Arqueo Ciego</strong>), ingresa el valor físico real recuperado. El servidor calculará el balance oficial al procesar.
             </p>
           </div>
 
           <!-- Physical count inputs -->
           <div class="space-y-4 max-h-[40vh] overflow-y-auto px-1 no-scrollbar">
-            <div v-for="(expected, method) in currentSession.balancesByMethod" :key="method" class="space-y-2">
-              <div class="flex justify-between text-xs">
-                <label class="font-bold uppercase text-gray-400 capitalize">
-                  ¿Cuánto hay en {{ method }}?
-                </label>
-                <span class="text-gray-500">Esperado: {{ formatCurrency(expected) }}</span>
-              </div>
+            <div v-for="(_, method) in currentSession.balancesByMethod" :key="method" class="space-y-1.5">
+              <label class="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400 capitalize">
+                ¿Cuánto dinero físico recuperaste en {{ method }}?
+              </label>
               <FormInputCurrency
                 v-model="physicalCounts[method]"
                 placeholder="0"
                 class="text-xl font-bold text-center"
               />
-              
-              <!-- Difference indicator for this channel -->
-              <div
-                v-if="physicalCounts[method] !== ''"
-                class="mt-1 flex items-center justify-center gap-2 p-1.5 rounded-lg text-xs font-bold"
-                :class="differenceColor(differences[method])"
-              >
-                <CheckCircle v-if="Math.abs(differences[method]) < 50" :size="14" />
-                <AlertTriangle v-else :size="14" />
-                <span>{{ differenceLabel(differences[method]) }}</span>
-                <span v-if="Math.abs(differences[method]) >= 50" class="font-mono">
-                  ({{ formatCurrency(Math.abs(differences[method])) }})
-                </span>
-              </div>
             </div>
           </div>
 

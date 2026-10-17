@@ -235,6 +235,7 @@ export const useFinancialStore = defineStore('financial', () => {
 
         // Orquestadores de Negocio
         loadSnapshots,
+        fetchFinancialReport,
         setPeriod,
     };
 });

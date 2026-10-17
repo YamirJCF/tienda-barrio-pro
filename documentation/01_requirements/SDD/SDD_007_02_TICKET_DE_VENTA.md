@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-007-02](../FRD/FRD_007_02_TICKET_DE_VENTA.md)  
 > **Fase del Plan:** Ola 3: Ventas, POS y Clientes (Ítem 3)  
-> **Estado:** 🟢 Aprobado y Consolidado (Post PAC-SDD v2.0)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-15  
 
 ---

@@ -17,17 +17,17 @@
         </div>
       </div>
 
-      <div v-if="!cashRegisterStore.isOpen" class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-xl">
-        <p class="text-sm text-red-700 dark:text-red-400 font-medium">
-          ⛔ Debes tener un turno de caja abierto para registrar un pago.
+      <div v-if="!cashRegisterStore.isOpen && paymentMethod !== 'externo'" class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-r-xl">
+        <p class="text-xs text-amber-700 dark:text-amber-400 font-medium">
+          ℹ️ Turno de caja cerrado. Puedes registrar el abono seleccionando <strong>Fondos Propios (Externo)</strong>.
         </p>
       </div>
 
-      <div v-else class="space-y-4">
+      <div class="space-y-4">
         <div class="relative">
           <BaseInput
             v-model.number="amountToPay"
-            label="¿Cuánto deseas abonar de la caja actual?"
+            label="¿Cuánto deseas abonar?"
             type="number"
             :max="pendingBalance"
             min="0"
@@ -49,11 +49,11 @@
           El abono no puede superar la deuda pendiente.
         </div>
 
-        <!-- Soft Warning Exceeds Cash -->
-        <div v-if="amountExceedsCash && !amountExceedsPending" class="bg-orange-50 dark:bg-amber-900/20 border border-orange-200 dark:border-amber-800/50 p-3 rounded-xl flex items-start gap-2">
-          <span class="text-orange-500 dark:text-amber-500 text-lg leading-none">⚠️</span>
-          <p class="text-xs text-orange-700 dark:text-amber-400 font-medium">
-            Este abono dejará el saldo de la caja en negativo. Deberás justificar el faltante en el cierre.
+        <!-- Strict Error on Insufficient Cash (No Soft Overdraft) -->
+        <div v-if="paymentMethod === 'efectivo' && amountExceedsCash && !amountExceedsPending" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 rounded-xl flex items-start gap-2">
+          <span class="text-red-500 text-lg leading-none">🚫</span>
+          <p class="text-xs text-red-700 dark:text-red-400 font-medium">
+            Saldo insuficiente en caja de efectivo (Disponible: {{ formatCurrency(Number(cashRegisterStore.currentBalance)) }}). No se permiten sobregiros.
           </p>
         </div>
 
@@ -64,30 +64,42 @@
         <!-- Método de Pago Selector -->
         <div class="mt-4">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Método de Pago</label>
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-4 gap-2">
                 <button
+                    type="button"
                     @click="paymentMethod = 'efectivo'"
                     :class="paymentMethod === 'efectivo' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
-                    class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                    class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
                 >
-                    <Banknote :size="24" :stroke-width="1.5" class="mb-1" />
-                    <span class="text-xs font-semibold">Efectivo</span>
+                    <Banknote :size="20" :stroke-width="1.5" class="mb-1" />
+                    <span class="text-[11px] font-semibold">Efectivo</span>
                 </button>
                 <button
+                    type="button"
                     @click="paymentMethod = 'nequi'"
                     :class="paymentMethod === 'nequi' ? 'bg-[#4A148C] text-white border-[#4A148C] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
-                    class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                    class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
                 >
-                    <Smartphone :size="24" :stroke-width="1.5" class="mb-1" />
-                    <span class="text-xs font-semibold">Nequi</span>
+                    <Smartphone :size="20" :stroke-width="1.5" class="mb-1" />
+                    <span class="text-[11px] font-semibold">Nequi</span>
                 </button>
                 <button
+                    type="button"
                     @click="paymentMethod = 'daviplata'"
                     :class="paymentMethod === 'daviplata' ? 'bg-[#E32119] text-white border-[#E32119] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
-                    class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
+                    class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
                 >
-                    <CreditCard :size="24" :stroke-width="1.5" class="mb-1" />
-                    <span class="text-xs font-semibold">Daviplata</span>
+                    <CreditCard :size="20" :stroke-width="1.5" class="mb-1" />
+                    <span class="text-[11px] font-semibold">Daviplata</span>
+                </button>
+                <button
+                    type="button"
+                    @click="paymentMethod = 'externo'"
+                    :class="paymentMethod === 'externo' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                    class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
+                >
+                    <Wallet :size="20" :stroke-width="1.5" class="mb-1" />
+                    <span class="text-[11px] font-semibold">Externo</span>
                 </button>
             </div>
         </div>
@@ -120,11 +132,11 @@ import { ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useCashRegisterStore } from '@/stores/cashRegister';
 import { usePayablesStore, type SupplierInvoice } from '@/stores/payables';
-import { formatCurrency } from '@/utils/currency';
+import { useCurrencyFormat } from '@/composables/useCurrencyFormat';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import { useToast } from 'vue-toastification';
-import { Banknote, Smartphone, CreditCard } from 'lucide-vue-next';
+import { Banknote, Smartphone, CreditCard, Wallet } from 'lucide-vue-next';
 
 const props = defineProps<{
   show: boolean;
@@ -136,13 +148,14 @@ const emit = defineEmits<{
   (e: 'success'): void;
 }>();
 
+const { formatCurrency } = useCurrencyFormat();
 const toast = useToast();
 const authStore = useAuthStore();
 const cashRegisterStore = useCashRegisterStore();
 const payablesStore = usePayablesStore();
 
 const amountToPay = ref<number | ''>('');
-const paymentMethod = ref('efectivo');
+const paymentMethod = ref(cashRegisterStore.isOpen ? 'efectivo' : 'externo');
 const isSubmitting = ref(false);
 const errorMessage = ref<string | null>(null);
 
@@ -160,12 +173,13 @@ const amountExceedsCash = computed(() => {
 });
 
 const canSubmit = computed(() => {
-  return (
-    authStore.isAdmin &&
-    cashRegisterStore.isOpen &&
-    Number(amountToPay.value) > 0 &&
-    !amountExceedsPending.value
-  );
+  if (!authStore.isAdmin) return false;
+  const amount = Number(amountToPay.value);
+  if (amount <= 0 || amountExceedsPending.value) return false;
+  if (paymentMethod.value === 'externo') return true;
+  if (!cashRegisterStore.isOpen) return false;
+  if (paymentMethod.value === 'efectivo' && amountExceedsCash.value) return false;
+  return true;
 });
 
 const payFullAmount = () => {
@@ -175,7 +189,7 @@ const payFullAmount = () => {
 const close = () => {
   if (isSubmitting.value) return;
   amountToPay.value = '';
-  paymentMethod.value = 'efectivo';
+  paymentMethod.value = cashRegisterStore.isOpen ? 'efectivo' : 'externo';
   errorMessage.value = null;
   emit('close');
 };
@@ -194,7 +208,7 @@ const submitPayment = async () => {
       isSubmitting.value = false;
       emit('success');
       close();
-    }, 400); // Pequeño delay para que el usuario perciba que se procesó
+    }, 400);
   } else {
     errorMessage.value = error;
     isSubmitting.value = false;

@@ -27,6 +27,7 @@ import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 import SyncIndicator from '../components/common/SyncIndicator.vue';
 import StatCard from '../components/ui/StatCard.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { useReportsStore } from '../stores/reports';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -35,6 +36,7 @@ const cashRegisterStore = useCashRegisterStore(); // Added for sync
 const authStore = useAuthStore();
 const notificationsStore = useNotificationsStore();
 const devicesStore = useDevicesStore(); // [NEW]
+const reportsStore = useReportsStore();
 const { formatWithSign } = useCurrencyFormat();
 
 // State
@@ -44,6 +46,7 @@ const profileSidebarOpen = ref(false);
 onMounted(async () => {
   salesStore.initialize();
   inventoryStore.initialize();
+  reportsStore.fetchDailySummary().catch(() => {});
   
   // FIX: Admin users might not have storeId in currentUser, but have selected currentStore
   const activeStoreId = authStore.currentStore?.id || authStore.currentUser?.storeId;
@@ -76,10 +79,25 @@ onUnmounted(() => {
 // Computed
 const isStoreOpen = computed(() => salesStore.isStoreOpen);
 
-// Formatted values using composable
-const formattedCash = computed(() => formatWithSign(salesStore.currentCash));
-const formattedTodayTotal = computed(() => formatWithSign(salesStore.todayTotal));
-const formattedTodayFiado = computed(() => formatWithSign(salesStore.todayFiado));
+// Formatted values using composable (Backend Authority: get_daily_summary)
+const formattedCash = computed(() => {
+  if (reportsStore.summary?.money_breakdown?.cash !== undefined) {
+    return formatWithSign(reportsStore.summary.money_breakdown.cash);
+  }
+  return formatWithSign(salesStore.currentCash);
+});
+const formattedTodayTotal = computed(() => {
+  if (reportsStore.summary?.hero_number !== undefined) {
+    return formatWithSign(reportsStore.summary.hero_number);
+  }
+  return formatWithSign(salesStore.todayTotal);
+});
+const formattedTodayFiado = computed(() => {
+  if (reportsStore.summary?.money_breakdown?.credit !== undefined) {
+    return formatWithSign(reportsStore.summary.money_breakdown.credit);
+  }
+  return formatWithSign(salesStore.todayFiado);
+});
 
 const totalProducts = computed(() => inventoryStore.totalProducts);
 

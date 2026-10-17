@@ -3,17 +3,39 @@
 > **Asociado a:** [FRD-014](../FRD/FRD_014_VENTA_FORZADA_Y_AUDITORIA.md)  
 > **Módulo:** Ventas, POS y Auditoría  
 > **Fase del Plan:** Ola 3 (Ítem 4)  
-> **Estado:** 🟢 Rectificado y Sanitizado (Protocolo PAC-SDD v2.0 / Auditoría QA Aprobada)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
+> **Última Actualización:** 2026-10-17
 > **Políticas Aplicables:** ARQ-002 (POL-AUTH-01, POL-AUD-01/02, POL-FIN-01/02/03, POL-LOG-01/02, POL-SEC-01, SPEC-010, SPEC-011)
 
 ---
 
-## 0. Control de Versiones
+## 0. Contexto y Restricciones Aplicables
 
-| Versión | Fecha | Autor | Descripción del Cambio |
-| :--- | :--- | :--- | :--- |
-| 1.0.0 | 2026-03-29 | Arquitecto de Software | Creación inicial del documento de diseño para venta forzada y auditoría. |
-| 2.0.0 | 2026-10-15 | Orquestador / Auditor QA | Rectificación y sanitización integral bajo protocolo PAC-SDD v2.0. Erradicación de código embebido, formalización de N=5 deudas técnicas bajo Regla 7, blindaje de autocorrección atómica de stock sin pasivos a proveedores (`chk_correccion_no_supplier`), aislamiento multi-tenant con `assert_store_access` y contratos JSON canónicos en Sección 5. |
+### 0.1 Políticas Globales Activadas (ARQ-002)
+
+| Política ID | Dominio | Impacto Concreto en este SDD |
+| :--- | :--- | :--- |
+| **POL-AUTH-01 / SEC-01** | Seguridad | Ejecución exclusiva para identidades verificadas en `admin_profiles` (`owner` o `admin`) tras invocar `assert_store_access(p_store_id)`. |
+| **POL-LOG-01 / 02** | Logística | Autocorrección atómica previa inyectando entrada `CORRECCION_SISTEMA` en `inventory_movements` para evitar stock negativo antes del consumo FIFO. |
+| **POL-FIN-03** | Financiero | Prohibición física de asociar proveedor (`chk_correccion_no_supplier: supplier_id IS NULL`), evitando pasivos ficticios en `supplier_invoices`. |
+| **POL-AUD-01 / 02** | Auditoría | Justificación obligatoria (`>= 10` caracteres) y registro inmutable en `audit_logs` (`event_type = 'FORCE_SALE'`, `severity = 'warning'`). |
+
+### 0.2 Contratos Vecinos que Limitan el Diseño
+
+| SDD Vecino | Restricción que Impone |
+| :--- | :--- |
+| **SDD_007 / SDD_007_01 (POS)** | La venta forzada pasa obligatoriamente por el checkout estándar multicanal (`rpc_procesar_venta_v3` / `v2`) tras nivelar el stock (Hallazgo H16). |
+| **SDD_010_016 (Valoración FIFO)** | El trigger `bridge_movement_to_batch` crea el lote técnico con `products.cost_price` para que `consume_stock_fifo` lo consuma inmediatamente. |
+| **SDD_005 (Auditoría Forense)** | El evento `FORCE_SALE` se expone en el Evidence Hub bajo el dominio de auditoría operativa. |
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
+
+Se declaran las **N=5 deudas técnicas** verificadas contra `information_schema` y `pg_proc` en producción (`ihtjocmhzuliwwvdzfnz`), detalladas en la Sección 7:
+- **D-1:** Inyección de `PERFORM public.assert_store_access(p_store_id);` como instrucción #1 en `rpc_force_sale`.
+- **D-2:** Validación estricta de rol administrativo sobre `public.admin_profiles` (`auth.uid()`).
+- **D-3:** Transición coordinada de la llamada interna de `rpc_force_sale` desde `rpc_procesar_venta_v2` hacia `rpc_procesar_venta_v3` (soportando `p_amount_received` y métodos multicanal según Hallazgo H16).
+- **D-4:** Preservación del constraint físico `chk_correccion_no_supplier` en `inventory_movements`.
+- **D-5:** Registro de estado de revisión del evento `FORCE_SALE` dentro de `audit_logs.metadata->>'review_status'` dada la estructura física de 9 columnas de `audit_logs`.
 
 ---
 
@@ -83,6 +105,26 @@ sequenceDiagram
 
     RPC-->>POS: HTTP 200 { success: true, data: { sale_id, ticket_number, total, change_given, audit_logged: true } }
     POS-->>Admin: Muestra confirmación de venta y ticket impreso con trazabilidad
+```
+
+### 2.2 Diagrama de Estados de Interfaz y Venta Forzada (stateDiagram-v2)
+
+```mermaid
+stateDiagram-v2
+    [*] --> POSIdle: Operación normal en POSView
+    
+    state "Modal de Venta Forzada (ForceSaleModal)" as ForceModal {
+        [*] --> WarningDisplayed: Disparo por stock insuficiente
+        WarningDisplayed --> EnteringJustification: Admin decide forzar venta
+        EnteringJustification --> JustificationInvalid: Longitud < 10 caracteres (Botón deshabilitado)
+        EnteringJustification --> SubmittingForceSale: Longitud >= 10 chars + Click 'Confirmar Venta Forzada' (Spinner)
+        SubmittingForceSale --> ForceSaleSuccess: rpc_force_sale exitoso (HTTP 200)
+        SubmittingForceSale --> ForceSaleError: Error de backend (Rol insuficiente / Sin caja abierta)
+        ForceSaleError --> WarningDisplayed: Banner error visible (anti-$0)
+        ForceSaleSuccess --> [*]: Ticket emitido con marca de auditoría
+    }
+
+    POSIdle --> ForceModal: Intento de agregar o cobrar ítem con stock insuficiente
 ```
 
 ---

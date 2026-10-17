@@ -61,6 +61,10 @@ async function ensureAnonymousSession() {
 
 const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
 
+function getTodayBogota(): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+}
+
 export const authRepository = {
     /**
      * Registra una nueva tienda (Admin) usando Supabase Auth Nativo
@@ -446,25 +450,18 @@ export const authRepository = {
         }
     },
 
-
-
     /**
      * Obtener solicitudes de acceso pendientes para el admin
-     * Updated: 'access_requests' -> 'daily_passes'
-     * OT-2: Filtered by UTC today and 5-minute TTL to prevent stale pending cards
+     * Conforme a SDD_001 / SDD_015: Zona Horaria America/Bogota, sin descarte silencioso por TTL
      */
     async getPendingAccessRequests(storeId: string) {
-        // Use UTC date to match PostgreSQL CURRENT_DATE (server runs in UTC)
-        const today = new Date().toISOString().split('T')[0];
-        // Only show pending requests from the last 5 minutes (TTL)
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        const today = getTodayBogota();
 
         const { data, error } = await supabase
             .from('daily_passes')
             .select('*, employees!daily_passes_employee_id_fkey!inner(name, store_id)')
             .eq('status', 'pending')
             .eq('pass_date', today)
-            .gte('requested_at', fiveMinutesAgo)
             .eq('employees.store_id', storeId)
             .order('requested_at', { ascending: false });
 
@@ -486,12 +483,10 @@ export const authRepository = {
 
     /**
      * Obtener dispositivos autorizados
-     * Updated: 'access_requests' -> 'daily_passes'
-     * OT-2: Filtered by UTC today to exclude authorized devices from previous days
+     * Conforme a SDD_001 / SDD_015: Zona Horaria America/Bogota
      */
     async getAuthorizedDevices(storeId: string) {
-        // Use UTC date to match PostgreSQL CURRENT_DATE (server runs in UTC)
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayBogota();
 
         const { data, error } = await supabase
             .from('daily_passes')
@@ -520,30 +515,17 @@ export const authRepository = {
 
     /**
      * Aprobar o rechazar solicitud de acceso
-     * Updated: Utiliza la nueva RPC 'aprobar_pase_diario'
+     * Consume rpc_gestionar_dispositivo (Acciones: 'approve' | 'reject')
      */
-    async updateAccessRequestStatus(requestId: string, status: 'approved' | 'rejected', reviewedBy: string) {
+    async updateAccessRequestStatus(requestId: string, status: 'approved' | 'rejected', reviewedBy?: string) {
         try {
-            if (status === 'approved') {
-                const { data, error } = await supabase.rpc('aprobar_pase_diario' as any, {
-                    p_pass_id: requestId,
-                    p_admin_id: reviewedBy
-                });
-                if (error) throw error;
-                return data;
-            } else {
-                // Reject/Revoke: Update status directly
-                const { error } = await supabase
-                    .from('daily_passes')
-                    .update({
-                        status: 'rejected',
-                        resolved_by: reviewedBy,
-                    })
-                    .eq('id', requestId);
-
-                if (error) throw error;
-                return true;
-            }
+            const action = status === 'approved' ? 'approve' : 'reject';
+            const { data, error } = await supabase.rpc('rpc_gestionar_dispositivo', {
+                p_pass_id: requestId,
+                p_action: action
+            });
+            if (error) throw error;
+            return data;
         } catch (err) {
             logger.error('[AuthRepo] Approval Error', err);
             throw err;

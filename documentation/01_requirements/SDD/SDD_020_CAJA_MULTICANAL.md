@@ -1,9 +1,9 @@
 # SDD-020: Control de Caja Multicanal (Físico y Digital)
 
-> **Asociado a:** [FRD-020](../FRD/FRD_020_CAJA_MULTICANAL.md) (Arqueo y Control de Turnos Multicanal)  
+> **Asociado a:** [FRD-020](../FRD/FRD_020_CAJA_MULTICANAL.md) (Arqueo y Control de Turnos Multicanal; absorbe [FRD_004_CAJA_ESTRICTA_MULTICANAL.md](../FRD/FRD_004_CAJA_ESTRICTA_MULTICANAL.md) y deroga [FRD_004_1_GESTION_PIN_CAJA.md](../FRD/FRD_004_1_GESTION_PIN_CAJA.md))  
 > **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos  
 > **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (PAC-SDD Completo 2026-10-14)  
-> **Última Actualización:** 2026-10-14  
+> **Última Actualización:** 2026-10-17
 
 ---
 
@@ -43,7 +43,7 @@
 
 | # | Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off (Regla 7) | Condición de Revisión Futura |
 |---|-----------------------|-----------------------|------------------------------------------|------------------------------|
-| **H-1** | 🔴 **Inexistencia de `cash_session_balances` en BD** | En producción no existe la tabla `cash_session_balances`. La base opera con balances monolíticos en `cash_sessions`. | **Decisión:** Proyectar normativamente `cash_session_balances` como la estructura oficial multicanal. En el interim, `cash_sessions` mantiene compatibilidad escalar consolidando la sumatoria de canales. | Despliegue de la migración `20260727000000_multichannel_schema.sql` en producción. |
+| **H-1** | 🟠 **Consenso Arquitectónico Multicanal (`SDD_020` + `SDD_023`)** | En producción no existe `cash_session_balances` y `cash_sessions` posee 12 columnas escalares consumidas por 10 RPCs y 2 triggers de auditoría. | **Decisión Consensuada:** Preservar intactas las 12 columnas escalares de `cash_sessions` (no-regresión) y agregar `payment_method TEXT NOT NULL DEFAULT 'efectivo'` en `cash_movements` (H-2) para calcular y conciliar dinámicamente los saldos por canal al cierre. La creación de una tabla separada `cash_session_balances` se difiere hasta una futura versión mayor si el volumen requiere materialización. | Despliegue de migración DDL de `cash_movements.payment_method` en Ola 1/4. |
 | **H-2** | 🔴 **Ausencia de `payment_method` en `cash_movements`** | `cash_movements` solo tiene 7 columnas y carece de discriminación de canal. | **Decisión:** El diseño normativo exige `payment_method TEXT NOT NULL`. Transitoriamente, las ventas se auditan vía join con `sales.payment_method` y los gastos/abonos prefijan el canal en `description`. | Migración DDL: `ALTER TABLE public.cash_movements ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'efectivo'`. |
 | **H-3** | 🔴 **Desconexión de `registrar_abono` en BD real** | La función actual en BD (`registrar_abono`) no recibe método de pago, no valida caja abierta ni inserta en `cash_movements`. | **Decisión:** Declarar obsoleta la función física y exigir la adopción de `rpc_registrar_abono` (`SDD_009`), requiriendo `p_payment_method` y caja abierta activa. | Despliegue de la migración de `rpc_registrar_abono` en producción. |
 | **H-4** | 🔴 **Omisión de `pago_proveedor` en egresos** | Las funciones legacy (`cerrar_caja`, `get_history_caja`) solo filtran `movement_type = 'gasto'`, ignorando `pago_proveedor`. | **Decisión:** Armonizar la fórmula de egresos para sumar obligatoriamente `movement_type IN ('gasto', 'pago_proveedor')` en el canal efectivo. | Refactorización de las RPCs de cierre y reportes. |

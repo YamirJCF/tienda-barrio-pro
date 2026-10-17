@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { X, Package, Check, Search } from 'lucide-vue-next';
 import { useSuppliersStore } from '@/stores/suppliers';
 import { useInventoryStore } from '@/stores/inventory';
+import { useNotifications } from '@/composables/useNotifications';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -15,6 +16,7 @@ const emit = defineEmits<{
 
 const suppliersStore = useSuppliersStore();
 const inventoryStore = useInventoryStore();
+const { showError, showSuccess } = useNotifications();
 
 const searchQuery = ref('');
 const selectedCategory = ref<string | null>(null);
@@ -81,10 +83,11 @@ const handleAssign = async () => {
   isLoading.value = false;
   
   if (result.success) {
+    showSuccess('Proveedor asignado exitosamente');
     emit('assigned');
     close();
   } else {
-    alert(result.error || 'Error al asignar proveedor');
+    showError(result.error || 'Error al asignar proveedor');
   }
 };
 

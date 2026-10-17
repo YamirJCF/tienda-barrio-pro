@@ -139,11 +139,11 @@ const isValid = computed(() => {
   const priceNum = parseFloat(String(price));
   const plu = String(formData.value.plu || '').trim();
 
-  // PLU requerido y ESTRICTAMENTE 3 dígitos numéricos
-  const isPluValid = plu !== '' && plu.length === 3 && /^\d+$/.test(plu);
+  // PLU opcional (autogenerable si está vacío), o entre 1 y 10 dígitos numéricos
+  const isPluValid = plu === '' || (/^\d{1,10}$/.test(plu));
 
   // Validación de Unicidad
-  const isDuplicate = inventoryStore.products.some(p => 
+  const isDuplicate = plu !== '' && inventoryStore.products.some(p => 
     p.plu === plu && p.id !== props.productId
   );
 
@@ -152,7 +152,7 @@ const isValid = computed(() => {
 
 const isPluDuplicate = computed(() => {
   const plu = String(formData.value.plu || '').trim();
-  if (!plu || plu.length !== 3) return false;
+  if (!plu) return false;
   
   return inventoryStore.products.some(p => 
     p.plu === plu && p.id !== props.productId
@@ -409,15 +409,14 @@ watch(
               <div class="col-span-4">
                 <BaseInput
                   :model-value="formData.plu"
-                  @update:model-value="val => formData.plu = String(val).replace(/[^0-9]/g, '').slice(0, 3)"
+                  @update:model-value="val => formData.plu = String(val).replace(/[^0-9]/g, '').slice(0, 10)"
                   @keydown="blockNonNumeric"
                   :error="isPluDuplicate ? 'Código en uso' : undefined"
                   label="Cód. Rápido"
-                  placeholder="PLU"
+                  placeholder="Auto"
                   class="text-center font-medium"
-                  maxlength="3"
+                  maxlength="10"
                   inputmode="numeric"
-                  required
                 />
               </div>
 

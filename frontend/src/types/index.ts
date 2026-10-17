@@ -63,6 +63,7 @@ export interface Sale {
     change?: Decimal;
     clientId?: string; // UUID - references Client.id
     employeeId?: string; // UUID - references Employee.id
+    storeId?: string; // UUID - references Store.id
     syncStatus?: 'synced' | 'pending' | 'failed'; // SPEC-012: Sync Protocol
 }
 
@@ -88,6 +89,9 @@ export interface SaleResponse {
     success: boolean;
     id?: string;
     ticketNumber?: number;
+    total?: number;
+    roundingDifference?: number;
+    changeGiven?: number;
     error?: string;
     code?: string;
 }

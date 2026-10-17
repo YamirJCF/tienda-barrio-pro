@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-013: Gestión de Sesiones](../FRD/FRD_013_GESTION_SESIONES.md)  
 > **Fase del Plan:** Ola 5: Sesiones, Autenticación y Offline (Ítem 2)  
-> **Estado:** 🟢 Consolidado (Auditoría PAC-SDD v2.0 Aprobada)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-16  
 
 ---

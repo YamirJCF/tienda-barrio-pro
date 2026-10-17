@@ -22,13 +22,16 @@ import {
   Smartphone,
   CreditCard
 } from 'lucide-vue-next';
-
+import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { useNotifications } from '../composables/useNotifications';
 
 const router = useRouter();
 const route = useRoute();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.isAdmin);
+const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
+const { showWarning, showSuccess } = useNotifications();
 
 // State
 const paymentAmount = ref('');
@@ -80,11 +83,8 @@ const creditUsagePercent = computed(() => {
 });
 
 // Methods
-const formatCurrency = (val: Decimal) => {
-  return `$${val
-    .toDecimalPlaces(0)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+const formatCurrency = (val: Decimal | number) => {
+  return rawFormatCurrency(val instanceof Decimal ? val.toNumber() : val);
 };
 
 const formatCedula = (cedula: string) => {
@@ -145,7 +145,7 @@ const deleteClient = () => {
   router.push('/clients');
 };
 
-const registerPayment = () => {
+const registerPayment = async () => {
   if (!paymentAmount.value || !client.value) return;
 
   const amount = new Decimal(paymentAmount.value);
@@ -153,17 +153,24 @@ const registerPayment = () => {
 
   // Validation: Prevent negative balance (Overpayment)
   if (amount.gt(client.value.totalDebt)) {
-      alert(`El abono no puede superar la deuda actual (${formatCurrency(client.value.totalDebt)}).\nEl sistema no maneja "Saldo a Favor" por defecto.`);
-      return;
+    showWarning(`El abono no puede superar la deuda actual (${formatCurrency(client.value.totalDebt)}).\nEl sistema no maneja "Saldo a Favor" por defecto.`);
+    return;
   }
 
-  // Ensure amount is valid before sending
-  const finalAmount = amount.toNumber(); // Convert to number if needed by store, though store likely takes Decimal or number
-  
-  clientsStore.registerPayment(clientId.value, new Decimal(finalAmount), 'Abono ' + (paymentMethod.value.charAt(0).toUpperCase() + paymentMethod.value.slice(1)), paymentMethod.value);
-  paymentAmount.value = '';
-  paymentMethod.value = 'efectivo';
-  showPaymentModal.value = false;
+  try {
+    await clientsStore.registerPayment(
+      clientId.value, 
+      amount, 
+      'Abono ' + (paymentMethod.value.charAt(0).toUpperCase() + paymentMethod.value.slice(1)), 
+      paymentMethod.value
+    );
+    showSuccess('Abono registrado exitosamente');
+    paymentAmount.value = '';
+    paymentMethod.value = 'efectivo';
+    showPaymentModal.value = false;
+  } catch (err: any) {
+    showWarning(err.message || 'Error al registrar el abono');
+  }
 };
 
 // WO: initializeSampleData eliminada - SPEC-007

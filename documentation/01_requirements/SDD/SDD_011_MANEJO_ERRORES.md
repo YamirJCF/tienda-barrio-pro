@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-011: Manejo de Errores y Resiliencia](../FRD/FRD_011_MANEJO_ERRORES.md)  
 > **Fase del Plan:** Ola 5: Sesiones, Autenticación y Offline (Ítem 4)  
-> **Estado:** 🟢 Consolidado (Auditoría PAC-SDD v2.0 Aprobada)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-16  
 
 ---

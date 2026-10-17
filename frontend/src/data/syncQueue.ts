@@ -405,6 +405,9 @@ async function processItem(item: QueueItem): Promise<boolean> {
                     : Number(rawAmountReceived))
                 : null;
 
+            const localId = item.payload.localId || item.payload.id || item.id;
+            const idempotencyKey = item.payload.idempotencyKey || `offline-${localId}`;
+
             const rpcPayload = {
                 p_store_id: item.payload.storeId || item.payload.store_id,
                 p_client_id: item.payload.clientId || item.payload.client_id || null,
@@ -412,10 +415,13 @@ async function processItem(item: QueueItem): Promise<boolean> {
                     ? 'efectivo' // Standardize on 'efectivo' to match DB Constraint
                     : (item.payload.paymentMethod || 'efectivo'),
                 p_amount_received: numericAmountReceived,
-                p_items: p_items_v2
+                p_items: p_items_v2,
+                p_idempotency_key: idempotencyKey,
+                p_local_id: localId,
+                p_is_offline_sync: true
             };
 
-            const { data, error } = await supabase.rpc('rpc_procesar_venta_v2', rpcPayload);
+            const { data, error } = await supabase.rpc('rpc_procesar_venta_v3', rpcPayload);
 
             if (error) {
                 // If RPC not found (404), throw specific error to handle differently if needed
@@ -425,22 +431,24 @@ async function processItem(item: QueueItem): Promise<boolean> {
                 throw error;
             }
 
+            if (data?.code === 'DUPLICATE_RESOLVED') {
+                logger.log(`[SyncQueue] 🔁 Sale already synchronized (${item.id}): ${data.message || 'Duplicate resolved'}`);
+                return true;
+            }
+
             if (!data || !data.success) {
                 throw new Error(data?.error || 'RPC processing failed without specific error');
             }
 
             // Success!
             logger.log(`[SyncQueue] ✅ RPC processed sale ${item.id} -> SaleID: ${data.sale_id}`);
-            // Success!
-            logger.log(`[SyncQueue] ✅ RPC processed sale ${item.id} -> SaleID: ${data.sale_id}`);
             return true;
         }
 
         case 'CREATE_CLIENT': {
-            // Direct Insert
-            const { error: clientError } = await supabase.from('clients').insert(item.payload);
-            if (clientError) throw clientError;
-            return true;
+            // RN-OFF-01: Offline client creation is prohibited
+            logger.warn(`[SyncQueue] ⚠️ Dropping illegal CREATE_CLIENT (${item.id}) — RN-OFF-01 violation. Client creation is online-only.`);
+            return true; // Return true to drain from queue
         }
 
         case 'CREATE_MOVEMENT': {

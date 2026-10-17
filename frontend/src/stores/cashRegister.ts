@@ -278,11 +278,11 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
             if (!result.success) {
                 console.error('🚫 [CashRegisterStore] Repository close failed:', result.error);
-                // Don't throw - still archive locally
+                throw new Error(result.error || 'Error al cerrar caja en el servidor');
             }
         } catch (e: any) {
             console.error('🚫 [CashRegisterStore] Repository close call failed:', e.message);
-            console.warn('⚠️ [CashRegisterStore] Session closed locally only');
+            throw e;
         }
 
         // Archive session
@@ -307,7 +307,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         return session;
     };
 
-    const registerExpense = async (amount: Decimal | number, description: string, category: string = 'General') => {
+    const registerExpense = async (amount: Decimal | number, description: string, category: string = 'Servicios', paymentMethod: string = 'efectivo') => {
         if (!currentSession.value) throw new Error("La caja está cerrada");
 
         const transaction: CashTransaction = {
@@ -316,6 +316,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             amount: new Decimal(amount),
             description,
             category,
+            paymentMethod,
             timestamp: new Date().toISOString()
         };
 

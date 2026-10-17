@@ -101,9 +101,9 @@ export async function decryptData(
     }
 
     const decryptedBuffer = await window.crypto.subtle.decrypt(
-        { name: ENCRYPTION_ALGORITHM, iv },
+        { name: ENCRYPTION_ALGORITHM, iv: iv as unknown as BufferSource },
         key,
-        cipherText
+        cipherText as unknown as BufferSource
     );
 
     const decoder = new TextDecoder();

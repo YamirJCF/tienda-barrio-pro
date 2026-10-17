@@ -3,17 +3,42 @@
 > **Asociado a:** [FRD-024](../FRD/FRD_024_POLITICA_FIADOS_CLIENTES.md)  
 > **Módulo:** Ventas, POS, Clientes y Caja  
 > **Fase del Plan:** Ola 3 (Ítem 6 - Cierre de Ola)  
-> **Estado:** 🟢 Rectificado y Sanitizado (Protocolo PAC-SDD v2.0 / Auditoría QA Aprobada)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
+> **Última Actualización:** 2026-10-17
 > **Políticas Aplicables:** ARQ-002 (POL-AUTH-01, POL-AUD-01/02, POL-FIN-01/02/03, POL-LOG-01/02, POL-SEC-01, SPEC-010, SPEC-011)
 
 ---
 
-## 0. Control de Versiones
+## 0. Contexto y Restricciones Aplicables
 
-| Versión | Fecha | Autor | Descripción del Cambio |
-| :--- | :--- | :--- | :--- |
-| 1.0.0 | 2026-03-29 | Arquitecto de Software | Creación del borrador conceptual de política de fiados y cuentas por cobrar. |
-| 2.0.0 | 2026-10-16 | Orquestador / Auditor QA | Rectificación integral bajo protocolo PAC-SDD v2.0. Erradicación de código embebido, formalización del aislamiento monetario de fiados ($0 en caja en la venta), indivisibilidad atómica del abono hacia caja activa, protección de columna generada `client_ledger.new_balance`, sincronización física de nombres en `clients`, formalización de N=8 deudas técnicas bajo Regla 7 y contratos JSON canónicos en Sección 5. |
+### 0.1 Políticas Globales Activadas (ARQ-002)
+
+| Política ID | Dominio | Impacto Concreto en este SDD |
+| :--- | :--- | :--- |
+| **POL-FIN-01** | Financiero | Aislamiento monetario de la promesa: la venta fiada impacta `$0` en caja diaria; el abono exige sesión de caja activa (`< 24h`) e inyecta liquidez en `cash_movements`. |
+| **POL-FIN-03** | Financiero | Validación atómica de cupo de crédito (`balance + total <= credit_limit`) e invariante `clients.balance >= 0`. |
+| **POL-LOG-01** | Logística | Descuento inmediato de inventario físico mediante `consume_stock_fifo` al momento de la venta a crédito. |
+| **POL-AUTH-01** | Seguridad | Validación obligatoria con `assert_store_access(p_store_id)` en RPCs y `get_current_store_id()` en RLS. |
+
+### 0.2 Contratos Vecinos que Limitan el Diseño
+
+| SDD Vecino | Restricción que Impone |
+| :--- | :--- |
+| **SDD_009 (Clientes y Cartera)** | Comparte el contrato canónico `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` y el esquema físico de `clients` y `client_ledger`. |
+| **SDD_007 / SDD_007_01 (Ventas y POS)** | `rpc_procesar_venta_v3` ejecuta la rama `payment_method = 'fiado'` y `rpc_anular_venta` revierte la deuda viva si la venta original fue a crédito. |
+| **SDD_004 / SDD_020 / SDD_023 (Caja)** | Exige sesión de caja abierta (`status = 'open'`) para todo recaudo de cartera e inserción con `payment_method` en `cash_movements`. |
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
+
+Se declaran las **N=8 deudas técnicas** verificadas contra producción (`ihtjocmhzuliwwvdzfnz`), cuyo desglose completo se encuentra en la Sección 7:
+- **D-1:** Evolución de `registrar_abono` hacia `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` con exigencia de turno de caja activo e inyección en `cash_movements` (Hallazgo H10).
+- **D-2:** Sincronización de nombres físicos en `clients` (`id_number`, `is_deleted`, `deleted_at`).
+- **D-3:** Protección de la columna generada `client_ledger.new_balance` (`GENERATED ALWAYS`).
+- **D-4:** Adición de `payment_method` en `cash_movements` para trazabilidad nativa de abonos por canal.
+- **D-5:** Validación de caducidad de turno de 24 horas (`SHIFT_EXPIRED`) antes de aceptar abonos.
+- **D-6:** Reversión atómica de deuda en `rpc_anular_venta` cuando `sales.payment_method = 'fiado'` (Hallazgo H9 A/B).
+- **D-7:** Remediación de `get_history_creditos` (eliminación de referencia a `cl.description`).
+- **D-8:** Inclusión de `assert_store_access(p_store_id)` en `get_client_ledger_summary`.
 
 ---
 
@@ -77,6 +102,35 @@ sequenceDiagram
         AbonoEngine->>DB_Cash: INSERT cash_movements (tipo='ingreso', canal, session_id)
         AbonoEngine-->>POS: HTTP 200 { success: true, new_balance, amount_paid }
     end
+```
+
+### 2.2 Diagrama de Estados del Ciclo de Vida del Fiado (stateDiagram-v2)
+
+```mermaid
+stateDiagram-v2
+    [*] --> DeudaInexistente: Cliente con saldo $0
+    
+    state "Venta Fiada (Checkout POS)" as SaleState {
+        [*] --> ValidandoCupo: Cajero selecciona 'fiado'
+        ValidandoCupo --> CupoExcedido: balance + total > credit_limit
+        CupoExcedido --> ValidandoCupo: Ajustar carrito o cliente
+        ValidandoCupo --> VentaAprobada: balance + total <= credit_limit
+    }
+
+    DeudaInexistente --> ConDeuda: Venta Fiada procesada ($0 en caja, stock descontado)
+    ConDeuda --> ConDeuda: Nuevas ventas fiadas dentro del cupo
+    
+    state "Abono y Liquidación (Caja)" as PaymentState {
+        [*] --> VerificandoCaja: Cajero ingresa abono
+        VerificandoCaja --> CajaCerradaError: Sin turno abierto (< 24h)
+        VerificandoCaja --> AbonoExcedido: monto > balance
+        VerificandoCaja --> AbonoAsentado: Validación exitosa (Ingreso en caja + Saldo reducido)
+    }
+
+    ConDeuda --> ConDeuda: Abono parcial asentado (balance > 0)
+    ConDeuda --> DeudaInexistente: Abono total asentado (balance = 0)
+    ConDeuda --> Anulada: Venta fiada anulada (rpc_anular_venta revierte saldo y stock)
+    Anulada --> [*]
 ```
 
 ---
@@ -299,7 +353,7 @@ A continuación se formalizan con rigor las **N=8 deudas técnicas y trade-offs*
 
 | ID Deuda | Dimensión Afectada | 1. Qué se Decidió | 2. Por qué (Trade-off Concreto) | 3. Condición de Revisión Futura |
 | :--- | :--- | :--- | :--- | :--- |
-| **D-1** | Transición de Contrato de Abonos (`registrar_abono`) | Normar en SDD-024 el contrato canónico `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` exigiendo sesión de caja activa e inyectando a `cash_movements`, manteniendo transitoriamente la función legacy en producción. | **Trade-off:** Evita rotura del frontend actual (`clients.ts`) sin forzar caídas en caliente mientras se despliega la suite multicanal de forma coordinada. | Despliegue de la migración de caja multicanal de la Ola 3/4. |
+| **D-1** | Transición de Contrato de Abonos (`registrar_abono`) | Normar en SDD-024 el contrato canónico `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` exigiendo sesión de caja activa e inyectando a `cash_movements`, manteniendo transitoriamente la función legacy en producción. | **Trade-off:** Evita rotura del frontend actual (el módulo de cartera del cliente) sin forzar caídas en caliente mientras se despliega la suite multicanal de forma coordinada. | Despliegue de la migración de caja multicanal de la Ola 3/4. |
 | **D-2** | Sinceramiento de Esquema Físico en `clients` | Adoptar con rigor absoluto los nombres físicos verificados en base de datos (`id_number`, `is_deleted`, `deleted_at`) en lugar de los nombres conceptuales del FRD (`cedula`, `deleted`, `deletedAt`). | **Trade-off:** Erradica discrepancias conceptuales y previene errores `42703` sin requerir DDLs de renombrado cosmético que rompan clientes de PostgREST. | Permanente / Invariante estructural. |
 | **D-3** | Invariante de Columna Generada en `client_ledger` | Prohibir categóricamente suministrar `new_balance` en sentencias `INSERT` sobre `client_ledger`, adoptando la convención de signos (`amount > 0` en fiados, `amount < 0` en abonos/anulaciones). | **Trade-off:** Respeta la arquitectura física de base de datos (`ALWAYS GENERATED`), evitando el error fatal PostgreSQL `428C9`. | Permanente / Invariante estructural. |
 | **D-4** | Persistencia de Canal en `cash_movements` | Normar la persistencia transitoria del canal estructurado dentro de la columna obligatoria `description` (ej. `'[ABONO: EFECTIVO] ...'`). | **Trade-off:** Cumple con la restricción `is_nullable = NO` de `description` y asegura auditoría de liquidez sin requerir alteración en caliente de `cash_movements`. | Migración DDL agregando `payment_method TEXT NOT NULL` en la Ola 4. |

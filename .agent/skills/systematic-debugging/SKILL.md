@@ -88,6 +88,14 @@ You MUST complete each phase before proceeding to the next.
    THEN investigate that specific component
    ```
 
+5. **Run the Structural Impact Scanner (Regla 10 — Mandatory in Tienda Barrio Pro)**
+   Before proposing or editing any shared file (SQL, RPC, Store, Service), run:
+   ```bash
+   node scripts/scan-impact.mjs <entity_table_rpc_or_store>
+   ```
+   Print the 4-line mechanical diagnosis (Origin, Active RVC Contracts, Blast Radius files, and Boundary Stoplights) before moving to Phase 2.
+
+
    **Example (multi-layer system):**
    ```bash
    # Layer 1: Workflow

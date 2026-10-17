@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-012: Sincronización y Resolución de Conflictos Offline](../FRD/FRD_012_SINCRONIZACION_OFFLINE.md), [FRD-012-01: Límites Estrictos del Sistema Offline](../FRD/FRD_012_01_LIMITES_SISTEMA_OFFLINE.md), y [FRD-012-R: Remediación del Módulo Offline](../FRD/FRD_012_REMEDIACION_OFFLINE.md)  
 > **Fase del Plan:** Ola 5: Sesiones, Autenticación y Offline (Ítem 5)  
-> **Estado:** 🟢 Consolidado (Auditoría PAC-SDD v2.0 Aprobada)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-16  
 
 ---
@@ -590,3 +590,8 @@ Conforme a la **Regla 7 de AGENTS.md**, se formalizan los 5 compromisos y decisi
 - **Qué se decidió:** Restringir la consulta y resolución de la Dead Letter Queue exclusivamente a usuarios con rol en `admin_profiles`, ocultando márgenes y costos unitarios al cajero operativo.
 - **Por qué / Trade-off:** Cumple el principio de ceguera contable (`POL-SEC-01`) y previene manipulaciones no autorizadas de transacciones fallidas en el mostrador.
 - **Condición de revisión futura:** Permanente / Invariante de seguridad y control interno.
+
+### D-6: Soporte de Precio Histórico Desconectado en `rpc_procesar_venta_v3` (`RN-012-04`)
+- **Qué se decidió:** Cuando una venta se origina en modo desconectado (`p_is_offline_sync = true`), el cliente envía en `p_items` el `unit_price` histórico capturado del catálogo local al momento de la transacción (`OfflineSaleRecord.created_at`). El backend `rpc_procesar_venta_v3` debe honrar o auditar dicho precio histórico en lugar de sobreescribirlo con el precio vigente en catálogo al momento de la sincronización.
+- **Por qué / Trade-off:** Cumple la regla `RN-012-04` impidiendo que un cambio de precios administrativo durante un apagón modifique retroactivamente el monto cobrado al cliente en el mostrador.
+- **Condición de revisión futura:** Ola 6 SQL (se integrará soporte para `p_is_offline_sync` y `unit_price` histórico opcional en `rpc_procesar_venta_v3`).

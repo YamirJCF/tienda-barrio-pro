@@ -143,9 +143,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useBatchStore } from '../../stores/batches';
+import { useInventoryStore } from '../../stores/inventory';
 import BaseModal from '../ui/BaseModal.vue';
 import BaseButton from '../ui/BaseButton.vue';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
+import { useNotifications } from '../../composables/useNotifications';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -156,7 +158,9 @@ const props = defineProps<{
 const emit = defineEmits(['update:modelValue']);
 
 const batchStore = useBatchStore();
+const inventoryStore = useInventoryStore();
 const { formatCurrency } = useCurrencyFormat();
+const { showError, showSuccess } = useNotifications();
 
 const editingBatchId = ref<string | null>(null);
 const editForm = ref({ cost_unit: 0, sale_price: 0 });
@@ -171,6 +175,12 @@ const modelValue = computed({
 });
 
 const stockTotal = computed(() => {
+  if (props.productId) {
+    const prod = inventoryStore.products.find(p => p.id === props.productId);
+    if (prod) {
+      return prod.stock.toNumber();
+    }
+  }
   return batchStore.batches.reduce((sum, b) => sum + Number(b.quantity_remaining), 0);
 });
 
@@ -199,8 +209,9 @@ const saveEdit = async () => {
   const res = await batchStore.updateBatchPrice(editingBatchId.value, editForm.value.cost_unit, editForm.value.sale_price);
   if (res.success) {
     editingBatchId.value = null;
+    showSuccess('Lote actualizado correctamente');
   } else {
-    alert(res.error || 'No se pudo actualizar el lote');
+    showError(res.error || 'No se pudo actualizar el lote');
   }
 };
 

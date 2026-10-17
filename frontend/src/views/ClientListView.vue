@@ -19,10 +19,12 @@ import {
   ChevronRight, 
   Plus 
 } from 'lucide-vue-next';
+import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 
 const router = useRouter();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
+const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
 
 onMounted(async () => {
   // WO-006: Ensure clients are fetched from server on load
@@ -74,11 +76,8 @@ const getColor = (name: string) => {
 };
 
 // Methods
-const formatCurrency = (val: Decimal) => {
-  return `$${val
-    .toDecimalPlaces(0)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+const formatCurrency = (val: Decimal | number) => {
+  return rawFormatCurrency(val instanceof Decimal ? val.toNumber() : val);
 };
 
 const formatCedula = (cedula: string) => {

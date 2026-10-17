@@ -2,7 +2,8 @@
 
 > **Asociado a:** [FRD-007-01](../FRD/FRD_007_01_NUCLEO_POS.md)  
 > **Fase del Plan:** Ola 3: Ventas, POS y Clientes (Ítem 2)  
-> **Estado:** 🟢 Aprobado y Consolidado (Post PAC-SDD v2.0)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Post PAC-SDD v2.0)
+> **Última Actualización:** 2026-10-17
 > **Última Actualización:** 2026-10-15  
 
 ---
@@ -172,12 +173,14 @@ stateDiagram-v2
 
 ---
 
-### 2.3 Regla de Cero Cálculos en Frontend (Flujo Unidireccional)
+### 2.3 Regla de Cero Cálculos en Frontend (Flujo Unidireccional y Frontera Online/Offline)
 
-1. **El Frontend NO Calcula Importes Financieros:** El cliente tiene estrictamente prohibido computar subtotales, impuestos, descuentos o el total oficial de la venta. Su responsabilidad se limita a acumular `{ product_id, quantity }` en memoria.
-2. **El Frontend NO Calcula Vueltas ni Redondeos:** Los redondeos comerciales al múltiplo inferior de $50 COP, el cambio exacto (`change_given`) y la diferencia fiscal (`rounding_difference`) son calculados y certificados exclusivamente por el motor de base de datos.
-3. **El Frontend NO Conoce Costos ni Lotes:** La interfaz de usuario opera bajo ceguera financiera total (`POL-SEC-01`). No recibe ni presenta costos de lote (`unit_cost`) ni capas FIFO.
-4. **Presentación de la Verdad:** El cliente Vue/Pinia formatea y presenta los datos crudos retornados por el servidor, garantizando que lo que ve el cajero coincida al 100% con los libros contables.
+1. **El Frontend NO Calcula Importes Financieros Oficiales:** El cliente tiene estrictamente prohibido computar subtotales, impuestos, descuentos o el total oficial de la venta en el payload de checkout online. Su responsabilidad se limita a acumular `{ product_id, quantity }` en memoria.
+2. **Visualización Previa en Carrito vs. Verdad Contable (`SPEC-011`):** Cualquier subtotal o total desplegado en la vista previa del carrito (`stores/cart.ts`, `POSView.vue`) es exclusivamente una **estimación cosmética pre-vuelo** para orientación visual del cajero. Dicho cálculo provisional jamás se envía como parámetro autoritativo al backend en ventas online.
+3. **El Frontend NO Calcula Vueltas ni Redondeos Oficiales:** Los redondeos comerciales al múltiplo inferior de $50 COP, el cambio exacto (`change_given`) y la diferencia fiscal (`rounding_difference`) son calculados y certificados exclusivamente por el motor de base de datos en `rpc_procesar_venta_v3`.
+4. **Exclusión de Pago Mixto en POS Actual:** En estricto cumplimiento de `FRD_004` (Caso B: Pago Mixto clasificado como `Próximamente POS`), se prohíbe en la interfaz del POS (`CheckoutModal.vue`) y en el repositorio (`saleRepository.ts`) exponer o enviar `payment_method = 'mixed'`. Los únicos métodos permitidos en POS son `'efectivo'`, `'nequi'`, `'daviplata'`, `'fiado'`.
+5. **El Frontend NO Conoce Costos ni Lotes:** La interfaz de usuario opera bajo ceguera financiera total (`POL-SEC-01`). No recibe ni presenta costos de lote (`unit_cost`) ni capas FIFO.
+6. **Frontera de Sincronización Desconectada (`SDD_012`):** La única excepción donde el cliente congela importes unitarios es en la cola local de ventas offline (`OfflineSaleRecord`), donde captura `historical_unit_price` para garantizar que la venta respete el precio vigente en el momento en que se pactó desconectado (`RN-012-04`).
 
 ---
 
@@ -237,6 +240,10 @@ stateDiagram-v2
 
 ## 5. Contrato de Interfaz
 
+### 5.0 Operación Previa de Catálogo y Búsqueda Unificada en POS (`buscar_producto_pos`)
+
+> **Trazabilidad H1 / H2 (`v1.5.8`):** Antes de ejecutar el checkout, la terminal POS resuelve la búsqueda unificada de productos (lookup instantáneo por código numérico `plu` exacto o búsqueda parcial alfabética `p_search` de mínimo 2 caracteres filtrando `current_stock > 0` y ocultando `cost_price`) consumiendo el contrato canónico **`buscar_producto_pos`** especificado en la Sección `§5.1` de [`SDD_006_03_CODIGO_PRODUCTO.md`](./SDD_006_03_CODIGO_PRODUCTO.md) y en [`SDD_006_NUCLEO_INVENTARIO_PADRE.md`](./SDD_006_NUCLEO_INVENTARIO_PADRE.md).
+
 ### 5.1 Operación: `rpc_procesar_venta_v3` (Procesamiento de Venta Atómica)
 
 - **Tipo:** RPC Postgres / Acción (WRITE)
@@ -246,14 +253,16 @@ stateDiagram-v2
   {
     "p_store_id": "UUID (Obligatorio)",
     "p_client_id": "UUID (Opcional, obligatorio si p_payment_method = 'fiado')",
-    "p_payment_method": "TEXT (Obligatorio: 'efectivo', 'nequi', 'daviplata', 'fiado')",
+    "p_payment_method": "TEXT (Obligatorio: 'efectivo', 'nequi', 'daviplata', 'fiado'. Prohibido 'mixed')",
     "p_amount_received": "NUMERIC >= 0 (Opcional, requerido si p_payment_method = 'efectivo')",
     "p_idempotency_key": "UUID (Opcional, identificador único de transacción para reintentos seguros)",
     "p_local_id": "TEXT (Opcional, identificador local de sincronización offline)",
+    "p_is_offline_sync": "BOOLEAN (Opcional, default false. Si true, el backend honra/audita precios históricos congelados)",
     "p_items": [
       {
         "product_id": "UUID (Obligatorio)",
-        "quantity": "NUMERIC > 0 (Obligatorio, entero en unitarios, máx 2 decimales en pesables)"
+        "quantity": "NUMERIC > 0 (Obligatorio, entero en unitarios, máx 2 decimales en pesables)",
+        "unit_price": "NUMERIC > 0 (Opcional, solo transmitido en sincronización offline diferida p_is_offline_sync = true)"
       }
     ]
   }

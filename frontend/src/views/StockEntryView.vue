@@ -268,12 +268,18 @@ import { useSuppliersStore } from '../stores/suppliers';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import { ArrowLeft, Search, ListPlus, X, Save } from 'lucide-vue-next';
+import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import { useAsyncAction } from '../composables/useAsyncAction';
+import { useNotifications } from '../composables/useNotifications';
 
 const router = useRouter();
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
 const suppliersStore = useSuppliersStore();
 const payablesStore = usePayablesStore();
+const { formatCurrency } = useCurrencyFormat();
+const { execute: executeSave, isLoading: isSaving } = useAsyncAction();
+const { showSuccess, showWarning, showError } = useNotifications();
 
 // Fetch suppliers on mount
 onMounted(async () => {
@@ -397,22 +403,6 @@ const removeItem = (index: number) => {
   entryItems.value.splice(index, 1);
 };
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('es-CO', { 
-    style: 'currency', 
-    currency: 'COP',
-    maximumFractionDigits: 0 
-  }).format(amount);
-};
-
-// Composable: Request Management
-import { useAsyncAction } from '../composables/useAsyncAction';
-// Notifications
-import { useNotifications } from '../composables/useNotifications';
-
-const { execute: executeSave, isLoading: isSaving } = useAsyncAction();
-const { showSuccess, showWarning, showError } = useNotifications();
-
 const saveEntry = async () => {
   // Validación: Si hay proveedor seleccionado, debe haber tipo de pago
   if (movementType.value === 'entrada' && selectedSupplierId.value && !paymentType.value) {
@@ -423,58 +413,55 @@ const saveEntry = async () => {
   if (entryItems.value.length === 0) return;
   
   await executeSave(async () => {
-    // Procesar cada item
-    // En fase 2 real, haríamos un batch update o una transacción
-    // Por ahora iteramos updateStock
     let successCount = 0;
+    const failedItems: string[] = [];
     
     // Perform updates
     for (const item of entryItems.value) {
       const qty = new Decimal(item.quantity);
       if (qty.gt(0)) {
-          // T1.2: Register logical movement
-            const result = await inventoryStore.registerStockMovement({
-              productId: item.productId,
-              type: movementType.value as any, 
-              quantity: qty,
-              reason: reason.value,
-              expirationDate: item.expirationDate,
-              unitCost: item.unitCost,
-              salePrice: item.salePrice,
-              supplierId: selectedSupplierId.value || undefined,
-              invoiceRef: invoiceRef.value || undefined,
-              referenceInvoiceId: referenceInvoiceId.value || undefined,
-              paymentType: paymentType.value as 'contado' | 'credito'
-            });
-          
-          if (result.success) {
-            successCount++;
-          } else {
-            console.error(`Error saving item ${item.productName}:`, result.error);
-          }
+        const result = await inventoryStore.registerStockMovement({
+          productId: item.productId,
+          type: movementType.value as any, 
+          quantity: qty,
+          reason: reason.value,
+          expirationDate: item.expirationDate,
+          unitCost: item.unitCost,
+          salePrice: item.salePrice,
+          supplierId: selectedSupplierId.value || undefined,
+          invoiceRef: invoiceRef.value || undefined,
+          referenceInvoiceId: referenceInvoiceId.value || undefined,
+          paymentType: paymentType.value as 'contado' | 'credito'
+        });
+        
+        if (result.success) {
+          successCount++;
+        } else {
+          console.error(`Error saving item ${item.productName}:`, result.error);
+          failedItems.push(`${item.productName}: ${result.error || 'Error desconocido'}`);
+        }
       }
     }
 
-    if (successCount === 0) {
-        throw new Error('No se pudo guardar ningún producto. Revisa la consola para más detalles.');
+    if (failedItems.length > 0 && successCount === 0) {
+      throw new Error(`Falló el registro de todos los productos: ${failedItems.join('; ')}`);
     }
 
-    // Return custom success object to be handled
-    return successCount;
+    return { successCount, failedItems };
 
   }, {
-    // Custom handling for success message inside executed block or here?
-    // We can use successMessage, but since the message is dynamic "X products updated",
-    // we might want to handle it manually or use a generic one.
-    // Let's handle manually below or inside.
-    checkConnectivity: false, // Inventory often needs to work offline? Pending specific requirement.
-    // Assuming partial offline support or optimistic UI
-    showSuccessToast: false // We will show a custom toast/alert
-  }).then((count) => {
-      if (count) {
-          showSuccess(`Entrada registrada exitosamente. Lotes actualizados correctamente.`);
-          router.push('/inventory');
+    checkConnectivity: true,
+    showSuccessToast: false
+  }).then((res) => {
+    if (res) {
+      if (res.failedItems.length > 0) {
+        showWarning(`Se registraron ${res.successCount} productos, pero fallaron ${res.failedItems.length}: ${res.failedItems.join('; ')}`);
+        router.push('/inventory');
+      } else if (res.successCount > 0) {
+        showSuccess(`Entrada registrada exitosamente (${res.successCount} productos). Lotes actualizados correctamente.`);
+        router.push('/inventory');
       }
+    }
   });
 };
 </script>

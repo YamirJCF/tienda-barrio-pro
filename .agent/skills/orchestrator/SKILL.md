@@ -42,10 +42,12 @@ Antes de descomponer cualquier SDD en tareas, el Orquestador DEBE:
 - Leer la **Sección 0 del SDD** objetivo (Contratos Vecinos y Funciones de Seguridad Centralizadas).
 - Leer `04_DEV_ORCHESTRATION/MAPA_LOGICA_GLOBAL.md` para identificar módulos relacionados que ya están implementados.
 
-### Paso 0.2 — Verificación de Existencia Real (Anti-Alucinación)
-Por cada función, componente o utilidad que el SDD sugiera reutilizar:
-1. **Buscar activamente** su declaración en el código fuente real (`src/utils/`, `src/composables/`, `supabase/`, etc.).
-2. **Citar la evidencia:** Ruta exacta del archivo y la línea de declaración encontrada.
+### Paso 0.2 — Verificación de Existencia Real y Ecógrafo de Impacto (Anti-Alucinación)
+Por cada entidad, tabla, RPC, función o utilidad que el SDD o problema involucre:
+1. **Ejecutar el Ecógrafo Estructural (Regla 10):**
+   `node scripts/scan-impact.mjs <nombre_entidad_o_rpc>`
+2. **Buscar activamente** su declaración en el código fuente real (`src/utils/`, `src/composables/`, `supabase/`, etc.).
+3. **Citar la evidencia:** Ruta exacta del archivo, línea de declaración y consumidores afectados devueltos por el escáner.
 
 > [!WARNING]
 > **PROHIBIDO:** Listar una función como reutilizable basándose
@@ -56,9 +58,11 @@ Por cada función, componente o utilidad que el SDD sugiera reutilizar:
 
 ### Paso 0.3 — Declaración de Resultados (Obligatoria)
 ```
-✅ RECONOCIMIENTO DEL TERRENO COMPLETADO
+✅ RECONOCIMIENTO DEL TERRENO Y ECOGRAFÍA COMPLETADOS
+Comando ejecutado: node scripts/scan-impact.mjs <entidades>
+Contratos RVC activos: [listar filas o Ninguno]
+Consumidores afectados (Radio de Explosión): [listar archivos .sql / .ts / .vue]
 Funciones reutilizables verificadas:
-  - [nombre] → [ruta/archivo.ts, línea aprox.]
   - [nombre] → [ruta/archivo.ts, línea aprox.]
 Funciones buscadas y NO encontradas (marcar como CREAR NUEVO):
   - [nombre esperado] → AUSENTE

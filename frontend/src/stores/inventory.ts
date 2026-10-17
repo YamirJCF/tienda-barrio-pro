@@ -476,6 +476,26 @@ export const useInventoryStore = defineStore(
       product.updatedAt = new Date().toISOString();
     };
 
+    const updateStock = (id: string, delta: number | Decimal): { success: boolean; product?: Product; error?: string } => {
+      const product = products.value.find((p) => p.id === id);
+      if (!product) {
+        return { success: false, error: 'Producto no encontrado' };
+      }
+      const deltaDecimal = delta instanceof Decimal ? delta : new Decimal(delta);
+      const newStock = product.stock.plus(deltaDecimal);
+      if (newStock.lt(0)) {
+        return { success: false, error: 'Stock insuficiente' };
+      }
+      product.stock = newStock;
+      product.updatedAt = new Date().toISOString();
+      return { success: true, product };
+    };
+
+    const fetchProducts = async (storeId?: string) => {
+      initialized.value = false;
+      await initialize(storeId);
+    };
+
     return {
       products,
       isLoading,
@@ -485,6 +505,7 @@ export const useInventoryStore = defineStore(
       lowStockProducts,
       productsByCategory,
       initialize,
+      fetchProducts,
       addProduct,
       updateProduct,
       deleteProduct,
@@ -493,6 +514,7 @@ export const useInventoryStore = defineStore(
       searchProducts,
       registerStockMovement,
       adjustStockLocal,
+      updateStock,
     };
   },
   {

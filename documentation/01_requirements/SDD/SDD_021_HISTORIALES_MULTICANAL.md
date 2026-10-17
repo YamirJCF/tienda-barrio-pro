@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-021](../FRD/FRD_021_HISTORIALES_MULTICANAL.md)  
 > **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Ítem 2)  
-> **Estado:** 🟢 Aprobado y Sanitizado (Protocolo PAC-SDD v2.0)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-16  
 
 ---
@@ -167,6 +167,33 @@ sequenceDiagram
 1. **El Frontend NO Clasifica Canales:** El cliente tiene estrictamente prohibido aplicar lógica heurística en memoria para deducir el canal de un movimiento. Toda resolución de canal (`efectivo`, `nequi`, `daviplata`) es computada y sellada por el backend en el payload de salida.
 2. **El Frontend NO Calcula Conteos de Paginación:** El cliente no deduce el total de páginas acumulando registros. El cálculo de `count` para paginación es responsabilidad matemática exclusiva de PostgreSQL.
 3. **Caché Efímera:** El store de Pinia actúa exclusivamente como una proyección temporal de lectura de la verdad del servidor. Toda alteración de filtros o cambio de página invoca nuevamente al backend.
+
+### 2.3 Diagrama de Estados de Interfaz (stateDiagram-v2)
+
+```mermaid
+stateDiagram-v2
+    [*] --> IdleHistory: Carga inicial de HistoryView
+    
+    state "Navegación de Historiales (HistoryView)" as HistoryView {
+        [*] --> LoadingMovements: Consulta rpc_obtener_historial_caja_multicanal (Skeleton activo)
+        LoadingMovements --> DisplayingMovements: Datos { data, count } cargados
+        LoadingMovements --> HistoryError: Error de red / permisos 403
+        HistoryError --> DisplayingMovements: Mensaje amigable visible (anti-$0)
+        DisplayingMovements --> FilteringMovements: Cambio de canal o rango de fechas
+        FilteringMovements --> LoadingMovements: Nueva consulta paginada al backend
+    }
+
+    state "Detalle de Venta y Devolución (SaleDetailModal)" as DetailModal {
+        [*] --> LoadingSaleDetail: get_sale_detail invocado
+        LoadingSaleDetail --> ViewingTicket: Desglose oficial de ítems y pagos
+        ViewingTicket --> ProcessingRefund: Admin solicita reembolso parcial (rpc_procesar_reembolso_item)
+        ViewingTicket --> ProcessingVoid: Admin solicita anulación total (rpc_anular_venta)
+        ProcessingRefund --> ViewingTicket: Reembolso asentado
+        ProcessingVoid --> ViewingTicket: Venta anulada
+    }
+
+    DisplayingMovements --> DetailModal: Click en comprobante o venta
+```
 
 ---
 

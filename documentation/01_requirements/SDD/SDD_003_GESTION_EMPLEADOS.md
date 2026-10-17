@@ -3,9 +3,11 @@
 > **Módulo:** Personal / Seguridad / RBAC Operativo  
 > **Versión:** 2.0 (PAC-SDD v2.0 — Cero Código Fuente, Estructura Canónica 0–7)  
 > **Fase del Plan:** 🌊 Ola 5: Sesiones, Autenticación y Offline (Ítem 1)  
-> **Estado:** ✅ Aprobado y Certificado por QA Independiente  
+> **Estado:** 🟢 Aprobado y Certificado en BD (Migración Ola 5 Aplicada con Evidencia)
+> **Asociado a:** [FRD-003](../FRD/FRD_003_GESTION_EMPLEADOS.md)
+> **Última Actualización:** 2026-10-17
 > **FRD Asociado:** [FRD-003: Gestión de Empleados y Permisos](../FRD/FRD_003_GESTION_EMPLEADOS.md)  
-> **Fecha de Certificación:** 2026-10-16  
+> **Fecha de Certificación:** 2026-10-17  
 
 ---
 
@@ -35,13 +37,24 @@
 
 ---
 
+### 0.3 Auditoría de BD contra Realidad (Deudas Técnicas Cerradas en Ola 5)
+
+| ID | Hallazgo / Componente | Estado en BD Real | Evidencia de Cierre en Ola 5 |
+| :--- | :--- | :--- | :--- |
+| **D-1** | Filtros y Búsqueda en Directorio (`rpc_obtener_empleados` - H14) | 🟢 Resuelto | Implementado y verificado en `20261017134000_wave5_daily_security_devices_and_employees.sql` con máscara segura de PIN (`pin = ''`). |
+| **D-2** | Revocación Reactiva al Desactivar (`toggle_empleado_activo`) | 🟢 Resuelto | Al conmutar `is_active = false`, actualiza atómicamente `daily_passes.status = 'rejected'` para pases aprobados del día actual. |
+| **D-3** | Unicidad Global de `username` | 🟢 Resuelto | Verificado con constraint `employees_username_key` y validación en `crear_empleado`. |
+| **D-4** | **Tope de Personal incluye al Propietario (`crear_empleado` / `toggle_empleado_activo`).** | 🟡 Deuda Formalizada (Ola 6) | `FRD_003` (RN-7) y `FRD_013` (RN-013-02) fijan `1 Admin + 5 Empleados Operativos`. En la BD física, el dueño tiene un registro en `employees` (`owner_*`), por lo que el conteo sin filtrar reduce el cupo a 4 empleados. En la migración Ola 6 se agregará `AND NOT EXISTS (SELECT 1 FROM public.admin_profiles ap WHERE ap.id = employees.id)`. |
+
+---
+
 ## 1. Glosario Local
 
 - **Alias Numérico (`username`):** Identificador alfanumérico o numérico (cédula o teléfono) que identifica unívocamente al empleado a nivel global en todo el sistema multi-tienda. Respaldado por el constraint físico `employees_username_key` (`UNIQUE (username)`).
 - **PIN Operativo:** Código numérico confidencial de exactamente 4 dígitos gestionado por el Administrador. Se persiste exclusivamente como huella criptográfica unidireccional Blowfish (`pin_hash`) mediante `crypt(p_pin, gen_salt('bf'))`.
 - **Pase Diario (`daily_pass`):** Credencial temporal vinculada a `employees.id` requerida cada día para desbloquear el Punto de Venta bajo el principio Zero Trust (`POL-SEC-02`).
 - **Baja Lógica (Soft-Delete):** Mecanismo de revocación de acceso mediante la mutación de estado `is_active = false`. Inhabilita la autenticación e invalida sesiones vivas sin destruir las referencias foráneas transaccionales.
-- **Límite de Equipo (`P_MAX_EMPLOYEES_PER_STORE`):** Parámetro de gobernanza que restringe a un máximo de 5 empleados activos simultáneos por tienda, evaluado a nivel de motor de base de datos.
+- **Límite de Equipo (`P_MAX_EMPLOYEES_PER_STORE`):** Parámetro de gobernanza que restringe a un máximo de 5 empleados operativos activos simultáneos por tienda (excluyendo el perfil del propietario en `admin_profiles`), evaluado a nivel de motor de base de datos (`1 Admin + 5 Empleados`).
 - **Toggles de Permisos (`permissions`):** Documento JSONB estructurado que contiene banderas booleanas independientes (`canManageInventory`, `canViewInventory`, `canFiar`, `canOpenCloseCash`, `canViewReports`) según `POL-SEG-03`.
 - **Degradación por Caja Cerrada:** Restricción operacional en la cual un empleado activo con pase diario ve bloqueada la capacidad de cobro en el POS mientras no exista una sesión de caja abierta en la tienda.
 
@@ -194,7 +207,7 @@ stateDiagram-v2
 - **Actor Principal:** Administrador (`admin_profiles` con rol `owner` o `admin`).
 - **Precondiciones:**
   1. El Administrador cuenta con sesión autenticada activa.
-  2. La tienda objetivo tiene estrictamente menos de 5 empleados activos (`COUNT(*) WHERE store_id = p_store_id AND is_active = true < 5`).
+  2. La tienda objetivo tiene estrictamente menos de 5 empleados operativos activos (`COUNT(*) WHERE store_id = p_store_id AND is_active = true AND NOT EXISTS (SELECT 1 FROM admin_profiles ap WHERE ap.id = employees.id) < 5`).
 - **Flujo Principal:**
   1. El Administrador accede al panel de equipo y pulsa "Nuevo Empleado".
   2. El servidor valida la disponibilidad de cupo mediante bloqueo transaccional.
@@ -207,7 +220,7 @@ stateDiagram-v2
   9. El servidor asienta el registro con `is_active = true` y retorna el UUID asignado.
   10. Se emite traza de auditoría en `audit_logs` con `event_type = 'EMPLOYEE_CREATED'`.
 - **Flujos de Excepción:**
-  - *Excepción 4.1.A (Límite alcanzado):* Si hay 5 empleados activos, el servidor aborta con excepción `EMPLOYEE_LIMIT_REACHED` (código HTTP 400). La interfaz instruye al dueño a desactivar un empleado previo.
+  - *Excepción 4.1.A (Límite alcanzado):* Si hay 5 empleados operativos activos, el servidor aborta con excepción `EMPLOYEE_LIMIT_REACHED` (código HTTP 400). La interfaz instruye al dueño a desactivar un empleado previo.
   - *Excepción 4.1.B (Alias duplicado globalmente):* Si el alias ya existe en cualquier establecimiento del sistema, Postgres aborta por violación de constraint `employees_username_key` (código HTTP 409: `USERNAME_ALREADY_EXISTS`).
   - *Excepción 4.1.C (PIN no numérico o longitud errónea):* Aborta con `INVALID_PIN_FORMAT`.
 - **Postcondiciones:** Registro creado, cupo incrementado en 1 y empleado habilitado para solicitar Pase Diario.
@@ -240,10 +253,10 @@ stateDiagram-v2
 - **Precondiciones:** El empleado tiene `is_active = false`.
 - **Flujo Principal:**
   1. El Administrador activa el filtro "Ver Inactivos" y pulsa "Reactivar".
-  2. El servidor evalúa que el cupo actual de activos sea menor a 5.
+  2. El servidor evalúa que el cupo actual de empleados operativos activos sea menor a 5 (excluyendo al dueño en `admin_profiles`).
   3. Si hay cupo, conmuta `is_active = true`.
 - **Flujo de Excepción:**
-  - Si la tienda ya alcanzó los 5 activos, aborta con `LIMIT_REACHED`.
+  - Si la tienda ya alcanzó los 5 empleados operativos activos, aborta con `LIMIT_REACHED`.
 - **Postcondiciones:** Empleado reactivado sin requerir reconfigurar permisos históricos.
 
 ### 4.5 Caso E: Consulta y Navegación del Directorio de Personal (RN-8)

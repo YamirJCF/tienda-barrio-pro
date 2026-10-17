@@ -97,7 +97,23 @@ const baseRepository = createSupabaseRepository<Employee, EmployeeDB>(
  * Extended Employee Repository implementation
  */
 export const employeeRepository: EmployeeRepository = {
-    getAll: (storeId: string) => baseRepository.getAll(storeId),
+    getAll: async (storeId: string): Promise<Employee[]> => {
+        if (isSupabaseConfigured() && navigator.onLine) {
+            try {
+                const supabase = getSupabaseClient()!;
+                const { data, error } = await supabase.rpc('rpc_obtener_empleados', {
+                    p_store_id: storeId
+                });
+                if (!error && data) {
+                    const list = Array.isArray(data) ? data : (data as any).data || [];
+                    return list.map(employeeMapper.toDomain);
+                }
+            } catch (e) {
+                logger.warn('[EmployeeRepo] rpc_obtener_empleados fallback', e);
+            }
+        }
+        return baseRepository.getAll(storeId);
+    },
 
     getById: baseRepository.getById,
 

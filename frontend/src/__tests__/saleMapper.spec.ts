@@ -20,7 +20,7 @@ const mockSaleDB = {
     voided_by: null,
     local_id: null,
     sync_status: 'synced',
-    store_id: 'store-1'
+    store_id: '11111111-1111-4111-8111-111111111111'
 };
 
 // Mock Domain Object
@@ -38,7 +38,8 @@ const mockSaleDomain: Sale = {
     clientId: undefined,
     employeeId: 'emp-001',
     roundingDifference: new Decimal(0),
-    syncStatus: 'synced'
+    syncStatus: 'synced',
+    storeId: '11111111-1111-4111-8111-111111111111'
 };
 
 describe('SaleMapper (WO-FE-007)', () => {

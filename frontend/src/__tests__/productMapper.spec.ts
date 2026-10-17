@@ -15,7 +15,7 @@ const mockProductDB = {
     cost_price: 2000,
     created_at: '2023-01-01T00:00:00Z',
     updated_at: '2023-01-01T00:00:00Z',
-    store_id: 'store-1',
+    store_id: '11111111-1111-4111-8111-111111111111',
     barcode: '7700001',
     description: null,
     image_url: null,
@@ -36,7 +36,7 @@ const mockProductDomain: Product = {
     cost: new Decimal(2000),
     createdAt: '2023-01-01T00:00:00Z',
     updatedAt: '2023-01-01T00:00:00Z',
-    storeId: 'store-1',
+    storeId: '11111111-1111-4111-8111-111111111111',
     notifiedLowStock: false,
     isWeighable: false,
     brand: undefined
@@ -61,7 +61,7 @@ describe('ProductMapper (WO-FE-006)', () => {
         expect(result.id).toBe(mockProductDomain.id);
         expect(result.price).toBe(2500); // Should be number
         expect(result.current_stock).toBe(10); // Should be mapped from stock
-        expect(result.category_id).toBeNull(); // ADR compliance
+        expect(result.category).toBeNull(); // Schema V2 text category
         expect(typeof result.price).toBe('number');
     });
 

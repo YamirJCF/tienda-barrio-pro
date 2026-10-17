@@ -1,17 +1,38 @@
 # SDD-028: Almacenamiento Local Seguro y Caché de Aplicación
 
-## 0. CONTROL DE VERSIONES Y METADATOS
+> **Asociado a:** [FRD-028](../FRD/FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md)
+> **Fase del Plan:** Ola 5 — Sesiones, Autenticación y Offline (Documento 8 de 8)
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
+> **Última Actualización:** 2026-10-17
 
-| Atributo | Detalle |
-|---|---|
-| **Documento** | SDD-028: Almacenamiento Local Seguro y Caché de Aplicación |
-| **Versión** | 2.0.0 (Saneamiento Arquitectónico y Sanitización PAC-SDD v2.0) |
-| **Fase del Plan** | Ola 5: Sesiones, Autenticación y Offline (Documento 8 de 8) |
-| **FRD de Origen** | [FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md](../FRD/FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md) |
-| **Estado de Certificación** | 🟢 APROBADO por Auditoría QA Independiente (Bloques 0 a 6) |
-| **Clasificación de Código** | Cero Código Fuente Incrustado (Zero Source Code Policy - Regla 1.1) |
-| **Esquema Relacional Asignado** | `public.products`, `public.clients`, `public.cash_sessions`, `public.sales`, `public.audit_logs` |
-| **Motores de Almacenamiento Cliente** | IndexedDB (`tienda-cache-db`, `tienda-sync-db`) y LocalStorage (`scopedStorage`) |
+---
+
+## 0. Contexto y Restricciones Aplicables
+
+### 0.1 Políticas Globales Activadas (ARQ-002)
+
+| Política ID | Dominio | Impacto Concreto en este SDD |
+| :--- | :--- | :--- |
+| **POL-DATA-01** | Arquitectura | **Autoridad Soberana del Backend:** El almacenamiento local (`IndexedDB` y `localStorage`) es exclusivamente una caché cosmética y cola de contingencia offline. Jamás sustituye la verdad financiera o de stock de PostgreSQL. |
+| **POL-AUTH-01** | Seguridad | **Aislamiento Multi-Tenant en Cliente:** Toda clave en `localStorage` y registro en `IndexedDB` se particiona por `store_id`. |
+| **POL-SEC-01** | Seguridad | **Ceguera Financiera y Cero Secretos:** Prohibido almacenar `pin_hash`, `store_pin_hash` o costos de lotes confidenciales en texto plano en almacenamiento síncrono. |
+
+### 0.2 Contratos Vecinos que Limitan el Diseño
+
+| SDD Vecino | Restricción que Impone |
+| :--- | :--- |
+| **SDD_012 (Sincronización Offline)** | Gobierna el límite duro de 50 transacciones en `sync_queue` (alerta al 80%, bloqueo al 100% — Hallazgo H20) y la supervivencia de la cola ante cierres de sesión (`RN-CACHE-03`). |
+| **SDD_011 (Manejo de Errores)** | Define la cuarentena en `dead_letter_queue` ante rechazos definitivos de reglas de negocio (`4xx` / `P0001`). |
+| **SDD_007 / SDD_007_01 (POS)** | Provee `idempotency_key` / `local_id` para garantizar procesamiento exactamente una vez al reconectar. |
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
+
+Se declaran las **N=5 decisiones y deudas técnicas** (desglosadas en la Sección 7):
+- **D-1:** Prohibición de colecciones masivas en `localStorage`; migración obligatoria de catálogos (`products`, `clients`, `sales`) a `IndexedDB`.
+- **D-2:** Invalidez de valores cacheados en el cliente para autorizar mutaciones en servidor (Backend Authority).
+- **D-3:** Supervivencia selectiva de `sync_queue` y `dead_letter_queue` durante el logout hasta su vaciado exitoso.
+- **D-4:** Recuperación automática ante corrupción de JSON/esquema local sin provocar pantalla en blanco (Regla 3 de `AGENTS.md`).
+- **D-5:** Particionamiento estricto por `store_id` en almacenes locales.
 
 ---
 
@@ -123,7 +144,7 @@ sequenceDiagram
 
 ### 4.1 RN-CACHE-01: Prohibición de Almacenamiento Masivo en LocalStorage
 1. **Límite de Capacidad y Bloqueo de Hilo:** Debido a la cuota física rígida del navegador (~5MB para `localStorage`) y a la naturaleza síncrona y bloqueante de su API, queda terminantemente prohibido almacenar arrays, colecciones o registros masivos de entidades de negocio (`products`, `clients`, `sales`, `cash_movements`, `inventory_batches`) en `localStorage` o `sessionStorage`. La deserialización masiva (`JSON.parse`) sobre colecciones extensas congela el Event Loop principal de JavaScript, degradando severamente la experiencia de usuario.
-2. **Exclusividad de IndexedDB:** Toda colección o catálogo con cardinalidad potencialmente ilimitada debe persistirse de forma obligatoria y exclusiva en el motor asíncrono `IndexedDB` a través del adaptador de persistencia [IndexedDBDataSource.ts](file:///frontend/src/data/sources/IndexedDBDataSource.ts).
+2. **Exclusividad de IndexedDB:** Toda colección o catálogo con cardinalidad potencialmente ilimitada debe persistirse de forma obligatoria y exclusiva en el motor asíncrono `IndexedDB` a través del adaptador de persistencia el adaptador asíncrono de base de datos local.
 3. **Uso Permitido de LocalStorage:** `localStorage` queda restringido estrictamente a:
    - Token de autenticación JWT y refresh token emitidos por Supabase GoTrue.
    - Claves de estado escalar volátiles utilizadas como aceleradores de interfaz (ej. `tienda-store-status`).

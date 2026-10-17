@@ -197,13 +197,14 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { usePayablesStore, type SupplierInvoice } from '@/stores/payables';
 import { useSuppliersStore } from '@/stores/suppliers';
-import { formatCurrency } from '@/utils/currency';
+import { useCurrencyFormat } from '@/composables/useCurrencyFormat';
 import PayInvoiceModal from '@/components/suppliers/PayInvoiceModal.vue';
 import BottomNav from '@/components/BottomNav.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import { ArrowLeft, Banknote, AlertTriangle, Truck, Receipt } from 'lucide-vue-next';
 
+const { formatCurrency } = useCurrencyFormat();
 const router = useRouter();
 const authStore = useAuthStore();
 const payablesStore = usePayablesStore();

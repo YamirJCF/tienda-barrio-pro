@@ -3,7 +3,9 @@
 > **Módulo:** Identidad / Seguridad / Gestión de Credenciales Maestras  
 > **Versión:** 2.0 (PAC-SDD v2.0 — Cero Código Fuente, Estructura Canónica 0–7)  
 > **Fase del Plan:** 🌊 Ola 5: Sesiones, Autenticación y Offline (Ítem 7)  
-> **Estado:** ✅ Aprobado y Certificado por QA Independiente  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (PAC-SDD v2.0)
+> **Asociado a:** [FRD-002.1](../FRD/FRD_002_1_CAMBIO_CONTRASENA.md)
+> **Última Actualización:** 2026-10-17
 > **FRD Asociado:** [FRD-002.1: Cambio de Contraseña de Cuenta Administrativa](../FRD/FRD_002_1_CAMBIO_CONTRASENA.md)  
 > **Fecha de Certificación:** 2026-10-17  
 
@@ -24,9 +26,19 @@
 ### 0.2 Contratos Vecinos que Delimitan este SDD
 
 - **`SDD_002_REGISTRO_ADMIN.md` (Onboarding y Cuenta Administradora):** Establece la génesis de la identidad maestra en `auth.users` y su vinculación con `admin_profiles` y `stores`. `SDD-002.1` gestiona el ciclo de vida de las credenciales de dicha identidad.
-- **`SDD_013_GESTION_SESIONES.md` / `SDD_001_SEGURIDAD_DIARIA.md` (Ciclo de Vida de Sesiones):** Gobierna el límite de concurrencia de 6 terminales por tienda (1 terminal administrativa en `admin_profiles` + 5 operativas en `daily_passes`). La ejecución de `signOut({ scope: 'others' })` destruye los refresh tokens en otros dispositivos, provocando que el interceptor de tokens (`authTokenInterceptor.ts`) capture la expiración y redirija limpiamente a login (`RN-013-05`).
+- **`SDD_013_GESTION_SESIONES.md` / `SDD_001_SEGURIDAD_DIARIA.md` (Ciclo de Vida de Sesiones):** Gobierna el límite de concurrencia de 6 terminales por tienda (1 terminal administrativa en `admin_profiles` + 5 operativas en `daily_passes`). La ejecución de `signOut({ scope: 'others' })` destruye los refresh tokens en otros dispositivos, provocando que el interceptor de tokens (el interceptor global de tokens de autenticación) capture la expiración y redirija limpiamente a login (`RN-013-05`).
 - **`SDD_003_GESTION_EMPLEADOS.md` (Segregación de Personal):** Delimita la frontera arquitectónica infranqueable entre las credenciales maestras del administrador (`auth.users` con contraseñas alfanuméricas) y las credenciales operativas de empleados (`employees.pin_hash` con PINs numéricos de 4 dígitos). Las mutaciones de contraseña jamás tocan la tabla `employees`.
 - **`SDD_005_AUDITORIA_TRAZABILIDAD.md`:** Centraliza el Evidence Hub y la auditoría forense inmutable ante eventos de seguridad (`PASSWORD_CHANGED`, intentos fallidos de re-autenticación).
+
+---
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
+
+| ID | Hallazgo / Componente | 1. Qué se Decidió | 2. Por qué (Trade-off Concreto) | 3. Condición de Revisión Futura |
+| :--- | :--- | :--- | :--- | :--- |
+| **D-1** | Delegación a GoTrue (`auth.users`) | Delegar el hashing bcrypt y mutación de contraseñas íntegramente a Supabase Auth GoTrue sin duplicar columnas de password en `public.admin_profiles`. | Evita vulnerabilidades criptográficas y desincronización de credenciales maestras. | Invariante arquitectónico permanente. |
+| **D-2** | Challenge de Contraseña Previa | Exigir re-autenticación previa (`signInWithPassword`) antes de invocar `updateUser` en el flujo interno autenticado. | GoTrue permite cambiar la contraseña con cualquier JWT activo; el challenge previo mitiga secuestro de sesiones desatendidas. | Revisión si GoTrue incorpora re-auth nativo en `updateUser`. |
+| **D-3** | Invalidación Masiva Selectiva (`scope: 'others'`) | Invocar `signOut({ scope: 'others' })` inmediatamente después de mutar la contraseña maestra. | Revoca sesiones en terminales ajenas preservando activa la sesión del dispositivo donde el Administrador ejecutó el cambio. | Permanente (CA-03 de FRD-002.1). |
 
 ---
 
@@ -120,13 +132,40 @@ sequenceDiagram
     UpdateView-->>Admin: Feedback de éxito y redirección al Dashboard
 ```
 
+### 2.3 Diagrama de Estados de Interfaz (stateDiagram-v2)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle: Usuario autenticado en Dashboard / Perfil
+    
+    state "Modal de Cambio de Contraseña (ChangePasswordModal)" as InternalChange {
+        [*] --> FillingFields: Modal abierto
+        FillingFields --> ValidatingMatch: Input en tiempo real (mín 6 chars + coincidencia)
+        ValidatingMatch --> FillingFields: No coincide o < 6 chars (Botón deshabilitado)
+        ValidatingMatch --> SubmittingChange: Click 'Actualizar Contraseña' (Botón disabled + Spinner)
+        SubmittingChange --> PasswordChallengeError: Error 400/401 (Contraseña actual incorrecta)
+        PasswordChallengeError --> FillingFields: Mensaje inline de error visible
+        SubmittingChange --> ChangeSuccess: Éxito (updateUser + signOut others)
+        ChangeSuccess --> [*]: Toast de éxito + Cierre de modal y limpieza de memoria
+    }
+
+    state "Recuperación Externa (UpdatePasswordView)" as ExternalRecovery {
+        [*] --> EnteringNewPassword: Magic link validado (/update-password)
+        EnteringNewPassword --> SubmittingRecovery: Click 'Establecer Contraseña'
+        SubmittingRecovery --> RecoverySuccess: Éxito en GoTrue
+        SubmittingRecovery --> RecoveryError: Token expirado o error de red
+        RecoveryError --> EnteringNewPassword: Alerta visible (anti-$0)
+        RecoverySuccess --> [*]: Redirección a Dashboard con sesión activa
+    }
+```
+
 ---
 
 ## 3. Especificación de Procesos de Negocio
 
 ### 3.1 Flujo Interno Autenticado desde Perfil (`RN-002.1-01`, `RN-002.1-02`)
 1. El Administrador accede a su panel de perfil desde la barra lateral de navegación y selecciona la opción "Seguridad y Contraseña".
-2. La interfaz despliega un componente modal (`ChangePasswordModal.vue`) con tres campos de entrada: Contraseña Actual, Nueva Contraseña y Confirmar Contraseña.
+2. La interfaz despliega un componente modal (el modal de cambio de contraseña) con tres campos de entrada: Contraseña Actual, Nueva Contraseña y Confirmar Contraseña.
 3. El frontend valida en tiempo real:
    - Que la nueva contraseña tenga una longitud mínima de 6 caracteres (alineada con directivas de seguridad).
    - Que el campo de confirmación sea exactamente idéntico al de la nueva contraseña.
@@ -145,7 +184,7 @@ sequenceDiagram
    - **Dispositivos distintos (ej. Computador de escritorio vs Celular):** Invalidados de inmediato.
    - **Ventanas en modo Incógnito:** Invalidadas de inmediato por operar con almacenamiento aislado.
    - **Pestañas múltiples en el mismo navegador:** NO se invalidan, dado que comparten el mismo almacén en `localStorage` (misma sesión JWT).
-3. Los dispositivos invalidados mantendrán funcionalidad únicamente hasta el vencimiento de su token JWT de acceso (corta duración). Al expirar e intentar refrescarlo, GoTrue rechazará la solicitud y el interceptor global (`authTokenInterceptor.ts`) expulsará al usuario a la pantalla de login con notificación de sesión expirada.
+3. Los dispositivos invalidados mantendrán funcionalidad únicamente hasta el vencimiento de su token JWT de acceso (corta duración). Al expirar e intentar refrescarlo, GoTrue rechazará la solicitud y el interceptor global (el interceptor global de tokens de autenticación) expulsará al usuario a la pantalla de login con notificación de sesión expirada.
 
 ### 3.3 Delegación al Proveedor de Identidad (`RN-002.1-04`)
 1. El backend relacional de PostgreSQL (`public`) no almacena, procesa ni valida contraseñas en texto plano ni hashes de contraseñas de cuentas administrativas.
@@ -165,15 +204,15 @@ sequenceDiagram
 
 | Requisito FRD | Descripción Funcional | Regla Técnica / Arquitectura | Método / Endpoint GoTrue | Verificación Empírica |
 | :--- | :--- | :--- | :--- | :--- |
-| **RN-002.1-01** | Verificación de Identidad Obligatoria | Password Challenge previo obligatorio antes de mutar. | `supabase.auth.signInWithPassword` | Verificado en `authRepository.ts:347`. |
-| **RN-002.1-02** | Validación de Nueva Contraseña | Longitud mínima de 6 caracteres y coincidencia estricta. | Validación Regex en Frontend + regla GoTrue. | Verificado en `ChangePasswordModal.vue`. |
-| **RN-002.1-03** | Invalidación de Sesiones Ajenas | Destrucción de tokens en otros dispositivos (`scope: 'others'`). | `supabase.auth.signOut({ scope: 'others' })` | Verificado en `authRepository.ts:377`. |
+| **RN-002.1-01** | Verificación de Identidad Obligatoria | Password Challenge previo obligatorio antes de mutar. | `supabase.auth.signInWithPassword` | Verificado en el repositorio de autenticación. |
+| **RN-002.1-02** | Validación de Nueva Contraseña | Longitud mínima de 6 caracteres y coincidencia estricta. | Validación Regex en Frontend + regla GoTrue. | Verificado en el modal de cambio de contraseña. |
+| **RN-002.1-03** | Invalidación de Sesiones Ajenas | Destrucción de tokens en otros dispositivos (`scope: 'others'`). | `supabase.auth.signOut({ scope: 'others' })` | Verificado en el repositorio de autenticación. |
 | **RN-002.1-04** | Delegación a Proveedor de Identidad | Backend relacional no almacena ni manipula contraseñas. | Microservicio GoTrue (`auth.users`). | Verificado en catálogo de base de datos. |
 | **CU-Caso A** | Cambio Exitoso (Flujo Principal) | Modal ➔ Challenge ➔ Update ➔ Purga ➔ Feedback de éxito. | Orquestación secuencial en repositorio. | Verificado en secuencia 2.1. |
 | **CU-Caso B** | Contraseña Actual Incorrecta | Error inline "La contraseña actual es incorrecta", aborto limpio. | Captura de error 400/401 en Challenge. | Verificado en secuencia 2.1 y UI. |
-| **CU-Caso C** | Validación de Formulario | Feedback reactivo y bloqueo de botón hasta datos válidos. | Estado computado en componente Vue. | Verificado en `ChangePasswordModal.vue`. |
+| **CU-Caso C** | Validación de Formulario | Feedback reactivo y bloqueo de botón hasta datos válidos. | Estado computado en componente Vue. | Verificado en el modal de cambio de contraseña. |
 | **CA-01** | Botón abre modal en perfil | "Seguridad y Contraseña" activa modal en lugar de navegar. | Evento emitido en componente de perfil. | Verificado en menú lateral de perfil. |
-| **CA-02** | Contraseña actual requerida | Campo obligatorio validado contra el servidor. | Password Challenge en tiempo real. | Verificado en `authRepository.ts`. |
+| **CA-02** | Contraseña actual requerida | Campo obligatorio validado contra el servidor. | Password Challenge en tiempo real. | Verificado en el repositorio de autenticación. |
 | **CA-03** | Validación inline de nueva clave | Mínimo 6 caracteres y coincidencia exacta. | Validadores reactivos en interfaz. | Verificado en componente modal. |
 | **CA-04** | Mensaje confirmatorio de éxito | Notificación de éxito y cierre automático del modal. | Toast / Notificación en interfaz de usuario. | Verificado en flujo de éxito. |
 | **CA-05** | Invalidación en otros dispositivos | Cierre forzado de sesiones remotas tras mutación. | `signOut({ scope: 'others' })`. | Verificado en GoTrue API. |
@@ -295,11 +334,11 @@ sequenceDiagram
 ## 6. Directrices de Implementación Frontend y Backend
 
 ### 6.1 Responsabilidades del Frontend Vue (@[/ux])
-1. **Validación Preventiva en Interfaz:** Validar longitud mínima (≥ 6 caracteres) y coincidencia estricta de confirmación en el formulario modal (`ChangePasswordModal.vue`) antes de iniciar la petición de red.
+1. **Validación Preventiva en Interfaz:** Validar longitud mínima (≥ 6 caracteres) y coincidencia estricta de confirmación en el formulario modal (el modal de cambio de contraseña) antes de iniciar la petición de red.
 2. **Prevención de Re-entrada y Estados de Carga:** Deshabilitar los campos de entrada y el botón de acción mostrando un spinner de carga mientras la promesa de actualización se encuentra en estado pendiente.
 3. **Manejo Seguro de la Memoria:** Limpiar de inmediato las variables reactivas (`ref`) que contengan contraseñas en texto plano tan pronto como la promesa se resuelva (sea por éxito o error), reduciendo la permanencia de secretos en el Heap de memoria JavaScript.
 4. **Traducción de Errores de Autenticación:** Mapear el código `INVALID_CURRENT_PASSWORD` al mensaje visual inline: *"La contraseña actual es incorrecta"*, sin cerrar el modal para permitir reintentos cómodos al usuario.
-5. **Captura del Evento de Recuperación:** Mantener la intercepción del evento `PASSWORD_RECOVERY` en `AuthCallbackView.vue` para garantizar que el usuario sea conducido forzosamente a la pantalla de actualización de contraseña tras abrir un Magic Link.
+5. **Captura del Evento de Recuperación:** Mantener la intercepción del evento `PASSWORD_RECOVERY` en la vista de retorno de autenticación para garantizar que el usuario sea conducido forzosamente a la pantalla de actualización de contraseña tras abrir un Magic Link.
 
 ### 6.2 Responsabilidades del Backend Supabase (@[/data])
 1. **Delegación Absoluta a GoTrue:** Mantener el aislamiento del esquema de datos relacionales (`public`), delegando la gestión de contraseñas íntegramente a `auth.users` mediante la API de Supabase Auth.

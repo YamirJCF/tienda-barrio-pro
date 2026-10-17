@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-005](../FRD/FRD_005_AUDITORIA_TRAZABILIDAD.md) y [FRD-005 (Inviolable)](../FRD/FRD_005_AUDITORIA_INVIOLABLE.md)  
 > **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Ítem 3)  
-> **Estado:** 🟢 Aprobado y Sanitizado (Protocolo PAC-SDD v2.0)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-16  
 
 ---

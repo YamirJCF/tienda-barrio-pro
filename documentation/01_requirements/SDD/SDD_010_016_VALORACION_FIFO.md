@@ -3,7 +3,7 @@
 > **Asociado a:** [FRD-010](../FRD/FRD_010_VALORACION_INVENTARIO_FIFO.md) y [FRD-016](../FRD/FRD_016_CORRECCION_COSTO_VENTAS.md)  
 > **Módulo Primario:** [SDD-006: Núcleo de Inventario y Catálogo Padre](SDD_006_NUCLEO_INVENTARIO_PADRE.md)  
 > **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores  
-> **Estado:** 🟢 Aprobado Normativamente (Protocolo PAC-SDD v2.0)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-14  
 
 ---

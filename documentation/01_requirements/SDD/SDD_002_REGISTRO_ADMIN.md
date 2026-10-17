@@ -3,7 +3,9 @@
 > **Módulo:** Identidad / Seguridad / Onboarding Multi-tenant  
 > **Versión:** 2.0 (PAC-SDD v2.0 — Cero Código Fuente, Estructura Canónica 0–7)  
 > **Fase del Plan:** 🌊 Ola 5: Sesiones, Autenticación y Offline (Ítem 6)  
-> **Estado:** ✅ Aprobado y Certificado por QA Independiente  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (PAC-SDD v2.0)
+> **Asociado a:** [FRD-002](../FRD/FRD_002_REGISTRO_ADMIN.md) y [FRD-002-AUTH](../FRD/FRD_002_AUTORIZACION_ESTRICTA.md)
+> **Última Actualización:** 2026-10-17
 > **FRD Asociado:** [FRD-002: Registro y Gestión de Cuentas Administrativas](../FRD/FRD_002_REGISTRO_ADMIN.md) y [FRD-002-AUTORIZACION-ESTRICTA: Autorización Estricta de Funciones Administrativas en Servidor](../FRD/FRD_002_AUTORIZACION_ESTRICTA.md)  
 > **Fecha de Certificación:** 2026-10-17  
 
@@ -31,6 +33,16 @@
 - **`SDD_006_02_GESTOR_REEMBOLSOS.md` / `SDD_007_01_NUCLEO_POS.md` / `SDD_014_VENTA_FORZADA_Y_AUDITORIA.md` / `SDD_019_CUENTAS_POR_PAGAR.md`:** Procedimientos transaccionales que ejecutan en servidor la validación de autoridad `SELECT role FROM public.admin_profiles WHERE id = auth.uid()` para anular ventas, forzar ventas con ajuste de inventario `CORRECCION_SISTEMA`, pagar facturas a proveedores o modificar precios de compra de lotes.
 - **`SDD_010_PROVEEDORES.md` (Aprovisionamiento Inicial de Proveedores):** Al crearse la tienda en `stores`, el trigger reactivo `trg_create_default_supplier` siembra automáticamente el `'Proveedor General'` (`is_default = true`) para evitar productos huérfanos.
 - **`SDD_005_AUDITORIA_TRAZABILIDAD.md`:** Bitácora inmutable en `audit_logs` para todo evento administrativo sensible.
+
+---
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
+
+| ID | Hallazgo / Componente | 1. Qué se Decidió | 2. Por qué (Trade-off Concreto) | 3. Condición de Revisión Futura |
+| :--- | :--- | :--- | :--- | :--- |
+| **D-1** | Aprovisionamiento Atómico (`handle_new_user_atomic`) | Mantener el aprovisionamiento atómico de `stores`, `admin_profiles`, `employees` y `suppliers` vía trigger en `auth.users` con relanzamiento explícito de errores (`RAISE`). | Garantiza cero tiendas huérfanas y cumple la Regla 3 de prohibición de fallos silenciosos. | Permanente. |
+| **D-2** | Política de Acceso Cero Pre-Verificación | Bloquear todo acceso a datos (`get_current_store_id() IS NULL`) hasta que `email_confirmed_at IS NOT NULL` en GoTrue. | Impide el uso de cuentas con correos falsos o no verificados (`RN-002-04`, `RN-002-05`). | Permanente. |
+| **D-3** | Verificación RBAC en Servidor (`admin_profiles`) | Exigir validación explícita `EXISTS (SELECT 1 FROM admin_profiles WHERE id = auth.uid())` en todos los RPCs administrativos críticos. | Cumple `FRD_002_AUTORIZACION_ESTRICTA` (absorbido en este SDD) y previene escalamiento de privilegios desde el cliente. | Auditoría continua en migraciones de Olas 3–5. |
 
 ---
 
@@ -166,6 +178,33 @@ sequenceDiagram
     end
 ```
 
+### 2.5 Diagrama de Estados de Interfaz y Registro de Administrador
+
+```mermaid
+stateDiagram-v2
+    [*] --> FormIdle: Carga de RegisterStoreView
+    
+    state "Formulario de Registro (RegisterStoreView)" as FormState {
+        [*] --> EnteringData: Input interactivo
+        EnteringData --> ValidatingInput: Submit de formulario
+        ValidatingInput --> EnteringData: Error de formato (password débil, email inválido)
+        ValidatingInput --> Submitting: Payload válido (Botón disabled + Spinner)
+        Submitting --> ActionError: Error de backend (Email ya registrado, red)
+        ActionError --> EnteringData: Banner error visible (anti-$0)
+    }
+
+    Submitting --> AwaitingEmailVerification: signUp exitoso (Tenant creado, sesión no verificada)
+    
+    state "Pantalla de Espera (CheckEmailView)" as EmailWaiting {
+        [*] --> ShowingNotice: "Revisa tu bandeja de entrada"
+        ShowingNotice --> ResendingEmail: Click reenviar correo
+        ResendingEmail --> ShowingNotice: Toast de correo reenviado
+    }
+
+    AwaitingEmailVerification --> VerifiedActive: Usuario pulsa enlace en email (/auth/v1/verify)
+    VerifiedActive --> [*]: Redirección a Login / Dashboard con Tenant aprovisionado
+```
+
 ---
 
 ## 3. Especificación de Procesos de Negocio
@@ -185,7 +224,7 @@ sequenceDiagram
 
 ### 3.2 Política de Acceso Cero y Bloqueo en Servidor Pre-Confirmación (`RN-002-04`, `RN-002-05`)
 1. Supabase GoTrue crea el usuario con `email_confirmed_at = NULL` y retorna una respuesta con sesión nula (`session: null`).
-2. El frontend detecta la ausencia de sesión activa y redirige inmediatamente a la vista de espera bloqueante (`VerifyEmailView.vue`).
+2. El frontend detecta la ausencia de sesión activa y redirige inmediatamente a la vista de espera bloqueante (la vista de espera de verificación de correo).
 3. Mientras el correo no esté confirmado:
    - Supabase GoTrue rechaza cualquier intento de login o emisión de access token JWT.
    - Cualquier solicitud realizada sin JWT evalúa `auth.uid()` como `NULL`.
@@ -238,7 +277,7 @@ sequenceDiagram
 | **RN-AUT-04** | Aislamiento Multi-inquilino | Verificación de pertenencia a tienda en cada llamada. | `PERFORM public.assert_store_access(p_store_id)`. | Verificado en `pg_proc`. |
 | **CU-002-01** | Registro de Nueva Tienda | Formulario de onboarding inicial y despacho de verificación. | `authRepository.registerStore` + `handle_new_user_atomic()`. | Verificado en secuencia 2.1. |
 | **CU-002-02** | Verificación y Primer Login | Activación de cuenta y carga del Dashboard. | `auth.verifyOtp` + `get_current_store_id()`. | Verificado en secuencia 2.2. |
-| **CU-002-03** | Intento de Acceso No Verificado | Bloqueo de UI y de datos ante usuario sin verificar. | `VerifyEmailView.vue` + Default-Deny RLS. | Verificado en secuencia 2.2. |
+| **CU-002-03** | Intento de Acceso No Verificado | Bloqueo de UI y de datos ante usuario sin verificar. | la vista de espera de verificación de correo + Default-Deny RLS. | Verificado en secuencia 2.2. |
 | **CA-002-01 a CA-002-07** | Criterios de Aceptación de Onboarding | Validación de campos, feedback visual, despacho de correo y bloqueo. | Pruebas de integración de autenticación. | Verificado al 100% en QA Bloques 0 a 6. |
 
 ---
@@ -447,7 +486,7 @@ sequenceDiagram
 ### 6.1 Responsabilidades del Frontend Vue (@[/ux])
 1. **Validación Preventiva de Formato:** Validar en tiempo real la sintaxis del correo y la fortaleza de la contraseña (mínimo 8 caracteres, al menos una mayúscula y un dígito) antes de emitir la llamada de red.
 2. **Gestión de Estados de Espera:** Mostrar spinners y deshabilitar botones de confirmación durante la invocación a `signUp()` para prevenir envíos duplicados.
-3. **Bloqueo de Interfaz Pre-Confirmación:** Al recibir `session: null`, redirigir obligatoriamente a la vista de confirmación pendiente (`VerifyEmailView.vue`), bloqueando el acceso al enrutador de rutas protegidas.
+3. **Bloqueo de Interfaz Pre-Confirmación:** Al recibir `session: null`, redirigir obligatoriamente a la vista de confirmación pendiente (la vista de espera de verificación de correo), bloqueando el acceso al enrutador de rutas protegidas.
 4. **Traducción Amigable de Códigos de Error:** Mapear los códigos técnicos emitidos por el servidor a mensajes en español orientados al usuario (ej. `'UNAUTHORIZED'` ➔ *"No tienes permisos de Administrador para realizar esta acción"*).
 5. **Cero Cálculos de Privilegios:** El frontend no determina si el usuario puede anular una venta o forzar inventario basándose en variables locales; la interfaz simplemente dispara la petición y reacciona al veredicto del servidor.
 

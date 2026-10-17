@@ -94,12 +94,13 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
         });
     };
 
-    // ============================================
-    // DRY HELPER: Derive payment method from transactions
-    // ============================================
     const derivePrimaryMethod = (payments: PaymentTransaction[]): string => {
+        if (payments.length === 0) return 'cash';
         const uniqueMethods = new Set(payments.map(p => p.method));
-        return uniqueMethods.size > 1 ? 'mixed' : payments[0].method;
+        if (uniqueMethods.size > 1) {
+            throw new Error('Los pagos mixtos no están permitidos en este terminal POS. Seleccione un único método de pago.');
+        }
+        return payments[0].method;
     };
 
     // ============================================
@@ -213,11 +214,14 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
 
             const saleItems = buildSaleItems();
 
+            const cashPayment = payments.find(p => p.method === 'cash');
+
             // Call the Force Sale repository method
             const result = await salesStore.forceSale({
                 items: saleItems,
                 total: cartStore.total,
                 paymentMethod: derivePrimaryMethod(payments),
+                amountReceived: cashPayment?.amount,
                 clientId,
             }, authStore.currentStore!.id, justification);
 
@@ -226,15 +230,12 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
             }
 
             // Update cash register for cash payments
-            const cashPayment = payments.find(p => p.method === 'cash');
             if (cashPayment) {
                 cashRegisterStore.addIncome(cashPayment.amount, `Venta Forzada ${currentTicket}`, result.id);
             }
 
-            // Update inventory locally (Fase 5b fix: forceSale wasn't updating local stock)
-            saleItems.forEach(item => {
-                inventoryStore.adjustStockLocal(item.productId, new Decimal(item.quantity).neg());
-            });
+            // Refresh inventory from server to reflect emergency batches and authoritative stock
+            await inventoryStore.fetchProducts();
 
             saleId = result.id ?? null;
             return true;

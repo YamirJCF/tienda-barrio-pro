@@ -77,7 +77,7 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             id: entity.id,
             ticket_number: entity.ticketNumber || 0,
             created_at: entity.timestamp || new Date().toISOString(),
-            payment_method: entity.paymentMethod,
+            payment_method: (entity.paymentMethod === 'cash' || (entity.paymentMethod as string) === 'mixed') ? 'efectivo' : entity.paymentMethod,
             total: entity.total.toNumber(),
             employee_id: entity.employeeId || '',
             client_id: entity.clientId || null,
@@ -87,6 +87,9 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             is_voided: false,
             void_reason: null,
             voided_by: null,
+            voided_at: null,
+            void_session_id: null,
+            idempotency_key: null,
             local_id: null,
             sync_status: entity.syncStatus || 'synced',
             store_id: storeId // NO FALLBACK - validated above
@@ -126,7 +129,7 @@ export const saleRepository: SaleRepository = {
      * Process a new sale (Atomic Transaction V2)
      * Uses RPC 'rpc_procesar_venta_v2' - Financial Core
      */
-    async processSale(saleData: SalePayload, storeId: string): Promise<{ success: boolean; id?: string; ticketNumber?: number; error?: string }> {
+    async processSale(saleData: SalePayload, storeId: string): Promise<SaleResponse> {
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
         // 1. Try Online (RPC V2)
@@ -147,6 +150,10 @@ export const saleRepository: SaleRepository = {
                         };
                     });
 
+                    if (saleData.paymentMethod === 'mixed') {
+                        throw new Error('El método de pago mixto no está permitido en este terminal POS.');
+                    }
+
                     const p_amount_received = saleData.amountReceived ? new Decimal(saleData.amountReceived).toNumber() : null;
 
                     // Validate Employee ID
@@ -155,20 +162,23 @@ export const saleRepository: SaleRepository = {
                         saleData.employeeId = undefined;
                     }
 
+                    const normalizedPaymentMethod = (saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod;
+
                     const rpcPayload = {
                         p_store_id: storeId,
                         p_client_id: saleData.clientId || null,
-                        // Fix: Map 'mixed' to 'cash' for backend compatibility (as V2 doesn't explicitly handle mixed yet)
-                        // Pass other methods (nequi, fiado, etc) through as they are in the DB.
-                        p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod,
+                        p_payment_method: normalizedPaymentMethod,
                         p_amount_received: p_amount_received,
-                        p_items: p_items
+                        p_items: p_items,
+                        p_idempotency_key: crypto.randomUUID(),
+                        p_local_id: crypto.randomUUID(),
+                        p_is_offline_sync: false
                     };
 
-                    const { data, error } = await supabase.rpc('rpc_procesar_venta_v2', rpcPayload);
+                    const { data, error } = await supabase.rpc('rpc_procesar_venta_v3', rpcPayload);
 
                     if (error) {
-                        logger.error('[SaleRepo] RPC V2 error:', error);
+                        logger.error('[SaleRepo] RPC V3 error:', error);
                         if (error.message && (error.message.includes('FetchError') || error.message.includes('Network request failed'))) {
                             // Fallthrough to offline
                         } else {
@@ -176,7 +186,14 @@ export const saleRepository: SaleRepository = {
                         }
                     } else {
                         if (data && data.success) {
-                            return { success: true, id: data.sale_id, ticketNumber: data.ticket_number };
+                            return { 
+                                success: true, 
+                                id: data.sale_id, 
+                                ticketNumber: data.ticket_number,
+                                total: data.total,
+                                roundingDifference: data.rounding_difference,
+                                changeGiven: data.change_given
+                            };
                         } else {
                             return { success: false, error: data?.error || 'Unknown RPC error' };
                         }
@@ -309,6 +326,7 @@ export const saleRepository: SaleRepository = {
                 p_store_id: storeId,
                 p_client_id: saleData.clientId || null,
                 p_payment_method: (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod,
+                p_amount_received: saleData.amountReceived ? Number(saleData.amountReceived) : null,
                 p_items: p_items,
                 p_justification: justification
             };

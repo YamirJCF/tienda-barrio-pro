@@ -305,6 +305,13 @@ export const useSalesStore = defineStore(
       if (result.id) {
         newSale.id = result.id;
       }
+      if (result.total !== undefined) {
+        newSale.total = new Decimal(result.total);
+        newSale.effectiveTotal = new Decimal(result.total);
+      }
+      if (result.roundingDifference !== undefined) {
+        newSale.roundingDifference = new Decimal(result.roundingDifference);
+      }
 
       sales.value.push(newSale);
 
@@ -395,6 +402,7 @@ export const useSalesStore = defineStore(
         total: saleData.total instanceof Decimal ? saleData.total.toNumber() : Number(saleData.total),
         paymentMethod: saleData.paymentMethod,
         clientId: (saleData.clientId && saleData.clientId !== 'N/A') ? saleData.clientId : null,
+        amountReceived: (saleData as any).amountReceived ? ((saleData as any).amountReceived instanceof Decimal ? (saleData as any).amountReceived.toNumber() : Number((saleData as any).amountReceived)) : undefined,
       };
 
       return await saleRepository.forceSale(repoPayload, storeId, justification);

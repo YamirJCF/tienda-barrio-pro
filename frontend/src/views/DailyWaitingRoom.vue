@@ -31,8 +31,6 @@ const isLocked = ref(false);
 
 // Realtime channel for this employee's specific pass row
 let passChannel: RealtimeChannel | null = null;
-// 5-minute expiry timer — reset on every retry
-let expiryTimer: ReturnType<typeof setTimeout> | null = null;
 let cooldownInterval: ReturnType<typeof setInterval> | null = null;
 
 // Messages
@@ -61,10 +59,8 @@ const subscribeToPass = (passId: string) => {
             (payload) => {
                 const status = (payload.new as any)?.status;
                 if (status === 'approved') {
-                    clearExpiryTimer();
                     router.push('/');
                 } else if (status === 'rejected' || status === 'expired') {
-                    clearExpiryTimer();
                     isLocked.value = true;
                     cleanupChannel();
                 }
@@ -77,27 +73,6 @@ const cleanupChannel = () => {
     if (passChannel) {
         supabase.removeChannel(passChannel);
         passChannel = null;
-    }
-};
-
-// ─── 5-minute expiry timer ──────────────────────────────────────────────────
-
-const EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
-
-const startExpiryTimer = () => {
-    clearExpiryTimer();
-    expiryTimer = setTimeout(() => {
-        // Admin didn't respond within 5 minutes → logout employee
-        cleanupChannel();
-        authStore.logout();
-        router.push({ path: '/login', query: { reason: 'timeout' } });
-    }, EXPIRY_MS);
-};
-
-const clearExpiryTimer = () => {
-    if (expiryTimer) {
-        clearTimeout(expiryTimer);
-        expiryTimer = null;
     }
 };
 
@@ -127,9 +102,6 @@ const handlePing = async () => {
     pingCount.value++;
     await authStore.requestDailyPass();
 
-    // Reset the 5-minute expiry window — employee is actively waiting
-    startExpiryTimer();
-
     if (pingCount.value >= maxPings) {
         isLocked.value = true;
     } else {
@@ -138,7 +110,6 @@ const handlePing = async () => {
 };
 
 const handleLogout = () => {
-    clearExpiryTimer();
     cleanupChannel();
     authStore.logout();
     router.push('/login');
@@ -164,9 +135,7 @@ onMounted(async () => {
         subscribeToPass(passId);
     }
 
-    // Start 5-minute expiry timer
     if (authStore.dailyAccessStatus === 'pending') {
-        startExpiryTimer();
         startCooldown(60);
     } else {
         startCooldown(0); // Allow button immediately if status is not pending
@@ -174,7 +143,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-    clearExpiryTimer();
     cleanupChannel();
     if (cooldownInterval) clearInterval(cooldownInterval);
 });

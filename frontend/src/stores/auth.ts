@@ -593,6 +593,6 @@ export const useAuthStore = defineStore(
     persist: {
       key: getStorageKey('tienda-auth'),
       paths: ['stores', 'currentUser', 'isAuthenticated', 'dailyAccessState'],
-    },
+    } as any,
   },
 );

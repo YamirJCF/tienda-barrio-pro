@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-019](../FRD/FRD_019_CUENTAS_POR_PAGAR.md)  
 > **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Ítem 4)  
-> **Estado:** 🟢 Aprobado y Sanitizado (Protocolo PAC-SDD v2.0)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
 > **Última Actualización:** 2026-10-16  
 
 ---

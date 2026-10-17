@@ -68,3 +68,25 @@ Como último paso antes de entregar una conclusión:
 2. Aplicar 9.2 (verificar que ninguna dimensión positiva silencie una negativa).
 3. Aplicar 9.3 (confirmar que los "hallazgos verificados" no repiten lo que el documento auditado ya decía de sí mismo sin consulta propia).
 4. Si cualquiera de los tres falla: DETENER. Reescribir la conclusión antes de presentarla.
+
+## 10. Ecógrafo Estructural de Resolución (Diagnóstico Mecánico vs. Solución Creativa)
+
+**Disparador (Modo Quirúrgico):** Obligatorio al resolver bugs, discrepancias o modificar tablas, RPCs, servicios o Stores compartidos (exento en cambios puramente visuales/cosméticos). El cumplimiento está protegido por el hook `pre-commit` (`scripts/verify-impact-hook.mjs`), que bloquea commits en capas compartidas sin un sello de escaneo activo.
+
+### 10.1 Fase A — Diagnóstico 100% Mecánico (Cero Creatividad / Cero Suposiciones)
+Antes de proponer o editar código en capas compartidas, es OBLIGATORIO ejecutar:
+
+    node scripts/scan-impact.mjs <entidad_tabla_rpc_o_store>
+
+Con el output real de consola (y la consulta de la Regla 6 si toca SQL), imprime este cuadro de 4 líneas antes de modificar archivos:
+1. **Origen Real del Fallo:** `[Dato en BD | Contrato RPC | Estado en Store | Render en UI]`
+2. **Contratos RVC Activos:** `[Filas devueltas en el Eje 1 del escáner]`
+3. **Radio de Explosión:** `[Archivos .sql, .ts y .vue devueltos en los Ejes 2 y 3 que consumen el objeto]`
+4. **Semáforo de Frontera (Muros Inviolables):**
+   - 🚫 **Muro 1 (Autoridad):** Si el fallo es de dato o cálculo financiero/stock → Prohibido parchar en `.vue`/`.ts` (ir a SQL).
+   - 🚫 **Muro 2 (Acoplamiento):** Si el cambio altera firma o payload compartido → Obligatorio actualizar todos los consumidores del punto 3.
+   - 🚫 **Muro 3 (Visibilidad):** Prohibido usar valores por defecto (`0`, `null`, `[]`, `catch` vacío) para silenciar el error (Regla 3).
+
+### 10.2 Fase B — Solución Creativa dentro de la Cancha
+Una vez fijados los muros de la Fase A, aplica creatividad técnica para resolver la causa raíz sin efectos secundarios. Cuando el problema admita más de un camino arquitectónico o de experiencia de usuario, **propón 2 o 3 opciones creativas viables** que respeten estrictamente los contratos del punto 2 y la integridad de los vecinos del punto 3.
+

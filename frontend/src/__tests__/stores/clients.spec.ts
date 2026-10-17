@@ -62,7 +62,7 @@ describe('Clients Store - updateClient', () => {
       name: 'Maria Perez Updated',
       cc: '10203040',
       phone: '3009999999',
-      creditLimit: '150000',
+      creditLimit: new Decimal(150000),
       storeId: 'store-uuid-1'
     });
 

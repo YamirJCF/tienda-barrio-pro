@@ -20,12 +20,18 @@ const showAddModal = ref(false);
 const newExpense = ref({
     amount: 0,
     description: '',
-    category: 'General'
+    category: 'Servicios',
+    paymentMethod: 'efectivo'
 });
 
 // isSubmitting handled by useAsyncAction
 
-const categories = ['General', 'Proveedor', 'Servicios', 'Comida', 'Transporte', 'Mantenimiento'];
+const categories = ['Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos', 'Reembolso'];
+const paymentMethods = [
+    { id: 'efectivo', name: 'Efectivo' },
+    { id: 'nequi', name: 'Nequi' },
+    { id: 'llave_bre', name: 'Llave Bre-B' }
+];
 
 // Computed
 const currentExpenses = computed(() => {
@@ -50,20 +56,20 @@ const handleSubmit = async () => {
     }
 
     await executeExpense(async () => {
-        cashRegisterStore.registerExpense(
+        await cashRegisterStore.registerExpense(
             new Decimal(newExpense.value.amount),
             newExpense.value.description,
-            newExpense.value.category
+            newExpense.value.category,
+            newExpense.value.paymentMethod
         );
         
         // Success actions within the async flow to ensure they happen only on success
         showAddModal.value = false;
         // Reset form
-        newExpense.value = { amount: 0, description: '', category: 'General' };
+        newExpense.value = { amount: 0, description: '', category: 'Servicios', paymentMethod: 'efectivo' };
     }, {
         successMessage: 'Gasto registrado correcto',
-        errorMessage: 'Error al registrar el gasto',
-        checkConnectivity: false // Offline expenses allowed (sync later)
+        errorMessage: 'Error al registrar el gasto'
     });
 };
 
@@ -145,9 +151,23 @@ const goBack = () => router.push('/');
                     </div>
 
                     <div>
+                        <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Medio de Pago</label>
+                        <div class="flex gap-2">
+                            <button v-for="pm in paymentMethods" :key="pm.id"
+                                    type="button"
+                                    @click="newExpense.paymentMethod = pm.id"
+                                    class="flex-1 py-1.5 px-2 rounded-xl text-xs font-bold border transition-colors text-center"
+                                    :class="newExpense.paymentMethod === pm.id ? 'bg-red-500 border-red-500 text-white' : 'bg-transparent border-gray-200 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'">
+                                {{ pm.name }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
                         <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Categoría</label>
                         <div class="flex flex-wrap gap-2">
                             <button v-for="cat in categories" :key="cat"
+                                    type="button"
                                     @click="newExpense.category = cat"
                                     class="px-3 py-1 rounded-full text-xs font-bold border transition-colors"
                                     :class="newExpense.category === cat ? 'bg-red-500 border-red-500 text-white' : 'bg-transparent border-gray-200 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'">

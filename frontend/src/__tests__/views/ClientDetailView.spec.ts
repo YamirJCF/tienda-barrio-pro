@@ -44,9 +44,16 @@ vi.mock('../../stores/auth', () => ({
   })
 }));
 
-// Mock window.alert
-const mockAlert = vi.fn();
-vi.stubGlobal('alert', mockAlert);
+const mockShowWarning = vi.fn();
+const mockShowSuccess = vi.fn();
+vi.mock('@/composables/useNotifications', () => ({
+  useNotifications: () => ({
+    showWarning: mockShowWarning,
+    showSuccess: mockShowSuccess,
+    showError: vi.fn(),
+    showInfo: vi.fn()
+  })
+}));
 
 describe('ClientDetailView.vue', () => {
   beforeEach(() => {
@@ -85,13 +92,14 @@ describe('ClientDetailView.vue', () => {
         plugins: [createPinia()],
         stubs: {
           BaseModal: {
+            props: ['modelValue', 'title'],
             template: `
               <div v-if="modelValue">
+                <h3>{{ title }}</h3>
                 <slot />
                 <slot name="footer" />
               </div>
-            `,
-            props: ['modelValue']
+            `
           },
           BaseInput: {
             template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
@@ -119,9 +127,9 @@ describe('ClientDetailView.vue', () => {
     
     expect(wrapper.text()).toContain('Maria Perez');
     expect(wrapper.text()).toContain('C.C. 10.203.040');
-    expect(wrapper.text()).toContain('$20.000'); // Total debt
-    expect(wrapper.text()).toContain('Disponibles: $80.000');
-    expect(wrapper.text()).toContain('Total: $100.000');
+    expect(wrapper.text()).toContain('20.000'); // Total debt
+    expect(wrapper.text()).toContain('Disponibles: 80.000');
+    expect(wrapper.text()).toContain('Total: 100.000');
   });
 
   it('navigates back to clients list when clicking back button', async () => {
@@ -206,7 +214,7 @@ describe('ClientDetailView.vue', () => {
     const confirmBtn = wrapper.findAll('button').find(b => b.text().includes('Confirmar'));
     await confirmBtn!.trigger('click');
     
-    expect(mockAlert).toHaveBeenCalledWith(
+    expect(mockShowWarning).toHaveBeenCalledWith(
       expect.stringContaining('El abono no puede superar la deuda actual')
     );
     expect(mockRegisterPayment).not.toHaveBeenCalled();

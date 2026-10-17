@@ -1,130 +1,61 @@
-# SDD-027: Núcleo de Caja Diaria (Flujo de Caja Puro)
+# SDD-027: Núcleo de Caja Diaria (Flujo de Caja Puro) (DEROGADO / ABSORBIDO)
+
+> [!WARNING]
+> **DOCUMENTO DEROGADO Y ABSORBIDO POR CONSOLIDACIÓN ARQUITECTÓNICA (PAC-SDD v2.0)**  
+> Este documento se conserva únicamente para trazabilidad histórica del repositorio.  
+> **Documento Rector Vigente:** [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md)  
+> **Justificación:** Reemplazado y consolidado por la arquitectura de caja de la Ola 1 (SDD_004_CONTROL_DE_CAJA.md y SDD_020_CAJA_MULTICANAL.md).  
+> **Prohibición:** Los equipos de Backend (`/data`) y Frontend (`/ux`) TIENEN PROHIBIDO implementar contratos a partir de este archivo; deben regirse exclusivamente por el SDD absorbente indicado arriba.
 
 > **Asociado a:** [FRD-027](../FRD/FRD_027_NUCLEO_CAJA_DIARIA.md)  
-> **Fase del Plan:** Fase 0 (Contratos Transversales)  
-> **Estado:** 🟢 Auditado y Corregido (QA Manual)  
-> **Última Actualización:** 2026-08-05
+> **Fase del Plan:** Consolidación Documental Pre-Código (Archivo Histórico)  
+> **Estado:** ⚪ Derogado / Absorbido por Suite Consolidada (2026-10-17)  
+> **Última Actualización:** 2026-10-17  
 
 ---
 
-## § 0. Contexto y Restricciones Aplicables (PEA-N)
+## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas
-| Política | Impacto Específico en este SDD |
-|----------|-------------------------------|
-| **Límite de Liquidez Real (POL-FIN-01)** | Prohibido consolidar transacciones diferidas o créditos (fiados) dentro del balance de liquidez disponible. |
-| **Segregación Estricta de Canales (POL-FIN-02)** | El sistema no maneja una "caja única". Debe estructurarse un balance independiente para cada método de pago. |
-| **Arqueo Ciego (POL-SEG-01)** | El sistema tiene prohibido revelar el saldo esperado al operario durante la declaración de cierre. |
+### 0.1 Políticas Globales Activadas (ARQ-002)
+Las políticas originalmente listadas en este documento (`POL-AUTH-01`, `POL-SEC-01`, `POL-FIN-01`, `POL-LOG-01`, `POL-AUD-01`) se encuentran activas y gobernadas en [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
----
+### 0.2 Contratos Vecinos que Limitan el Diseño
+Todos los contratos vecinos han sido redirigidos hacia [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
-## § 1. Glosario Local
-
-* **Turno Contable:** Periodo inmutable donde un actor es responsable de los movimientos líquidos.
-* **Canal Financiero:** Medio por el cual circula la liquidez (Efectivo, Tarjeta, Billetera Digital). Los balances nunca se mezclan.
-* **Arqueo Ciego:** Proceso donde el actor declara lo que cuenta físicamente sin conocer las proyecciones del servidor.
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica)
+Sin deuda técnica propia abierta en este archivo por encontrarse absorbido. Toda brecha de migración sobre las entidades de este dominio reside formalizada bajo la Regla 7 en la sección `§0.3` de [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
 ---
 
-## § 2. Diagrama de Secuencia
-
-### Caso de Uso: Mutación de Liquidez Multicanal
-```mermaid
-sequenceDiagram
-    participant Orquestador as Módulo Transaccional
-    participant Caja as Motor de Caja Diaria
-    participant Saldo as Entidad de Balances
-    
-    Orquestador->>Caja: Solicita egreso (Canal, Monto)
-    Caja->>Caja: Valida Turno Abierto y Autorizado
-    
-    Caja->>Saldo: Consulta límite del Canal específico
-    alt Límite Insuficiente
-        Caja-->>Orquestador: Rechazo (Sobregiro de Canal)
-    else Límite Suficiente
-        Caja->>Saldo: Actualiza balance esperado del Canal
-        Caja->>Caja: Asienta movimiento log en bitácora financiera
-        Caja-->>Orquestador: Transacción Confirmada
-    end
-```
+## 1. Glosario Local
+Los términos de dominio de este submódulo forman parte del glosario unificado de [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
 ---
 
-## § 3. Diagrama de Estados
-
-### Ciclo de Vida del Turno
-```mermaid
-stateDiagram-v2
-    [*] --> Abierto: Apertura Exitosa
-    Abierto --> Abierto: Mutaciones de Liquidez
-    Abierto --> Cerrado: Arqueo Ciego Exitoso
-    Abierto --> Bloqueado: Suspensión por Anomalías (Venta Forzada)
-    Bloqueado --> Cerrado: Auditoría Completada
-    Abierto --> Cerrado_Forzado: Caducidad (Límite 24H)
-    Cerrado --> [*]
-```
+## 2. Diagramas de Secuencia
+Los flujos de interacción actualizados bajo el protocolo PAC-SDD v2.0 se encuentran especificados en la sección `§2` de [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
 ---
 
-## § 4. Especificación Detallada de Casos de Uso
-
-### Caso A: Apertura de Turno Multicanal
-- **Precondiciones:** El operario no tiene otro turno activo.
-- **Flujo Principal:**
-  1. El operario transmite la intención de iniciar operaciones.
-  2. El servidor valida la ausencia de superposiciones.
-  3. El servidor crea la entidad agrupadora del turno.
-  4. El servidor siembra balances iniciales (en cero) para cada canal financiero habilitado.
-- **Postcondiciones:** Turno habilitado para recepción de operaciones de liquidez.
-
-### Caso B: Inyección / Extracción de Liquidez
-- **Precondiciones:** Turno abierto y vigente.
-- **Flujo Principal:**
-  1. El controlador externo (POS, Gastos) solicita asentar un valor monetario.
-  2. El servidor valida que la instrucción contenga un identificador de canal explícito.
-  3. Si la operación es un egreso, el servidor verifica matemáticamente que el canal posea fondos suficientes.
-  4. El servidor suma o resta el monto al acumulado del canal específico.
-  5. El servidor asienta el movimiento en la bitácora financiera inmutable.
-- **Postcondiciones:** Balance del canal actualizado.
-
-### Caso C: Declaración de Cierre (Arqueo Ciego)
-- **Precondiciones:** Turno abierto y operario autenticado.
-- **Flujo Principal:**
-  1. El operario envía una colección de montos contados físicamente, separados por canal.
-  2. El servidor sella el turno cambiando su estado a cerrado, congelando nuevas transacciones.
-  3. El servidor compara los valores declarados contra las proyecciones teóricas.
-  4. El servidor registra la diferencia exacta (cuadre o descuadre) por canal.
-  5. El servidor devuelve el reporte comparativo al cliente.
-- **Postcondiciones:** Turno finalizado irreversiblemente.
+## 3. Diagramas de Estado
+Las máquinas de estado vigentes de las entidades relacionadas se encuentran modeladas en la sección `§3` de [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
 ---
 
-## § 5. Contrato de Interfaz
-
-### Operación: Extracción Estricta
-- **Entrada esperada:** 
-  - Identificador de la tienda (tenant).
-  - Valor monetario a sustraer.
-  - Identificador del canal financiero afectado.
-- **Reglas de transformación / cálculo:**
-  - El motor DEBE rechazar la solicitud arrojando una excepción lógica si el saldo acumulado en el canal dictaminado es inferior a la sustracción.
-  - El motor PROHÍBE que una extracción de dinero afecte saldos globales; cada centavo pertenece a su canal.
-- **Salida esperada:** Confirmación de mutación, o rechazo estructural.
+## 4. Especificación Detallada de Casos de Uso
+Los casos de uso de este requerimiento están cubiertos de forma íntegra en la sección `§4` de [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
 ---
 
-## § 6. Análisis de Seguridad
-
-- **Control de Acceso:** La apertura y cierre de caja asumen la validación estricta del perímetro territorial del usuario.
-- **Protección de Datos:** Las proyecciones de balance (`expected_balance`) jamás se transmiten a la capa cliente durante operaciones rutinarias ni cierres, evadiendo la filtración de información para evitar "cuadres fabricados" por el cajero.
-- **Superficie de Amenazas:** 
-  - *Amenaza:* Secuestro de turno.
-  - *Mitigación:* El servidor descubre automáticamente la sesión abierta a nombre del usuario autenticado; el cliente jamás transmite el ID del turno en el paquete de peticiones para evitar suplantaciones lógicas.
+## 5. Contrato de Interfaz
+Los payloads JSON, firmas de procedimientos almacenados y catálogos de códigos de error vigentes están normados en la sección `§5` de [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
 ---
 
-## § 7. Modelo de Datos Lógico
+## 6. Análisis de Seguridad
+Las directivas de seguridad centralizada (`assert_store_access`, `get_current_store_id`, `is_authorized_employee`) aplicables se encuentran especificadas en la sección `§6` de [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).
 
-- **Entidad Agrupadora (Turno):** Aloja los metadatos de apertura, estado, autor y sellado temporal.
-- **Entidad de Desglose (Saldos de Canal):** Sub-entidad del Turno. Mapea un canal financiero específico a tres valores inmutables: saldo inicial sembrado, proyección esperada y declaración física final.
-- **Bitácora Financiera:** Colección apendicular donde todo movimiento (ingreso o egreso) debe referenciar atómicamente el canal afectado y la justificación causal.
+---
+
+## 7. Modelo de Datos Lógico
+El diagrama Entidad-Relación y el diccionario de columnas físicas verificadas contra `information_schema.columns` residen en la sección `§7` de [SDD_004_CONTROL_DE_CAJA.md](./SDD_004_CONTROL_DE_CAJA.md) y [SDD_020_CAJA_MULTICANAL.md](./SDD_020_CAJA_MULTICANAL.md).

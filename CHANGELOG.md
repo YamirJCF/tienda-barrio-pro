@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-10-17
+
+### Added
+- **Architecture & Documentation (PAC-SDD v2.0 & PAC-UXD):**
+  - Rectificación integral de los 36 SDDs al estándar PAC-SDD v2.0 (`SDD_001` a `SDD_027`) y archivo formal de especificaciones obsoletas (`SDD_010`, `SDD_016`) en `_deprecated/`.
+  - Auditoría estructural de la interfaz mediante el protocolo `/pac-uxd` generando 21 reportes de discrepancia (`PAC_UXD_001` a `PAC_UXD_027`) y sincronizando el Registro Vivo de Contratos (`RVC_registro_vivo_contratos.md`).
+- **Database & Backend Authority (Supabase Waves 1–6):**
+  - **Multicanalidad y Arqueo Ciego (`cash_sessions`, `cash_movements`):** Nuevas columnas `category`, `payment_method`, `voucher_ref`, `expected_balances`, `actual_balances` y `discrepancies`. RPCs `rpc_get_pending_Yesterday_sessions`, `rpc_close_expired_session`, `rpc_get_cash_control_summary` y `rpc_register_cash_movement` actualizados para inicializar canales digitales en \$0 y preservar el arqueo ciego sin filtrar saldos esperados antes del conteo.
+  - **Ventas, Anulaciones e Idempotencia Offline (`rpc_procesar_venta_v3`, `rpc_anular_venta`, `rpc_procesar_devolucion`):** Creación de `rpc_procesar_venta_v3` con soporte para `p_idempotency_key` y resolución de duplicados (`DUPLICATE_RESOLVED`). Anulación de ventas atada a turno abierto y canal original (`voided_at`, `void_session_id`). Devoluciones multicanal con validación de fondos por canal y registro tipificado como `Reembolso`.
+  - **Inventario, Lotes FIFO y Paginación (`rpc_get_products_paginated`, `rpc_get_kardex_history`, `rpc_assign_supplier_bulk`):** Paginación progresiva en servidor (20 ítems), historial Kardex filtrable por fechas/tipo/empleado, asignación masiva de proveedores y alerta de demanda reprimida/umbral de silencio en `get_smart_supply_report`.
+  - **Cuentas por Pagar, Clientes y Empleados (`rpc_get_supplier_invoices_paginated`, `rpc_pay_supplier_invoice`, `rpc_get_clients_filtered`, `rpc_get_client_ledger_paginated`):** Normalización Title Case de proveedores (`trg_normalize_supplier_name`), pago multicanal de facturas con opción de registro en caja, filtros de cartera y paginación del libro mayor de clientes.
+  - **Seguridad Diaria, Sesiones y Dispositivos (`rpc_gestionar_dispositivo`, `expire_daily_passes`):** Corrección de `expire_daily_passes()` para que el cierre de turno de caja no revoque el pase diario (Decisión `D-03`), consolidación del límite de 3 reintentos (`RN-7`) y revocación remota inmediata de sesiones concurrentes (`H15`).
+- **Frontend & UX Alignment (Vue 3 / Pinia Waves 1–6):**
+  - **Arqueo Ciego y Caja Multicanal (`CashControlView.vue`, `ForcedCloseAuditModal.vue`, `ExpensesModal.vue`, `CashHistoryCard.vue`):** Eliminada toda exposición prematura del saldo esperado del sistema antes de confirmar el conteo físico; soporte para selección de categoría OPEX obligatoria y filtro histórico de turnos por rango de fechas.
+  - **POS, Ventas y Cola Offline (`POSView.vue`, `SaleDetailModal.vue`, `ReturnProductModal.vue`, `syncQueue.ts`, `SyncStatusModal.vue`):** Conectada la anulación de ventas y devoluciones multicanal al backend; indicador permanente de capacidad de cola offline (`X/50`), alerta al 80% y bloqueo al 100%; migración de sincronización offline a `rpc_procesar_venta_v3` con llave de idempotencia y bloqueo de creación offline de clientes (`RN-OFF-01`).
+  - **Inventario, Clientes, Finanzas y Seguridad (`InventoryView.vue`, `ProductFormModal.vue`, `KardexModal.vue`, `ClientsView.vue`, `ClientDetailView.vue`, `AccountsPayableView.vue`, `BusinessHealthView.vue`, `UpdatePasswordView.vue`):** Paginación progresiva ("Cargar más"), selector de lotes FIFO en POS y mermas, filtro por empleado en salud del negocio (Pilar 4) y política de contraseñas `POL-SEC-03` con cierre de sesiones remotas (`scope: 'others'`).
+
 ## [1.5.8] - 2026-10-09
 
 ### Added

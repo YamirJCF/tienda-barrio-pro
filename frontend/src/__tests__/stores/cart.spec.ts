@@ -4,12 +4,15 @@ import { useCartStore } from '../../stores/cart';
 import { useInventoryStore } from '../../stores/inventory';
 import { Decimal } from 'decimal.js';
 
+const PROD_1_ID = '11111111-1111-4111-8111-111111111111';
+const PROD_2_ID = '22222222-2222-4222-8222-222222222222';
+
 // Mock Inventory Store
 vi.mock('../../stores/inventory', () => ({
     useInventoryStore: vi.fn(() => ({
         products: [
-            { id: 'prod-1', name: 'Soda', price: new Decimal(2000), stock: new Decimal(10), isActive: true },
-            { id: 'prod-2', name: 'Rice', price: new Decimal(1500), stock: new Decimal(5), isWeighable: true, measurementUnit: 'kg' }
+            { id: '11111111-1111-4111-8111-111111111111', name: 'Soda', price: new Decimal(2000), stock: new Decimal(10), isActive: true },
+            { id: '22222222-2222-4222-8222-222222222222', name: 'Rice', price: new Decimal(1500), stock: new Decimal(5), isWeighable: true, measurementUnit: 'kg' }
         ],
         adjustStockLocal: vi.fn()
     }))
@@ -22,14 +25,14 @@ describe('Cart Store (Logic Verification)', () => {
 
     it('should add items properly', async () => {
         const cart = useCartStore();
-        const success = await cart.addItem({
-            id: 'prod-1',
+        const result = await cart.addItem({
+            id: PROD_1_ID,
             name: 'Soda',
             price: new Decimal(2000),
             quantity: 2
         });
 
-        expect(success).toBe(true);
+        expect(result.success).toBe(true);
         expect(cart.items.length).toBe(1);
         expect(cart.total.toNumber()).toBe(4000);
     });
@@ -37,14 +40,14 @@ describe('Cart Store (Logic Verification)', () => {
     it('should block adding more than stock', async () => {
         const cart = useCartStore();
         // Stock is 10
-        const success = await cart.addItem({
-            id: 'prod-1',
+        const result = await cart.addItem({
+            id: PROD_1_ID,
             name: 'Soda',
             price: new Decimal(2000),
             quantity: 11
         });
 
-        expect(success).toBe(false); // Should fail
+        expect(result.success).toBe(false); // Should fail
         expect(cart.items.length).toBe(0);
     });
 
@@ -59,7 +62,7 @@ describe('Cart Store (Logic Verification)', () => {
         // Better to simulate "Adding weighable item" which has subtotal.
 
         cart.addWeighableItem({
-            id: 'prod-2',
+            id: PROD_2_ID,
             name: 'Rice',
             price: new Decimal(1500),
             quantity: new Decimal(0.5), // 750
@@ -83,7 +86,7 @@ describe('Cart Store (Logic Verification)', () => {
 
     it('should clear cart', async () => {
         const cart = useCartStore();
-        await cart.addItem({ id: 'prod-1', name: 'Soda', price: new Decimal(2000), quantity: 1 });
+        await cart.addItem({ id: PROD_1_ID, name: 'Soda', price: new Decimal(2000), quantity: 1 });
         cart.clearCart();
         expect(cart.items.length).toBe(0);
         expect(cart.total.toNumber()).toBe(0);

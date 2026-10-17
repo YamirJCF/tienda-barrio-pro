@@ -122,12 +122,20 @@ export const useSuppliersStore = defineStore(
             }
 
             try {
-                const { error: updateError } = await supabase
-                    .from('products')
-                    .update({ supplier_id: supplierId, updated_at: new Date().toISOString() })
-                    .in('id', productIds);
+                const authStore = (await import('./auth')).useAuthStore();
+                const storeId = authStore.currentStore?.id || authStore.currentUser?.storeId;
+                if (!storeId) throw new Error('No hay sesión de tienda activa');
 
-                if (updateError) throw updateError;
+                const { data, error: rpcError } = await supabase.rpc('rpc_asignar_proveedor_masivo', {
+                    p_store_id: storeId,
+                    p_supplier_id: supplierId,
+                    p_product_ids: productIds
+                });
+
+                if (rpcError) throw rpcError;
+                if (data && !(data as any).success) {
+                    throw new Error((data as any).error || 'Error al asignar proveedor');
+                }
 
                 return { success: true };
             } catch (e: any) {

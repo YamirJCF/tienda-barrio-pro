@@ -1,82 +1,61 @@
-# SDD-006-01-02: Movimientos de Salida (Prohibición y Delegación)
+# SDD-006-01-02: Movimientos de Salida (Prohibición y Delegación) (DEROGADO / ABSORBIDO)
+
+> [!WARNING]
+> **DOCUMENTO DEROGADO Y ABSORBIDO POR CONSOLIDACIÓN ARQUITECTÓNICA (PAC-SDD v2.0)**  
+> Este documento se conserva únicamente para trazabilidad histórica del repositorio.  
+> **Documento Rector Vigente:** [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md)  
+> **Justificación:** Sus reglas sobre bajas logísticas (mermas y devoluciones a proveedor) y el rol del POS fueron absorbidas y rectificadas en SDD_006_NUCLEO_INVENTARIO_PADRE.md y SDD_007_01_NUCLEO_POS.md (Deuda D-3).  
+> **Prohibición:** Los equipos de Backend (`/data`) y Frontend (`/ux`) TIENEN PROHIBIDO implementar contratos a partir de este archivo; deben regirse exclusivamente por el SDD absorbente indicado arriba.
 
 > **Asociado a:** [FRD-006-01-02](../FRD/FRD_006_01_02_MOVIMIENTOS_SALIDA_INVENTARIO.md)  
-> **Fase del Plan:** Fase 4 (Inventario Detallado)  
-> **Estado:** 🟢 Consolidado  
-> **Última Actualización:** 2026-08-04
+> **Fase del Plan:** Consolidación Documental Pre-Código (Archivo Histórico)  
+> **Estado:** ⚪ Derogado / Absorbido por Suite Consolidada (2026-10-17)  
+> **Última Actualización:** 2026-10-17  
 
 ---
 
-## 0. Contexto y Restricciones Aplicables (PEA-N)
+## 0. Contexto y Restricciones Aplicables
 
 ### 0.1 Políticas Globales Activadas (ARQ-002)
-| Política | Dominio | Impacto Específico en este SDD |
-|----------|---------|-------------------------------|
-| **POL-LOG-03** | Arquitectura | **El POS como Embudo Único:** Todo egreso de mercancía que implique pérdida de valor operativo (Mermas, Consumo Interno, Devolución a Proveedor) TIENE ESTRICTAMENTE PROHIBIDO ejecutarse como un movimiento aislado en el módulo de Inventario. Debe obligatoriamente ser procesado por el Motor de Transacciones (POS) para asegurar su anclaje a un Turno de Caja auditable. |
+Las políticas originalmente listadas en este documento (`POL-AUTH-01`, `POL-SEC-01`, `POL-FIN-01`, `POL-LOG-01`, `POL-AUD-01`) se encuentran activas y gobernadas en [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
 
-### 0.2 Contratos Vecinos que Limitan el Diseño (Consulta RVC)
-| SDD Vecino / Entidad | Restricción que impone al diseño de este SDD |
-|----------------------|----------------------------------------------|
-| **SDD_007_01 (POS)** | El RPC `rpc_procesar_venta_v3` expone la variable `closure_type` que acepta explícitamente `'merma'`, `'consumo_interno'` y `'devolucion_proveedor'`. |
-| **SDD_027_01 (Reportes Caja)** | El reporte `get_daily_summary` espera leer las salidas por mermas directamente vinculadas al `session_id` del turno actual de caja. |
+### 0.2 Contratos Vecinos que Limitan el Diseño
+Todos los contratos vecinos han sido redirigidos hacia [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
+
+### 0.3 Auditoría de BD contra Realidad (Deuda Técnica)
+Sin deuda técnica propia abierta en este archivo por encontrarse absorbido. Toda brecha de migración sobre las entidades de este dominio reside formalizada bajo la Regla 7 en la sección `§0.3` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
 
 ---
 
-## 1. Diagrama de Secuencia (UML - Mermaid)
-
-### Caso de Uso: Redirección del Flujo de Salida al POS
-```mermaid
-sequenceDiagram
-    participant Operario
-    participant Inventario_UI
-    participant POS_UI
-    participant POS_Backend
-    participant Caja
-    participant Kardex
-
-    Operario->>Inventario_UI: Intenta buscar botón "Registrar Merma"
-    Inventario_UI-->>Operario: Botón Inexistente (Prohibición por Diseño)
-    
-    Operario->>POS_UI: Ingresa al Punto de Venta
-    Operario->>POS_UI: Escanea/Ingresa producto roto
-    Operario->>POS_UI: Selecciona Cierre Alternativo: "Baja por Merma"
-    
-    POS_UI->>POS_Backend: Request procesar venta (closure_type: 'merma')
-    
-    POS_Backend->>Caja: Anclar pérdida al session_id actual
-    POS_Backend->>Kardex: Registrar movimiento tipo 'merma'
-    
-    POS_Backend-->>POS_UI: OK (Transacción guardada sin mover efectivo)
-```
+## 1. Glosario Local
+Los términos de dominio de este submódulo forman parte del glosario unificado de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
 
 ---
 
-## 2. Especificación Detallada de Casos de Uso
-
-### 2.1 Prohibición de Registro de Salidas en Módulo Inventario
-- **Precondiciones:** N/A.
-- **Reglas de Negocio Aplicables:** Regla 1 (Prohibición de Egresos Ciegos), Regla 2 (POS como Motor Único).
-- **Flujo Principal:** 
-  1. El módulo de inventario NO EXPONDRÁ opciones para registrar manualmente mermas, consumos internos o devoluciones a proveedor.
-  2. El flujo debe ser guiado operativamente hacia el módulo POS.
-- **Flujos Alternativos:** El único momento en que el inventario aplica un ajuste negativo es a través del flujo de Ajuste Físico de Inventario (proceso global).
-- **Flujos de Excepción:** Si por API se intenta invocar un endpoint suelto de "salida de inventario", este DEBE ser rechazado.
-- **Postcondiciones (Éxito):** El sistema mantiene la integridad del cajero.
+## 2. Diagramas de Secuencia
+Los flujos de interacción actualizados bajo el protocolo PAC-SDD v2.0 se encuentran especificados en la sección `§2` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
 
 ---
 
-## 3. Contrato de Interfaz
-
-### 3.1 Operación (Inexistente)
-- Se prohíbe la existencia de endpoints como `rpc_registrar_salida` o `rpc_registrar_merma` independientes de la caja. Toda invocación debe realizarse consumiendo el contrato establecido en el `SDD_007_01_NUCLEO_POS`.
+## 3. Diagramas de Estado
+Las máquinas de estado vigentes de las entidades relacionadas se encuentran modeladas en la sección `§3` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
 
 ---
 
-## 4. Análisis de Seguridad
+## 4. Especificación Detallada de Casos de Uso
+Los casos de uso de este requerimiento están cubiertos de forma íntegra en la sección `§4` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
 
-- **Control de Acceso:** La ejecución de mermas y salidas no monetarias sigue las reglas de permisos del módulo POS. Un cajero estándar puede reportar una botella rota durante su turno usando el POS.
-- **Protección de Datos:** La información de pérdidas se considera crítica y está restringida en los reportes a roles gerenciales.
-- **Superficie de Amenazas:** 
-  - *Amenaza:* "Agujero Negro Contable". Un empleado extrae mercancía y la declara como merma por un endpoint suelto para no afectar su propio arqueo de caja.
-  - *Mitigación:* Al obligar el uso del POS, la transacción requiere forzosamente un `session_id`. Si el empleado reporta 10 mermas en su turno, estas quedan amarradas inmutablemente a su reporte Z. El dueño puede ver exactamente qué empleado reportó la merma, a qué hora exacta, y sumarlo a sus indicadores de desempeño.
-- **Trazabilidad de Auditoría:** Todas las mermas dejan un rastro en `sales` y `sale_items`, valoradas a costo o cero, permitiendo auditar el volumen de pérdidas operativas vinculadas a los empleados.
+---
+
+## 5. Contrato de Interfaz
+Los payloads JSON, firmas de procedimientos almacenados y catálogos de códigos de error vigentes están normados en la sección `§5` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
+
+---
+
+## 6. Análisis de Seguridad
+Las directivas de seguridad centralizada (`assert_store_access`, `get_current_store_id`, `is_authorized_employee`) aplicables se encuentran especificadas en la sección `§6` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
+
+---
+
+## 7. Modelo de Datos Lógico
+El diagrama Entidad-Relación y el diccionario de columnas físicas verificadas contra `information_schema.columns` residen en la sección `§7` de [SDD_006_NUCLEO_INVENTARIO_PADRE.md](./SDD_006_NUCLEO_INVENTARIO_PADRE.md) y [SDD_007_01_NUCLEO_POS.md](./SDD_007_01_NUCLEO_POS.md).
