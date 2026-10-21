@@ -198,9 +198,10 @@ Procedimiento almacenado para saldar la cuenta tras un cierre forzado:
 2. **Seguridad RBAC en Servidor:** Valida que el empleado o administrador posea el permiso `canOpenCloseCash = true`.
 3. **Validación de Estado:** Localiza la sesión verificando que cumpla estrictamente `id = p_session_id`, `status = 'closed'`, `forced_close = true` y `actual_balance IS NULL`.
 4. **Aislamiento Multi-Tenant (Regla 4):** Valida que el invocador pertenezca a la tienda de la sesión (`assert_store_access`).
-5. **Cálculo de Diferencia en Servidor:** Computa `v_difference = v_session.expected_balance - p_actual_balance`.
+5. **Cálculo de Diferencia en Servidor:** Computa `v_difference = p_actual_balance - v_session.expected_balance` (positivo = sobrante, negativo = faltante; misma convención que `cerrar_caja`, SDD-020 H-5).
 6. **Liquidación:** Actualiza `actual_balance = p_actual_balance`, `difference = v_difference` y `closed_by = p_employee_id`.
-7. **Asiento Inmutable:** Inserta en `audit_logs` el evento `FORCED_CLOSE_RECONCILED`.
+7. **Asiento Inmutable:** Inserta en `audit_logs` el evento `FORCED_CLOSE_RECONCILED` usando las columnas reales (`actor_id`, `store_id`, `event_type`, `resource_id`, `metadata`, `severity`). Como `audit_logs.actor_id` tiene dos FK (`employees` y `auth.users`), el actor debe existir en ambas; de lo contrario aborta con `AUDIT_ACTOR_UNRESOLVABLE`.
+8. **Errores como excepciones (Regla 3):** Todo rechazo de negocio se propaga con `RAISE EXCEPTION` (`INVALID_BALANCE`, `SESSION_NOT_FOUND`, `STORE_ACCESS_DENIED`, `EMPLOYEE_NOT_FOUND`, `INSUFFICIENT_PERMISSIONS`, `AUDIT_ACTOR_UNRESOLVABLE`, `SESSION_NOT_RECONCILABLE`); nunca `{success:false}` con forma de dato válido.
 
 ---
 
@@ -392,3 +393,17 @@ En estricto cumplimiento de la **Regla 7 de AGENTS.md**, se formalizan a continu
 - **Qué se decidió:** Consagrar que todos los movimientos de caja (`cash_movements`) permanecen inmutablemente atados a su `session_id` original; ni el cierre forzado ni la reconciliación administrativa mutan retrospectivamente las ventas, los cobros ni el P&L devengado en SDD-018.
 - **Por qué / Trade-off:** Garantiza la inviolabilidad del estado de resultados y el costo de ventas FIFO ante contingencias o negligencias operativas en el turno de caja.
 - **Bajo qué condición futura se revisará:** Permanente. Principio contable fundamental del sistema.
+### D-6: Reconciliación de Cierre Forzado Solo en Efectivo (corrección 2026-10-21)
+- **Qué se decidió:** El modal de auditoría pide un único conteo físico en efectivo por sesión pendiente y el cliente ya no consulta `cash_session_balances` ni recibe `expected_balance` (Arqueo Ciego).
+- **Por qué / Trade-off:** `cash_session_balances` no existe en producción (SDD-020 Ola 4 diferida) y el backend vivo (`cerrar_caja`, `rpc_check_and_force_close_shifts`, `rpc_reconciliar_cierre_forzado`) calcula `expected_balance` solo con `payment_method = 'efectivo'`. La consulta a la tabla inexistente devolvía `PGRST205` y dejaba inalcanzable la reconciliación. Costo: no se concilia físicamente Nequi/Daviplata/BRE (son saldos bancarios, no de gaveta; siguen trazables en `cash_movements.payment_method`).
+- **Bajo qué condición futura se revisará:** Al desplegar `rpc_cerrar_caja_multicanal` con `cash_session_balances` (SDD-020, Ola 4).
+
+### D-7: Compuerta Servidor de Apertura (`RECONCILIATION_REQUIRED`) Diferida
+- **Qué se decidió:** No modificar `abrir_caja` en esta corrección. Hoy la compuerta RN-017-03 existe solo en cliente (`CashControlView`), que ahora falla cerrado si no puede verificar turnos pendientes. Verificado: `abrir_caja` en producción abre con un turno forzado pendiente.
+- **Por qué / Trade-off:** Mover la compuerta a SQL es lo correcto (Muro 1) pero bloquearía la apertura de toda tienda con cierres forzados pendientes (hoy 2 en producción) y no se pudo validar de extremo a extremo con un empleado de pase diario en esta corrección.
+- **Bajo qué condición futura se revisará:** Tras confirmar la reconciliación en producción con el administrador y con un empleado con `canOpenCloseCash`; entonces `abrir_caja` debe abortar con `RECONCILIATION_REQUIRED`.
+
+### D-8: Empleados sin Identidad en `auth.users` No Pueden Reconciliar
+- **Qué se decidió:** `rpc_reconciliar_cierre_forzado` aborta con `AUDIT_ACTOR_UNRESOLVABLE` si `p_employee_id` no existe en `auth.users` (3 de 5 empleados en producción).
+- **Por qué / Trade-off:** `audit_logs.actor_id` exige existir en `employees` y en `auth.users` (`fk_audit_user`); relajarlo afecta una tabla compartida entre módulos (Regla 6). Un administrador puede reconciliar siempre.
+- **Bajo qué condición futura se revisará:** Al unificar la autenticación de empleados en `auth.users` o al relajar `fk_audit_user` con auditoría de impacto cruzado.

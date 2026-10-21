@@ -11,8 +11,8 @@ import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 export interface PendingForcedSession {
   id: string;
   openedAt: string;
-  expectedBalance: number;
-  balancesByMethod?: Record<string, number>;
+  /** Canales a contar físicamente (hoy solo 'efectivo'). NO incluye saldos esperados (Arqueo Ciego). */
+  channels: string[];
 }
 
 // =============================================
@@ -42,9 +42,9 @@ const currentSession = computed(() => props.pendingSessions[0] ?? null);
 
 import { watch } from 'vue';
 watch(() => currentSession.value, (session) => {
-  if (session && session.balancesByMethod) {
+  if (session) {
     physicalCounts.value = {};
-    Object.keys(session.balancesByMethod).forEach(method => {
+    session.channels.forEach(method => {
       physicalCounts.value[method] = 0;
     });
   }
@@ -57,8 +57,8 @@ const totalPhysical = computed(() => {
 });
 
 const isValid = computed(() => {
-  if (!currentSession.value?.balancesByMethod) return false;
-  return Object.keys(currentSession.value.balancesByMethod).every(method => {
+  if (!currentSession.value) return false;
+  return currentSession.value.channels.every(method => {
     const val = physicalCounts.value[method];
     return typeof val === 'number' && !isNaN(val) && val >= 0;
   });
@@ -130,7 +130,7 @@ const handleConfirm = () => {
 
           <!-- Physical count inputs -->
           <div class="space-y-4 max-h-[40vh] overflow-y-auto px-1 no-scrollbar">
-            <div v-for="(_, method) in currentSession.balancesByMethod" :key="method" class="space-y-1.5">
+            <div v-for="method in currentSession.channels" :key="method" class="space-y-1.5">
               <label class="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400 capitalize">
                 ¿Cuánto dinero físico recuperaste en {{ method }}?
               </label>

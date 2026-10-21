@@ -45,53 +45,27 @@ const fetchPendingForcedSessions = async () => {
     try {
         const supabase = requireSupabase();
         
-        // 1. Fetch pending sessions
+        // Arqueo Ciego (POL-SEG-01): el saldo esperado NO viaja al cliente.
+        // Solo se piden id y fecha de apertura; el servidor calcula la diferencia al reconciliar.
         const { data: sessions, error } = await supabase
             .from('cash_sessions')
-            .select('id, opened_at, expected_balance')
+            .select('id, opened_at')
             .eq('status', 'closed')
             .eq('forced_close', true)
             .is('actual_balance', null)
             .order('opened_at', { ascending: true });
 
         if (error) throw error;
-        
-        if (!sessions || sessions.length === 0) {
-            pendingForcedSessions.value = [];
-            return;
-        }
 
-        // 2. Fetch multichannel balances for those sessions
-        const sessionIds = sessions.map(s => s.id);
-        const { data: balancesData, error: balancesError } = await supabase
-            .from('cash_session_balances')
-            .select('session_id, payment_method, expected_amount')
-            .in('session_id', sessionIds);
-            
-        if (balancesError) throw balancesError;
-
-        // 3. Map balances to sessions
-        pendingForcedSessions.value = sessions.map(s => {
-            const sBalances = balancesData?.filter(b => b.session_id === s.id) || [];
-            
-            // Build balancesByMethod map
-            const balancesByMethod: Record<string, number> = {};
-            if (sBalances.length > 0) {
-                sBalances.forEach(b => {
-                    balancesByMethod[b.payment_method] = Number(b.expected_amount || 0);
-                });
-            } else {
-                // Fallback if no multichannel balances exist (e.g. legacy session)
-                balancesByMethod['efectivo'] = Number(s.expected_balance ?? 0);
-            }
-
-            return {
-                id:              s.id,
-                openedAt:        s.opened_at,
-                expectedBalance: Number(s.expected_balance ?? 0),
-                balancesByMethod
-            };
-        });
+        // La reconciliación de cierre forzado es solo en efectivo: el backend vivo
+        // (cerrar_caja / rpc_check_and_force_close_shifts / rpc_reconciliar_cierre_forzado)
+        // calcula expected_balance únicamente con cash_movements.payment_method = 'efectivo'.
+        // cash_session_balances no existe en producción (Ola 4 diferida, RVC L20).
+        pendingForcedSessions.value = (sessions ?? []).map(s => ({
+            id:       s.id,
+            openedAt: s.opened_at,
+            channels: ['efectivo']
+        }));
     } catch (e) {
         console.error('🚫 [CashControl] Failed to fetch pending forced sessions:', e);
         fetchForcedSessionsError.value = true;
@@ -114,14 +88,30 @@ const handleAuditConfirm = async (sessionId: string, actualBalance: number) => {
         });
 
         if (error) throw error;
-        if (!data?.success) throw new Error(data?.error || 'Reconciliación fallida');
+        if (!data?.success) throw new Error('RECONCILIATION_FAILED');
 
         // Eliminar la sesión conciliada de la cola
         pendingForcedSessions.value = pendingForcedSessions.value.filter(s => s.id !== sessionId);
         showSuccess('Turno reconciliado correctamente.');
     } catch (e: any) {
-        showError(e.message || 'Error al reconciliar el cierre forzado.');
+        console.error('🚫 [CashControl] Reconciliation failed:', e);
+        showError(translateReconciliationError(e?.message));
     }
+};
+
+// Traduce el código técnico del backend a un mensaje accionable (el backend no conoce la UI)
+const translateReconciliationError = (message?: string): string => {
+    const code = (message || '').split(':')[0].trim();
+    const messages: Record<string, string> = {
+        INVALID_BALANCE: 'El monto contado no es válido.',
+        SESSION_NOT_FOUND: 'El turno ya no existe. Actualiza e intenta de nuevo.',
+        SESSION_NOT_RECONCILABLE: 'Este turno ya fue reconciliado. Actualiza para continuar.',
+        STORE_ACCESS_DENIED: 'No tienes acceso a esta tienda.',
+        EMPLOYEE_NOT_FOUND: 'Tu usuario no está registrado como empleado de esta tienda.',
+        INSUFFICIENT_PERMISSIONS: 'No tienes permiso para reconciliar cierres de caja. Consulta con el administrador.',
+        AUDIT_ACTOR_UNRESOLVABLE: 'Tu usuario no puede firmar la auditoría. Pide a un administrador que reconcilie el turno.',
+    };
+    return messages[code] || 'No se pudo reconciliar el turno. Intenta de nuevo.';
 };
 
 // Post-Cierre Confirmation State (Arqueo Ciego)
@@ -207,6 +197,13 @@ const handlePinSuccess = async () => {
     
     await executeAction(async () => {
         if (pendingAction.value === 'open') {
+            // No se puede abrir sin verificar turnos forzados pendientes (RN-017-03):
+            // si la verificación falló, se bloquea (Regla 3: no saltar un control obligatorio).
+            if (fetchForcedSessionsError.value) {
+                showError('No se pudo verificar si hay turnos pendientes de reconciliar. Pulsa "Reintentar" antes de abrir la caja.');
+                return;
+            }
+
             // Bloqueo de apertura si hay reconciliaciones pendientes
             if (pendingForcedSessions.value.length > 0) {
                 showError('Debes reconciliar los turnos cerrados forzosamente antes de abrir una nueva caja.');
