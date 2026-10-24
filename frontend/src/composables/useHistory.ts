@@ -29,13 +29,20 @@ export interface HistorySummary {
     label: string;
 }
 
+function toLocalDateStr(d: Date): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 /**
  * Returns {start, end} date strings for a given preset.
  * For 'custom', uses externally provided dates.
  */
 function getDateRange(preset: DatePreset, customStart?: string, customEnd?: string): { start: string; end: string } {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = toLocalDateStr(now);
 
     switch (preset) {
         case 'today':
@@ -43,17 +50,18 @@ function getDateRange(preset: DatePreset, customStart?: string, customEnd?: stri
         case 'yesterday': {
             const yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1);
-            return { start: yesterday.toISOString().split('T')[0], end: yesterday.toISOString().split('T')[0] };
+            const yesterdayStr = toLocalDateStr(yesterday);
+            return { start: yesterdayStr, end: yesterdayStr };
         }
         case 'week': {
             const weekAgo = new Date(now);
             weekAgo.setDate(weekAgo.getDate() - 7);
-            return { start: weekAgo.toISOString().split('T')[0], end: todayStr };
+            return { start: toLocalDateStr(weekAgo), end: todayStr };
         }
         case 'month': {
             const monthAgo = new Date(now);
             monthAgo.setDate(monthAgo.getDate() - 30);
-            return { start: monthAgo.toISOString().split('T')[0], end: todayStr };
+            return { start: toLocalDateStr(monthAgo), end: todayStr };
         }
         case 'custom': {
             return {
@@ -295,28 +303,76 @@ export function useHistory() {
         const rows = (data || []) as any[];
         items.value = rows.map(session => {
             const isClosed = session.status === 'closed';
-            const diffNum = Number(session.difference || 0);
-            const diffText = diffNum === 0 ? 'Cuadrada' : diffNum > 0 ? `Sobrante: ${formatCurrency(Math.abs(diffNum))}` : `Faltante: ${formatCurrency(Math.abs(diffNum))}`;
+            const isForced = Boolean(session.forced_close);
+            const hasActualBalance = session.actual_balance !== null && session.actual_balance !== undefined;
+            const hasDifference = session.difference !== null && session.difference !== undefined;
+            const isPendingReconciliation =
+                isClosed &&
+                (session.reconciliation_status === 'forced_pending_reconciliation' || !hasActualBalance);
+
+            let diffText: string;
+            if (isPendingReconciliation) {
+                diffText = 'Pendiente de reconciliación';
+            } else if (!hasDifference) {
+                diffText = 'Sin arqueo';
+            } else {
+                const diffNum = Number(session.difference);
+                diffText = diffNum === 0
+                    ? 'Cuadrada'
+                    : diffNum > 0
+                        ? `Sobrante: ${formatCurrency(Math.abs(diffNum))}`
+                        : `Faltante: ${formatCurrency(Math.abs(diffNum))}`;
+            }
+
+            const title = !isClosed
+                ? '🟢 Turno Abierto'
+                : isPendingReconciliation
+                    ? '⚠️ Cierre Forzado (24h)'
+                    : isForced
+                        ? 'Turno Cerrado (Reconciliado)'
+                        : 'Turno Cerrado';
+
+            const netBalance = session.net_session_balance ?? session.expected_balance ?? session.opening_balance;
+            const hasExpectedBalance = session.expected_balance !== null && session.expected_balance !== undefined;
+
+            const amountFormatted = !isClosed
+                ? formatCurrency(netBalance)
+                : isPendingReconciliation
+                    ? (hasExpectedBalance ? `Esp: ${formatCurrency(session.expected_balance)}` : 'Pendiente arqueo')
+                    : formatCurrency(session.actual_balance);
+
+            const closedByLabel = session.closed_by_name || (isForced ? 'Sistema (24h)' : 'Sin registro');
+            const eventType = session.event_type || (isClosed ? 'CIERRE' : 'APERTURA');
+
+            const colorClass = !isClosed
+                ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400'
+                : isPendingReconciliation
+                    ? 'text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400'
+                    : 'text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-300';
+
+            const badge = !isClosed
+                ? { text: 'Abierto', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' }
+                : isPendingReconciliation
+                    ? { text: 'Sin Reconciliar', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' }
+                    : isForced
+                        ? { text: 'Forzado · Reconciliado', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300' }
+                        : { text: 'Cerrado', color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' };
 
             return {
                 id: session.id,
                 type: 'cash' as HistoryType,
-                title: isClosed ? 'Turno Cerrado' : '🟢 Turno Abierto',
+                title,
                 subtitle: isClosed
                     ? `Base: ${formatCurrency(session.opening_balance)} · Ingresos: ${formatCurrency(session.total_income)} · ${diffText}`
                     : `Base: ${formatCurrency(session.opening_balance)} · ${session.total_movements} movimientos`,
-                date: isClosed ? session.closed_at : session.opened_at,
-                amount: Number(session.opening_balance) + Number(session.total_income) - Number(session.total_expenses),
-                amountFormatted: isClosed ? formatCurrency(session.actual_balance) : formatCurrency(Number(session.opening_balance) + Number(session.total_income)),
-                user: isClosed ? `${session.opened_by_name} → ${session.closed_by_name}` : session.opened_by_name,
+                date: isClosed ? (session.closed_at || session.opened_at) : session.opened_at,
+                amount: isClosed && hasActualBalance ? Number(session.actual_balance) : Number(netBalance),
+                amountFormatted,
+                user: isClosed ? `${session.opened_by_name} → ${closedByLabel}` : session.opened_by_name,
                 icon: 'vault',
-                colorClass: isClosed
-                    ? 'text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-300'
-                    : 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400',
-                badge: isClosed
-                    ? { text: 'Cerrado', color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }
-                    : { text: 'Abierto', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' },
-                metadata: session
+                colorClass,
+                badge,
+                metadata: { ...session, event_type: eventType }
             };
         });
     };
