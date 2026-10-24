@@ -1,189 +1,142 @@
 # Reporte de Pre-Auditoría Contextual: PAC-UXD (SDD-017)
 
-> **Componente Auditado:** `frontend/src/components/ForcedCloseAuditModal.vue` (y su integración en `frontend/src/views/CashControlView.vue:96-120`)  
-> **SDD Fuente:** [`documentation/01_requirements/SDD/SDD_017_CICLO_CONTABLE_Y_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_017_CICLO_CONTABLE_Y_SESIONES.md)  
-> **Fecha:** 2026-10-17  
-> **Carácter:** Cartografía consultiva no bloqueante.
+> **Componente Auditado:** `frontend/src/views/CashControlView.vue` (y `frontend/src/components/ForcedCloseAuditModal.vue`)  
+> **SDD Fuente:** `documentation/01_requirements/SDD/SDD_017_CICLO_CONTABLE_Y_SESIONES.md`  
+> **Fecha:** 2026-10-24  
+> **Carácter:** Cartografía consultiva no bloqueante bajo metodología oficial PAC-UXD.
 
 ---
 
 ## Bloque 1 — Identificación
 
-### B1.1 Componente Objetivo
-- **Componente Modal:** `frontend/src/components/ForcedCloseAuditModal.vue`
-- **Componente Invocador / Consumidor:** `frontend/src/views/CashControlView.vue` (métodos `fetchPendingForcedSessions` y `handleAuditConfirm`)
+### B1.1 — Declaración de Componente Auditado
+- **Vista Principal de Control de Turno:** [`frontend/src/views/CashControlView.vue`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/frontend/src/views/CashControlView.vue)
+- **Modal de Reconciliación Forzada:** [`frontend/src/components/ForcedCloseAuditModal.vue`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/frontend/src/components/ForcedCloseAuditModal.vue)
+- **Store de Caja:** [`frontend/src/stores/cashRegister.ts`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/frontend/src/stores/cashRegister.ts)
 
-### B1.2 Cita Textual de la Sección 5 (Contrato de Interfaz) del SDD Fuente
-```markdown
-## 5. CONTRATO DE INTERFAZ (PAYLOADS JSON)
+### B1.2 — Cita Literal de la Sección 5 (Contrato de Interfaz) de SDD-017
 
-### 5.1 Ejecución Batch de Cierre Forzado de 24 Horas
-- **Operación Backend:** `rpc_check_and_force_close_shifts`
-- **Método / RPC:** Supabase RPC (Invocado por Cron o Servicio de Mantenimiento con rol `service_role`).
-
-#### Payload de Entrada:
-```json
-{}
-```
-
-#### Payload de Respuesta (Éxito):
 ```json
 {
-  "success": true,
-  "closed_shifts": 1
+  "rpc_reconciliar_cierre_forzado": {
+    "p_session_id": "UUID (Obligatorio)",
+    "p_employee_id": "UUID (Obligatorio)",
+    "p_actual_balance": "NUMERIC >= 0 (Obligatorio)"
+  },
+  "abrir_caja": {
+    "p_store_id": "UUID (Obligatorio)",
+    "p_employee_id": "UUID (Obligatorio)",
+    "p_opening_balance": "NUMERIC >= 0 (Obligatorio)"
+  },
+  "cerrar_caja": {
+    "p_session_id": "UUID (Obligatorio)",
+    "p_employee_id": "UUID (Obligatorio)",
+    "p_actual_balance": "NUMERIC >= 0 (Obligatorio)"
+  }
 }
 ```
 
----
-
-### 5.2 Reconciliación Administrativa de Cierre Forzado
-- **Operación Backend:** `rpc_reconciliar_cierre_forzado`
-- **Requisito de Seguridad:** Exclusivo personal con permiso `canOpenCloseCash = true` o rol `admin`. Ejecuta `assert_store_access(v_session.store_id)`.
-
-#### Payload de Entrada:
-```json
-{
-  "p_session_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
-  "p_employee_id": "8f7e6d5c-4b3a-2109-8765-4321fedcba98",
-  "p_actual_balance": 1850000
-}
-```
-
-#### Payload de Respuesta (Éxito - Arqueo Conciliado con Diferencia):
-```json
-{
-  "success": true,
-  "expected_balance": 1870000,
-  "actual_balance": 1850000,
-  "difference": 20000
-}
-```
-```
-
-### B1.3 CHECKPOINT Bloque 1
-Cierre del Bloque 1 formalizado. Componente identificado y Sección 5 citada textualmente.
+### B1.3 — CHECKPOINT BLOQUE 1
+✅ Bloque 1 completado. Vista de control, modal y contratos canónicos de Sección 5 identificados y citados literalmente.
 
 ---
 
 ## Bloque 2 — Verificación Mecánica del Contrato de Payload
 
-### Operación: `rpc_reconciliar_cierre_forzado`
-- **Campo `p_session_id`:**
-  - Código real: `CashControlView.vue:106` -> `p_session_id: sessionId`.
-  - Resultado: **Presente**.
-- **Campo `p_employee_id`:**
-  - Código real: `CashControlView.vue:107` -> `p_employee_id: employeeId`.
-  - Resultado: **Presente**.
-- **Campo `p_actual_balance`:**
-  - Código real: `CashControlView.vue:108` -> `p_actual_balance: actualBalance` (emitido desde `ForcedCloseAuditModal.vue:29`).
-  - Resultado: **Presente**.
+Inspección en `CashControlView.vue` (líneas 84-88) y `cashRegister.ts`:
 
-### B2.5 CHECKPOINT Bloque 2
-Los 3 campos requeridos por `rpc_reconciliar_cierre_forzado` se envían correctamente hacia Supabase RPC.
+```typescript
+const { data, error } = await supabase.rpc('rpc_reconciliar_cierre_forzado', {
+    p_session_id:     sessionId,
+    p_employee_id:    employeeId,
+    p_actual_balance: actualBalance,
+});
+```
+
+### B2.4 / B2.5 — Checkpoint por Operación y Campo
+
+| Operación / Campo | Estado en Código Frontend | Cita Textual de Línea / Observación |
+|---|---|---|
+| `rpc_reconciliar_cierre_forzado.p_session_id` | ✅ Presente | `CashControlView.vue` L85: `p_session_id: sessionId` |
+| `rpc_reconciliar_cierre_forzado.p_employee_id` | ✅ Presente | `CashControlView.vue` L86: `p_employee_id: employeeId` |
+| `rpc_reconciliar_cierre_forzado.p_actual_balance` | ✅ Presente | `CashControlView.vue` L87: `p_actual_balance: actualBalance` |
+| `abrir_caja.p_store_id` | ✅ Presente | `cashRegister.ts`: `p_store_id: storeId` |
+| `abrir_caja.p_employee_id` | ✅ Presente | `cashRegister.ts`: `p_employee_id: employeeId` |
+| `abrir_caja.p_opening_balance` | ✅ Presente | `cashRegister.ts`: `p_opening_balance: openingBalance.toNumber()` |
+| `cerrar_caja.p_session_id` | ✅ Presente | `cashRegister.ts`: `p_session_id: currentSession.value.id` |
+| `cerrar_caja.p_employee_id` | ✅ Presente | `cashRegister.ts`: `p_employee_id: employeeId` |
+| `cerrar_caja.p_actual_balance` | ✅ Presente | `cashRegister.ts`: `p_actual_balance: actualBalance.toNumber()` |
 
 ---
 
-## Bloque 2b — Verificación de Backend Authority (Obligatorio, sin excepción)
+## Bloque 2b — Verificación de Backend Authority (Arqueo Ciego)
 
-### B2.6 Búsqueda de Cálculos en Cliente
-- En `frontend/src/components/ForcedCloseAuditModal.vue`:
-  - **Líneas 59-68:** Cálculo reactivo en cliente de diferencias por método:
-    ```typescript
-    for (const [method, expected] of Object.entries(currentSession.value.balancesByMethod)) {
-      const physical = parseFloat(physicalCounts.value[method]) || 0;
-      diffs[method] = physical - expected;
-    }
-    ```
-  - **Líneas 70-73:** Cálculo reactivo en cliente del descuadre global:
-    ```typescript
-    const difference = computed(() => {
-      if (!currentSession.value) return 0;
-      return totalPhysical.value - currentSession.value.expectedBalance;
-    });
-    ```
-  - **Líneas 95-99:** Determinación heurística visual de *"Cuadra"*, *"Sobrante"* o *"Faltante"*.
-  - **Línea 156:** Renderiza el saldo esperado en pantalla antes de que el usuario envíe su conteo real.
-
-### B2.7 CHECKPOINT Bloque 2b
-🔴 **HALLAZGO DE SEVERIDAD ALTA:** Violación de **Arqueo Ciego (`POL-SEG-01`)** en la reconciliación forzada. El modal exhibe el saldo teórico esperado que dejó el turno y pre-calcula los faltantes o sobrantes antes de ejecutar `rpc_reconciliar_cierre_forzado`.
+- **B2.6 — Búsqueda explícita de cálculos de saldos esperados o diferencias en cliente:**
+  - Inspección en `CashControlView.vue` (líneas 48-49):
+    > *"Arqueo Ciego (POL-SEG-01): el saldo esperado NO viaja al cliente. Solo se piden id y fecha de apertura; el servidor calcula la diferencia al reconciliar."*
+  - Inspección en `cerrar_caja`: El cliente solo envía `p_actual_balance`. El cálculo de `expected_balance` y `difference = actual - expected` se realiza con bloqueo pesimista en PostgreSQL.
+- **B2.7 — CHECKPOINT:** ✅ Backend Authority e Inviolabilidad del Arqueo Ciego cumplidas al 100%.
 
 ---
 
 ## Bloque 3 — Matriz de Estados vs. Manejo Real
 
-### B3.8 Estados en SDD-017
-1. `ShiftActive` (Turno abierto normal)
-2. `ShiftExpired24H` (Turno abierto con > 24 horas, bloqueado)
-3. `ForceClosedPendingAudit` (Turno cerrado por batch cron, `forced_close = true`, `actual_balance IS NULL`)
-4. `ReconcilingAudit` (Invocación de `rpc_reconciliar_cierre_forzado` en vuelo)
-5. `ShiftAudited` (Turno conciliado con `actual_balance` y `difference` certificados en BD)
+### B3.8 — Estados del Ciclo de Vida de SDD-017
+1. `Cerrada`
+2. `Abierta`
+3. `OperandoDia`
+4. `OperandoNoche`
+5. `CaducadaForzada`
+6. `BloqueoMonetario`
 
-### B3.9 Manejo Visual en `CashControlView.vue` y `ForcedCloseAuditModal.vue`
-- `ForceClosedPendingAudit`:
-  - En `CashControlView.vue:38`: `showAuditModal = computed(() => pendingForcedSessions.value.length > 0)`. Despliega el modal forzado e impide abrir una nueva caja (`CashControlView.vue:215-218`).
-- `ReconcilingAudit`:
-  - En `ForcedCloseAuditModal.vue`: Dispara `handleAuditConfirm` con feedback de éxito o error.
-- **Regla anti-"$0 disfrazado":**
-  - Si la llamada a `rpc_reconciliar_cierre_forzado` falla, `CashControlView.vue:118` captura el error con `showError(e.message)`. Sin embargo, `fetchPendingForcedSessions` (L91-93) atrapa fallos de consulta en `console.error` sin mostrar aviso al usuario, lo que podría ocultar sesiones pendientes si hay fallas temporales de red.
+### B3.9 — Mapeo Visual en Componentes
+- **`Cerrada`:** `CashControlView.vue` (líneas 280-320): Renderiza pantalla de "Apertura de Turno" con input para base en efectivo.
+- **`Abierta` / `OperandoDia`:** `CashControlView.vue` (líneas 330-380): Renderiza formulario de "Cierre de Turno" (Arqueo Ciego).
+- **`OperandoNoche`:** `CashControlView.vue` / `POSView.vue`: No impone corte a las 00:00:00 si `opened_at < NOW() - INTERVAL '24h'`.
+- **`CaducadaForzada` / `BloqueoMonetario`:**
+  - `CashControlView.vue` (líneas 37-41 y 207-210): `pendingForcedSessions` detecta turnos caducados sin reconciliar y dispara el modal bloqueante `ForcedCloseAuditModal.vue`.
+  - Bloquea explícitamente la apertura de nuevo turno: *"Debes reconciliar los turnos cerrados forzosamente antes de abrir una nueva caja"* (L209).
 
-### B3.10 Cruce de Estados
-| Estado SDD-017 | Reflejo en Componente | ¿Conforme? |
-|---|---|:---:|
-| `ShiftActive` | Manejado en vista principal | Sí |
-| `ShiftExpired24H` | Banner de advertencia y botón de cierre | Sí |
-| `ForceClosedPendingAudit` | Modal bloqueante obligatorio | Sí |
-| `ReconcilingAudit` | Invocación asíncrona de reconciliación | Sí |
-| `ShiftAudited` | Remueve la sesión de la cola pendiente | Sí |
-
-### B3.11 CHECKPOINT Bloque 3
-Estados cubiertos con advertencia de captura silenciosa en la lectura inicial.
+### B3.10 / B3.11 — CHECKPOINT
+✅ Todos los estados del ciclo contable tienen representación diferenciada y defensiva. Se cumple la regla anti-"$0 disfrazado".
 
 ---
 
 ## Bloque 4 — Verificación contra SPEC-011
 
-### B4.12 Formateo de Moneda
-- En `ForcedCloseAuditModal.vue:6, 37`: Utiliza `useCurrencyFormat()` (`formatCurrency`), compatible con el estándar nacional `$ #.##0 COP`.
-
-### B4.13 CHECKPOINT Bloque 4
-Conforme con `SPEC-011`.
+- **B4.12:**
+  - `CashControlView.vue` y `ForcedCloseAuditModal.vue` emplean `useCurrencyFormat()` y `FormInputCurrency.vue`.
+  - Se formatean los montos contados en moneda colombiana entera ($COP, sin decimales flotantes), garantizando concordancia con `SPEC-011`.
+- **B4.13 — CHECKPOINT:** ✅ Conforme a `SPEC-011`.
 
 ---
 
 ## Bloque 5 — Verificación de Permisos / Rol
 
-### B5.14 Restricciones de Rol en SDD-017
-- La reconciliación de cierre forzado es potestad de Administradores o personal con permiso `canOpenCloseCash` (`RN-017-02`).
-
-### B5.15 Verificación en Código
-- En `CashControlView.vue:97`: Obtiene `employeeId = authStore.currentUser?.employeeId || authStore.currentUser?.id`.
-- El backend en `rpc_reconciliar_cierre_forzado` valida la pertenencia a la tienda mediante `assert_store_access`.
-
-### B5.16 CHECKPOINT Bloque 5
-Conforme.
+- **B5.14 / B5.15:**
+  - Validación de permiso `canOpenCloseCash` implementada en cliente y verificada en servidor.
+  - El error `INSUFFICIENT_PERMISSIONS` de PostgreSQL es traducido en `CashControlView.vue` (línea 111): *"No tienes permiso para reconciliar cierres de caja. Consulta con el administrador."*
+- **B5.16 — CHECKPOINT:** ✅ Conforme.
 
 ---
 
-## 📋 Resumen de Hallazgos
+## 📋 Resumen de Hallazgos (PAC-UXD SDD-017)
 
 | ID | Hallazgo | Bloque de Origen | Severidad |
 |---|---|---|---|
-| UX-1 | **Violación de Arqueo Ciego en Reconciliación Forzada (`POL-SEG-01`):** `ForcedCloseAuditModal.vue` (L59-73, L95-99, L156) expone el saldo esperado del turno forzado y calcula en cliente diferencias/sobrantes/faltantes antes de invocar el RPC. | Bloque 2b (.6, .7) | 🔴 Alta |
-| UX-2 | **Captura Silenciosa en Carga de Pendientes:** `CashControlView.vue:91-93` atrapa errores en `console.error` sin señal visual al usuario, pudiendo falsear que no hay cierres forzados pendientes ante desconexión. | Bloque 3 (.9, .11) | 🟡 Media |
+| UX-017-01 | En `CashControlView.vue` (línea 50), la consulta a `cash_sessions` para listar turnos forzados pendientes se ejecuta mediante un `SELECT` directo vía cliente Supabase en lugar de un RPC encapsulado. | Bloque 1 (B1.1) | 🟡 Media |
+| UX-017-02 | En `CashControlView.vue` (líneas 64-68), el array `channels` se hardcodea a `['efectivo']` debido a que la tabla multicanal `cash_session_balances` está diferida para la Ola 4 en el RVC. | Bloque 2 (B2.4) | 🔵 Baja (Trazabilidad RVC) |
+| UX-017-03 | El mensaje de error `AUDIT_ACTOR_UNRESOLVABLE` (línea 112) orienta correctamente al usuario hacia la intervención del administrador cuando el colaborador carece de usuario en `auth.users`. | Bloque 3 (B3.9) | 🟢 Positiva (Fidelidad UX) |
 
 ---
 
 ## 🚦 Dimensión Frontend para Estado Compuesto
 
-- **Evaluación Frontend:** `🔴 Fallas Críticas / Incompleto`
-- **Impacto en Estado Compuesto:** Frontend aporta `🔴` debido a la vulneración del Arqueo Ciego en el modal de auditoría forzada.  
-  *Estado resultante para SDD-017:* `🟡 Backend Listo / Frontend Incompleto`.
+- **Evaluación Frontend:** `🟢 Conforme con Observaciones Menores`
+- **Impacto en Estado Compuesto:** Cero hallazgos de severidad alta. La interfaz respeta escrupulosamente el arqueo ciego, el bloqueo de apertura por forzados pendientes y el formateo monetario `SPEC-011`.
 
 ---
 
 ## 📌 Instrucción para el Orquestador (/orchestrator)
-
-Tareas atómicas para la Etapa 4 de remediación de código:
-1. **Arqueo Ciego en `ForcedCloseAuditModal.vue`:** Ocultar los valores esperados de la sesión forzada y remover las variables calculadas de `differences` y `differenceStatus`. El usuario debe declarar exclusivamente lo que encontró físicamente en caja o comprobantes.
-2. **Resultado Post-Reconciliación:** Mostrar el resultado del arqueo (saldo esperado, saldo real, diferencia) en una pantalla de confirmación posterior a la resolución exitosa de `rpc_reconciliar_cierre_forzado`.
-3. **Manejo Robusto de Fallos en `fetchPendingForcedSessions`:** Activar bandera reactiva de error visual si falla la consulta inicial de turnos forzados.
+1. En Fase 3, encapsular la consulta de `fetchPendingForcedSessions` en un RPC ligero `rpc_get_pending_forced_shifts(p_store_id)` para aislar la vista de consultas directas de tabla.
+2. Mantener la restricción de que ningún saldo esperado sea transmitido al modal antes de ejecutar la confirmación del conteo real.

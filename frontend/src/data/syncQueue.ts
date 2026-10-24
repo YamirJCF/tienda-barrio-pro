@@ -389,7 +389,8 @@ async function processItem(item: QueueItem): Promise<boolean> {
             // V2 does NOT accept prices - server calculates from DB
             const p_items_v2 = item.payload.items.map((i: any) => ({
                 product_id: i.productId || i.product_id,
-                quantity: Number(i.quantity)
+                quantity: Number(i.quantity),
+                unit_price: Number(i.unitPrice || i.unit_price || i.price || 0)
             }));
 
             // ARCH-005: RPC-Based Sync (Restored)
@@ -418,7 +419,9 @@ async function processItem(item: QueueItem): Promise<boolean> {
                 p_items: p_items_v2,
                 p_idempotency_key: idempotencyKey,
                 p_local_id: localId,
-                p_is_offline_sync: true
+                p_is_offline_sync: true,
+                p_origin_session_id: item.payload.sessionId || item.payload.session_id || item.payload.originSessionId || null,
+                p_sold_by: item.payload.employeeId || item.payload.employee_id || item.payload.soldBy || null
             };
 
             const { data, error } = await supabase.rpc('rpc_procesar_venta_v3', rpcPayload);

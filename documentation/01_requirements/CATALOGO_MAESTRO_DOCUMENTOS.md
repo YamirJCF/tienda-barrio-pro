@@ -1,7 +1,7 @@
 # 📋 Catálogo Maestro de Documentos — Tienda Barrio Pro
 
-> **Versión:** 1.0  
-> **Fecha:** 2026-08-07  
+> **Versión:** 2.1  
+> **Fecha:** 2026-10-24  
 > **Propósito:** Mapa oficial y único de todos los documentos del proyecto. Sirve como hoja de ruta de implementación y registro de trazabilidad documental.  
 > **Norma:** Todo documento nuevo debe registrarse aquí antes de ser aprobado.
 
@@ -147,9 +147,9 @@
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
 | FRD-012 | [FRD_012_SINCRONIZACION_OFFLINE.md](FRD/FRD_012_SINCRONIZACION_OFFLINE.md) | FRD | 🟢 | ✅ SDD_012 | Documento principal |
-| FRD-012-01 | [FRD_012_01_LIMITES_SISTEMA_OFFLINE.md](FRD/FRD_012_01_LIMITES_SISTEMA_OFFLINE.md) | FRD | 🟢 | 🔴 SIN SDD | **Pendiente Fase 3-P2:** Ampliar SDD_012 con §8 Límites |
-| FRD-012-R | [FRD_012_REMEDIACION_OFFLINE.md](FRD/FRD_012_REMEDIACION_OFFLINE.md) | FRD | 🟢 | 🔴 SIN SDD | **Pendiente Fase 3-P2:** Ampliar SDD_012 con §9 Remediación |
-| SDD-012 | [SDD_012_SINCRONIZACION_OFFLINE.md](SDD/SDD_012_SINCRONIZACION_OFFLINE.md) | SDD | 🟡 Validado | — | Incompleto: falta §8 Límites y §9 Remediación |
+| FRD-012-01 | [FRD_012_01_LIMITES_SISTEMA_OFFLINE.md](FRD/FRD_012_01_LIMITES_SISTEMA_OFFLINE.md) | FRD | 🟢 | ✅ SDD_012 | Formalizado v1.0 (RN-OFF-01 a RN-OFF-09). Integrado en SDD_012 v3.0.0. |
+| FRD-012-R | [FRD_012_REMEDIACION_OFFLINE.md](FRD/FRD_012_REMEDIACION_OFFLINE.md) | FRD | 🟢 | ✅ SDD_012 | Integrado en SDD_012 v3.0.0 (§9 Ciclo de Remediación). |
+| SDD-012 | [SDD_012_SINCRONIZACION_OFFLINE.md](SDD/SDD_012_SINCRONIZACION_OFFLINE.md) | SDD | 🟢 Validado | — | v3.0.0. Re-especificado desde cero bajo PAC-SDD v2.0 (Bloques 0-7) y PAC-UXD. Absorbe FRD-012, FRD-012-01 y FRD-012-R. Deuda D-6 documentada. |
 
 ---
 
@@ -157,8 +157,8 @@
 
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
-| FRD-013 | [FRD_013_GESTION_SESIONES.md](FRD/FRD_013_GESTION_SESIONES.md) | FRD | 🟢 | ✅ SDD_013 | — |
-| SDD-013 | [SDD_013_GESTION_SESIONES.md](SDD/SDD_013_GESTION_SESIONES.md) | SDD | 🟡 Validado | — | — |
+| FRD-013 | [FRD_013_GESTION_SESIONES.md](FRD/FRD_013_GESTION_SESIONES.md) | FRD | 🟢 | ✅ SDD_013 | v2.0 (RN-013-01 a RN-013-08). Formaliza concurrencia y pases diarios. |
+| SDD-013 | [SDD_013_GESTION_SESIONES.md](SDD/SDD_013_GESTION_SESIONES.md) | SDD | 🟢 Validado | — | v3.0.0. Re-especificado desde cero bajo PAC-SDD v2.0 (Bloques 0-7) y PAC-UXD. Concurrencia 6 terminales, Pase Diario D-03 sin expiración por caja, fallback offline. |
 
 ---
 
@@ -184,8 +184,8 @@
 
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
-| FRD-017 | [FRD_017_CICLO_CONTABLE_Y_SESIONES.md](FRD/FRD_017_CICLO_CONTABLE_Y_SESIONES.md) | FRD | 🟢 | ✅ SDD_017 | — |
-| SDD-017 | [SDD_017_CICLO_CONTABLE_Y_SESIONES.md](SDD/SDD_017_CICLO_CONTABLE_Y_SESIONES.md) | SDD | 🟡 Validado | — | — |
+| FRD-017 | [FRD_017_CICLO_CONTABLE_Y_SESIONES.md](FRD/FRD_017_CICLO_CONTABLE_Y_SESIONES.md) | FRD | 🟢 | ✅ SDD_017 | v4.0 (RN-017-01 a RN-017-05). Turnos 24h, reconciliación ciega, rpc_reconciliar_cierre_forzado. |
+| SDD-017 | [SDD_017_CICLO_CONTABLE_Y_SESIONES.md](SDD/SDD_017_CICLO_CONTABLE_Y_SESIONES.md) | SDD | 🟢 Validado | — | v3.0.0. Re-especificado desde cero bajo PAC-SDD v2.0 (Bloques 0-7) y PAC-UXD. Ciclo 24h, reconciliación asíncrona ciega, Deuda D-7 documentada. |
 
 ---
 
@@ -284,6 +284,9 @@
 | DSD de Migración Creado | 1 (`DSD_007_01_v3_MIGRATION.md`) | 🟢 Creado |
 | SPEC Técnica Creada | 1 (`SPEC_001_AUTORIDAD_DEL_SERVIDOR.md`) | 🟢 Creado |
 | FRDs Deprecated | 2 (`FRD_004_1`, `FRD_015_COSTO_VENTAS` sustituido por `FRD_016`) | 🚫 Marcados |
+| SDDs Derogados y Archivados | 3 (`SDD_012_DEROGADO`, `SDD_013_DEROGADO`, `SDD_017_DEROGADO`) | 📦 En `archive/` |
+| Informes PAC-UXD Verificados | 3 (`PAC_UXD_SDD_012`, `PAC_UXD_SDD_013`, `PAC_UXD_SDD_017`) | 🟢 En `VERIFICACION/` |
+| Informes Técnicos Comparativos | 1 (`auditoria_comparativa_sdd_fase2.md`) | 🟢 En `TECHNICAL_REPORTS/` |
 
 ---
 
@@ -293,4 +296,25 @@
 |---------|-------|---------|
 | 1.0 | 2026-08-07 | Creación inicial — 76 documentos catalogados. Decisiones D-01 a D-04 incorporadas. |
 | 2.0 | 2026-08-07 | Consolidación total de Fases 1, 2A, 2B, 2C y 3. Cobertura 100% SDD/SPEC completada. |
+| 2.1 | 2026-10-24 | Re-especificación v3.0.0 de SDD_012, SDD_013 y SDD_017 bajo PAC-SDD y PAC-UXD. Registro de documentos derogados en `archive/` y reportes en `VERIFICACION/` y `TECHNICAL_REPORTS/`. |
+
+---
+
+## Documentos Archivados y Verificaciones (Trazabilidad)
+
+### SDDs Derogados y Archivados (`archive/`)
+
+| Documento Anterior | Reemplazado por | Fecha Derogación | Motivo / Decisión |
+|--------------------|-----------------|------------------|-------------------|
+| `SDD_012_SINCRONIZACION_OFFLINE_DEROGADO.md` | `SDD_012_SINCRONIZACION_OFFLINE.md` (v3.0.0) | 2026-10-24 | Re-especificación completa desde cero bajo PAC-SDD v2.0 (Bloques 0-7). Límites de cola e idempotencia. |
+| `SDD_013_GESTION_SESIONES_DEROGADO.md` | `SDD_013_GESTION_SESIONES.md` (v3.0.0) | 2026-10-24 | Re-especificación completa desde cero bajo PAC-SDD v2.0. Concurrencia 6 terminales y Pases Diarios D-03. |
+| `SDD_017_CICLO_CONTABLE_Y_SESIONES_DEROGADO.md` | `SDD_017_CICLO_CONTABLE_Y_SESIONES.md` (v3.0.0) | 2026-10-24 | Re-especificación completa desde cero bajo PAC-SDD v2.0. Ciclo 24h, reconciliación asíncrona ciega. |
+
+### Informes de Verificación UI (`VERIFICACION/`)
+
+| Informe | Componentes Auditados | SDD Asociado | Veredicto |
+|---------|-----------------------|--------------|-----------|
+| `PAC_UXD_SDD_012.md` | `SyncIndicator.vue`, `syncQueue.ts` | SDD_012 v3.0.0 | 🟢 100% Alineado con Deuda D-6 |
+| `PAC_UXD_SDD_013.md` | `LoginView.vue`, `GatekeeperPending.vue` | SDD_013 v3.0.0 | 🟢 100% Alineado (D-03 / Multi-device) |
+| `PAC_UXD_SDD_017.md` | `CashControlView.vue`, `ForcedCloseAuditModal.vue` | SDD_017 v3.0.0 | 🟢 100% Alineado con Deuda D-7 |
 

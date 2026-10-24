@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - 2026-10-24
+
+### Added
+- **Integridad de la Tríada (Offline, Sesiones y Ciclo Contable de Caja):**
+  - **Normativa & Políticas (`FRD-012-01`, `FRD-013`, `FRD-017`):**
+    - Especificación formal de límites offline: cola máxima de 50 transacciones (`RN-OFF-01`), congelación de precios históricos (`RN-OFF-04`), restricción de fiados y clientes nuevos offline (`RN-OFF-02`), e imputación de venta a sesión activa al momento del registro (`RN-OFF-07`).
+    - Ciclo de vida de pase diario y concurrencia: validez hasta las 23:59:59 con extensión para turnos nocturnos de caja activa que cruzan medianoche (`RN-013-01`), concurrencia máxima de 6 terminales por tienda (`RN-013-02`), y reactividad del estado de caja en presencia (`RN-013-04`).
+    - Ciclo contable de caja: límite de turno de 24 horas continuas (`RN-017-01`), cierre forzado automático con compuerta de reconciliación ciega obligatoria que bloquea apertura de nuevos turnos (`RN-017-02`, `RN-017-03`), y saneamiento de deudas contables `D-1`, `D-2`, `D-6` y `D-7`.
+  - **Especificaciones de Diseño & Auditorías PAC (v3.0.0):**
+    - Redacción desde cero bajo PAC-SDD v2.0 de `SDD_012_SINCRONIZACION_OFFLINE.md`, `SDD_013_GESTION_SESIONES.md` y `SDD_017_CICLO_CONTABLE_Y_SESIONES.md`.
+    - Archivo y derogación formal de versiones obsoletas en `documentation/01_requirements/archive/`.
+    - Reportes de auditoría de interfaz `PAC_UXD_SDD_012.md`, `PAC_UXD_SDD_013.md`, `PAC_UXD_SDD_017.md` y reporte técnico consolidado `auditoria_comparativa_sdd_fase2.md`.
+    - Sincronización del Catálogo Maestro (v2.1), Mapa de Lógica Global (v3.2) y Registro Vivo de Contratos (RVC).
+  - **Base de Datos & Seguridad (Supabase Migration `20261024170000`):**
+    - Eliminación de restricción foránea `fk_audit_user` en `audit_logs` permitiendo trazabilidad de auditoría para cajeros anónimos y empleados (Deuda D-1).
+    - Inclusión de columna indexada `actor_id UUID REFERENCES employees(id)` en `cash_movements` (Deuda D-2).
+    - Ajuste en `get_current_store_id()` y `get_employee_id_from_session()` para admitir pases del día anterior en turnos nocturnos continuos menores a 24 horas (`RN-017-01`).
+    - Refuerzo en `abrir_caja` para abortar con código `RECONCILIATION_REQUIRED` ante turnos forzados no reconciliados y aislamiento de seguridad `assert_store_access` (Deuda D-7).
+    - Saneamiento de `rpc_reconciliar_cierre_forzado` desacoplándolo de cuentas `auth.users`.
+    - Extensión de firma en `rpc_procesar_venta_v3` (10 parámetros) para registrar `origin_session_id` y `sold_by`, permitiendo imputación contable a sesión cerrada con actualización de saldo esperado y registro de auditoría `LATE_SYNC_UPDATE` (Deuda D-6).
+  - **Frontend & Capa de Sincronización (Vue 3 / Pinia / TypeScript):**
+    - `syncQueue.ts`: preservación del precio unitario histórico en el payload sincronizado y envío de trazabilidad de sesión y empleado.
+    - `presence.ts`: vinculación reactiva al estado del `cashRegisterStore` para reflejar con precisión si la caja se encuentra abierta.
+    - `LoginView.vue`: precarga automática del alias recordado para solicitud de pase diario con 1 toque tras expirar a medianoche.
+    - Regeneración íntegra de tipos de base de datos (`database.types.ts`).
+    - Cobertura de pruebas unitarias (`triad_integrity.spec.ts`) con 100% de tests exitosos (14 suites / 79 tests).
+
 ## [1.6.0] - 2026-10-17
 
 ### Added

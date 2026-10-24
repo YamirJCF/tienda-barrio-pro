@@ -318,6 +318,7 @@ export type Database = {
       }
       cash_movements: {
         Row: {
+          actor_id: string | null
           amount: number
           category: string | null
           created_at: string
@@ -330,6 +331,7 @@ export type Database = {
           voucher_ref: string | null
         }
         Insert: {
+          actor_id?: string | null
           amount: number
           category?: string | null
           created_at?: string
@@ -342,6 +344,7 @@ export type Database = {
           voucher_ref?: string | null
         }
         Update: {
+          actor_id?: string | null
           amount?: number
           category?: string | null
           created_at?: string
@@ -354,6 +357,13 @@ export type Database = {
           voucher_ref?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cash_movements_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cash_movements_sale_id_fkey"
             columns: ["sale_id"]
@@ -1699,7 +1709,9 @@ export type Database = {
           p_is_offline_sync?: boolean
           p_items: Json
           p_local_id?: string
+          p_origin_session_id?: string
           p_payment_method: string
+          p_sold_by?: string
           p_store_id: string
         }
         Returns: Json

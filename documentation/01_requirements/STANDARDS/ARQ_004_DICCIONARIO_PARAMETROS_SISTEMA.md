@@ -1,7 +1,7 @@
 # 📐 Estándar ARQ-004: Diccionario de Parámetros del Sistema
 
-**Versión:** 1.0  
-**Fecha:** 2026-07-31  
+**Versión:** 1.1  
+**Fecha:** 2026-10-24  
 **Autor:** Arquitecto de Producto  
 **Estado:** ✅ Activo  
 **Documento Padre:** `ARQ_002_POLITICAS_GLOBALES_NEGOCIO.md`
@@ -35,14 +35,14 @@ Los valores numéricos (límites, porcentajes, umbrales) tienden a quedar enterr
 
 | Código | Nombre | Valor Actual | Unidad | Política Origen | FRD que lo Consume | Rango Válido |
 |--------|--------|-------------|--------|-----------------|-------------------|--------------|
-| `P_MAX_HORAS_TURNO` | Vida máxima de un turno de caja | 24 | Horas | POL-SEG-02 | FRD-027-02 | 1 - 48 |
+| `P_MAX_HORAS_TURNO` | Vida máxima de un turno de caja | 24 | Horas | POL-SEG-02 | FRD-027-02, FRD-012-01, FRD-013, FRD-017 | 1 - 48 |
 | `P_REDONDEO_MULTIPLO` | Múltiplo de redondeo para subtotales | 50 | Pesos (COP) | POL-FIN-05 | FRD-007-01 | 1 - 1000 |
 | `P_MAX_ITEMS_CARRITO` | Límite de productos por transacción | 50 | Unidades | POL-FIN-05 | FRD-007-01 | 1 - 500 |
 | `P_TICKET_PREFIX` | Prefijo alfanumérico para el número de ticket | TK- | Texto | POL-AUD-02 | FRD-007-02 | Máximo 5 caracteres |
 | `P_MIN_PLU_LENGTH` | Longitud mínima del Código de Producto | 1 | Caracteres | POL-LOG-01 | FRD-006-03 | 1 - 3 |
 | `P_MAX_PLU_LENGTH` | Longitud máxima del Código de Producto | 6 | Caracteres | POL-LOG-01 | FRD-006-03 | 4 - 8 |
 | `P_AUTO_PLU_SEED` | Semilla para autogenerar Códigos de Producto | 1000 | Número | POL-LOG-01 | FRD-006-03 | Mayor a 0 |
-| `P_MAX_EMPLOYEES_PER_STORE` | Límite de empleados activos por cuenta de administrador | 5 | Empleados | POL-SEG-03 | FRD-003 | 1 - 20 |
+| `P_MAX_EMPLOYEES_PER_STORE` | Límite de empleados activos por cuenta de administrador | 5 | Empleados | POL-SEG-03 | FRD-003, FRD-013, FRD-017 | 1 - 20 |
 | `P_ALLOWED_PAYMENT_CHANNELS` | Canales de pago permitidos e inmutables | `['CASH', 'NEQUI', 'BRE_KEY']` | Arreglo de Strings | POL-FIN-02 | FRD-004, FRD-019 | N/A |
 | `P_MAX_OFFLINE_QUEUE_SIZE` | Límite máximo de transacciones pendientes en modo offline antes de bloquear nuevas operaciones | 50 | Transacciones | POL-LOG-02 | FRD-012-01 | 10 - 100 |
 | `P_MAX_ACCESS_ATTEMPTS` | Máximo de reintentos de alerta de acceso (pase diario) | 3 | Intentos | POL-SEG-03 | FRD-001 | 1 - 10 |
@@ -69,8 +69,9 @@ Los valores numéricos (límites, porcentajes, umbrales) tienden a quedar enterr
 | Versión | Fecha | Autor | Cambio |
 |---------|-------|-------|--------|
 | 1.0 | 2026-07-31 | Arquitecto de Producto | Creación inicial. Extraída desde la Sección III de ARQ-002. Agregados Rango Válido y Protocolo de Actualización. |
+| 1.1 | 2026-10-24 | Arquitecto de Producto | Sincronización de consumidores de `P_MAX_HORAS_TURNO` y `P_MAX_EMPLOYEES_PER_STORE` con FRD-012-01, FRD-013 y FRD-017. |
 
 ---
 
 **Firmado:** Arquitecto de Producto  
-**Fecha:** 2026-07-31
+**Fecha:** 2026-10-24

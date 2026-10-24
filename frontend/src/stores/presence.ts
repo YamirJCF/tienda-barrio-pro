@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { useAuthStore } from './auth';
+import { useCashRegisterStore } from './cashRegister';
 import { supabase } from '../lib/supabase';
 
 export type PresenceStatus = 'online' | 'paused' | 'offline' | 'ghost';
@@ -84,7 +85,13 @@ export const usePresenceStore = defineStore('presence', () => {
             storeId: authStore.currentUser.storeId,
             lastSeen: new Date().toISOString(),
             status: status,
-            isRegisterOpen: true, // Idealmente esto vendría del cashRegisterStore
+            isRegisterOpen: (() => {
+                try {
+                    return !!useCashRegisterStore().isOpen;
+                } catch {
+                    return false;
+                }
+            })(), // RN-013-04: Excluye de alerta GHOST si la caja está cerrada
         };
 
         await channel.track(session);

@@ -24,7 +24,7 @@ const {
   recordSuccess,
 } = useRateLimiter();
 
-const username = ref('');
+const username = ref(authStore.currentUser?.username || localStorage.getItem('tienda_last_username') || '');
 const password = ref('');
 const showPassword = ref(false);
 const errorMessage = ref('');
@@ -78,6 +78,7 @@ const handleContinue = async () => {
         }
         
         employeeContext.value = result.data;
+        localStorage.setItem('tienda_last_username', username.value.trim());
         // Proceed
         currentStep.value = 'credential';
     } catch (e: any) {

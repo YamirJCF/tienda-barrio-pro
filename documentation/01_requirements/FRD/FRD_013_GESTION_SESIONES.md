@@ -1,222 +1,135 @@
 # FRD-013: Gestión de Sesiones
 
 > **Módulo:** Autenticación / Sesiones  
-> **Versión:** 1.0  
-> **Fecha:** 2026-01-28  
-> **Estado:** Borrador
+> **Versión:** 2.0  
+> **Fecha:** 2026-10-24  
+> **Estado:** Borrador Formalizado  
+> **Políticas Rectoras:** `POL-SEG-02`, `POL-SEG-03`, `POL-LOG-01`, `POL-AUD-02`
 
 ---
 
 ## Descripción
 
-Este documento define las reglas para el ciclo de vida de las sesiones de usuario en el sistema: inicio, duración, cierre voluntario, y límites de concurrencia. Complementa FRD_001 (Pase Diario) y FRD_002 (Registro Admin).
+Este documento define las reglas para el ciclo de vida de las sesiones de usuario en el sistema: inicio, relevo de jornada sin logout manual, límites de concurrencia y desacople respecto al estado de la caja de la tienda. Complementa a `FRD-001` (Seguridad Diaria y Pase Diario), `FRD-002` (Registro Admin), `FRD-003` (Gestión de Empleados) y `FRD-017` (Ciclo Contable y Sesiones).
 
-**Principio rector:** Las sesiones son indefinidas pero controladas por el mecanismo de Pase Diario para empleados.
+**Principio rector:** Las sesiones de los usuarios son persistentes en sus dispositivos para evitar fricción operativa, pero el acceso a las funciones del negocio está gobernado por la validez del Pase Diario (en colaboradores) y el estado del turno contable de caja (para operaciones monetarias), garantizando que las tareas logísticas no monetarias operen de forma autónoma.
 
 ---
 
-## Contexto
+## Contexto Operativo y Separación de Poderes
 
-| Rol | Mecanismo de Control |
-|-----|---------------------|
-| **Admin** | Credenciales (email + contraseña) |
-| **Empleado** | Credenciales (alias + PIN) + Pase Diario obligatorio |
+| Rol | Identidad y Credenciales | Autorización de Acceso al Sistema | Autorización de Operaciones Monetarias |
+|:---|:---|:---|:---|
+| **Administrador** | Cuenta maestra (Correo + Contraseña) | Sesión de cuenta válida | Requiere turno de caja abierto (< `P_MAX_HORAS_TURNO`) |
+| **Colaborador** | Identidad de empleado (Alias + PIN) | Pase Diario aprobado vigente (para el día o turno nocturno activo) | Requiere turno de caja abierto (< `P_MAX_HORAS_TURNO`) + permiso específico |
 
 ---
 
 ## Reglas de Negocio
 
-### RN-013-01: Duración de Sesión
+### RN-013-01: Duración de Sesión y Relevo Automático de Jornada
+El sistema asume que en el entorno real de una tienda de barrio los colaboradores y el Administrador no realizan un cierre de sesión manual al culminar su turno de trabajo diario.
+- La identidad persistida en el dispositivo permanece asociada al usuario sin cerrarse por el simple paso del tiempo.
+- Al abrir la aplicación en un nuevo día calendario, el sistema DEBE evaluar de inmediato el estado del acceso:
+  - **Para el Administrador:** Si la sesión maestra ha expirado, el sistema DEBE redirigir limpiamente a la pantalla de ingreso.
+  - **Para el Colaborador:** Si el Pase Diario pertenecía al día calendario anterior y la tienda NO cuenta con un turno nocturno abierto, el sistema DEBE transicionar automáticamente la pantalla a la solicitud del nuevo Pase Diario del día, teniendo PROHIBIDO permitir el acceso a módulos operativos o exhibir datos de negocio obsoletos en caché.
+- Una sesión solo se termina de forma definitiva cuando:
+  1. El usuario ejecuta un cierre de sesión voluntario explícito.
+  2. El Administrador desactiva la cuenta del colaborador (`FRD-003`).
+  3. El Administrador revoca remotamente el dispositivo (`FRD-015`).
 
-El sistema NO implementa expiración automática de sesiones por tiempo. Una sesión permanece activa hasta que:
-1. El usuario cierra sesión voluntariamente
-2. El Admin desactiva la cuenta del empleado (ver FRD_003)
-3. Se cierra la caja del turno (para empleados, ver FRD_001)
+### RN-013-02: Límite de Sesiones Concurrentes por Tienda
+El sistema permite un máximo de hasta `P_MAX_EMPLOYEES_PER_STORE` colaboradores y 1 Administrador con sesiones activas simultáneas por tienda (`POL-SEG-03`):
+- 1 sesión para el Administrador / Propietario.
+- Hasta `P_MAX_EMPLOYEES_PER_STORE` sesiones independientes para colaboradores.
 
-### RN-013-02: Límite de Sesiones Concurrentes
+Si se intenta iniciar una sesión que supere la capacidad máxima:
+1. El sistema DEBE rechazar el intento de acceso.
+2. El sistema DEBE informar: "Límite de dispositivos alcanzado. Cierre sesión en otro dispositivo para continuar."
 
-El sistema permite un máximo de **6 sesiones activas simultáneas** por tienda:
-1. 1 sesión de Admin (dueño/manager)
-2. 5 sesiones de Empleados
+### RN-013-03: Comportamiento del Cierre de Sesión Voluntario
+Cuando un usuario decide cerrar sesión voluntariamente:
 
-Si se intenta abrir una 7ma sesión:
-1. El sistema DEBE rechazar el nuevo intento de login
-2. El sistema DEBE mostrar: "Límite de dispositivos alcanzado. Cierre sesión en otro dispositivo para continuar."
+| Acción | Administrador | Colaborador |
+|:---|:---:|:---:|
+| Limpiar credenciales de autenticación local | ✅ SÍ | ✅ SÍ |
+| Redirigir a pantalla de ingreso | ✅ SÍ | ✅ SÍ |
+| Preservar inventario y catálogo en caché de lectura | ✅ SÍ | ✅ SÍ |
+| Preservar lista de clientes en caché de lectura | ✅ SÍ | ✅ SÍ |
+| Limpiar carrito de venta en curso | ✅ SÍ | ✅ SÍ |
+| Invalidar Pase Diario actual | N/A | ✅ SÍ |
+| **Preservar colas de sincronización offline pendientes** | ✅ SÍ | ✅ SÍ |
 
-### RN-013-03: Comportamiento de Cierre de Sesión (Logout)
+> **Gobernanza de Almacenamiento:** Bajo ninguna circunstancia el cierre de sesión voluntario puede destruir las colas de sincronización offline (`sync_queue` / DLQ), protegiendo la *POL-AUD-01 (Inmutabilidad Histórica)* y `FRD-028`.
 
-Cuando un usuario cierra sesión voluntariamente:
+### RN-013-04: Continuidad Operativa e Inmunidad ante Inactividad (Sin Alertas Falsas)
+El sistema NO cierra sesiones por inactividad. En una tienda física, los dispositivos pueden permanecer con la pantalla apagada o sin interacción durante periodos prolongados mientras el personal realiza tareas físicas de inventario, recepción de mercancía o atención directa en mostrador.
+- El sistema TIENE PROHIBIDO clasificar como abandono o alerta de seguridad (`GHOST`) a un colaborador cuya pantalla se apague o deje de enviar señales periódicas durante la jornada mientras realiza labores de inventario o cuando la caja esté cerrada.
+- La ausencia de interacción en labores no monetarias jamás interrumpirá la sesión del colaborador.
 
-| Acción | Admin | Empleado |
-|--------|-------|----------|
-| Limpiar credenciales | ✅ SÍ | ✅ SÍ |
-| Redirigir a pantalla de login | ✅ SÍ | ✅ SÍ |
-| Preservar inventario en caché | ✅ SÍ | ✅ SÍ |
-| Preservar lista de clientes en caché | ✅ SÍ | ✅ SÍ |
-| Limpiar carrito pendiente | ✅ SÍ | ✅ SÍ |
-| Invalidar Pase Diario | N/A | ✅ SÍ |
+### RN-013-05: Cierre Forzado por Desactivación de Cuenta
+Cuando el Administrador desactiva a un colaborador (`FRD-003`):
+1. El acceso del colaborador DEBE revocarse en tiempo real.
+2. Toda petición posterior del dispositivo DEBE ser rechazada por el servidor central.
+3. El dispositivo del colaborador DEBE ser redirigido a la pantalla de ingreso con el mensaje: "Tu cuenta ha sido desactivada. Contacta al administrador."
 
-> **Justificación:** Preservar datos en caché acelera el próximo inicio de sesión al evitar descargas completas. El carrito se limpia por seguridad (evitar que otro usuario complete una venta ajena).
+### RN-013-06: Desacople Absoluto entre Cierre de Caja y Pase Diario
+Alineado estrictamente con `FRD-001` (Reglas 3, 4 y 13) y la *POL-LOG-01 (Independencia Logística-Financiera)*:
+- El cierre ordinario o forzado de la caja de la tienda **TIENE TERMINANTEMENTE PROHIBIDO invalidar los Pases Diarios** de los colaboradores.
+- El cierre de caja bloquea de forma exclusiva las operaciones monetarias (ventas POS, egresos, gastos en efectivo, cobro de abonos y anulaciones en efectivo) para todos los roles, incluido el Administrador.
+- Los colaboradores con Pase Diario vigente DEBEN conservar pleno acceso a sus funciones no monetarias autorizadas (consulta y toma física de inventario, registro de proveedores, clientes y reportes analíticos).
 
-### RN-013-04: Sin Timeout por Inactividad
+### RN-013-07: Continuidad de Sesión y Pase en Cruce de Medianoche
+Si la tienda mantiene un turno de caja abierto durante la noche (`FRD-017` `RN-017-01`):
+- Los Pases Diarios aprobados en el día calendario anterior conservan plena validez operativa después de las `00:00` horas mientras el turno de caja permanezca abierto y no haya superado `P_MAX_HORAS_TURNO`.
+- El sistema NO PUEDE interrumpir el trabajo de los colaboradores ni forzarlos a solicitar un nuevo pase en medio de una jornada nocturna activa.
 
-El sistema NO cierra sesiones por inactividad del usuario. La sesión permanece activa aunque el usuario no interactúe con la aplicación durante horas.
-
-> **Justificación:** En un entorno de tienda, el dispositivo puede estar inactivo mientras el tendero atiende clientes físicamente. Forzar re-login sería contraproducente.
-
-### RN-013-05: Cierre Forzado por Desactivación
-
-Cuando el Admin desactiva un empleado (FRD_003):
-1. La sesión activa del empleado DEBE cerrarse inmediatamente
-2. El dispositivo del empleado DEBE redirigirse a la pantalla de login
-3. El sistema DEBE mostrar: "Tu cuenta ha sido desactivada. Contacta al administrador."
-
-### RN-013-06: Cierre por Cierre de Caja
-
-Cuando se cierra la caja del turno:
-
-1. Todos los Pases Diarios activos de empleados se invalidan
-2. El usuario que ejecuta el cierre (Admin o Empleado con permiso) mantiene su sesión activa hasta que decida cerrarla voluntariamente
-3. Los empleados SIN permiso de caja DEBEN ver su sesión bloqueada inmediatamente
-4. Al día siguiente, TODOS los empleados DEBEN solicitar un nuevo Pase Diario
-
-| Quién cierra | Su sesión | Otros empleados |
-|--------------|-----------|-----------------|
-| Admin | Permanece activa | Bloqueados |
-| Empleado con permiso de caja | Permanece activa | Bloqueados |
-
-> **Nota sobre permisos:** Los permisos se evalúan en tiempo real en cada operación. Si un empleado cerró la caja hoy pero mañana le retiran el permiso de caja, al día siguiente DEBE solicitar Pase Diario como cualquier otro empleado y ya NO podrá ejecutar operaciones de caja.
-
-### RN-013-07: Liberación Manual de Sesión por el Admin
-
-El Administrador DEBE poder cerrar remotamente la sesión activa de un empleado específico para liberar un slot de sesión, sin necesidad de desactivar al empleado (FRD-003) ni cerrar la caja (FRD-027).
-
-- La operación de cierre remoto se ejecuta desde la sección de control de dispositivos descrita en FRD-015 (revocación de dispositivo conectado).
-- Al revocar un dispositivo conectado, el sistema DEBE cerrar la sesión asociada, liberar el slot de concurrencia (RN-013-02) e invalidar el Pase Diario del empleado afectado.
-- El empleado afectado DEBE ver el mensaje: "Tu sesión fue cerrada por el administrador" y ser redirigido a la pantalla de login.
-- El empleado puede solicitar un nuevo Pase Diario para volver a ingresar.
+### RN-013-08: Revocación Remota de Dispositivo por el Administrador
+El Administrador DEBE poder revocar remotamente el dispositivo de un colaborador específico desde el panel de control (`FRD-015`):
+- Al revocar el dispositivo, el servidor cancela el acceso de ese dispositivo, libera el cupo de concurrencia e invalida el Pase Diario correspondiente.
+- El colaborador afectado DEBE recibir el aviso: "Tu sesión fue cerrada por el administrador" y ser conducido a la pantalla de ingreso.
 
 ---
 
 ## Casos de Uso
 
-### Caso A: Cierre de Sesión Voluntario (Empleado)
-
-- **Actor:** Empleado
-- **Precondición:** Sesión activa con Pase Diario válido
+**Caso A: Inicio de Jornada al Día Siguiente sin Logout Previo**
+- **Actor:** Colaborador.
+- **Precondición:** El colaborador operó ayer con pase aprobado, se fue a su casa sin cerrar sesión y la caja del día anterior ya fue cerrada por el Administrador.
 - **Flujo Principal:**
-    1. Empleado selecciona "Cerrar Sesión" en el menú
-    2. Sistema muestra confirmación: "¿Cerrar sesión?"
-    3. Empleado confirma
-    4. Sistema limpia credenciales locales
-    5. Sistema invalida el Pase Diario actual
-    6. Sistema redirige a pantalla de login
-    7. Los datos de inventario y clientes permanecen en caché
-- **Postcondición:** Usuario desautenticado, caché de datos intacta
+  1. El colaborador abre la aplicación a las 08:00 AM.
+  2. El sistema detecta que el pase almacenado pertenece al día anterior y que no existe un turno nocturno abierto.
+  3. El sistema no permite el ingreso directo al Dashboard con datos en caché, sino que redirige automáticamente a la pantalla de solicitud de Pase Diario del día.
+  4. El colaborador solicita su pase diario de hoy con un solo toque.
+  5. El Administrador aprueba la solicitud y el colaborador ingresa a operar.
+- **Postcondición:** Cero sesiones fantasma; seguridad de acceso diario preservada sin fricción.
 
-### Caso B: Cierre de Sesión Voluntario (Admin)
-
-- **Actor:** Admin
-- **Precondición:** Sesión activa
+**Caso B: Realización de Inventario Físico con Caja Cerrada**
+- **Actor:** Colaborador con permiso de inventario.
+- **Precondición:** El turno de caja fue cerrado a las 07:00 PM. El colaborador tiene pase diario aprobado de hoy.
 - **Flujo Principal:**
-    1. Admin selecciona "Cerrar Sesión" en el menú
-    2. Sistema muestra confirmación: "¿Cerrar sesión?"
-    3. Admin confirma
-    4. Sistema limpia credenciales locales
-    5. Sistema redirige a pantalla de login
-    6. Los datos de inventario y clientes permanecen en caché
-- **Postcondición:** Admin desautenticado, caché de datos intacta
+  1. El colaborador ingresa al módulo de Inventario para realizar el conteo físico de estantes.
+  2. El sistema permite el acceso al catálogo y al registro de ajustes de conteo.
+  3. Durante el conteo, el colaborador apaga la pantalla del celular por 20 minutos mientras cuenta cajas en bodega.
+  4. Al encender la pantalla, la sesión sigue activa y sin alertas de abandono o bloqueo.
+- **Postcondición:** Autonomía logística garantizada sin dependencia del estado de la caja ni falsos positivos de seguridad.
 
-### Caso C: Límite de Sesiones Alcanzado
-
-- **Actor:** Empleado o Admin
-- **Precondición:** Ya existen 6 sesiones activas en la tienda
+**Caso C: Turno Nocturno que Cruza las Doce de la Noche**
+- **Actor:** Colaborador y Administrador.
+- **Precondición:** Caja abierta a las 09:00 PM con turno activo.
 - **Flujo Principal:**
-    1. Usuario intenta hacer login
-    2. Sistema valida credenciales (correctas)
-    3. Sistema detecta que hay 6 sesiones activas
-    4. Sistema rechaza el login
-    5. Sistema muestra: "Límite de dispositivos alcanzado"
-    6. Usuario debe cerrar sesión en otro dispositivo primero
-- **Postcondición:** Login rechazado, usuario no autenticado
-
-### Caso D: Sesión Interrumpida por Desactivación
-
-- **Actor:** Empleado (afectado) + Admin (ejecutor)
-- **Precondición:** Empleado con sesión activa, Admin en panel de gestión
-- **Flujo Principal:**
-    1. Admin desactiva al empleado desde panel de gestión
-    2. Sistema marca empleado como inactivo
-    3. Sistema detecta el cambio de estado
-    4. En el dispositivo del empleado, la aplicación cierra la sesión automáticamente
-    5. Empleado ve mensaje: "Tu cuenta ha sido desactivada"
-    6. Empleado es redirigido a pantalla de login
-- **Postcondición:** Empleado desautenticado, no puede volver a entrar hasta reactivación
-
-### Caso E: Liberación de Slot de Sesión (Admin)
-
-- **Actor:** Administrador
-- **Precondición:** 6 sesiones activas, un nuevo empleado necesita ingresar.
-- **Flujo Principal:**
-    1. Empleado intenta hacer login → Sistema rechaza: "Límite de dispositivos alcanzado".
-    2. Admin accede al centro de notificaciones → sección de control de dispositivos (FRD-015).
-    3. Admin identifica un dispositivo inactivo o de un empleado que ya no necesita acceso.
-    4. Admin revoca el dispositivo.
-    5. Sistema cierra la sesión asociada, libera el slot e invalida el Pase Diario.
-    6. Empleado afectado ve: "Tu sesión fue cerrada por el administrador".
-    7. El nuevo empleado puede ahora hacer login exitosamente.
-- **Postcondición:** Slot liberado, nuevo empleado autenticado.
+  1. El reloj del sistema marca las 00:00:01 AM (cambio de día calendario).
+  2. El colaborador procesa una venta POS a las 00:15 AM.
+  3. El sistema valida que el turno de caja sigue abierto y tiene menos de `P_MAX_HORAS_TURNO`.
+  4. El servidor acepta la transacción sin exigir un nuevo pase diario ni interrumpir la atención al público.
+- **Postcondición:** Continuidad contable y operativa del hecho económico ininterrumpida.
 
 ---
 
 ## Criterios de Aceptación
-
-### Límites y Concurrencia
-- [ ] El sistema rechaza el 7mo intento de login mostrando mensaje de límite
-- [ ] El límite de 6 sesiones se valida en el servidor, no solo en la interfaz
-- [ ] Al revocar un dispositivo conectado, la sesión asociada se cierra y el slot de concurrencia se libera.
-- [ ] El empleado cuya sesión fue cerrada remotamente ve un mensaje explicativo y es redirigido a login.
-
-### Cierre de Sesión
-- [ ] Al cerrar sesión, las credenciales se eliminan del dispositivo
-- [ ] Al cerrar sesión, el inventario y clientes permanecen en caché
-- [ ] Al cerrar sesión, el carrito pendiente se elimina
-- [ ] Al cerrar sesión de empleado, el Pase Diario se invalida
-
-### Desactivación
-- [ ] Al desactivar un empleado, su sesión activa se cierra inmediatamente
-- [ ] El empleado desactivado ve mensaje explicativo antes de redirigir a login
-
-### Sin Timeout
-- [ ] Una sesión inactiva por 24 horas sigue siendo válida (sin expiración automática)
-
----
-
-## Requisitos de Datos (Para Equipo Data)
-
-### Información de Sesión
-
-El sistema requiere rastrear la siguiente información para cada sesión activa:
-
-| Información | Descripción |
-|-------------|-------------|
-| Identificador de usuario | Quién inició la sesión |
-| Identificador de tienda | A qué tienda pertenece |
-| Fecha/hora de inicio | Cuándo se autenticó |
-| Identificador de dispositivo | Desde qué navegador/dispositivo |
-| Estado | Activa o finalizada |
-
-### Conteo de Sesiones
-
-El sistema DEBE poder consultar rápidamente cuántas sesiones activas tiene una tienda para validar el límite de 6.
-
----
-
-## Trazabilidad
-
-| Documento | Referencia |
-|-----------|------------|
-| FRD_001 | Pase Diario - Expiración al cerrar caja |
-| FRD_002 | Registro Admin - Credenciales maestras |
-| FRD_003 | Gestión de Empleados - Desactivación |
-| FRD_011 | Manejo de Errores - Validación de cuenta activa |
+- [ ] **CA-SES-01:** El sistema rechaza el intento de acceso si se excede el límite de `P_MAX_EMPLOYEES_PER_STORE` colaboradores más 1 Administrador.
+- [ ] **CA-SES-02:** Abrir la app al día siguiente sin un turno nocturno abierto conduce al colaborador a la solicitud del pase del día, sin cargar pantallas operativas en caché.
+- [ ] **CA-SES-03:** El cierre de caja ordinario o forzado NO expira los pases diarios de los colaboradores ni bloquea módulos no monetarios permitidos.
+- [ ] **CA-SES-04:** Un colaborador en labores de inventario no sufre cierre de sesión ni alertas de abandono por apagado de pantalla.
+- [ ] **CA-SES-05:** Durante un turno abierto de menos de `P_MAX_HORAS_TURNO`, el cambio de día a medianoche no invalida las solicitudes ni bloquea las ventas de los colaboradores.
+- [ ] **CA-SES-06:** El cierre de sesión voluntario preserva intactas las colas de sincronización offline pendientes.

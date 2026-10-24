@@ -1,6 +1,6 @@
-# 🗺️ Mapa de Lógica Global (v3.1)
+# 🗺️ Mapa de Lógica Global (v3.2)
 
-> **Módulos documentados:** 46 / 46 (100% FRD/SDD)
+> **Módulos documentados:** 46 / 46 (100% FRD/SDD) — Triada Offline, Sesiones y Ciclo Contable Re-especificada v3.0.0 y Verificada PAC-SDD / PAC-UXD
 
 ---
 
@@ -129,7 +129,7 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | DSDs Individuales en `02_architecture/` | 10 documentos |
 | Documentos de diseño UX/UI (`03_ui_ux_design/`) | 17 |
 | Diccionarios de Datos (`02_architecture/`) | Centralizados (Core) + Modulares |
-| Documentos en `archive/` | 19 archivos (históricos + legacy)
+| Documentos en `archive/` | 22 archivos (históricos + legacy + 3 SDDs derogados) |
 
 ---
 
@@ -147,8 +147,9 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | **Reportes** | FRD-008 / SDD-008 | 🟢 Validado |
 | **Clientes** | FRD-009 / SDD-009 | 🟢 Validado |
 | **Valoración FIFO / Costo Ventas** | FRD-010 / SDD-010 | 🟢 Validado |
-| **Sincronización Offline** | FRD-012 / SDD-012 | 🟡 Validado (Requiere ampliación) |
-| **Gestión Sesiones / Ciclo Contable**| FRD-013 / FRD-017 | 🟢 Validado |
+| **Sincronización Offline** | FRD-012 / FRD-012-01 / SDD-012 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
+| **Gestión Sesiones** | FRD-013 / SDD-013 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
+| **Ciclo Contable y Caja** | FRD-017 / SDD-017 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
 | **Cuentas por Pagar (Proveedores)** | FRD-019 / SDD-019 | 🟢 Validado |
 
 > Para el desglose completo de tareas de frontend asociadas a estos módulos, consultar los correspondientes `WO` (Work Orders) en `04_dev_orchestration/`.
@@ -185,3 +186,4 @@ Durante la auditoría (2026-08-17), se consolidaron los siguientes documentos he
 3. **Saneamiento documental ejecutado (2026-08-17):** Se reubicaron 10 documentos de datos dispersos en la carpeta correcta (`02_architecture/`), se archivaron documentos históricos completados, y se centralizó el Contrato de Flujo en `04_dev_orchestration/`.
 4. **Estado de la Arquitectura de Datos:** Se identificó un “Schema Drift” entre `supabase-schema-v2.sql` (Core) y los DSDs Modulares más recientes. Detallado en `AUDIT_REPORT_ARCHITECTURE.md`.
 5. **Próximo Paso Crítico:** Consolidar `supabase-schema-v2.sql` con los DSDs modulares antes de ejecutar nuevas migraciones en producción.
+6. **Re-especificación Integral de la Triada (2026-10-24):** SDD_012 (Sincronización Offline), SDD_013 (Gestión de Sesiones) y SDD_017 (Ciclo Contable y Sesiones) fueron re-creados desde cero bajo el protocolo PAC-SDD v2.0 (Bloques 0-7) y verificados contra el código UI bajo el protocolo PAC-UXD (Bloques 1-5). Las versiones previas fueron derogadas y archivadas en `documentation/01_requirements/archive/` para trazabilidad histórica, y sus informes de verificación yacen en `documentation/01_requirements/VERIFICACION/`.

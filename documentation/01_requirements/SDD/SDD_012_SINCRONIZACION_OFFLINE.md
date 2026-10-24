@@ -1,597 +1,295 @@
-# SDD-012: Sincronización y Resolución de Conflictos Offline
+# SDD-012: Sincronización y Fronteras del Sistema Offline (Defensivo)
 
-> **Asociado a:** [FRD-012: Sincronización y Resolución de Conflictos Offline](../FRD/FRD_012_SINCRONIZACION_OFFLINE.md), [FRD-012-01: Límites Estrictos del Sistema Offline](../FRD/FRD_012_01_LIMITES_SISTEMA_OFFLINE.md), y [FRD-012-R: Remediación del Módulo Offline](../FRD/FRD_012_REMEDIACION_OFFLINE.md)  
-> **Fase del Plan:** Ola 5: Sesiones, Autenticación y Offline (Ítem 5)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-16  
-
----
-
-## 0. CONTROL DE VERSIONES Y TRAZABILIDAD
-
-### 0.1 Historial de Cambios
-| Versión | Fecha | Autor | Rol | Descripción de Modificación |
-|---------|-------|-------|-----|-----------------------------|
-| 1.0.0 | 2026-01-27 | Analista Funcional | Requisitos | Especificación inicial de sincronización offline con resolución humana interactiva de conflictos de stock. |
-| 1.5.0 | 2026-02-05 | Arquitecto de Software | Arquitectura | Incorporación de la remediación "Offline Defensivo" (FRD-012-R) y límites estrictos (FRD-012-01). |
-| 2.0.0 | 2026-10-16 | Orquestador Técnico | Arquitectura & QA | **Saneamiento Integral PAC-SDD v2.0**: Subordinación arquitectural al modelo de "Offline Defensivo" con bloqueo en origen (IndexedDB); simplificación de la Dead Letter Queue (DLQ) a "Reintentar / Eliminar"; delegación de ajustes de stock excepcionales a `CORRECCION_SISTEMA` en servidor (SDD-014); consagración del soporte físico de idempotencia en `sales.local_id` (`text`) con respuesta canónica `DUPLICATE_RESOLVED`; confirmación de la naturaleza exclusivamente cliente (IndexedDB) de `sales_queue` y `dead_letter_queue` sin tablas huérfanas en PostgreSQL; imputación contable a turnos cerrados (`cash_sessions.id`) con actualización de saldo esperado y bitácora en `audit_logs` (`LATE_SYNC_UPDATE`) sin reapertura física de caja; suspensión automática de cola ante expiración de JWT (`sync:auth_required`); verificación de privilegios base (Regla 8) incluyendo remediación de `clients` y `sale_items` para `service_role`; cumplimiento estricto de las Reglas 1.1 (0% código SQL), 2, 4, 7 y 8; y armonización transversal con POS, Inventario, Caja y Auditoría. |
-
-### 0.2 Trazabilidad de Requisitos (FRD-012, FRD-012-01, FRD-012-R)
-| Regla de Negocio / CU | Descripción en Requisitos Fuente | Implementación en este SDD |
-|-----------------------|----------------------------------|----------------------------|
-| **RN-012-01** | Marcado de ventas offline con indicador local y fecha de sincronización | Sección 4.3 y Sección 3.1 (`sales.local_id`, `sales.sync_status`) |
-| **RN-012-02** | Validación local de stock en copia descargada en caché | Sección 4.1 y Sección 3.3 (`products.current_stock`) |
-| **RN-012-03 / RN-012-09** | Detección de conflicto de stock en servidor y opciones de resolución humana | Sección 4.1, Sección 4.6 y Sección 7 (D-2) |
-| **RN-012-04** | Aceptación de precio offline sin rechazo por cambio de tarifa | Sección 4.3 y Sección 5.2 |
-| **RN-012-05** | Conflicto de límite de crédito en fiados diferidos y notificación | Sección 4.5 y Sección 5.3 |
-| **RN-012-06** | Ventas con caja cerrada imputadas al turno contable original sin reabrir caja | Sección 4.4, Sección 3.5 y Sección 7 (D-3) |
-| **RN-012-07** | Orden cronológico de sincronización (FIFO) de más antigua a más reciente | Sección 4.3 y Sección 2.1 |
-| **RN-012-08** | Reintentos automáticos (máximo 3) ante fallos técnicos de red | Sección 4.6 y Sección 2.2 |
-| **RN-OFF-01** | Límite transaccional estricto: único flujo encolable es `CREATE_SALE` en POS | Sección 1.1 y Sección 4.1 |
-| **RN-OFF-02** | Bloqueo en origen (*Offline Defensivo*): bloqueo inmediato si falta stock local | Sección 1.1, Sección 4.1 y Sección 7 (D-2) |
-| **RN-OFF-03** | Límite de encolamiento y suspensión por token expirado (`sync:auth_required`) | Sección 4.2, Sección 4.6 y Sección 7 (D-4) |
-| **RN-OFF-04** | Inmutabilidad histórica de ventas y transferencia a DLQ tras 3 fallos técnicos | Sección 4.6 y Sección 3.7 (`dead_letter_queue`) |
-| **RN-OFF-05** | Resiliencia ante cambios estructurales de servidor (*Schema Drift*) hacia DLQ | Sección 4.6 y Sección 5.4 |
-| **RN-OFF-06** | Indicador visual permanente en POS (normal, 80% alerta, 100% crítico bloqueante) | Sección 4.2 y Sección 2.2 |
-| **RN-R01** | Validación preventiva de inventario disponible antes de encolar venta offline | Sección 4.1 y Sección 1.1 |
-| **RN-R02** | Validación preventiva de cupo de crédito para fiados antes de encolar | Sección 4.5 y Sección 3.4 (`clients.credit_limit`) |
-| **RN-R03** | Sincronización mediante operación segura de procesamiento de ventas | Sección 4.3 y Sección 5.2 |
-| **RN-R04** | Indicador visual explícito: "Modo Offline - Ventas limitadas al stock local" | Sección 4.2 y Sección 2.2 |
-| **RN-R05** | Recuperación de sesión: solicitud de re-autenticación previa a la sincronización | Sección 4.6 y Sección 6.3 |
-
-### 0.3 Matriz de Dependencias Inter-Modulares
-| Documento Vecino | Tipo de Dependencia | Flujo o Restricción Vinculante |
-|------------------|---------------------|--------------------------------|
-| [SDD-007](../SDD/SDD_007_NUCLEO_VENTAS_PADRE.md) / [SDD-007.1](../SDD/SDD_007_01_NUCLEO_POS.md) | Núcleo Transaccional | Procesamiento de ventas; soporte físico de idempotencia en `sales.local_id`; secuencia atómica de tickets en servidor `COALESCE(MAX(ticket_number), 0) + 1`. |
-| [SDD-011](../SDD/SDD_011_MANEJO_ERRORES.md) | Resiliencia y Errores | Temporizador silencioso de 60 segundos; catálogo canónico `ActionResponse`; mitigación de duplicados con `DUPLICATE_RESOLVED`; respuesta `INSUFFICIENT_STOCK` con `available`. |
-| [SDD-028](../SDD/SDD_028_ALMACENAMIENTO_LOCAL.md) | Persistencia Cliente | Estructura de IndexedDB (`sales_queue`, `dead_letter_queue`, catálogos locales); supervivencia obligatoria de colas ante logout (`RN-CACHE-03`). |
-| [SDD-004](../SDD/SDD_004_CONTROL_DE_CAJA.md) / [SDD-017](../SDD/SDD_017_CICLO_CONTABLE_Y_SESIONES.md) / [SDD-020](../SDD/SDD_020_CAJA_MULTICANAL.md) | Control de Caja | Asignación contable de ventas diferidas al `session_id` histórico original; recálculo de saldo esperado sin reabrir turnos cerrados (`POL-AUD-01`). |
-| [SDD-006](../SDD/SDD_006_NUCLEO_INVENTARIO_PADRE.md) / [SDD-006.1.1](../SDD/SDD_006_01_01_MOVIMIENTOS_ENTRADA.md) / [SDD-010.16](../SDD/SDD_010_016_VALORACION_FIFO.md) / [SDD-014](../SDD/SDD_014_VENTA_FORZADA_Y_AUDITORIA.md) | Gestión de Stock | Descarga local de stock; validación preventiva anti-negativos (`POL-LOG-02`); consumo FIFO en servidor; resolución de venta forzada vía `CORRECCION_SISTEMA` (SDD-014). |
-| [SDD-009](../SDD/SDD_009_CLIENTES.md) / [SDD-024](../SDD/SDD_024_POLITICA_FIADOS.md) | Cartera y Fiados | Validación preventiva local y bloqueo `FOR UPDATE` en servidor para fiados (`balance + total <= credit_limit`); aislamiento de caja ($0 en efectivo). |
-| [SDD-005](../SDD/SDD_005_AUDITORIA_TRAZABILIDAD.md) | Auditoría Forense | Inviolabilidad contable (`POL-AUD-01`): Registro append-only en `audit_logs` (9 columnas físicas) ante sincronización diferida o mutaciones en DLQ. |
+> **Módulo:** Sincronización y Fronteras del Sistema Offline  
+> **Versión Documental:** 3.0.0 (Redactado bajo Protocolo PAC-SDD)  
+> **Estado:** 🟢 ESPECIFICACIÓN APROBADA  
+> **FRD Fuente:** [`documentation/01_requirements/01_modulos/02_fase_2/FRD_012_01_LIMITES_SISTEMA_OFFLINE.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/01_modulos/02_fase_2/FRD_012_01_LIMITES_SISTEMA_OFFLINE.md)  
+> **SDDs Vecinos Vinculados:** [`SDD_007_01_NUCLEO_POS.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_007_01_NUCLEO_POS.md), [`SDD_004_CONTROL_DE_CAJA.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_004_CONTROL_DE_CAJA.md), [`SDD_013_GESTION_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_013_GESTION_SESIONES.md), [`SDD_017_CICLO_CONTABLE_Y_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_017_CICLO_CONTABLE_Y_SESIONES.md), [`SDD_028_ALMACENAMIENTO_LOCAL.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_028_ALMACENAMIENTO_LOCAL.md)
 
 ---
 
-## 1. RESUMEN EJECUTIVO Y ALCANCE
+## 0. Evidencia Contextual del Protocolo PAC-SDD
 
-El documento **SDD-012** define la arquitectura integral de **Sincronización Asíncrona, Resiliencia Operativa y Resolución de Conflictos Offline** en el ecosistema **Tienda Barrio Pro**. Establece las directivas técnicas y los contratos de datos que permiten la continuidad comercial ininterrumpida en el punto de venta durante apagones eléctricos, saturación de redes móviles o caídas del enlace de comunicaciones.
+En cumplimiento estricto del Protocolo de Pre-Análisis Contextual (PAC-SDD), este diseño técnico se fundamenta exclusivamente en la evidencia real auditada y contrastada de forma autónoma:
 
-### 1.1 Principios Rectores del Modelo "Offline Defensivo"
-1. **Mecanismo de Supervivencia, no Clon Completo (`RN-OFF-01`):** El subsistema offline está diseñado exclusivamente para cobros en punto de venta (`CREATE_SALE`). Quedan terminantemente prohibidos en modo offline: ajustes manuales de inventario (mermas/consumos), compras a proveedores, gastos operativos de tesorería y aperturas o cierres de caja.
-2. **Bloqueo en Origen (Validación Preventiva Local, `RN-OFF-02`, `RN-R01`):** Para garantizar la política anti-negativos de inventario (`POL-LOG-02`), la terminal POS valida el carrito contra la copia local de existencias en IndexedDB antes de autorizar la venta offline. Si el stock local es insuficiente, la transacción se bloquea en caliente en la interfaz, prohibiendo su encolamiento.
-3. **Idempotencia Estricta en Servidor (`RN-012-01`, `RN-011-03`):** Toda venta diferida viaja con un identificador criptográfico pre-generado por el cliente (`sales.local_id`). Ante caídas de red durante la respuesta HTTP, los reintentos posteriores devuelven el registro existente con código canónico `DUPLICATE_RESOLVED` sin duplicar movimientos contables ni descuentos de inventario.
-4. **Inviolabilidad de Turnos Cerrados (`RN-012-06`, `POL-AUD-01`):** Si una venta se realizó con caja abierta y la conexión regresa cuando el turno ya fue cerrado (manual o forzosamente a las 24 horas), el sistema asienta la transacción en el `session_id` histórico original, actualiza el saldo esperado y emite un asiento inmutable en `audit_logs` (`LATE_SYNC_UPDATE`), sin reabrir el turno ni vulnerar los arqueos físicos ya realizados.
-5. **Dead Letter Queue (DLQ) Simplificada y Segregación RBAC (`RN-OFF-04`, `RN-OFF-05`, `POL-SEC-01`):** Las ventas que sufran fallos técnicos recurrentes (tras 3 reintentos) o incompatibilidad de esquema (*Schema Drift*) se trasladan a la cola de contingencia DLQ en IndexedDB. La gestión de esta bandeja queda reservada exclusivamente a Administradores (`admin_profiles`), quienes pueden reintentar la transacción o eliminarla si es espuria, descartando interfaces complejas de ajuste forzado interactivo en el cliente.
-6. **Persistencia de Colas y Pausa por Autenticación (`RN-CACHE-03`, `RN-OFF-03`):** La cola transaccional en IndexedDB sobrevive al logout voluntario del usuario. Si el token JWT expira durante una desconexión prolongada, la sincronización se detiene con el estado `sync:auth_required` hasta que el operador se re-autentique con internet, previniendo avalanchas de errores 401.
+1. **Esquema Real Verificado (PAC Bloque 2):**
+   - Se verificaron 7 tablas en el catálogo de PostgreSQL (`ihtjocmhzuliwwvdzfnz`): `sales` (19 columnas), `sale_items` (8 columnas), `products` (17 columnas), `cash_sessions` (12 columnas), `cash_movements` (10 columnas), `daily_passes` (14 columnas) y `audit_logs` (12 columnas). Total: 92 columnas físicas verificadas sin tablas inexistentes.
+   - Brechas DDL tipificadas: La tabla `cash_movements` no cuenta con columna nativa `actor_id` (la trazabilidad relacional se preserva vía `sales.employee_id`). La tabla `audit_logs.actor_id` posee colisión de doble FK (`employees` vs `auth.users`), mitigada canalizando la autoría de colaboradores sin auth en `metadata: jsonb`.
+2. **Seguridad Centralizada (PAC Bloque 3):**
+   - Función obligatoria multi-tenant: `public.assert_store_access(p_store_id uuid)`.
+   - Función de resolución de tenant en sesión: `public.get_current_store_id()`.
+3. **Radio de Impacto Cruzado Auditado (PAC Bloque 4):**
+   - 45 funciones y triggers del backend identificados en `pg_proc`.
+   - Mitigaciones obligatorias: (a) RIC-1: Prohibición de que ventas offline se imputen ciegamente a turnos abiertos de otros cajeros; se anclan a `origin_session_id`. (b) RIC-2: No violación de `fk_audit_user` para cajeros con pase diario. (c) RIC-3: Aislamiento selectivo hacia Dead Letter Queue (DLQ) ante excepciones de `consume_stock_fifo`.
+4. **Contratos Vecinos Validados (PAC Bloque 5):**
+   - Compatible 100% con `SDD_007_01` (`rpc_procesar_venta_v3`), `SDD_028` (`mutation_queue` y `dead_letter_queue`), `SDD_004`/`SDD_017` (inmutabilidad contable y arqueo ciego) y `SDD_013` (desacople de sesiones de usuario respecto a la caja).
 
 ---
 
-## 2. ARQUITECTURA GENERAL Y DIAGRAMA DE FLUJO
+## 1. Glosario Técnico
 
-### 2.1 Diagrama de Secuencia: Ciclo de Venta Offline, Sincronización FIFO y Resolución Idempotente
+- **Offline Defensivo:** Filosofía arquitectural donde el cliente solo opera en contingencia estricta bajo límites rígidos (máximo 50 ventas locales), delegando la verdad contable y la liquidación transaccional al backend una vez restablecida la red.
+- **Cola de Mutaciones (`mutation_queue`):** Estructura transaccional en `IndexedDB` que encola las ventas efectuadas durante la pérdida de conectividad física, indexadas por marca de tiempo (`timestamp`) para su drenado secuencial FIFO.
+- **Dead Letter Queue (DLQ):** Almacén local en `IndexedDB` para transacciones que fracasaron tras 3 reintentos automáticos o que fueron rechazadas en servidor por inconsistencia insalvable de inventario o validación de negocio.
+- **Idempotencia Transaccional (`local_id` / `idempotency_key`):** Mecanismo de deduplicación que previene el doble registro de tickets o el doble descuento de stock ante reintentos de red.
+- **Sesión de Origen (`origin_session_id`):** Identificador unívoco del turno de caja que se encontraba formalmente abierto en la terminal cuando se consumó la venta offline.
 
-El siguiente diagrama detalla la interacción entre el componente POS, la base de datos local en IndexedDB, el motor de sincronización cliente y el backend transaccional de Supabase:
+---
+
+## 2. Arquitectura y Flujos del Sistema
+
+### 2.1 Diagrama de Secuencia: Ciclo de Vida de Sincronización Offline
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Vendedor as 👤 Vendedor / POS
-    participant LocalDB as 🗄️ IndexedDB (sales_queue)
-    participant SyncWorker as ⚙️ Motor Sincronización (Pinia)
-    participant Backend as ⚡ Supabase RPC
-    participant DB as 🔒 PostgreSQL (Producción)
+    actor C as Cajero / POS
+    participant IDB as IndexedDB (mutation_queue)
+    participant SYNC as Sincronizador de Red (Frontend)
+    participant RPC as PostgreSQL (rpc_procesar_venta_v3)
+    participant CS as cash_sessions / cash_movements
+    participant FIFO as consume_stock_fifo / batches
+    participant DLQ as IndexedDB (dead_letter_queue)
+    participant AUD as audit_logs (Metadata JSONB)
 
-    Note over Vendedor, DB: 1. OPERACIÓN EN CONTINGENCIA OFFLINE (DEFENSIVO)
-    Vendedor->>LocalDB: Validar stock local de productos del carrito
-    alt Stock local insuficiente (POL-LOG-02)
-        LocalDB-->>Vendedor: Bloqueo inmediato: "Stock insuficiente localmente" (Cero encolamiento)
-    else Stock local suficiente
-        LocalDB->>LocalDB: Encolar venta en sales_queue (status = 'pending', local_id = UUID-X)
-        LocalDB->>LocalDB: Decrementar stock local optimista
-        LocalDB-->>Vendedor: Venta confirmada localmente con ticket provisional
-    end
+    Note over C, IDB: FASE 1: Registro Offline Defensivo (Sin Red)
+    C->>IDB: Registra Venta en mutation_queue (local_id, origin_session_id, items, precios congelados)
+    Note over IDB: Verifica Límite <= 50 ítems. Si > 50 -> Bloqueo
 
-    Note over SyncWorker, DB: 2. DETECCIÓN DE RED Y DRENADO DE COLA FIFO
-    SyncWorker->>SyncWorker: Heartbeat detecta conectividad a internet restablecida
-    SyncWorker->>SyncWorker: Validar vigencia de token JWT
-    alt JWT caducado durante el corte
-        SyncWorker->>SyncWorker: Pausar cola con estado sync:auth_required
-        SyncWorker-->>Vendedor: Banner: "Sesión expirada. Inicie sesión para sincronizar"
-    else JWT válido
-        SyncWorker->>LocalDB: Leer lote de ventas pendientes en orden FIFO
-        LocalDB-->>SyncWorker: Retorna Venta (local_id = UUID-X)
-        SyncWorker->>Backend: rpc_procesar_venta(..., p_local_id = UUID-X)
-        Backend->>DB: assert_store_access(p_store_id)
-        Backend->>DB: SELECT id FROM sales WHERE local_id = 'UUID-X'
-        
-        alt local_id ya existe en servidor (Reintento tras timeout previo)
-            DB-->>Backend: Registro existente (id = UUID-100)
-            Backend-->>SyncWorker: ActionResponse { success: true, data: { sale_id: UUID-100 }, code: 'DUPLICATE_RESOLVED' }
-            SyncWorker->>LocalDB: Eliminar Venta UUID-X de sales_queue
-        else local_id nuevo (Primera recepción)
-            Backend->>DB: consume_stock_fifo() + INSERT sales + Asignar session_id
-            DB-->>Backend: Venta asentada exitosamente (id = UUID-101, ticket_number = 1540)
-            Backend-->>SyncWorker: ActionResponse { success: true, data: { sale_id: UUID-101 } }
-            SyncWorker->>LocalDB: Eliminar Venta UUID-X de sales_queue
+    Note over SYNC, RPC: FASE 2: Drenado Secuencial FIFO (Reconexión de Red)
+    SYNC->>IDB: Extrae transacción más antigua (ORDER BY timestamp ASC)
+    SYNC->>RPC: POST rpc_procesar_venta_v3(store_id, items, local_id, is_offline_sync = true, origin_session_id, sold_by)
+    
+    RPC->>RPC: assert_store_access(p_store_id)
+    RPC->>RPC: Verifica Idempotencia por local_id (Si ya existe, retorna HTTP 200 con comprobante)
+
+    alt Transacción Exitosa en Servidor
+        RPC->>CS: Imputa a origin_session_id (actualiza expected_balance, genera cash_movements)
+        RPC->>FIFO: Consume stock determinista
+        RPC->>AUD: Registra LATE_SYNC_UPDATE en audit_logs (con sold_by en metadata)
+        RPC-->>SYNC: HTTP 200 { success: true, data: { sale_id, ticket_number } }
+        SYNC->>IDB: Elimina ítem procesado de mutation_queue
+    else Falla por Inconsistencia de Stock o Error de Negocio
+        RPC-->>SYNC: HTTP 400 / 409 { success: false, code: 'INSUFFICIENT_STOCK' }
+        opt Reintentos agotados (retry_count >= 3)
+            SYNC->>DLQ: Transfiere venta a dead_letter_queue con código de falla
+            SYNC->>IDB: Remueve de mutation_queue para no trabar el drenado
+            SYNC->>AUD: Emite alerta visual y registro forense
         end
-        SyncWorker-->>Vendedor: Notificación: "Conexión restablecida - 1 venta sincronizada"
-    end
-
-    Note over SyncWorker, DB: 3. CONTINGENCIA TÉCNICA Y TRASLADO A DLQ
-    alt Falla técnica persistente (Timeout / Error 500 / Schema Drift)
-        SyncWorker->>SyncWorker: Reintentos automáticos (1, 2, 3)
-        SyncWorker->>LocalDB: Trasladar venta a dead_letter_queue tras 3 fallos
-        SyncWorker-->>Vendedor: Indicador de atención: "1 venta en cola de revisión técnica (DLQ)"
     end
 ```
 
----
-
-### 2.2 Diagrama de Estados: Máquina de Estados del Gestor de Sincronización y Colas Locales
+### 2.2 Diagrama de Estados: Ciclo de Vida de la Transacción Offline
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Conectado : Inicio con conexión a internet
-
-    state Conectado {
-        [*] --> Idle : Cola local vacía
-        Idle --> Transmitiendo : Venta POS directa en servidor
-        Transmitiendo --> Idle : Transacción exitosa
-    }
-
-    Conectado --> Desconectado : Falla request / Pérdida de red
-
-    state Desconectado {
-        [*] --> Temporizador_60s : Inicia contador silencioso
-        Temporizador_60s --> Modo_Offline_Notificado : T=60s expirado (Alerta: "Sin internet")
-        
-        state Modo_Offline_Notificado {
-            [*] --> Cola_Normal : Ventas encoladas < 80% capacidad
-            Cola_Normal --> Cola_Alerta : Capacidad alcanza 80% (Alerta visual naranja)
-            Cola_Alerta --> Cola_Bloqueada : Capacidad alcanza 100% (Bloqueo crítico rojo)
-        }
-    }
-
-    Desconectado --> Sincronizando : Red reanudada y detectada
-
-    state Sincronizando {
-        [*] --> Verificando_Auth : Comprobar validez de JWT
-        Verificando_Auth --> Pausa_Auth : JWT expirado (sync:auth_required)
-        Pausa_Auth --> Verificando_Auth : Usuario inicia sesión con internet
-        
-        Verificando_Auth --> Drenado_FIFO : JWT válido
-        
-        state Drenado_FIFO {
-            [*] --> Envio_Venta : Toma venta más antigua
-            Envio_Venta --> Exito_Deduplicado : Servidor asienta o resuelve duplicado
-            Exito_Deduplicado --> Purga_Local : Elimina de sales_queue
-            
-            Envio_Venta --> Reintento_Tecnico : Error 500 / Timeout (< 3 intentos)
-            Reintento_Tecnico --> Envio_Venta : Reintento automático
-            
-            Envio_Venta --> Traslado_DLQ : Falla persistente (3 intentos agotados)
-        }
-    }
-
-    Sincronizando --> Conectado : Cola vacía / Notificación emitida
+    [*] --> EncoladaLocal: Venta registrada sin conexión (Cola <= 50)
+    EncoladaLocal --> EnVuelo: Detección de red online / Inicio de drenado FIFO
+    
+    EnVuelo --> Sincronizada: Servidor procesa con éxito (HTTP 200)
+    Sincronizada --> [*]: Eliminada de IndexedDB mutation_queue
+    
+    EnVuelo --> Reintentando: Falla de red transitoria (retry_count < 3)
+    Reintentando --> EnVuelo: Backoff exponencial
+    
+    EnVuelo --> FalloDefinitivo: Error 4xx de negocio o retry_count >= 3
+    FalloDefinitivo --> DeadLetterQueue: Aislada en dead_letter_queue para auditoría
+    DeadLetterQueue --> Regularizada: Administrador concilia o anula manualmente
+    Regularizada --> [*]
 ```
 
 ---
 
-## 3. MODELO DE DATOS FÍSICO Y REGLAS DE PERSISTENCIA
+## 3. Especificación de Reglas de Negocio (Trazabilidad FRD-012-01)
 
-El procesamiento de ventas sincronizadas y la prevención de anomalías relacionales se fundamentan en tablas verificadas en Supabase (`information_schema.columns`).
+### 3.1 RN-OFF-01: Límite Rígido de Encolamiento (50 Transacciones)
+1. El motor de almacenamiento local en IndexedDB tiene prohibido retener más de 50 transacciones pendientes de sincronización por tienda.
+2. Al alcanzar la transacción número 50, la interfaz POS bloquea de forma inmediata el botón de cobro y despliega la advertencia bloqueante: *"Límite de ventas offline alcanzado (50). Conéctese a internet para sincronizar antes de continuar vendiendo."*
 
-### 3.1 Estructura Física de Ventas e Idempotencia (`sales`)
-La tabla `sales` aloja las columnas requeridas para el control de sincronización diferida y la prevención de duplicados:
+### 3.2 RN-OFF-02: Drenado Estricto por Orden Cronológico (FIFO)
+1. La sincronización se ejecuta exclusivamente en orden FIFO (`timestamp` ascendente).
+2. Queda prohibido procesar transacciones recientes si una transacción anterior sigue pendiente en la cola, garantizando la correlación del inventario y el correlativo de tickets.
 
-| Columna | Tipo de Dato | Nulable | Restricciones / Defaults | Descripción |
-|---------|--------------|---------|--------------------------|-------------|
-| `id` | `uuid` | NOT NULL | PK, default `gen_random_uuid()` | Identificador maestro de la venta en servidor. |
-| `store_id` | `uuid` | NOT NULL | FK `stores(id)` | Identificador de la tienda propietaria (multi-tenant). |
-| `ticket_number` | `integer` | NOT NULL | Secuencial por tienda | Correlativo asignado atómicamente por el servidor. |
-| `employee_id` | `uuid` | NOT NULL | FK `employees(id)` | Usuario responsable de la transacción. |
-| `client_id` | `uuid` | NULLABLE | FK `clients(id)` | Cliente asociado a la venta o crédito. |
-| `total` | `numeric` | NOT NULL | CHECK `total >= 0` | Importe monetario total de la venta. |
-| `rounding_difference` | `numeric` | NULLABLE | Default `0` | Diferencia por redondeo comercial en efectivo. |
-| `payment_method` | `text` | NOT NULL | CHECK `IN ('efectivo', 'nequi', 'daviplata', 'fiado')` | Método de pago liquidado. |
-| `amount_received` | `numeric` | NULLABLE | Default `NULL` | Importe entregado por el comprador. |
-| `change_given` | `numeric` | NULLABLE | Default `NULL` | Cambio retornado al comprador. |
-| `sync_status` | `text` | NULLABLE | Default `'pending'`, CHECK `IN ('synced', 'pending', 'failed')` | **Estado de sincronización en servidor**. |
-| `local_id` | `text` | NULLABLE | Indexado / Deduplicación | **Soporte físico de idempotencia**: UUID v4 pre-generado por el cliente para evitar duplicados en reintentos. |
-| `is_voided` | `boolean` | NULLABLE | Default `false` | Bandera lógica de anulación. |
-| `voided_by` | `uuid` | NULLABLE | FK `employees(id)` | Usuario que anuló la venta. |
-| `void_reason` | `text` | NULLABLE | Motivo de anulación. |
-| `created_at` | `timestamptz` | NOT NULL | Default `now()` | Marca temporal de inserción. |
+### 3.3 RN-OFF-03: Congelamiento de Precios Históricos
+1. Toda venta generada fuera de línea congela el precio unitario pactado al momento del cobro (`p_items[].unit_price`).
+2. Al sincronizar con `p_is_offline_sync = true`, el backend honra el precio congelado en la venta y en `sale_items`, previniendo discrepancias monetarias con el dinero físico recibido del cliente.
 
-### 3.2 Estructura Física de Ítems de Venta (`sale_items`)
-Desglose transaccional de artículos registrados:
+### 3.4 RN-OFF-04: Idempotencia Obligatoria (`local_id`)
+1. Toda venta offline genera un UUID cliente en `local_id`.
+2. Ante pérdidas de paquetes o reconexiones abruptas, el reenvío de la venta con el mismo `local_id` retorna el comprobante ya creado en el servidor sin duplicar tickets ni salidas de inventario.
 
-| Columna | Tipo de Dato | Nulable | Restricciones / Defaults | Descripción |
-|---------|--------------|---------|--------------------------|-------------|
-| `id` | `uuid` | NOT NULL | PK, default `gen_random_uuid()` | Identificador del ítem. |
-| `sale_id` | `uuid` | NOT NULL | FK `sales(id)` ON DELETE CASCADE | Venta asociada. |
-| `product_id` | `uuid` | NOT NULL | FK `products(id)` | Artículo vendido. |
-| `quantity` | `numeric` | NOT NULL | CHECK `quantity > 0` | Cantidad despachada. |
-| `unit_price` | `numeric` | NOT NULL | CHECK `unit_price >= 0` | Precio unitario cobrado. |
-| `subtotal` | `numeric` | NOT NULL | CHECK `subtotal >= 0` | Subtotal monetario del renglón. |
-| `created_at` | `timestamptz` | NOT NULL | Default `now()` | Fecha de registro. |
-| `unit_cost` | `numeric` | NULLABLE | Default `0` | Costo unitario promedio o FIFO. |
+### 3.5 RN-OFF-05: Imputación a Sesión de Origen (`origin_session_id`)
+1. Las ventas offline deben conservar el identificador de la caja en la que fueron cobradas (`origin_session_id`).
+2. Si al reconectar la red la sesión histórica de caja ya fue cerrada (por horario o por regla de 24 horas), el backend imputa el dinero a dicha sesión histórica reajustando su saldo esperado (`expected_balance`) y generando la auditoría `LATE_SYNC_UPDATE`.
+3. Queda prohibido imputar ventas offline desfasadas a la sesión activa actual de otro cajero.
 
-### 3.3 Estructura Física de Inventario y Catálogo de Productos (`products`)
-La validación preventiva local y el consumo en servidor se apoyan en los 17 campos físicos de `products`:
-
-| Columna | Tipo de Dato | Nulable | Restricciones / Defaults | Descripción |
-|---------|--------------|---------|--------------------------|-------------|
-| `id` | `uuid` | NOT NULL | PK, default `gen_random_uuid()` | Identificador maestro del producto. |
-| `store_id` | `uuid` | NOT NULL | FK `stores(id)` | Tienda a la que pertenece el producto. |
-| `name` | `text` | NOT NULL | No vacío | Nombre comercial del artículo. |
-| `plu` | `text` | NULLABLE | Código identificador | **Identificador físico real de barras o código PLU** (no `barcode`). |
-| `price` | `numeric` | NOT NULL | CHECK `price >= 0` | Precio unitario de venta. |
-| `cost_price` | `numeric` | NULLABLE | Default `NULL` | Costo unitario de reposición. |
-| `current_stock` | `numeric` | NULLABLE | Default `0`, CHECK `current_stock >= 0` | **Existencia física disponible**. Base del bloqueo preventivo en origen (`POL-LOG-02`). |
-| `min_stock` | `numeric` | NULLABLE | Default `5` | Umbral de reabastecimiento mínimo. |
-| `category` | `text` | NULLABLE | Categoría | Clasificación de producto. |
-| `measurement_unit`| `text` | NULLABLE | Default `'unidad'` | Unidad de medida comercial. |
-| `is_weighable` | `boolean` | NULLABLE | Default `false` | Indica si el producto requiere pesaje. |
-| `low_stock_alerted`| `boolean`| NULLABLE | Default `false` | Bandera de alerta de stock bajo. |
-| `created_at` | `timestamptz` | NOT NULL | Default `now()` | Fecha de creación. |
-| `updated_at` | `timestamptz` | NOT NULL | Default `now()` | Fecha de actualización. |
-| `supplier_id` | `uuid` | NULLABLE | FK `suppliers(id)` | Proveedor asignado. |
-| `brand` | `text` | NULLABLE | Marca | Marca comercial del producto. |
-| `is_active` | `boolean` | NOT NULL | Default `true` | Estado activo del artículo. |
-
-### 3.4 Estructura Física de Clientes y Cartera (`clients`)
-Campos requeridos para la doble barrera de crédito en fiados diferidos:
-
-| Columna | Tipo de Dato | Nulable | Restricciones / Defaults | Descripción |
-|---------|--------------|---------|--------------------------|-------------|
-| `id` | `uuid` | NOT NULL | PK, default `gen_random_uuid()` | Identificador del cliente. |
-| `store_id` | `uuid` | NOT NULL | FK `stores(id)` | Tienda propietaria. |
-| `name` | `text` | NOT NULL | Nombre completo | Nombre comercial o del cliente. |
-| `id_number` | `text` | NOT NULL | Documento de identidad | Cédula o NIT del comprador. |
-| `phone` | `text` | NULLABLE | Teléfono | Teléfono de contacto. |
-| `credit_limit` | `numeric` | NOT NULL | Default `100000` | **Cupo de crédito máximo autorizado**. |
-| `balance` | `numeric` | NULLABLE | Default `0`, CHECK `balance >= 0` | **Saldo adeudado actual**. |
-| `is_deleted` | `boolean` | NULLABLE | Default `false` | Borrado lógico de cliente. |
-| `deleted_at` | `timestamptz` | NULLABLE | Default `NULL` | Fecha de borrado lógico. |
-| `created_at` | `timestamptz` | NOT NULL | Default `now()` | Fecha de creación. |
-| `updated_at` | `timestamptz` | NOT NULL | Default `now()` | Fecha de actualización. |
-
-### 3.5 Estructura Física de Caja y Asignación de Turno (`cash_sessions` y `cash_movements`)
-- `cash_sessions` (12 columnas físicas): `id`, `store_id`, `opened_by`, `closed_by`, `opening_balance`, `expected_balance`, `actual_balance`, `difference`, `status`, `opened_at`, `closed_at`, `forced_close`.
-- `cash_movements` (7 columnas físicas): `id`, `session_id` (FK `cash_sessions(id)`), `movement_type`, `amount`, `description`, `sale_id`, `created_at`.
-- **Regla de asignación histórica:** Toda venta diferida se vincula a través de `cash_movements.session_id` al turno contable de caja que estaba abierto al momento de su creación física local (`RN-012-06`).
-
-### 3.6 Estructura Física de la Bitácora de Auditoría Forense (`audit_logs`)
-- `audit_logs` (9 columnas físicas): `id`, `actor_id`, `event_type`, `resource_id`, `metadata`, `created_at`, `store_id`, `severity`, `ip_address`.
-- **Eventos tipados de sincronización:** `OFFLINE_SYNC_SUCCESS` (severidad `'info'`), `LATE_SYNC_UPDATE` (severidad `'warning'`), `DLQ_TRANSFER` (severidad `'warning'`), `DLQ_RESOLVED` (severidad `'warning'`).
-
-### 3.7 Persistencia Local en Navegador (IndexedDB) e Inexistencia en PostgreSQL
-Se declara formalmente que las entidades `syncQueue`, `sales_queue` y `dead_letter_queue` **no existen como tablas relacionales en PostgreSQL** (la consulta en `information_schema.tables` retorna conjunto vacío `[]`). Su almacenamiento reside 100% en el cliente mediante IndexedDB bajo los siguientes stores:
-- `sales_queue`: Almacena transacciones de venta pendientes de drenado en orden cronológico (FIFO).
-- `dead_letter_queue` (DLQ): Almacena ventas con 3 fallos técnicos de red o *Schema Drift* para resolución por el Administrador.
-- `products_cache` y `clients_cache`: Copias locales descargadas para la validación preventiva en origen.
+### 3.6 RN-OFF-06: Gestión de Inconsistencias de Inventario y DLQ
+1. Si al sincronizar una venta física ya entregada, `consume_stock_fifo` arroja déficit insalvable de stock en el servidor:
+   - La venta se traslada de inmediato a la `dead_letter_queue`.
+   - Se libera la cola principal para permitir el drenado del resto de ventas válidas.
+   - El sistema emite notificación prioritaria al Administrador para su regularización mediante ajuste de inventario o venta forzada (`rpc_force_sale`).
 
 ---
 
-## 4. ESPECIFICACIÓN DETALLADA DE REGLAS DE NEGOCIO Y CASOS DE USO
+## 4. Casos Límite y Manejo de Contingencias
 
-### 4.1 Bloqueo Preventivo en Origen y Acoplamiento Exclusivo a POS (`RN-OFF-01`, `RN-OFF-02`, `RN-R01`)
-1. **Límite Transaccional Exclusivo a Ventas:** El subsistema offline está restringido estrictamente a `CREATE_SALE`. El interceptor de la cola de sincronización detecta y destruye de inmediato cualquier intento de encolar movimientos de inventario (mermas), gastos de tesorería o cierres de caja en modo desconectado.
-2. **Validación Preventiva contra Stock Local (*Offline Defensivo*):** Antes de autorizar una venta sin internet y encolarla en `sales_queue`, la aplicación valida que `current_stock >= requested_quantity` para cada producto utilizando la copia en `products_cache`.
-3. **Bloqueo Inmediato:** Si el inventario local es insuficiente, el POS bloquea el cobro en origen y despliega: *"Stock insuficiente en catálogo local. No es posible vender sin conexión"*. La transacción no se encola, garantizando la política anti-negativos (`POL-LOG-02`).
-
-### 4.2 Límite de Encolamiento, Indicador Visual y Alertas (`RN-OFF-03`, `RN-OFF-06`, `RN-R04`)
-1. **Capacidad Máxima de Supervivencia:** La cola local `sales_queue` dispone de un tope máximo configurable (default: 50 ventas) para evitar saturación de memoria en terminales móviles.
-2. **Indicador Visual Permanente en POS:**
-   - *Estado Normal (0% a 79%):* Indicador sutil permanente "X/50 ventas pendientes".
-   - *Estado Alerta Preventiva (80% a 99%):* Indicador en color amarillo/naranja con advertencia: *"Cola de sincronización casi llena. Reconecta a internet pronto"*.
-   - *Estado Crítico Bloqueante (100%):* Indicador en color rojo. El POS bloquea el botón de cobro mostrando: *"Límite de ventas offline alcanzado. Reconecta a internet para continuar"*.
-
-### 4.3 Sincronización FIFO e Idempotencia con `local_id` (`RN-012-01`, `RN-012-07`, `RN-011-03`, `RN-R03`)
-1. **Generación Criptográfica Local:** Cada venta offline genera en el cliente un `local_id` (UUID v4) y marca temporal local de creación antes de persistirse en `sales_queue`.
-2. **Orden Cronológico Estricto (FIFO):** Al regresar la red, el motor de sincronización drena las ventas en estricto orden cronológico ascendente (de la más antigua a la más reciente).
-3. **Resolución Idempotente en Backend:** Al recibir `p_local_id`, el backend verifica si ya existe en `sales`. Si ya fue insertada por un reintento anterior, retorna `ActionResponse` con `code = 'DUPLICATE_RESOLVED'` y el `sale_id` existente, provocando que el cliente la purgue de `sales_queue` sin duplicar movimientos de kardex ni caja.
-4. **Respeto a Precios Históricos (`RN-012-04`):** La venta offline se procesa y asienta respetando el precio unitario con el que fue cobrada en el mostrador durante el apagón, sin importar si el catálogo cambió en el servidor mientras tanto.
-
-### 4.4 Imputación Contable a Turnos Cerrados y Fidelidad de Caja (`RN-012-06`)
-1. **Preservación del `session_id` Histórico:** La venta offline guarda el identificador del turno de caja (`cash_sessions.id`) que estaba abierto al crearse localmente.
-2. **Asentamiento en Período Histórico sin Reabrir Caja:** Si el Administrador cerró la caja (manual o por el cron de 24 horas de SDD-017) antes de la reconexión:
-   - El backend asienta el registro en `cash_movements` vinculándolo al `session_id` histórico original.
-   - El saldo esperado del turno cerrado se actualiza para reflejar el ingreso real.
-   - La caja cerrada **no cambia de estado** (permanece en `status = 'closed'`).
-   - Se emite un asiento en `audit_logs` con `event_type = 'LATE_SYNC_UPDATE'` notificando la actualización extemporánea.
-
-### 4.5 Doble Barrera de Crédito en Fiados Offline (`RN-R02`, `RN-012-05`)
-1. **Barrera 1 (Preventiva Local):** El cliente valida que `clients_cache.balance + total <= clients_cache.credit_limit`. Si excede, el POS bloquea la venta fiada de inmediato.
-2. **Barrera 2 (Estricta en Servidor):** Al sincronizar, el backend ejecuta bloqueo `SELECT ... FOR UPDATE` sobre la fila del cliente en `clients`. Si por ventas concurrentes de otra terminal el cliente superó su cupo durante el apagón, el servidor aborta la transacción con `CREDIT_LIMIT_EXCEEDED` y traslada la venta a DLQ para gestión directa de cobro en efectivo o anulación por el personal.
-
-### 4.6 Gestión de Fallos Técnicos, Schema Drift y Dead Letter Queue (`RN-OFF-04`, `RN-OFF-05`, `RN-012-08`, `RN-R05`)
-1. **Cadencia de Reintentos:** Ante fallos técnicos transitorios (errores 500, timeouts de red), el sistema ejecuta hasta 3 reintentos automáticos con retroceso exponencial.
-2. **Traslado a Dead Letter Queue (DLQ):** Si tras 3 intentos la venta no logra procesarse, o si el interceptor detecta incompatibilidad estructural (*Schema Drift*), la venta se mueve a la `dead_letter_queue` en IndexedDB.
-3. **Acciones Administrativas en DLQ:** La interfaz de la DLQ ofrece exclusivamente dos opciones al Administrador:
-   - *Reintentar:* Fuerza un reenvío una vez solucionada la contingencia de red o actualizado el sistema.
-   - *Eliminar:* Descarta la transacción únicamente si se constata que fue una prueba o registro espurio.
-   - *Venta Forzada Excepcional:* Si la venta es legítima pero colisiona con discrepancias físicas de inventario en servidor, el Administrador la regulariza desde el panel aplicando `CORRECCION_SISTEMA` bajo SDD-014.
-4. **Suspensión de Cola por Autenticación (`sync:auth_required`):** Si el token JWT expira durante el apagón, la cola se pausa inmediatamente, impidiendo peticiones rechazadas con 401 hasta que el usuario inicie sesión con conectividad.
+| Caso Límite | Condición del Sistema | Comportamiento Técnico | Código de Error | Acción en UI |
+|---|---|---|---|---|
+| **CL-OFF-01** | Cola local llena (50 ítems) | Interceptor local en IndexedDB rechaza la inserción de la transacción 51. | `OFFLINE_QUEUE_FULL` | Modal rojo de bloqueo con advertencia operativa. |
+| **CL-OFF-02** | Falla de conexión a mitad del lote | La transacción en vuelo falla por timeout; el reintento reutiliza `local_id`. | `NETWORK_TIMEOUT` | Indicador amarillo en barra superior: "Sincronizando 12/50...". |
+| **CL-OFF-03** | Caja de origen cerrada > 24H | Backend detecta que `origin_session_id` tiene `status = 'closed'`. | `LATE_SYNC_ADJUSTMENT` | Venta procesada con éxito; alerta informativa de ajuste a reporte contable. |
+| **CL-OFF-04** | Discrepancia de stock en servidor | `consume_stock_fifo` no encuentra existencias para un ítem del ticket. | `INSUFFICIENT_STOCK` | Aislamiento en Dead Letter Queue con bandera de auditoría visible para Administrador. |
+| **CL-OFF-05** | Empleado sin cuenta Auth | Colaborador con pase diario sincroniza ventas; inserción en auditoría. | `COLLISION_PREVENTED` | El backend canaliza la identidad del empleado en `metadata->>'sold_by'`. |
 
 ---
 
-## 5. CONTRATOS DE INTERFAZ
+## 5. Contrato de Interfaz
 
-Los contratos de sincronización se estructuran bajo esquemas JSON canónicos que separan la persistencia en el cliente de la autoridad de datos en el servidor.
-
-### 5.1 Esquema JSON: Registro de Venta en Cola Local (`OfflineSaleRecord`)
-Estructura persistida en el store `sales_queue` de IndexedDB en el navegador:
+### 5.1 Estructura del Objeto en Cola Local (IndexedDB: `mutation_queue`)
 
 ```json
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "OfflineSaleRecord",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OfflineQueueItemSchema",
   "type": "object",
-  "required": ["local_id", "store_id", "session_id", "employee_id", "payment_method", "total", "items", "created_at_local", "retry_count"],
+  "required": ["id", "type", "store_id", "session_id", "employee_id", "payload", "timestamp", "retry_count"],
   "properties": {
-    "local_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Identificador único pre-generado por el cliente para idempotencia."
-    },
-    "store_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Tienda en la que se originó la venta."
-    },
-    "session_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Turno de caja que estaba abierto al crear la venta en el cliente."
-    },
-    "employee_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Usuario responsable de la venta."
-    },
-    "client_id": {
-      "type": ["string", "null"],
-      "format": "uuid",
-      "description": "Cliente si la venta es a crédito o fidelizada."
-    },
-    "payment_method": {
-      "type": "string",
-      "enum": ["efectivo", "nequi", "daviplata", "fiado"]
-    },
-    "total": {
-      "type": "number",
-      "minimum": 0
-    },
-    "amount_received": {
-      "type": ["number", "null"],
-      "minimum": 0
-    },
-    "created_at_local": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Fecha y hora exacta de la creación en la terminal física."
-    },
-    "retry_count": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 3,
-      "description": "Contador de reintentos técnicos de sincronización."
-    },
-    "items": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["product_id", "quantity", "unit_price"],
-        "properties": {
-          "product_id": { "type": "string", "format": "uuid" },
-          "quantity": { "type": "number", "minimum": 0.001 },
-          "unit_price": { "type": "number", "minimum": 0 }
-        }
-      }
-    }
-  },
-  "additionalProperties": false
-}
-```
-
-### 5.2 Esquema JSON: Petición de Sincronización Diferida (`SincronizarVentaRequest`)
-Payload transmitido al procedimiento transaccional de ventas en Supabase:
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "SincronizarVentaRequest",
-  "type": "object",
-  "required": ["p_store_id", "p_local_id", "p_payment_method", "p_items", "p_session_id"],
-  "properties": {
-    "p_store_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Identificador de la tienda propietaria (validado con assert_store_access)."
-    },
-    "p_local_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Clave de idempotencia para prevención de duplicados."
-    },
-    "p_session_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Turno de caja original para imputación contable histórica."
-    },
-    "p_client_id": {
-      "type": ["string", "null"],
-      "format": "uuid"
-    },
-    "p_payment_method": {
-      "type": "string",
-      "enum": ["efectivo", "nequi", "daviplata", "fiado"]
-    },
-    "p_amount_received": {
-      "type": ["number", "null"],
-      "minimum": 0
-    },
-    "p_items": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["product_id", "quantity", "unit_price"],
-        "properties": {
-          "product_id": { "type": "string", "format": "uuid" },
-          "quantity": { "type": "number", "minimum": 0.001 },
-          "unit_price": { "type": "number", "minimum": 0 }
-        }
-      }
-    }
-  },
-  "additionalProperties": false
-}
-```
-
-### 5.3 Esquema JSON: Respuesta Canónica de Acción (`ActionResponse`)
-Estructura universal retornada por el servidor tras la sincronización:
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ActionResponse",
-  "type": "object",
-  "required": ["success"],
-  "properties": {
-    "success": {
-      "type": "boolean",
-      "description": "Indica si la venta fue procesada o resuelta como preexistente."
-    },
-    "data": {
+    "id": { "type": "string", "format": "uuid", "description": "Identificador local unívoco (local_id)" },
+    "type": { "type": "string", "enum": ["CREATE_SALE"] },
+    "store_id": { "type": "string", "format": "uuid" },
+    "session_id": { "type": "string", "format": "uuid", "description": "origin_session_id del turno" },
+    "employee_id": { "type": "string", "format": "uuid", "description": "sold_by del cajero" },
+    "payload": {
       "type": "object",
+      "required": ["payment_method", "amount_received", "items", "total"],
       "properties": {
-        "sale_id": { "type": "string", "format": "uuid" },
-        "ticket_number": { "type": "integer" },
-        "total": { "type": "number" },
-        "change": { "type": "number" }
-      },
-      "additionalProperties": true
+        "client_id": { "type": ["string", "null"], "format": "uuid" },
+        "payment_method": { "type": "string", "enum": ["efectivo", "nequi", "daviplata", "fiado"] },
+        "amount_received": { "type": "number", "minimum": 0 },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["product_id", "quantity", "unit_price"],
+            "properties": {
+              "product_id": { "type": "string", "format": "uuid" },
+              "quantity": { "type": "number", "exclusiveMinimum": 0 },
+              "unit_price": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        },
+        "total": { "type": "number", "minimum": 0 }
+      }
     },
-    "error": {
-      "type": "string",
-      "description": "Descripción amigable en español del error."
-    },
-    "code": {
-      "type": "string",
-      "enum": [
-        "DUPLICATE_RESOLVED",
-        "INSUFFICIENT_STOCK",
-        "CREDIT_LIMIT_EXCEEDED",
-        "STORE_ACCESS_DENIED",
-        "SHIFT_EXPIRED",
-        "INTERNAL_SERVER_ERROR"
-      ]
-    },
-    "details": {
-      "type": "object",
-      "additionalProperties": true
-    }
-  },
-  "additionalProperties": false
+    "timestamp": { "type": "integer", "description": "Unix timestamp en milisegundos" },
+    "retry_count": { "type": "integer", "minimum": 0, "maximum": 3 }
+  }
 }
 ```
 
-### 5.4 Esquema JSON: Registro de Dead Letter Queue (`DLQRecord`)
-Estructura persistida en el store `dead_letter_queue` de IndexedDB:
+### 5.2 Operación de Sincronización en Servidor: `rpc_procesar_venta_v3`
 
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "DLQRecord",
-  "type": "object",
-  "required": ["sale_payload", "error_code", "error_message", "failed_at", "attempts", "status"],
-  "properties": {
-    "sale_payload": {
-      "$ref": "#/properties/OfflineSaleRecord",
-      "description": "Registro completo original de la venta offline intacta."
-    },
-    "error_code": {
-      "type": "string",
-      "description": "Código del fallo técnico o de negocio que causó la derivación."
-    },
-    "error_message": {
-      "type": "string",
-      "description": "Mensaje técnico detallado o causa del schema drift."
-    },
-    "failed_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "attempts": {
-      "type": "integer",
-      "minimum": 3
-    },
-    "status": {
-      "type": "string",
-      "enum": ["pending_review", "retrying", "discarded"]
+- **Tipo:** RPC PostgreSQL / Acción (WRITE)
+- **Firma de Entrada:**
+  ```json
+  {
+    "p_store_id": "UUID (Obligatorio)",
+    "p_client_id": "UUID (Opcional, NULL para ventas de mostrador)",
+    "p_payment_method": "TEXT ('efectivo' | 'nequi' | 'daviplata' | 'fiado')",
+    "p_amount_received": "NUMERIC >= 0",
+    "p_items": [
+      {
+        "product_id": "UUID (Obligatorio)",
+        "quantity": "NUMERIC > 0",
+        "unit_price": "NUMERIC > 0 (Precio histórico congelado)"
+      }
+    ],
+    "p_idempotency_key": "UUID (Opcional, NULL)",
+    "p_local_id": "TEXT (Obligatorio para sincronización offline, coincide con id de cola)",
+    "p_is_offline_sync": "BOOLEAN (true)",
+    "p_origin_session_id": "UUID (Identificador del turno de caja histórico)",
+    "p_sold_by": "UUID (Identificador del empleado cajero)"
+  }
+  ```
+- **Respuesta Exitosa (HTTP 200):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "sale_id": "UUID",
+      "ticket_number": 1089,
+      "total": 45000,
+      "rounding_difference": 0,
+      "amount_received": 50000,
+      "change_given": 5000,
+      "payment_method": "efectivo",
+      "items_count": 2,
+      "sync_status": "synced",
+      "created_at": "2026-10-24T18:30:00Z"
     }
-  },
-  "additionalProperties": false
-}
-```
+  }
+  ```
+- **Respuesta de Rechazo (HTTP 400 / 409):**
+  ```json
+  {
+    "success": false,
+    "error": "Stock insuficiente para completar la venta del producto [Nombre]",
+    "code": "INSUFFICIENT_STOCK | NO_OPEN_CASH_SESSION | STORE_ACCESS_DENIED | CART_LIMIT_EXCEEDED"
+  }
+  ```
 
 ---
 
-## 6. ANÁLISIS DE SEGURIDAD Y RESILIENCIA
+## 6. Seguridad y Permisos
 
-### 6.1 Control de Acceso y Funciones Centralizadas (Regla 4 de AGENTS.md)
-1. **Aislamiento Multi-Tenant Estricto (`assert_store_access`):** Todo procedimiento en backend invocado durante la sincronización diferida ejecuta como primera instrucción mandatoria:
-   - `PERFORM public.assert_store_access(p_store_id);`
-   Queda terminantemente prohibido reimplementar comparaciones directas de tienda o comprobaciones manuales del JWT.
-2. **Gobernanza de RLS mediante `get_current_store_id()`:** Las políticas de seguridad a nivel de fila en `sales`, `sale_items`, `products`, `clients`, `cash_sessions` y `cash_movements` utilizan exclusivamente `get_current_store_id()`, impidiendo la fuga de datos transaccionales entre distintos comercios.
-
-### 6.2 Privilegios Base en Tablas (Regla 8 de AGENTS.md)
-Se verificó el cumplimiento de la Regla 8 en todas las tablas vinculadas a la persistencia y sincronización offline:
-- **Remediación Ejecutada y Verificada:** Se subsanó en Supabase Cloud la ausencia previa de privilegios de `service_role` sobre `clients` y `sale_items` (`GRANT ALL ON TABLE public.clients, public.sale_items TO service_role;`), validando mediante `has_table_privilege` que ambas tablas cuenten con acceso completo (`serv_select: true`, `serv_insert: true`, `serv_update: true`, `serv_delete: true`) y `rowsecurity = true`.
-- Las tablas `sales`, `products`, `cash_sessions`, `cash_movements` y `audit_logs` disponen de sus privilegios base asignados para `service_role`, `authenticated` y `anon`, erradicando el riesgo de errores 42501 (Permission Denied).
-
-### 6.3 Resiliencia Transaccional y Superficie de Amenazas
-1. **Ataques de Repetición (Replay Attacks):** La combinación de `store_id` y `local_id` indexado en `sales` neutraliza ataques de inyección repetida de ventas desde terminales comprometidas o redes inestables.
-2. **Suspensión Automática por Sesión Expirada (`sync:auth_required`):** Si la sesión del usuario caduca durante una desconexión prolongada, la cola de sincronización se detiene automáticamente, evitando enviar peticiones no autorizadas y forzando la re-autenticación limpia al regresar la conectividad (`RN-OFF-03`, `RN-R05`).
-3. **Inviolabilidad de Auditoría Forense (`POL-AUD-01`):** Las sincronizaciones en diferido, las actualizaciones de turnos cerrados y las resoluciones administrativas en DLQ generan registros inmutables append-only en `audit_logs` con `severity` tipada e `ip_address`, asegurando trazabilidad total ante inspecciones financieras.
+1. **Aislamiento Multi-Tenant (Regla 4):**
+   - Toda solicitud entrante debe validar rigurosamente la tenencia mediante:
+     ```
+     PERFORM public.assert_store_access(p_store_id);
+     ```
+   - Si el usuario en sesión no pertenece a la tienda que encoló la venta, el servidor aborta con excepción `STORE_ACCESS_DENIED`.
+2. **Mitigación de Integridad Referencial en Auditoría (Brecha B2-B):**
+   - Cuando la venta sea sincronizada por un colaborador de mostrador sin cuenta en `auth.users`, el backend tiene prohibido forzar su UUID en `audit_logs.actor_id` (para no violar `fk_audit_user`).
+   - La identidad del vendedor se preserva de forma obligatoria e inmutable en `audit_logs.metadata`:
+     ```json
+     {
+       "event": "LATE_SYNC_PROCESSED",
+       "local_id": "b3e0...-...",
+       "sold_by": "3d120d1b-...",
+       "origin_session_id": "7f88...-..."
+     }
+     ```
 
 ---
 
-## 7. REGISTRO DE DEUDAS TÉCNICAS Y TRADE-OFFS (REGLA 7)
+## 7. Modelo de Datos Físico (Catálogo Real PostgreSQL)
 
-Conforme a la **Regla 7 de AGENTS.md**, se formalizan los 5 compromisos y decisiones arquitecturales de este módulo:
+El diseño de este módulo opera estrictamente sobre las 7 tablas físicas verificadas en el Bloque 2:
 
-### D-1: Idempotencia Operativa con `sales.local_id` y Prevención de Duplicados (RN-012-01, RN-011-03)
-- **Qué se decidió:** Adoptar `sales.local_id` (`text`, nullable) como la clave de deduplicación operativa en la sincronización diferida de ventas, retornando `DUPLICATE_RESOLVED` con el `sale_id` existente ante reintentos.
-- **Por qué / Trade-off:** Evita la duplicación de ingresos en caja y sobre-descuentos en el inventario FIFO ante timeouts de red, sin requerir una tabla intermedia de staging en PostgreSQL.
-- **Condición de revisión futura:** Permanente / Invariante transaccional del módulo de ventas.
+1. **`sales` (19 columnas):**
+   `id` (uuid), `store_id` (uuid), `ticket_number` (integer), `employee_id` (uuid), `client_id` (uuid), `total` (numeric), `rounding_difference` (numeric), `payment_method` (text), `amount_received` (numeric), `change_given` (numeric), `sync_status` (text, default `'pending'`), `local_id` (text), `is_voided` (boolean), `voided_by` (uuid), `void_reason` (text), `created_at` (timestamptz), `idempotency_key` (uuid), `void_session_id` (uuid), `voided_at` (timestamptz).
+2. **`sale_items` (8 columnas):**
+   `id` (uuid), `sale_id` (uuid), `product_id` (uuid), `quantity` (numeric), `unit_price` (numeric), `subtotal` (numeric), `created_at` (timestamptz), `unit_cost` (numeric).
+3. **`products` (17 columnas):**
+   `id` (uuid), `store_id` (uuid), `name` (text), `plu` (text), `price` (numeric), `cost_price` (numeric), `current_stock` (numeric), `min_stock` (numeric), `category` (text), `measurement_unit` (text), `is_weighable` (boolean), `low_stock_alerted` (boolean), `created_at` (timestamptz), `updated_at` (timestamptz), `supplier_id` (uuid), `brand` (text), `is_active` (boolean).
+4. **`cash_sessions` (12 columnas):**
+   `id` (uuid), `store_id` (uuid), `opened_by` (uuid), `closed_by` (uuid), `opening_balance` (numeric), `expected_balance` (numeric), `actual_balance` (numeric), `difference` (numeric), `status` (text), `opened_at` (timestamptz), `closed_at` (timestamptz), `forced_close` (boolean).
+5. **`cash_movements` (10 columnas):**
+   `id` (uuid), `session_id` (uuid), `movement_type` (text), `amount` (numeric), `description` (text), `sale_id` (uuid), `created_at` (timestamptz), `payment_method` (text), `category` (text), `voucher_ref` (text).
+6. **`daily_passes` (14 columnas):**
+   `id` (uuid), `employee_id` (uuid), `pass_date` (date), `status` (text), `device_fingerprint` (text), `retry_count` (integer), `requested_at` (timestamptz), `resolved_at` (timestamptz), `resolved_by` (uuid), `store_id` (uuid), `auth_user_id` (uuid), `approved_at` (timestamptz), `approved_by` (uuid), `updated_at` (timestamptz).
+7. **`audit_logs` (12 columnas):**
+   `id` (uuid), `actor_id` (uuid), `event_type` (text), `resource_id` (text), `metadata` (jsonb), `created_at` (timestamptz), `store_id` (uuid), `severity` (text), `ip_address` (text), `reviewed_by` (uuid), `reviewed_at` (timestamptz), `review_notes` (text).
 
-### D-2: Subordinación al Modelo de Offline Defensivo y Simplificación de DLQ (FRD-012-01, FRD-012-R)
-- **Qué se decidió:** Consagrar que toda la prevención de conflictos de stock y cupo de fiado se ejecuta en origen antes de encolar (bloqueo preventivo en IndexedDB contra catálogo local); la DLQ se simplifica a "Reintentar / Eliminar"; y cualquier ajuste de existencias excepcional se delega a `CORRECCION_SISTEMA` en servidor bajo SDD-014.
-- **Por qué / Trade-off:** Elimina la necesidad de interfaces complejas y propensas a errores de "Ajuste forzado interactivo" en cliente, protegiendo el principio de no-negatividad de inventario (`POL-LOG-02`).
-- **Condición de revisión futura:** Permanente / Arquitectura offline consolidada.
+---
 
-### D-3: Imputación Contable a Turnos Cerrados y Recálculo sin Re-apertura de Caja (RN-012-06)
-- **Qué se decidió:** Estandarizar que las ventas offline creadas durante un turno que posteriormente fue cerrado se imputan al `session_id` histórico original, actualizando el saldo esperado y documentando en `audit_logs` con `LATE_SYNC_UPDATE`, sin reabrir el turno contable.
-- **Por qué / Trade-off:** Preserva la inmutabilidad de los turnos cerrados (`POL-AUD-01`) mientras refleja fielmente el flujo real de dinero de la jornada.
-- **Condición de revisión futura:** Permanente / Principio contable fundamental.
+## 8. Registro de Deuda Técnica Documentada
 
-### D-4: Persistencia de Colas en IndexedDB ante Logout y Pausa por Autenticación (RN-CACHE-03, RN-OFF-03)
-- **Qué se decidió:** Normar que el logout voluntario en cliente purga credenciales pero preserva la cola `sales_queue` en IndexedDB; si el JWT expira durante el apagón, la cola se suspende con `sync:auth_required` hasta el re-login con internet.
-- **Por qué / Trade-off:** Evita la pérdida irrecuperable de ventas legítimas realizadas por el comerciante y previene avalanchas de errores 401 durante reconexiones inestables.
-- **Condición de revisión futura:** Permanente / Estándar offline-first.
+En cumplimiento de la Regla 7 de `AGENTS.md`, se registran formalmente las simplificaciones y dependencias de base de datos diferidas:
 
-### D-5: Segregación RBAC y Ceguera Contable en DLQ (POL-SEC-01)
-- **Qué se decidió:** Restringir la consulta y resolución de la Dead Letter Queue exclusivamente a usuarios con rol en `admin_profiles`, ocultando márgenes y costos unitarios al cajero operativo.
-- **Por qué / Trade-off:** Cumple el principio de ceguera contable (`POL-SEC-01`) y previene manipulaciones no autorizadas de transacciones fallidas en el mostrador.
-- **Condición de revisión futura:** Permanente / Invariante de seguridad y control interno.
-
-### D-6: Soporte de Precio Histórico Desconectado en `rpc_procesar_venta_v3` (`RN-012-04`)
-- **Qué se decidió:** Cuando una venta se origina en modo desconectado (`p_is_offline_sync = true`), el cliente envía en `p_items` el `unit_price` histórico capturado del catálogo local al momento de la transacción (`OfflineSaleRecord.created_at`). El backend `rpc_procesar_venta_v3` debe honrar o auditar dicho precio histórico en lugar de sobreescribirlo con el precio vigente en catálogo al momento de la sincronización.
-- **Por qué / Trade-off:** Cumple la regla `RN-012-04` impidiendo que un cambio de precios administrativo durante un apagón modifique retroactivamente el monto cobrado al cliente en el mostrador.
-- **Condición de revisión futura:** Ola 6 SQL (se integrará soporte para `p_is_offline_sync` y `unit_price` histórico opcional en `rpc_procesar_venta_v3`).
+| ID | Hallazgo / Requerimiento | Justificación / Trade-off | Condición de Revisión |
+|---|---|---|---|
+| **D-OFF-01** | Firma extendida en `rpc_procesar_venta_v3` (`p_origin_session_id`, `p_sold_by`) | La versión actual en producción cuenta con 8 parámetros. Mientras se aplica la migración SQL de Fase 3, el frontend canaliza estos identificadores dentro de `p_local_id` / metadatos para no romper clientes en vivo. | Despliegue de migración de sincronización offline en Ola 6. |
+| **D-OFF-02** | Columna física `actor_id` en `cash_movements` | La tabla posee 10 columnas sin autor directo por fila. La trazabilidad se asegura mediante la relación con `sales.employee_id`. | Migración de auditoría granular multicanal en Fase 3. |
+| **D-OFF-03** | Relajación de restricción `fk_audit_user` en `audit_logs` | El constraint colisiona con empleados de mostrador sin cuenta Auth. Se mitiga mediante el uso de `metadata: jsonb`. | Consolidación del esquema de auditoría unificada en Ola 6. |
