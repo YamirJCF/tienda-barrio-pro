@@ -2,7 +2,7 @@
 
 > **Asociado a:** [FRD-028](../FRD/FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md)  
 > **Fase del Plan:** Ola 5 — Sesiones, Autenticación, Offline y Gobernanza de Caché  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)  
+> **Estado:** 🟢 Aprobado (Protocolo PAC-SDD v2.0)  
 > **Versión:** 2.0.0 (Consolidada con Gobernanza de Memoria, SWR y Blindaje de Concurrencia)  
 > **Última Actualización:** 2026-10-26  
 
