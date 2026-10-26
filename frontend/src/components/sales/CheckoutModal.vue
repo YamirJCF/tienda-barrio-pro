@@ -209,10 +209,11 @@ watch(() => props.modelValue, async (val) => {
     clientSearch.value = '';
     selectedFiadoClient.value = props.selectedClient || null;
 
-    // Asegurar carga de clientes de la tienda activa para el flujo de Fiado/Crédito
+    // Carga bajo demanda no bloqueante de clientes para el flujo de Fiado/Crédito (SWR Nivel 2)
     const authStore = useAuthStore();
-    if (authStore.currentUser?.storeId) {
-      await clientsStore.initialize(authStore.currentUser.storeId);
+    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+    if (storeId && clientsStore.clients.length === 0) {
+      clientsStore.initialize(storeId);
     }
   }
 });

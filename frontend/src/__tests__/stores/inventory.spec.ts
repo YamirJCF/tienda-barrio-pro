@@ -25,6 +25,14 @@ vi.mock('../../data/repositories/productRepository', () => ({
     })),
     registerEntry: vi.fn(async () => true),
     registerExit: vi.fn(async () => true),
+    updateCatalog: vi.fn(async (params) => ({
+      success: true,
+      data: {
+        product_id: params.id,
+        name: params.name,
+        price: params.price,
+      }
+    })),
   },
   productMapper: {
     toDomain: vi.fn((r) => r),
@@ -220,6 +228,87 @@ describe('Inventory Store', () => {
       const found = store.getProductByPLU('123');
 
       expect(found).toBeUndefined();
+    });
+  });
+
+  describe('updateProduct (Escudos 1 y 2 - SDD-028 v2.0.0)', () => {
+    it('desacopla el vector de catálogo y no muta current_stock (Deuda D-7)', async () => {
+      const store = useInventoryStore();
+      const created = await store.addProduct({
+        name: 'Arroz Diana',
+        price: new Decimal(3500),
+        isWeighable: false,
+        measurementUnit: 'un',
+        stock: new Decimal(50),
+        minStock: 5,
+        storeId: '11111111-1111-4111-8111-111111111111'
+      });
+
+      const updated = await store.updateProduct(
+        created!.id,
+        { name: 'Arroz Diana Especial', price: new Decimal(4000) },
+        { expectedOldPrice: 3500, expectedName: 'Arroz Diana' }
+      );
+
+      expect(updated?.name).toBe('Arroz Diana Especial');
+      expect(updated?.price.toNumber()).toBe(4000);
+      expect(updated?.stock.toNumber()).toBe(50); // Stock intacto
+    });
+
+    it('lanza error y purga memoria cuando el backend bloquea por concurrencia (Escudo 2)', async () => {
+      const { productRepository } = await import('../../data/repositories/productRepository');
+      (productRepository.updateCatalog as any).mockResolvedValueOnce({
+        success: false,
+        code: 'CONCURRENT_MUTATION_BLOCKED',
+        error: 'Operación bloqueada. Modificado concurrentemente.'
+      });
+
+      const store = useInventoryStore();
+      const created = await store.addProduct({
+        name: 'Aceite',
+        price: new Decimal(8000),
+        isWeighable: false,
+        measurementUnit: 'un',
+        stock: new Decimal(10),
+        minStock: 2,
+        storeId: '11111111-1111-4111-8111-111111111111'
+      });
+
+      await expect(
+        store.updateProduct(
+          created!.id,
+          { price: new Decimal(8500) },
+          { expectedOldPrice: 7000, expectedName: 'Aceite' }
+        )
+      ).rejects.toThrow('Operación bloqueada. Modificado concurrentemente.');
+    });
+
+    it('lanza error cuando el backend bloquea por cooldown (Escudo 1)', async () => {
+      const { productRepository } = await import('../../data/repositories/productRepository');
+      (productRepository.updateCatalog as any).mockResolvedValueOnce({
+        success: false,
+        code: 'MUTATION_COOLDOWN_ACTIVE',
+        error: 'Operación bloqueada temporalmente por cooldown.'
+      });
+
+      const store = useInventoryStore();
+      const created = await store.addProduct({
+        name: 'Leche',
+        price: new Decimal(3000),
+        isWeighable: false,
+        measurementUnit: 'un',
+        stock: new Decimal(20),
+        minStock: 5,
+        storeId: '11111111-1111-4111-8111-111111111111'
+      });
+
+      await expect(
+        store.updateProduct(
+          created!.id,
+          { price: new Decimal(3200) },
+          { expectedOldPrice: 3000, expectedName: 'Leche' }
+        )
+      ).rejects.toThrow('Operación bloqueada temporalmente por cooldown.');
     });
   });
 });

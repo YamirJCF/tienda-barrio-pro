@@ -6,6 +6,7 @@ import { clientRepository } from '../data/repositories/clientRepository';
 import { generateUUID } from '../utils/uuid';
 import { logger } from '../utils/logger';
 import { clientsSerializer } from '../data/serializers/clientsSerializer';
+import { systemCacheManager, CacheLevel } from '../services/systemCacheManager';
 import { getSupabaseClient, isSupabaseConfigured } from '../data/supabaseClient';
 
 export const useClientsStore = defineStore(
@@ -29,26 +30,30 @@ export const useClientsStore = defineStore(
     });
 
     // Actions
-    const initialize = async (storeId: string) => {
+    const initialize = async (storeId: string, forceReload: boolean = false) => {
       if (!storeId) return;
 
       // OFFLINE-FIRST: If we already have clients loaded (from persist), skip network call when offline
       const isOnline = navigator.onLine;
-      if (!isOnline && clients.value.length > 0) {
+      if (!isOnline && clients.value.length > 0 && !forceReload) {
         logger.log('[ClientsStore] Offline mode: using persisted clients');
         return;
       }
 
       isLoading.value = true;
       try {
-        const data = await clientRepository.getAll(storeId);
-        clients.value = data;
-        // Transactions are loaded on demand usually, but we keep the array valid
+        const cacheKey = `clients:${storeId}`;
+        const { data } = await systemCacheManager.fetchSWR(
+          cacheKey,
+          () => clientRepository.getAll(storeId),
+          { level: CacheLevel.LEVEL_2_CATALOG, forceFresh: forceReload }
+        );
+        if (data) {
+          clients.value = data;
+        }
       } catch (e: any) {
         logger.error('[ClientsStore] Init failed', e);
         error.value = 'Error al cargar clientes';
-        // FRD-012: Don't clear existing clients on network error
-        // If we have persisted data, keep it
         if (clients.value.length > 0) {
           logger.warn('[ClientsStore] Network failed, but keeping persisted clients');
         }
@@ -76,6 +81,7 @@ export const useClientsStore = defineStore(
         const created = await clientRepository.create(newClient);
         if (created) {
           clients.value.push(created);
+          systemCacheManager.invalidate(`clients:${data.storeId}`);
           return created;
         }
       } catch (e) {
@@ -99,6 +105,9 @@ export const useClientsStore = defineStore(
           const index = clients.value.findIndex(c => c.id === id);
           if (index !== -1) {
             clients.value[index] = updated;
+          }
+          if (dataWithStore.storeId) {
+            systemCacheManager.invalidate(`clients:${dataWithStore.storeId}`);
           }
           return updated;
         }

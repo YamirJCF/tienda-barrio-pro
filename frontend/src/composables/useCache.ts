@@ -1,87 +1,129 @@
 /**
- * useCache Composable
- * WO-003 T3.2: SWR Caching Strategy
+ * useCache Composable v2.0
+ * Conforme con SDD-028 v2.0.0
  * 
- * Features:
- * - Stale-While-Revalidate pattern
- * - Configurable TTL per entity
- * - Uses Supabase repositories
+ * Envoltorio ergonómico de Vue para SystemCacheManager:
+ * - Stale-While-Revalidate pattern (SWR)
+ * - Deduplicación de promesas en vuelo
+ * - Generación reactiva anti-carreras
+ * - TTL por niveles de datos
+ * - Acotamiento LRU
  * 
  * @module composables/useCache
- * @see 01_REQUIREMENTS/sync_protocol_spec.md
  */
 
-import { ref } from 'vue';
-import { logger } from '../utils/logger';
+import {
+  systemCacheManager,
+  SystemCacheManager,
+  CacheLevel,
+  CACHE_TTL_CONFIG,
+  type CacheEntry,
+  type FetchSWROptions,
+  type SWRResult,
+} from '../services/systemCacheManager';
 
-interface CacheConfig {
-    ttl: number; // Time to live in ms
-    key: string;
+export {
+  systemCacheManager,
+  SystemCacheManager,
+  CacheLevel,
+  CACHE_TTL_CONFIG,
+  type CacheEntry,
+  type FetchSWROptions,
+  type SWRResult,
+};
+
+export interface LegacyCacheConfig {
+  key: string;
+  ttl?: number;
+  level?: CacheLevel;
+  namespace?: string;
+  forceFresh?: boolean;
 }
 
-const CACHE_STORE: Record<string, { data: any; timestamp: number }> = {};
-
-/**
- * Use SWR Cache strategy
- */
 export function useCache() {
+  /**
+   * fetchSWR sobrecargado: soporta firma clásica { key, ttl } o firma limpia (key, fetcher, options)
+   */
+  async function fetchSWR<T>(
+    keyOrConfig: string | LegacyCacheConfig,
+    fetcher: () => Promise<T>,
+    options?: FetchSWROptions
+  ): Promise<SWRResult<T>> {
+    let key: string;
+    let opts: FetchSWROptions = options || {};
 
-    /**
-     * Fetch data with SWR strategy
-     * 1. Return cached data immediately (stale)
-     * 2. Fetch fresh data in background
-     * 3. Update cache and return fresh data if changed
-     */
-    const fetchSWR = async <T>(
-        config: CacheConfig,
-        fetcher: () => Promise<T>
-    ): Promise<{ data: T | null; isStale: boolean; error: any }> => {
-        const now = Date.now();
-        const cached = CACHE_STORE[config.key];
+    if (typeof keyOrConfig === 'string') {
+      key = keyOrConfig;
+    } else {
+      key = keyOrConfig.key;
+      opts = {
+        ttl: keyOrConfig.ttl,
+        level: keyOrConfig.level,
+        namespace: keyOrConfig.namespace,
+        forceFresh: keyOrConfig.forceFresh,
+        ...options,
+      };
+    }
 
-        const result = {
-            data: cached ? cached.data as T : null,
-            isStale: false,
-            error: null
-        };
+    return systemCacheManager.fetchSWR<T>(key, fetcher, opts);
+  }
 
-        // If cache missing or expired, mark as stale
-        if (!cached || (now - cached.timestamp > config.ttl)) {
-            result.isStale = true;
-        }
+  const invalidate = (key: string) => {
+    systemCacheManager.invalidate(key);
+  };
 
-        // If stale or missing, fetch fresh
-        if (result.isStale) {
-            try {
-                const fresh = await fetcher();
-                if (fresh) {
-                    CACHE_STORE[config.key] = {
-                        data: fresh,
-                        timestamp: now
-                    };
-                    result.data = fresh;
-                }
-            } catch (e) {
-                logger.error(`[useCache] background fetch failed for ${config.key}`, e);
-                result.error = e;
-                // Keep returning stale data if available
-            }
-        }
+  const invalidateNamespace = (namespace: string) => {
+    systemCacheManager.invalidateNamespace(namespace);
+  };
 
-        return result;
-    };
+  const invalidateAll = () => {
+    systemCacheManager.invalidateAll();
+  };
 
-    /**
-     * Invalidate cache key
-     */
-    const invalidate = (key: string) => {
-        delete CACHE_STORE[key];
-    };
+  const get = <T>(key: string): T | null => {
+    return systemCacheManager.get<T>(key);
+  };
 
-    return {
-        fetchSWR,
-        invalidate
-    };
+  const set = <T>(
+    key: string,
+    data: T,
+    options?: { level?: CacheLevel; namespace?: string }
+  ) => {
+    return systemCacheManager.set<T>(key, data, options);
+  };
+
+  const coldStart = <T>(
+    key: string,
+    data: T,
+    level?: CacheLevel,
+    namespace?: string
+  ) => {
+    systemCacheManager.coldStart<T>(key, data, level, namespace);
+  };
+
+  const markStale = (key: string) => {
+    systemCacheManager.markStale(key);
+  };
+
+  const subscribe = <T>(
+    keyOrNamespace: string,
+    callback: (data: T, key: string) => void
+  ) => {
+    return systemCacheManager.subscribe<T>(keyOrNamespace, callback);
+  };
+
+  return {
+    fetchSWR,
+    invalidate,
+    invalidateNamespace,
+    invalidateAll,
+    get,
+    set,
+    coldStart,
+    markStale,
+    subscribe,
+    manager: systemCacheManager,
+  };
 }
 
 export default useCache;

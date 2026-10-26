@@ -152,6 +152,18 @@ export interface ProductRepository extends EntityRepository<Product> {
     getMovementHistory(productId: string, limit?: number): Promise<InventoryMovementHistory[]>;
     registerEntry(productId: string, quantity: number, purchasePrice: number, salePrice: number, reason?: string, supplierId?: string, paymentType?: string, invoiceRef?: string, referenceInvoiceId?: string): Promise<boolean>;
     updateBatchPrice(batchId: string, newSalePrice: number): Promise<boolean>;
+    updateCatalog(params: {
+        id: string;
+        name: string;
+        price: number;
+        expectedOldPrice: number;
+        expectedName: string;
+        cost?: number;
+        minStock?: number;
+        plu?: string;
+        category?: string;
+        expectedOldCost?: number;
+    }): Promise<{ success: boolean; data?: any; error?: string; code?: string }>;
 }
 
 // Create base repository with Mappers
@@ -478,6 +490,73 @@ export const productRepository: ProductRepository = {
         }
 
         return true;
+    },
+
+    /**
+     * Actualizar Catálogo con Escudos 1 y 2 (SDD-028 v2.0.0 / SDD-006)
+     * Desacopla el vector comercial del vector logístico (current_stock permanece intacto)
+     */
+    async updateCatalog(params: {
+        id: string;
+        name: string;
+        price: number;
+        expectedOldPrice: number;
+        expectedName: string;
+        cost?: number;
+        minStock?: number;
+        plu?: string;
+        category?: string;
+        expectedOldCost?: number;
+    }): Promise<{ success: boolean; data?: any; error?: string; code?: string }> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            throw new Error('OFFLINE_NOT_ALLOWED: La edición de catálogo requiere conexión activa a internet.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const { data, error } = await supabase.rpc('rpc_actualizar_producto_catalogo', {
+            p_product_id: params.id,
+            p_name: params.name,
+            p_price: params.price,
+            p_expected_old_price: params.expectedOldPrice,
+            p_expected_name: params.expectedName,
+            p_cost: params.cost !== undefined ? params.cost : null,
+            p_min_stock: params.minStock !== undefined ? params.minStock : 0,
+            p_plu: params.plu || null,
+            p_category: params.category || null,
+            p_expected_old_cost: params.expectedOldCost !== undefined ? params.expectedOldCost : null
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] RPC Error in updateCatalog', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (res && res.success) {
+            // Actualizar caché IDB local de forma asíncrona preservando stock
+            try {
+                const existing = await productCache.getById(params.id);
+                if (existing) {
+                    await productCache.save({
+                        ...existing,
+                        name: params.name,
+                        price: new Decimal(params.price),
+                        cost: params.cost !== undefined ? new Decimal(params.cost) : existing.cost,
+                        minStock: params.minStock !== undefined ? params.minStock : existing.minStock,
+                        plu: params.plu || existing.plu,
+                        category: params.category || existing.category,
+                        updatedAt: new Date().toISOString()
+                    });
+                }
+            } catch (cacheErr) {
+                logger.warn('[ProductRepo] Failed to update local IDB cache after catalog update', cacheErr);
+            }
+        }
+
+        return res;
     }
 };
 

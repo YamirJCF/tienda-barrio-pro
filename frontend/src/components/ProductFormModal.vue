@@ -52,6 +52,11 @@ const isSubmitting = ref(false);
 const originalStock = ref<Decimal | null>(null);
 const stockWasModified = ref(false);
 
+// Sello de Estado Base (Escudo 2 - SDD-028 §4.8)
+const originalPrice = ref<number | null>(null);
+const originalName = ref<string | null>(null);
+const originalCost = ref<number | null>(null);
+
 // WO-004: Formatear cantidad a máximo 2 decimales para visualización
 const formatQuantity = (qty: number | Decimal): string => {
   const num = qty instanceof Decimal ? qty.toNumber() : Number(qty);
@@ -213,6 +218,9 @@ const resetForm = () => {
   };
   // WO-003: Reset stock tracking
   originalStock.value = null;
+  originalPrice.value = null;
+  originalName.value = null;
+  originalCost.value = null;
   stockWasModified.value = false;
 };
 
@@ -226,42 +234,52 @@ const save = async () => {
     return;
   }
 
-  // WO-003: Usar originalStock si no fue modificado por el usuario
-  const stockToSave =
-    props.productId && originalStock.value && !stockWasModified.value
-      ? originalStock.value
-      : new Decimal(formData.value.stock || 0);
-
-  // BR-01: Libertad de Precios. No se fuerza el redondeo aquí.
-  const productData = {
-    name: formData.value.name.trim(),
-    brand: formData.value.brand.trim() || undefined,
-    category: formData.value.category.trim() || undefined,
-    plu: formData.value.plu.trim() || undefined,
-    isWeighable: formData.value.saleMode === 'weight',
-    measurementUnit:
-      formData.value.saleMode === 'weight' ? formData.value.measurementUnit : ('un' as const),
-    price: new Decimal(formData.value.price), // Exact price
-    cost: formData.value.cost ? new Decimal(formData.value.cost) : undefined,
-    stock: stockToSave,
-    minStock: parseInt(formData.value.minStock) || 5,
-    storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '', // Inject storeId
-  };
-
-  logger.log('[ProductForm] productData:', productData);
-
   isSubmitting.value = true;
   let savedProduct: Product | undefined;
 
   try {
     if (props.productId) {
-      // Update existing
-      logger.log('[ProductForm] Updating product:', props.productId);
-      savedProduct = await inventoryStore.updateProduct(props.productId, productData) || undefined;
+      // Update existing: SDD-028 §4.8 y Deuda D-7 (current_stock permanece intacto)
+      logger.log('[ProductForm] Updating product with Vector Snapshot Seal:', props.productId);
+      const snapshot = {
+        expectedOldPrice: originalPrice.value ?? new Decimal(formData.value.price).toNumber(),
+        expectedName: originalName.value ?? formData.value.name.trim(),
+        expectedOldCost: originalCost.value ?? (formData.value.cost ? Number(formData.value.cost) : undefined)
+      };
+
+      const updateData = {
+        name: formData.value.name.trim(),
+        brand: formData.value.brand.trim() || undefined,
+        category: formData.value.category.trim() || undefined,
+        plu: formData.value.plu.trim() || undefined,
+        isWeighable: formData.value.saleMode === 'weight',
+        measurementUnit:
+          formData.value.saleMode === 'weight' ? formData.value.measurementUnit : ('un' as const),
+        price: new Decimal(formData.value.price),
+        cost: formData.value.cost ? new Decimal(formData.value.cost) : undefined,
+        minStock: parseInt(formData.value.minStock) || 5,
+        storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '',
+      };
+
+      savedProduct = await inventoryStore.updateProduct(props.productId, updateData, snapshot) || undefined;
     } else {
-      // Create new
+      // Create new: incluye stock inicial para entrada por trigger
       logger.log('[ProductForm] Creating new product');
-      savedProduct = await inventoryStore.addProduct(productData) || undefined;
+      const createData = {
+        name: formData.value.name.trim(),
+        brand: formData.value.brand.trim() || undefined,
+        category: formData.value.category.trim() || undefined,
+        plu: formData.value.plu.trim() || undefined,
+        isWeighable: formData.value.saleMode === 'weight',
+        measurementUnit:
+          formData.value.saleMode === 'weight' ? formData.value.measurementUnit : ('un' as const),
+        price: new Decimal(formData.value.price),
+        cost: formData.value.cost ? new Decimal(formData.value.cost) : undefined,
+        stock: new Decimal(formData.value.stock || 0),
+        minStock: parseInt(formData.value.minStock) || 5,
+        storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '',
+      };
+      savedProduct = await inventoryStore.addProduct(createData) || undefined;
     }
 
     if (savedProduct) {
@@ -272,9 +290,20 @@ const save = async () => {
     } else {
       toast.error('Error al guardar el producto');
     }
-  } catch (err) {
-    toast.error('Error al guardar el producto');
-    logger.error('[ProductForm] Error saving product:', err);
+  } catch (err: any) {
+    if (err?.code === 'CONCURRENT_MUTATION_BLOCKED') {
+      // UXD-014 §5: Bloqueo defensivo inmediato, cierre de modal y alerta de integridad
+      toast.error('Operación bloqueada. El producto fue modificado concurrentemente desde otro terminal.');
+      close();
+      // Re-descargar catálogo de fondo para ver la verdad del servidor
+      inventoryStore.initialize(authStore.currentStore?.id, true);
+    } else if (err?.code === 'MUTATION_COOLDOWN_ACTIVE') {
+      toast.warning('Operación bloqueada temporalmente por cooldown de seguridad (3 segundos). Espere un momento e intente de nuevo.');
+      // El modal permanece abierto para que el usuario pueda reintentar tras el cooldown
+    } else {
+      toast.error(err?.message || 'Error al guardar el producto');
+      logger.error('[ProductForm] Error saving product:', err);
+    }
   } finally {
     isSubmitting.value = false;
   }
@@ -316,6 +345,9 @@ watch(
       if (product) {
         // WO-003: Guardar stock original para preservar precisión
         originalStock.value = product.stock;
+        originalPrice.value = product.price.toNumber();
+        originalName.value = product.name;
+        originalCost.value = product.cost ? product.cost.toNumber() : null;
         stockWasModified.value = false;
 
         // WO-004: Derivar saleMode de isWeighable y cargar measurementUnit

@@ -9,6 +9,7 @@ import { logger } from '../utils/logger';
 import { getSupabaseClient, isSupabaseConfigured } from '../data/supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { inventorySerializer } from '../data/serializers/inventorySerializer';
+import { systemCacheManager, CacheLevel } from '../services/systemCacheManager';
 
 export const useInventoryStore = defineStore(
   'inventory',
@@ -148,14 +149,14 @@ export const useInventoryStore = defineStore(
     /**
      * Initialize store by fetching from repository
      */
-    const initialize = async (storeId?: string) => {
+    const initialize = async (storeId?: string, forceReload: boolean = false) => {
       const authStore = useAuthStore();
       const effectiveStoreId = storeId || authStore.currentUser?.storeId;
 
       if (!effectiveStoreId) return;
 
-      // Only return early if initialized AND the data belongs to the SAME store
-      if (initialized.value &&
+      // Only return early if initialized AND the data belongs to the SAME store AND not forceReload
+      if (!forceReload && initialized.value &&
         products.value.length > 0 &&
         loadedStoreId.value === effectiveStoreId) {
         return;
@@ -163,8 +164,16 @@ export const useInventoryStore = defineStore(
 
       isLoading.value = true;
       try {
-        const rawProducts = await productRepository.getAll(effectiveStoreId);
-        products.value = rawProducts.map(ensureDecimals);
+        const cacheKey = `products:${effectiveStoreId}`;
+        const { data: rawProducts } = await systemCacheManager.fetchSWR(
+          cacheKey,
+          () => productRepository.getAll(effectiveStoreId),
+          { level: CacheLevel.LEVEL_2_CATALOG, forceFresh: forceReload }
+        );
+
+        if (rawProducts) {
+          products.value = rawProducts.map(ensureDecimals);
+        }
 
         // Setup realtime if available
         if (isSupabaseConfigured()) {
@@ -246,35 +255,81 @@ export const useInventoryStore = defineStore(
       return null;
     };
 
-    const updateProduct = async (id: string, updates: Partial<Omit<Product, 'id' | 'createdAt'>>) => {
+    const updateProduct = async (
+      id: string,
+      updates: Partial<Omit<Product, 'id' | 'createdAt'>>,
+      snapshot?: { expectedOldPrice: number; expectedName: string; expectedOldCost?: number }
+    ) => {
       const index = products.value.findIndex((p) => p.id === id);
       if (index === -1) return null;
 
-      const processedUpdates = updates.price
-        ? { ...updates, price: roundHybrid50(updates.price) }
-        : updates;
+      const current = products.value[index];
 
-      const updatePayload = {
-        ...processedUpdates,
-        updatedAt: new Date().toISOString()
-      };
+      const priceDecimal = updates.price
+        ? roundHybrid50(updates.price)
+        : current.price;
+
+      const expectedOldPrice = snapshot?.expectedOldPrice ?? current.price.toNumber();
+      const expectedName = snapshot?.expectedName ?? current.name;
+      const expectedOldCost = snapshot?.expectedOldCost ?? (current.cost ? current.cost.toNumber() : undefined);
 
       try {
-        const updated = await productRepository.update(id, updatePayload as any);
-        if (updated) {
+        const result = await productRepository.updateCatalog({
+          id,
+          name: (updates.name ?? current.name).trim(),
+          price: priceDecimal.toNumber(),
+          expectedOldPrice,
+          expectedName,
+          cost: updates.cost ? updates.cost.toNumber() : (current.cost ? current.cost.toNumber() : undefined),
+          minStock: updates.minStock !== undefined ? updates.minStock : current.minStock,
+          plu: updates.plu !== undefined ? (updates.plu ? updates.plu.trim() : undefined) : current.plu,
+          category: updates.category !== undefined ? (updates.category ? updates.category.trim() : undefined) : current.category,
+          expectedOldCost
+        });
+
+        if (result.success) {
+          // Deuda D-7: current_stock permanece INTACTO. Se actualizan solo los campos comerciales.
           const merged = ensureDecimals({
-            ...products.value[index],
-            ...updated
+            ...current,
+            name: (updates.name ?? current.name).trim(),
+            price: priceDecimal,
+            cost: updates.cost ?? current.cost,
+            minStock: updates.minStock !== undefined ? updates.minStock : current.minStock,
+            plu: updates.plu !== undefined ? (updates.plu ? updates.plu.trim() : undefined) : current.plu,
+            category: updates.category !== undefined ? (updates.category ? updates.category.trim() : undefined) : current.category,
+            updatedAt: new Date().toISOString()
           });
           products.value[index] = merged;
+
+          // Invalidar caché en RAM para reflejar el cambio
+          systemCacheManager.invalidate(`product:${id}`);
+          if (loadedStoreId.value) {
+            systemCacheManager.markStale(`products:${loadedStoreId.value}`);
+          }
+
           return merged;
+        } else {
+          const errorMsg = result.error || 'Error al actualizar producto en catálogo';
+          error.value = errorMsg;
+          logger.warn('[InventoryStore] Update rejected by business rule:', result);
+
+          // Purgar de memoria RAM para forzar recarga de la verdad
+          systemCacheManager.invalidate(`product:${id}`);
+          if (loadedStoreId.value) {
+            systemCacheManager.invalidate(`products:${loadedStoreId.value}`);
+          }
+
+          const businessError: any = new Error(errorMsg);
+          businessError.code = result.code;
+          businessError.result = result;
+          throw businessError;
         }
       } catch (e: any) {
         const errorMsg = e.message || 'Error al actualizar producto';
         error.value = errorMsg;
         logger.error('[InventoryStore] Update failed', e);
+        throw e;
       }
-      return null;
     };
 
     const deleteProduct = async (id: string) => {
