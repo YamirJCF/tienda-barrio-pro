@@ -223,7 +223,7 @@ Los datos recuperados desde persistencia local (`pinia-plugin-persistedstate` o 
 #### Manejo de Idempotencia por Red Lenta
 Si el sello no coincide (`price != expected_old_price`), pero:
 - `price == p_new_price` (el cambio ya se aplicó) **Y**
-- El último registro en `audit_precios` fue ejecutado por el mismo `actor_id` hace menos de 10 segundos.
+- El último registro en `audit_precios` fue ejecutado por el mismo actor (`changed_by = v_employee_id`) hace menos de 10 segundos.
 El RPC retorna `{ success: true, code: 'ALREADY_APPLIED_IDEMPOTENT' }`, evitando registrar falsas alertas de seguridad por reintentos de red.
 
 #### Registro Seguro en Auditoría (Sin Rollback Ciego)
@@ -289,7 +289,7 @@ En PostgreSQL, una excepción con `RAISE EXCEPTION` revierte toda la transacció
     "p_cost": { "type": "number", "minimum": 0 },
     "p_min_stock": { "type": "integer", "minimum": 0 },
     "p_plu": { "type": ["string", "null"] },
-    "p_category_id": { "type": ["string", "null"], "format": "uuid" },
+    "p_category": { "type": ["string", "null"] },
     "p_expected_old_price": { "type": "number", "description": "Sello Escudo 2: precio base que leyó el usuario" },
     "p_expected_old_cost": { "type": "number" },
     "p_expected_name": { "type": "string", "description": "Sello Escudo 2: nombre base que leyó el usuario" }

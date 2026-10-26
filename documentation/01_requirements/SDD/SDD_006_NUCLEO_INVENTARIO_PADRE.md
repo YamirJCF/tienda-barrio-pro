@@ -359,7 +359,7 @@ stateDiagram-v2
     "p_cost": "NUMERIC (Obligatorio, >= 0 COP)",
     "p_min_stock": "INTEGER (Obligatorio, >= 0)",
     "p_plu": "TEXT (Opcional, max 4 dígitos)",
-    "p_category_id": "UUID (Opcional)",
+    "p_category": "TEXT (Opcional)",
     "p_expected_old_price": "NUMERIC (Obligatorio - Sello Escudo 2)",
     "p_expected_old_cost": "NUMERIC (Obligatorio - Sello Escudo 2)",
     "p_expected_name": "TEXT (Obligatorio - Sello Escudo 2)"
@@ -376,7 +376,7 @@ stateDiagram-v2
       "cost_price": 7500,
       "min_stock": 5,
       "plu": "1001",
-      "category_id": "UUID"
+      "category": "Abarrotes"
     }
   }
   ```
