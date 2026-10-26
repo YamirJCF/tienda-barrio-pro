@@ -58,7 +58,7 @@ Implementación de un sistema centralizado de historiales que permite auditar to
 **Nivel 1: Críticos (Integridad Financiera)**
 - Transacciones de venta: tickets, anulaciones, métodos de pago
 - Control de caja: aperturas, cierres, conteo de efectivo, diferencias
-- Auditoría de seguridad: logins fallidos, cambios de PIN, accesos fuera de horario
+- Auditoría de seguridad: logins fallidos, cambios de PIN, accesos fuera de horario, bloqueos de mutación concurrente y sospechas de manipulación (`CONCURRENT_MUTATION_BLOCKED`)
 
 **Nivel 2: Operativos (Control de Gestión)**
 - Kardex de inventario: compras, ventas, mermas, ajustes de stock
@@ -105,7 +105,7 @@ Implementación de un sistema centralizado de historiales que permite auditar to
 | Ventas | Auditoría de ventas | Tickets, anulaciones, cambios |
 | Caja | Auditoría de caja | Aperturas, cierres, movimientos |
 | Inventario | Auditoría de inventario | Entradas, salidas, ajustes |
-| Seguridad | Auditoría de seguridad | Logins, cambios de PIN, pases |
+| Seguridad | Auditoría de seguridad | Logins, cambios de PIN, pases, bloqueos de concurrencia |
 | Precios | Auditoría de precios | Cambios de costo/precio |
 | Créditos | Auditoría de créditos | Deudas, abonos, liquidaciones |
 

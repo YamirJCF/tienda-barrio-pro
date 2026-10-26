@@ -1,4 +1,13 @@
-# SPEC-011: Estrategia de Caché SWR
+# SPEC-011: Estrategia de Caché SWR (HISTÓRICO / DEROGADO)
+
+> [!WARNING]
+> **DOCUMENTO HISTÓRICO DEROGADO (SUPERSEDED):**
+> Este borrador temprano de enero de 2026 ha sido sustituido de manera oficial y vinculante por:
+> - [FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md](../FRD/FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md) (v2.0)
+> - [SDD_028_ALMACENAMIENTO_LOCAL.md](../SDD/SDD_028_ALMACENAMIENTO_LOCAL.md) (v2.0.0)
+> Se conserva exclusivamente para fines de trazabilidad histórica. Estado: 🚫 **DEROGADO**
+
+---
 
 > **Documento de Requisitos Funcionales (FRD)**  
 > Versión: 2.0 (Consolidada)  

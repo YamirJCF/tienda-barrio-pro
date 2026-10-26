@@ -1,7 +1,7 @@
 # 📋 Catálogo Maestro de Documentos — Tienda Barrio Pro
 
-> **Versión:** 2.1  
-> **Fecha:** 2026-10-24  
+> **Versión:** 2.2  
+> **Fecha:** 2026-10-26  
 > **Propósito:** Mapa oficial y único de todos los documentos del proyecto. Sirve como hoja de ruta de implementación y registro de trazabilidad documental.  
 > **Norma:** Todo documento nuevo debe registrarse aquí antes de ser aprobado.
 
@@ -260,7 +260,7 @@
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
 | FRD-028 | [FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md](FRD/FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md) | FRD | 🟢 | ✅ SDD_028 | — |
-| SDD-028 | [SDD_028_ALMACENAMIENTO_LOCAL.md](SDD/SDD_028_ALMACENAMIENTO_LOCAL.md) | SDD | 🟡 Validado | — | — |
+| SDD-028 | [SDD_028_ALMACENAMIENTO_LOCAL.md](SDD/SDD_028_ALMACENAMIENTO_LOCAL.md) | SDD | 🟢 Validado | — | v2.0.0. Gobernanza de RAM (SWR, LRU, deduplicación en vuelo), Escudos 1 y 2 de concurrencia. Deudas D-6 y D-7 formalizadas. |
 
 ---
 

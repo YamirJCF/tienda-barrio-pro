@@ -346,6 +346,59 @@ stateDiagram-v2
 
 ---
 
+### 5.4 Operación Escalar: Actualización Segura de Catálogo (`rpc_actualizar_producto_catalogo`)
+- **Tipo:** RPC Postgres / Acción (WRITE)
+- **Propósito:** Actualizar atributos comerciales de catálogo (nombre, precio de venta, costo de adquisición, stock mínimo, PLU, categoría) bajo blindaje dual de concurrencia (**Escudo 1 y Escudo 2**).
+- **Invariante Crítica:** Prohíbe de forma absoluta modificar `products.current_stock`. El stock solo puede mutar mediante transacciones de Kardex (`inventory_movements`) o consumo FIFO en el POS.
+- **Entradas:**
+  ```json
+  {
+    "p_product_id": "UUID (Obligatorio)",
+    "p_name": "TEXT (Obligatorio, min 2 chars)",
+    "p_price": "NUMERIC (Obligatorio, >= 50 COP)",
+    "p_cost": "NUMERIC (Obligatorio, >= 0 COP)",
+    "p_min_stock": "INTEGER (Obligatorio, >= 0)",
+    "p_plu": "TEXT (Opcional, max 4 dígitos)",
+    "p_category_id": "UUID (Opcional)",
+    "p_expected_old_price": "NUMERIC (Obligatorio - Sello Escudo 2)",
+    "p_expected_old_cost": "NUMERIC (Obligatorio - Sello Escudo 2)",
+    "p_expected_name": "TEXT (Obligatorio - Sello Escudo 2)"
+  }
+  ```
+- **Salida Exitosa:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "product_id": "UUID",
+      "name": "Aceite Gourmet 1L",
+      "price": 12000,
+      "cost_price": 7500,
+      "min_stock": 5,
+      "plu": "1001",
+      "category_id": "UUID"
+    }
+  }
+  ```
+- **Salida Idempotente (Red Lenta):**
+  ```json
+  {
+    "success": true,
+    "code": "ALREADY_APPLIED_IDEMPOTENT",
+    "message": "Actualización ya aplicada en reintento previo."
+  }
+  ```
+- **Catálogo Exhaustivo de Errores:**
+  | Código de Error | Causa | Mensaje Técnico |
+  |-----------------|-------|-----------------|
+  | `STORE_ACCESS_DENIED` | Usuario no pertenece a la tienda | El usuario no tiene acceso a esta tienda |
+  | `PRODUCT_NOT_FOUND` | `p_product_id` no existe en la tienda | El producto especificado no existe |
+  | `MUTATION_COOLDOWN_ACTIVE` | Escudo 1: Se intentó modificar el precio/catálogo antes de 3 segundos desde la última modificación | Operación bloqueada temporalmente por cooldown de seguridad (3 segundos) |
+  | `CONCURRENT_MUTATION_BLOCKED` | Escudo 2: El precio o nombre en BD difiere del sello base esperado (`expected_old_price`) | Operación bloqueada. El producto fue modificado concurrentemente desde otro dispositivo |
+  | `PLU_ALREADY_EXISTS` | El PLU ya está en uso por otro producto activo | El código PLU ya se encuentra asignado a otro producto |
+
+---
+
 ## 6. Análisis de Seguridad e Integridad
 
 ### 6.1 Validación de Acceso Centralizada y Multi-Tenant (Regla 4)
@@ -362,9 +415,10 @@ Queda terminantemente prohibida cualquier comprobación ad-hoc manual de pertene
 - Para evitar errores de denegación de permisos (`42501 - Permission Denied`) en producción, se garantiza normativamente que las tablas `products`, `inventory_movements`, `inventory_batches` y `product_price_history` cuenten con privilegios otorgados (`GRANT ALL`) para los roles `anon`, `authenticated` y `service_role`.
 - La seguridad no descansa en la denegación de privilegios DDL base, sino en la activación estricta de Row Level Security (`ENABLE ROW LEVEL SECURITY`) y en la canalización de operaciones complejas a través de funciones `SECURITY DEFINER` con `search_path = public`.
 
-### 6.4 Concurrencia y Bloqueo Pesimista
+### 6.4 Concurrencia, Bloqueo Pesimista y Aislamiento por Vectores
 - Las mutaciones de stock concurrentes (ej. ventas simultáneas en mostrador o ajustes físicos) se gobiernan mediante bloqueo pesimista de fila (`SELECT ... FOR UPDATE`) sobre los lotes de `inventory_batches` dentro de la función `consume_stock_fifo`, evitando decrementos desincronizados o saldos negativos.
 - La unicidad del PLU está blindada concurrentemente por el índice único parcial `products_plu_active_idx`. Si dos administradores intentan registrar simultáneamente el mismo PLU para productos activos, la base de datos rechaza la segunda transacción por colisión de índice.
+- **Aislamiento Vectorial Catálogo vs Kardex (Escudos 1 y 2):** Toda edición de atributos de catálogo se ejecuta mediante `rpc_actualizar_producto_catalogo` con bloqueo pesimista `SELECT ... FOR UPDATE` sobre la fila de `products`. Compara el sello snapshot (`expected_old_price`, `expected_name`) e ignora deliberadamente `current_stock` y `products.updated_at`. Esto garantiza que una venta en el POS ejecutada por un cajero mientras el Administrador edita el precio no sea bloqueada ni cause un falso positivo de seguridad. Las ediciones concurrentes sobre el mismo vector en menos de 3 segundos o con datos obsoletos se abortan y registran en `audit_seguridad`.
 
 ---
 

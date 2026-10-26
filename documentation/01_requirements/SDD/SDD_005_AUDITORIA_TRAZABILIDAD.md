@@ -734,7 +734,7 @@ erDiagram
 - `id` (uuid, PK): Identificador único.
 - `actor_id` (uuid, NOT NULL, FK `profiles.id`): Usuario actuante.
 - `store_id` (uuid, NOT NULL, FK `stores.id`): Tienda del evento.
-- `event_type` (text, NOT NULL): Tipo (`'LOGIN_FAILED'`, `'PASS_GRANTED'`, `'UNAUTHORIZED_ATTEMPT'`).
+- `event_type` (text, NOT NULL): Tipo de evento de seguridad. Valores admitidos: `'LOGIN_SUCCESS'`, `'LOGIN_FAILED'`, `'PIN_CHANGE'`, `'UNAUTHORIZED_ACCESS'`, `'FORCE_SALE'`, `'SESSION_EXPIRED'`, `'ROLE_CHANGE'`, `'EMPLOYEE_DEACTIVATED'`, `'CONCURRENT_MUTATION_BLOCKED'`. Check constraint protegido en BD.
 - `ip_address` (text, NULLABLE): IP remota del cliente.
 - `user_agent` (text, NULLABLE): Navegador / Dispositivo.
 - `created_at` (timestamptz, NOT NULL, default `now()`): Timestamp del evento.

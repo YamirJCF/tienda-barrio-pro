@@ -1,9 +1,10 @@
 # SDD-028: Almacenamiento Local Seguro y Caché de Aplicación
 
-> **Asociado a:** [FRD-028](../FRD/FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md)
-> **Fase del Plan:** Ola 5 — Sesiones, Autenticación y Offline (Documento 8 de 8)
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-17
+> **Asociado a:** [FRD-028](../FRD/FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md)  
+> **Fase del Plan:** Ola 5 — Sesiones, Autenticación, Offline y Gobernanza de Caché  
+> **Estado:** 🟢 Aprobado (Protocolo PAC-SDD v2.0)  
+> **Versión:** 2.0.0 (Consolidada con Gobernanza de Memoria, SWR y Blindaje de Concurrencia)  
+> **Última Actualización:** 2026-10-26  
 
 ---
 
@@ -13,9 +14,9 @@
 
 | Política ID | Dominio | Impacto Concreto en este SDD |
 | :--- | :--- | :--- |
-| **POL-DATA-01** | Arquitectura | **Autoridad Soberana del Backend:** El almacenamiento local (`IndexedDB` y `localStorage`) es exclusivamente una caché cosmética y cola de contingencia offline. Jamás sustituye la verdad financiera o de stock de PostgreSQL. |
-| **POL-AUTH-01** | Seguridad | **Aislamiento Multi-Tenant en Cliente:** Toda clave en `localStorage` y registro en `IndexedDB` se particiona por `store_id`. |
-| **POL-SEC-01** | Seguridad | **Ceguera Financiera y Cero Secretos:** Prohibido almacenar `pin_hash`, `store_pin_hash` o costos de lotes confidenciales en texto plano en almacenamiento síncrono. |
+| **POL-DATA-01** | Arquitectura | **Autoridad Soberana del Backend:** El almacenamiento local (`IndexedDB`, memoria RAM y `localStorage`) es exclusivamente una caché cosmética y acelerador visual. Jamás sustituye la verdad financiera o de stock de PostgreSQL en Supabase. |
+| **POL-AUTH-01** | Seguridad | **Aislamiento Multi-Tenant en Cliente:** Toda clave en `localStorage`, memoria y registro en `IndexedDB` se particiona estrictamente por `store_id`. |
+| **POL-SEC-01** | Seguridad | **Ceguera Financiera y Cero Secretos:** Prohibido almacenar credenciales sensibles o costos en texto plano en almacenamiento síncrono. Bloqueo definitivo de mutaciones concurrentes sospechosas. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 
@@ -24,44 +25,45 @@
 | **SDD_012 (Sincronización Offline)** | Gobierna el límite duro de 50 transacciones en `sync_queue` (alerta al 80%, bloqueo al 100% — Hallazgo H20) y la supervivencia de la cola ante cierres de sesión (`RN-CACHE-03`). |
 | **SDD_011 (Manejo de Errores)** | Define la cuarentena en `dead_letter_queue` ante rechazos definitivos de reglas de negocio (`4xx` / `P0001`). |
 | **SDD_007 / SDD_007_01 (POS)** | Provee `idempotency_key` / `local_id` para garantizar procesamiento exactamente una vez al reconectar. |
+| **SDD_005 (Auditoría y Trazabilidad)** | Provee la tabla append-only `audit_seguridad` para asentar bloqueos de concurrencia (`CONCURRENT_MUTATION_BLOCKED`). |
+| **SDD_006_PADRE (Inventario)** | Desacopla la mutación de catálogo (`rpc_actualizar_producto_catalogo`) de los movimientos logísticos de Kardex, prohibiendo mutaciones directas a `products.current_stock`. |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
 
-Se declaran las **N=5 decisiones y deudas técnicas** (desglosadas en la Sección 7):
+Se declaran las **N=7 decisiones y deudas técnicas** (desglosadas en la Sección 7):
 - **D-1:** Prohibición de colecciones masivas en `localStorage`; migración obligatoria de catálogos (`products`, `clients`, `sales`) a `IndexedDB`.
 - **D-2:** Invalidez de valores cacheados en el cliente para autorizar mutaciones en servidor (Backend Authority).
 - **D-3:** Supervivencia selectiva de `sync_queue` y `dead_letter_queue` durante el logout hasta su vaciado exitoso.
 - **D-4:** Recuperación automática ante corrupción de JSON/esquema local sin provocar pantalla en blanco (Regla 3 de `AGENTS.md`).
-- **D-5:** Particionamiento estricto por `store_id` en almacenes locales.
+- **D-5:** Particionamiento estricto por `store_id` en almacenes locales (`scopedStorage`).
+- **D-6:** Desacoplamiento del Sello de Concurrencia respecto al trigger `trg_products_updated` (Blindaje de falsos bloqueos durante ventas POS).
+- **D-7:** Erradicación de `current_stock` en el mapper y contrato de actualización de catálogo (`rpc_actualizar_producto_catalogo`).
 
 ---
 
 ## 1. INTRODUCCIÓN Y PROPÓSITO ARQUITECTÓNICO
 
-El presente documento define la arquitectura formal, límites operacionales y gobernanza de seguridad para la persistencia en el lado cliente (Navegador Web) en Tienda Barrio Pro. Su propósito fundamental es establecer una delimitación estricta entre el almacenamiento en memoria volátil, el almacenamiento síncrono en `localStorage` y el almacenamiento asíncrono estructurado en `IndexedDB`, salvaguardando en todo momento el principio de **Autoridad Soberana del Backend (Backend Authority)** consagrado en el Contrato de Interfaz del sistema.
+El presente documento define la arquitectura formal, límites operacionales y gobernanza de seguridad para la persistencia en el lado cliente (Navegador Web) en Tienda Barrio Pro. Su propósito fundamental es establecer una delimitación estricta entre el almacenamiento en memoria volátil (RAM), el almacenamiento síncrono en `localStorage` y el almacenamiento asíncrono estructurado en `IndexedDB`, salvaguardando en todo momento el principio de **Autoridad Soberana del Backend (Backend Authority)** consagrado en el Contrato de Interfaz del sistema.
 
 Bajo la regla de negocio fundamental **"El dato es sagrado y no se negocia"**, cualquier fragmento de información residente en el cliente (precios, existencias de inventario, cupos de crédito, estados de caja o roles de usuario) es clasificado exclusivamente como una **copia optimista de conveniencia cosmética**. El almacenamiento local tiene como única finalidad acelerar la navegación de la interfaz gráfica de usuario (UI), habilitar búsquedas instantáneas en el Punto de Venta (POS) y sostener la operación transaccional en contingencias de red (Offline-First). Toda mutación transaccional, financiera o de inventario debe ser remitida y validada de manera soberana e inmutable por el motor de base de datos relacional PostgreSQL en Supabase.
+
+Adicionalmente, bajo el escenario de concurrencia real de hasta 6 dispositivos simultáneos (1 Administrador + 5 Empleados), este diseño implementa un motor centralizado de caché operacional (`SystemCacheManager`) con deduplicación de promesas en vuelo, jerarquía estricta de invalidación y un blindaje dual de mutación (**Escudo 1 y Escudo 2**) que bloquea definitivamente cualquier sobrescritura destructiva entre cuentas.
 
 ---
 
 ## 2. POLÍTICAS GLOBALES Y TRAZABILIDAD REGULATORIA (ARQ-002 / AGENTS.MD)
 
-El diseño e implementación del almacenamiento local y la caché de aplicación se subordinan a las siguientes políticas arquitectónicas y de seguridad:
-
 1. **POL-AUTH-01 (Aislamiento Multi-Tenant Absoluto):**
-   Toda información almacenada en el cliente debe pertenecer estrictamente a la tienda activa (`store_id`). En el almacenamiento síncrono (`localStorage`), el adaptador `scopedStorage` obliga a prefijar todas las claves con el identificador del tenant (`tienda-${currentStoreId}-${key}`). En el almacenamiento asíncrono (`IndexedDB`), las colecciones de dominio (`products`, `clients`, `sales`) incorporan obligatoriamente el índice secundario `by_store` para garantizar que un dispositivo o terminal físico compartido entre múltiples dependientes o sucursales jamás mezcle catálogos ni filtre saldos de distintos comercios. En servidor, toda sincronización valida la pertenencia mediante la invocación mandatoria de `assert_store_access(p_store_id)`.
+   Toda información almacenada en el cliente debe pertenecer estrictamente a la tienda activa (`store_id`). En el almacenamiento síncrono (`localStorage`), el adaptador `scopedStorage` obliga a prefijar todas las claves con el identificador del tenant (`tienda-${currentStoreId}-${key}`). En el gestor de caché en memoria (`SystemCacheManager`), el prefijo de partición es mandatorio (`${storeId}:${namespace}:${queryKey}`). En el servidor, toda sincronización valida la pertenencia mediante la invocación mandatoria de `assert_store_access(p_store_id)`.
 
 2. **POL-FIN-01 (Backend Authority Financiero e Inventario):**
-   El servidor es la única autoridad de cálculo contable y valoración económica. El cliente tiene terminantemente prohibido realizar cálculos matemáticos de ventas, redondeos a $50 COP, cómputo de impuestos, determinación de saldos de clientes o valoración FIFO de inventarios. Toda transacción encolada localmente envía únicamente intenciones operativas y cantidades de producto; PostgreSQL valida la existencia de sesión abierta en `cash_sessions`, consulta el precio unitario vigente en `products` y descuenta existencias mediante `consume_stock_fifo` en `inventory_batches`.
+   El servidor es la única autoridad de cálculo contable y valoración económica. El cliente tiene terminantemente prohibido realizar cálculos matemáticos de ventas, cómputo de impuestos, determinación de saldos de clientes o valoración FIFO de inventarios. Toda mutación envía únicamente intenciones operativas y cantidades; PostgreSQL valida las reglas y asienta los cambios en el libro mayor correspondiente.
 
 3. **POL-AUD-01 (Inviolabilidad Contable y Auditoría Forense):**
-   Todo hecho económico capturado localmente debe preservarse con fidelidad histórica. Las ventas generadas en contingencia offline son inmutables y no pueden eliminarse arbitrariamente. Cualquier anomalía grave, sospecha de manipulación de almacenamiento (*tampering*) o transacción transferida a la Dead Letter Queue (DLQ) genera un asiento inmutable en la tabla física `audit_logs` con severidad `warning` o `error`.
+   Todo hecho económico capturado localmente debe preservarse con fidelidad histórica. Las ventas generadas en contingencia offline son inmutables y no pueden eliminarse arbitrariamente. Cualquier anomalía grave, sospecha de manipulación de almacenamiento (*tampering*) o colisión de concurrencia bloqueada genera un asiento inmutable en `public.audit_seguridad` con severidad y payload forense.
 
-4. **POL-SEC-01 (Seguridad RBAC en Servidor):**
-   Los privilegios operativos residen exclusivamente en las tablas oficiales del servidor (`admin_profiles`, `employees`). Las banderas locales presentes en el almacenamiento del navegador (`isAdmin: true`, `role: 'owner'`) son meramente indicativas para renderizar elementos visuales; cualquier intento de ejecutar una operación privilegiada mediante instrumentación directa es interceptado y abortado por los procedimientos almacenados en PostgreSQL.
-
-5. **Reglas de AGENTS.md (2, 3, 4, 6 y 8):**
-   Se verifica la ausencia de tablas relacionales de colas o caché en el esquema `public` de PostgreSQL (Regla 2); se prohíbe el uso de bloques que silencien errores de parseo o rechazos de seguridad convirtiéndolos en respuestas falsamente exitosas (Regla 3); se reutilizan las funciones centralizadas de acceso `get_current_store_id()` y `assert_store_access()` (Regla 4); se comprueba la invarianza DDL en tablas compartidas (Regla 6); y se ratifica la asignación de privilegios plenos en las tablas operativas de PostgreSQL (Regla 8).
+4. **Reglas de AGENTS.md (2, 3, 4, 6 y 8):**
+   Se verifica el esquema real antes de escribir SQL (Regla 2); se prohíbe el uso de bloques que silencien errores de parseo o rechazos de seguridad convirtiéndolos en respuestas falsamente exitosas (Regla 3); se reutilizan las funciones centralizadas de acceso `get_current_store_id()` y `assert_store_access()` (Regla 4); se audita el impacto cruzado en tablas compartidas (Regla 6); y se ratifica la asignación de privilegios plenos en tablas nuevas (Regla 8).
 
 ---
 
@@ -71,10 +73,11 @@ La arquitectura de persistencia en el cliente se estructura en tres niveles jer�
 
 ```mermaid
 flowchart TD
-    subgraph "Nivel 1: Memoria Volátil (Pinia Stores / RAM)"
-        RAM_CART["Carrito de Compras POS (Efímero)"]
-        RAM_SEARCH["Filtros de Búsqueda y Paginación"]
-        RAM_CRYPTO["Sal Criptográfica y Llaves Volátiles"]
+    subgraph "Nivel 1: Memoria Volátil (SystemCacheManager / RAM)"
+        RAM_CACHE["SystemCacheManager (Singleton SWR)"]
+        RAM_INFLIGHT["Deduplicador de Promesas en Vuelo (Map)"]
+        RAM_GEN["Contadores de Generación (Version Tracking)"]
+        RAM_LRU["Caché Acotado LRU (Máx 10 por namespace)"]
     end
 
     subgraph "Nivel 2: Almacenamiento Síncrono (LocalStorage / Scoped)"
@@ -84,58 +87,77 @@ flowchart TD
     end
 
     subgraph "Nivel 3: Almacenamiento Asíncrono Estructurado (IndexedDB)"
-        IDB_CACHE["tienda-cache-db (v1): products, clients, sales"]
+        IDB_CACHE["tienda-cache-db (v1): products, clients, sales (Catálogo Búsqueda POS)"]
         IDB_SYNC["tienda-sync-db (v2): sync_queue, dead_letter_queue, corrupted_items"]
     end
 
     subgraph "Capa de Servidor (Supabase PostgreSQL - Autoridad Absoluta)"
-        PG_DB[("PostgreSQL: products, clients, cash_sessions, sales, audit_logs")]
-        PG_RPC["RPCs Soberanos: rpc_procesar_venta_v2, assert_store_access"]
+        PG_DB[("PostgreSQL: products, clients, cash_sessions, sales, audit_seguridad")]
+        PG_RPC["RPCs Soberanos: rpc_procesar_venta_v3, rpc_actualizar_producto_catalogo"]
+        PG_RT["Supabase Realtime Channel: store_sync:{storeId}"]
     end
 
-    RAM_CART -.->|"Descarta al refrescar o cerrar pestaña"| RAM_CART
-    LS_STATUS -->|"Navegación visual optimista"| UI_VIEW["Componente Vue (Interfaz de Usuario)"]
-    IDB_CACHE -->|"Búsqueda O(1) instantánea sin latencia"| UI_VIEW
+    RAM_CACHE -->|"0ms Lectura Stale / SWR"| UI_VIEW["Componente Vue (UI)"]
+    RAM_INFLIGHT -.->|"Deduplica peticiones concurrentes"| PG_DB
+    LS_STATUS -->|"Navegación visual optimista"| UI_VIEW
+    IDB_CACHE -->|"Búsqueda O(1) instantánea sin red"| UI_VIEW
     UI_VIEW -->|"Intención de Venta Offline"| IDB_SYNC
     IDB_SYNC -->|"Reintento FIFO asíncrono con local_id"| PG_RPC
-    PG_RPC -->|"Transacción Atómica / Consumo FIFO"| PG_DB
+    PG_RPC -->|"Escudos 1 y 2 / Transacción Atómica"| PG_DB
+    PG_RT -->|"Invalidación Remota / Broadcast"| RAM_CACHE
     PG_DB -->|"Hidratación Asíncrona de Catálogos"| IDB_CACHE
 ```
 
 ### 3.1 Flujo de Verificación y Resistencia al Tampering
-
-Cuando un usuario interactúa con la aplicación, el flujo de datos garantiza que cualquier discrepancia entre el estado local y la base de datos sea detectada y auto-corregida de forma inmediata:
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant DEV as Usuario Malicioso (DevTools)
     participant UI as Componente Vue (UI)
-    participant IDB as IndexedDB / LocalStorage
-    participant STORE as Pinia Store (Cliente)
+    participant RAM as SystemCacheManager (RAM)
     participant DB as PostgreSQL (Supabase Servidor)
 
-    Note over DEV, IDB: Manipulación Local Arbitraria (Tampering)
-    DEV->>IDB: Modifica 'tienda-store-status' a 'open' (Caja realmente cerrada)
-    DEV->>IDB: Altera precio de producto en 'tienda-cache-db'
-    IDB-->>STORE: Carga estado alterado en memoria
-    STORE-->>UI: Habilita botón de cobro en terminal POS
+    Note over DEV, RAM: Manipulación Local Arbitraria (Tampering)
+    DEV->>RAM: Modifica precio local de producto en memoria a $100
+    RAM-->>UI: Renderiza precio optimista falso en formulario
+    UI->>DB: rpc_actualizar_producto_catalogo(id, price: 100, expected_old_price: 100)
+    Note over DB: Validación Soberana y Escudo 2
+    DB->>DB: SELECT price FROM products WHERE id = ... FOR UPDATE
+    Note right of DB: BD Real = $10.000 != Esperado $100
+    DB->>DB: INSERT INTO audit_seguridad ('CONCURRENT_MUTATION_BLOCKED')
+    DB-->>UI: Error: CONCURRENT_MUTATION_BLOCKED
+    UI->>RAM: Invalida y purga clave del producto
+    RAM->>DB: Descarga silenciosa del valor auténtico ($10.000)
+    UI-->>DEV: Toast Error: "Operación bloqueada por integridad."
+```
 
-    Note over UI, DB: Intención de Escritura Transaccional
-    UI->>STORE: Confirmar Venta (Intención + local_id + items)
-    STORE->>DB: Invocación RPC: rpc_procesar_venta_v2(p_store_id, p_items, p_local_id)
-    Note over DB: Validación Soberana en Servidor
-    DB->>DB: assert_store_access(p_store_id)
-    DB->>DB: Verifica cash_sessions: ¿Turno abierto? -> NO
-    DB-->>STORE: Excepción: RAISE EXCEPTION 'SHIFT_CLOSED' (Código: NO_OPEN_CASH_SESSION)
+### 3.2 Flujo de Concurrencia entre Dispositivos (Escudo 1 y Escudo 2)
 
-    Note over STORE, UI: Protocolo de Auto-Corrección y Purga
-    STORE->>IDB: Purga clave 'tienda-store-status' adulterada
-    STORE->>DB: SELECT status FROM cash_sessions WHERE store_id = ...
-    DB-->>STORE: Estado auténtico: 'closed'
-    STORE->>IDB: Re-escribe estado auténtico en almacenamiento local
-    STORE-->>UI: Notificación de Error: "Turno cerrado. Debe abrir caja para operar."
-    UI->>UI: Deshabilita controles de venta en pantalla
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T1 as Terminal 1 (Admin)
+    participant T2 as Terminal 2 (Empleado)
+    participant DB as Supabase PostgreSQL
+    participant RT as Canal Realtime
+
+    Note over T1, T2: Ambos abren la ficha con precio base = $10.000
+    T1->>DB: rpc_actualizar_producto_catalogo(price: 12000, expected: 10000)
+    Note over DB: Escudo 1: Pasa (>3s) | Escudo 2: Coincide ($10.000 == $10.000)
+    DB->>DB: UPDATE products SET price = 12000, cost_price = ...
+    DB->>DB: INSERT INTO audit_precios (product_id, old_price: 10000, new_price: 12000)
+    DB-->>RT: Broadcast evento 'PRICE_CHANGED'
+    DB-->>T1: { success: true }
+    
+    Note over T2, DB: T2 intenta guardar 45s después con datos viejos ($11.000)
+    T2->>DB: rpc_actualizar_producto_catalogo(price: 11000, expected: 10000)
+    Note over DB: Escudo 1: Pasa (>3s)
+    Note over DB: Escudo 2: FALLA (Precio actual $12.000 != esperado $10.000)
+    DB->>DB: INSERT INTO audit_seguridad ('CONCURRENT_MUTATION_BLOCKED')
+    DB-->>T2: { success: false, code: 'CONCURRENT_MUTATION_BLOCKED' }
+    T2->>T2: Cierra modal defensivamente + Alerta de Integridad
+    T2->>DB: Refresca catálogo y carga $12.000
 ```
 
 ---
@@ -143,165 +165,82 @@ sequenceDiagram
 ## 4. ESPECIFICACIÓN DETALLADA DE REGLAS DE NEGOCIO Y MODELO DE PERSISTENCIA
 
 ### 4.1 RN-CACHE-01: Prohibición de Almacenamiento Masivo en LocalStorage
-1. **Límite de Capacidad y Bloqueo de Hilo:** Debido a la cuota física rígida del navegador (~5MB para `localStorage`) y a la naturaleza síncrona y bloqueante de su API, queda terminantemente prohibido almacenar arrays, colecciones o registros masivos de entidades de negocio (`products`, `clients`, `sales`, `cash_movements`, `inventory_batches`) en `localStorage` o `sessionStorage`. La deserialización masiva (`JSON.parse`) sobre colecciones extensas congela el Event Loop principal de JavaScript, degradando severamente la experiencia de usuario.
-2. **Exclusividad de IndexedDB:** Toda colección o catálogo con cardinalidad potencialmente ilimitada debe persistirse de forma obligatoria y exclusiva en el motor asíncrono `IndexedDB` a través del adaptador de persistencia el adaptador asíncrono de base de datos local.
-3. **Uso Permitido de LocalStorage:** `localStorage` queda restringido estrictamente a:
-   - Token de autenticación JWT y refresh token emitidos por Supabase GoTrue.
-   - Claves de estado escalar volátiles utilizadas como aceleradores de interfaz (ej. `tienda-store-status`).
-   - Preferencias cosméticas de usuario (tema claro/oscuro, densidad de tablas, orden de columnas).
+Queda terminantemente prohibido almacenar arrays, colecciones o registros masivos de entidades de negocio en `localStorage`. Toda persistencia local de catálogos masivos debe residir en `IndexedDB` (`tienda-cache-db`).
 
-### 4.2 RN-CACHE-02: Caché Optimista vs Autoridad del Backend (Tampering Resistance)
-1. **Invalidez Legal del Dato en Cliente:** Ningún dato residente en el navegador posee autoridad transaccional ni contable. La aplicación asume que el almacenamiento local puede ser manipulado, inspeccionado o alterado en cualquier momento mediante las herramientas para desarrolladores del navegador (DevTools).
-2. **Validación Soberana Obligatoria:** Todas las operaciones de escritura (creación de ventas, registros de movimientos de inventario, pagos a proveedores o aperturas de caja) deben ser autorizadas y computadas en el servidor relacional. El servidor rechaza ineludiblemente cualquier transacción que incumpla las reglas de negocio, sin importar el estado aparente en el cliente.
-3. **Auto-Corrección y Purga Reactiva:** Si el servidor responde con un código de error de rechazo (`SHIFT_CLOSED`, `STORE_ACCESS_DENIED`, `INSUFFICIENT_STOCK`, `CREDIT_LIMIT_EXCEEDED`), el frontend debe capturar el error, registrar el evento de inconsistencia, purgar el valor adulterado del almacenamiento local y forzar una sincronización limpia desde PostgreSQL.
+### 4.2 RN-CACHE-02: Caché Optimista vs Autoridad del Backend
+El estado en memoria o almacenamiento local es estrictamente cosmético. Toda mutación se valida y procesa en PostgreSQL.
 
-### 4.3 RN-CACHE-03: Supervivencia de Datos Críticos ante Cierre de Sesión (Logout Selectivo)
-1. **Prohibición de Borrados Ciegos:** Se prohíbe taxativamente la ejecución de instrucciones destructivas indiscriminadas como `localStorage.clear()` o la eliminación global de las bases de datos de IndexedDB durante el flujo de cierre de sesión voluntario (`logout`).
-2. **Purga Selectiva de Credenciales:** El cierre de sesión debe destruir rigurosamente los tokens de autenticación JWT (`sb-<ref>-auth-token`), llaves temporales de pase diario (`pin_auth_token`, `dailyAccessState`) y vaciar el carrito de compras residente en memoria volátil.
-3. **Preservación Incondicional de Colas Transaccionales:** Las bases de datos de IndexedDB `tienda-sync-db` (que albergan los object stores `sync_queue` / `sales_queue`, `dead_letter_queue` y `corrupted_items`) deben permanecer **completamente intactas** durante el logout. Destruir estas colas constituiría la pérdida irremediable de hechos económicos legítimos ya cobrados al cliente en efectivo en el mundo físico, violando la política `POL-AUD-01`.
+### 4.3 RN-CACHE-03: Supervivencia de Datos Críticos ante Logout
+El flujo de logout destruye tokens y credenciales pero **PRESERVA intactas e inmutables** las colas de IndexedDB `tienda-sync-db` (`sync_queue`, `dead_letter_queue` y `corrupted_items`).
 
-### 4.4 RN-CACHE-04: Resiliencia ante Corrupción Local y Prevención del White Screen of Death (WSOD)
-1. **Envoltorio Seguro de Deserialización:** Toda lectura de almacenamiento local debe encapsularse en manejadores seguros (`safeParseJson`) para interceptar fallas originadas por JSONs truncados, cierres intempestivos de pestañas o cortes de energía eléctrica en el dispositivo.
-2. **Recuperación en Dos Fases:**
-   - *Fase 1 (Aislamiento de Registro):* Ante un registro corrupto aislado dentro de una colección, el sistema descarta únicamente el elemento afectado, preservando el resto de la colección.
-   - *Fase 2 (Purga Atómica y Auto-Sanación):* Si un store completo o clave de configuración resulta ilegible, el sistema purga atómicamente la clave afectada (`localStorage.removeItem(key)` o reseteo de object store en IndexedDB), registra una advertencia estructurada y gatilla una descarga limpia y transparente desde Supabase, erradicando permanentemente la pantalla blanca de la muerte (WSOD).
+### 4.4 RN-CACHE-04: Resiliencia ante Corrupción Local y Prevención del WSOD
+Toda lectura de almacenamiento se encapsula en manejadores seguros (`safeParseJson`). Ante claves corruptas se purga la clave y se re-descarga silenciosamente desde Supabase.
+
+### 4.5 RN-CACHE-05: Gobernanza del Caché Operacional en Memoria (RAM)
+1. **Configuración de TTLs Diferenciados por Nivel:**
+
+| Nivel | Tipología de Datos | TTL Vigencia | TTL Stale Máximo | Estrategia | Stores Asociados |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Nivel 1 (Estáticos)** | Perfiles, Configuración de Tienda | 60 minutos | 24 horas | Cache-First | `auth`, `devices` |
+| **Nivel 2 (Catálogos)** | Productos, Clientes, Empleados, Proveedores | 5 minutos | 30 minutos | SWR | `inventory`, `clients`, `employees`, `suppliers` |
+| **Nivel 3 (Financiero/Caja)** | Sesión activa de caja, saldo en pantalla | 30 segundos | 2 minutos | SWR Corto | `cashRegister`, `sales` (resumen día), `expenses` |
+| **Nivel 4 (Transaccional)** | Decisiones de cobro, arqueo, cierre de caja | 0 segundos | 0 segundos | Network-Only | RPCs soberanos (cero caché) |
+| **Nivel 5 (Consultas/Reportes)** | Historiales, Kardex, Lotes, Analítica | 2 minutos | 10 minutos | LRU Bounded | `useHistory`, `reports`, `financial`, `batches` |
+
+2. **Deduplicación de Peticiones en Vuelo:**
+   `SystemCacheManager` mantiene un mapa reactivo `inFlightPromises: Map<string, Promise<any>>`. Si un segundo llamador invoca `fetchSWR` sobre una clave que ya se está descargando, se suscribe a la misma promesa existente sin generar una segunda petición HTTP.
+
+3. **Contador de Generación contra Carreras de Invalidación:**
+   Cada entrada almacena un entero `generation: number`. Al invocar `invalidate(key)` o `invalidateNamespace(ns)`, el contador de generación se incrementa. Si una promesa en vuelo finaliza después de que la clave fue invalidada, su resultado es descartado automáticamente.
+
+4. **Acotamiento de Memoria (LRU Bounded):**
+   Para consultas parametrizadas, el gestor almacena un máximo de 10 entradas por namespace (`MAX_ENTRIES = 10`). Al alcanzar el límite, se purga la entrada consultada hace más tiempo (`least recently used`).
+
+### 4.6 RN-CACHE-06: Conectividad y Reconexión como Evento de Invalidación
+1. El composable `useOnlineStatus` y el listener del canal Realtime detectan la pérdida de conectividad.
+2. Ante una desconexión superior a 5 segundos, todas las claves de Nivel 2 y Nivel 3 en memoria se marcan con `isStale = true`.
+3. Al detectarse el evento `reconnect` o el restablecimiento de WebSocket, el gestor dispara un `invalidateAll()` silencioso. Las vistas activas revalidan en segundo plano sin interrumpir la interacción del usuario.
+
+### 4.7 RN-CACHE-07: Política de Arranque en Frío (Cold Start)
+Los datos recuperados desde persistencia local (`pinia-plugin-persistedstate` o `IndexedDB`) tras un refresco de página (`F5`) se inicializan con `lastFetchedAt = 0`. Esto permite pintarlos de inmediato en la UI mientras el motor dispara la revalidación asíncrona de fondo en el primer ciclo de renderizado.
+
+### 4.8 RN-CACHE-08: Blindaje de Concurrencia y Bloqueo Definitivo de Mutación (Escudos 1 y 2)
+
+#### Algoritmo del Escudo 1 — Cooldown Mínimo por Vector (`< 3 segundos`)
+1. El backend intercepta la solicitud de mutación en el RPC respectivo.
+2. Consulta el timestamp del último registro en la tabla de auditoría del vector:
+   - Para el **Vector Catálogo/Precio**: `SELECT max(created_at) FROM audit_precios WHERE product_id = p_product_id;`
+   - Para el **Vector Logístico/Stock**: `SELECT max(created_at) FROM inventory_movements WHERE product_id = p_product_id AND movement_type != 'venta';`
+3. Si `now() - max(created_at) < interval '3 seconds'`, la mutación se bloquea de forma inmediata.
+
+#### Algoritmo del Escudo 2 — Sello de Estado Base por Vector (`Vector Snapshot Seal`)
+1. El cliente envía `p_expected_old_price`, `p_expected_old_cost` y `p_expected_name`.
+2. El RPC bloquea la fila con `SELECT price, cost_price, name FROM products WHERE id = p_product_id FOR UPDATE;`.
+3. Compara estrictamente los valores de catálogo:
+   $$\text{price} == \text{expected\_old\_price} \quad \land \quad \text{name} == \text{expected\_name}$$
+4. **Regla de Oro:** Se prohíbe comparar `products.updated_at` o `current_stock`, puesto que las ventas del cajero disparan el trigger `trg_products_updated` continuamente sin alterar los datos del catálogo comercial.
+
+#### Manejo de Idempotencia por Red Lenta
+Si el sello no coincide (`price != expected_old_price`), pero:
+- `price == p_new_price` (el cambio ya se aplicó) **Y**
+- El último registro en `audit_precios` fue ejecutado por el mismo `actor_id` hace menos de 10 segundos.
+El RPC retorna `{ success: true, code: 'ALREADY_APPLIED_IDEMPOTENT' }`, evitando registrar falsas alertas de seguridad por reintentos de red.
+
+#### Registro Seguro en Auditoría (Sin Rollback Ciego)
+En PostgreSQL, una excepción con `RAISE EXCEPTION` revierte toda la transacción, borrando cualquier inserción en `audit_seguridad`. Por tanto, ante el fallo del Escudo 1 o Escudo 2:
+1. El RPC ejecuta `INSERT INTO public.audit_seguridad (actor_id, store_id, event_type, metadata) VALUES (v_employee_id, v_store_id, 'CONCURRENT_MUTATION_BLOCKED', jsonb_build_object('reason', 'STALE_VECTOR_SNAPSHOT', ...));`.
+2. Omite el `UPDATE` sobre `products`.
+3. Retorna `{ success: false, code: 'CONCURRENT_MUTATION_BLOCKED', message: 'Bloqueo defensivo por colisión concurrente.' }`.
 
 ---
 
 ## 5. CONTRATO DE INTERFAZ Y COMUNICACIÓN (CLIENTE - SERVIDOR - STORAGE)
 
-El intercambio de datos y la persistencia local se rigen por contratos de interfaz estrictos modelados en formato JSON Schema.
-
-### 5.1 Estructura del Almacén de Transacciones Offline (IndexedDB: `sync_queue` / `sales_queue`)
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "OfflineQueueItemSchema",
-  "type": "object",
-  "description": "Estructura inmutable de transacción diferida almacenada en IndexedDB (tienda-sync-db)",
-  "required": ["id", "type", "store_id", "session_id", "employee_id", "payload", "timestamp", "retry_count"],
-  "properties": {
-    "id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Identificador local único universal (local_id) para deduplicación idempotente en servidor"
-    },
-    "type": {
-      "type": "string",
-      "enum": ["CREATE_SALE"],
-      "description": "Tipo de mutación offline autorizada. Los movimientos de inventario directos son estrictamente online"
-    },
-    "store_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Identificador único de la tienda (aislamiento multi-tenant)"
-    },
-    "session_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Identificador del turno de caja que estaba abierto al registrarse la venta local"
-    },
-    "employee_id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Identificador del empleado que ejecutó la venta"
-    },
-    "payload": {
-      "type": "object",
-      "required": ["items", "payment_method", "total"],
-      "properties": {
-        "client_id": {
-          "type": ["string", "null"],
-          "format": "uuid",
-          "description": "Identificador del cliente en caso de venta a crédito o fiado"
-        },
-        "payment_method": {
-          "type": "string",
-          "enum": ["efectivo", "nequi", "daviplata", "fiado"]
-        },
-        "amount_received": {
-          "type": "number",
-          "minimum": 0
-        },
-        "items": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "required": ["product_id", "quantity"],
-            "properties": {
-              "product_id": { "type": "string", "format": "uuid" },
-              "quantity": { "type": "number", "exclusiveMinimum": 0 }
-            }
-          }
-        },
-        "total": {
-          "type": "number",
-          "minimum": 0,
-          "description": "Total referencial informativo de la interfaz"
-        }
-      }
-    },
-    "timestamp": {
-      "type": "integer",
-      "description": "Marca de tiempo Unix (milisegundos) para indexación FIFO (by-timestamp)"
-    },
-    "retry_count": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 3,
-      "description": "Contador de intentos de sincronización antes de transferir a DLQ"
-    }
-  }
-}
-```
+### 5.1 Estructura del Almacén de Transacciones Offline (IndexedDB: `sync_queue`)
+*(Se mantiene idéntico a v1.0 — 50 ítems de cuota e indexación FIFO).*
 
 ### 5.2 Estructura del Almacén de Transacciones Fallidas (IndexedDB: `dead_letter_queue`)
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "DLQItemSchema",
-  "type": "object",
-  "description": "Estructura de contingencia para transacciones rechazadas o excedidas en reintentos",
-  "required": ["id", "original_transaction", "error_code", "error_message", "failed_at", "attempts", "status"],
-  "properties": {
-    "id": {
-      "type": "string",
-      "format": "uuid",
-      "description": "Identificador de la transacción fallida (coincidente con local_id)"
-    },
-    "original_transaction": {
-      "type": "object",
-      "description": "Payload íntegro original del OfflineQueueItem"
-    },
-    "error_code": {
-      "type": "string",
-      "enum": ["INSUFFICIENT_STOCK", "CREDIT_LIMIT_EXCEEDED", "SHIFT_CLOSED", "STORE_ACCESS_DENIED", "SCHEMA_DRIFT", "UNKNOWN_ERROR"],
-      "description": "Código de error estructurado retornado por el servidor o motor de sincronización"
-    },
-    "error_message": {
-      "type": "string",
-      "description": "Mensaje técnico descriptivo del rechazo"
-    },
-    "failed_at": {
-      "type": "integer",
-      "description": "Marca de tiempo Unix de entrada a la DLQ"
-    },
-    "attempts": {
-      "type": "integer",
-      "minimum": 3
-    },
-    "status": {
-      "type": "string",
-      "enum": ["PENDING_REVIEW", "RESOLVED_RETRY", "DISCARDED"],
-      "default": "PENDING_REVIEW",
-      "description": "Estado de gestión administrativa de la anomalía"
-    }
-  }
-}
-```
+*(Se mantiene idéntico a v1.0).*
 
 ### 5.3 Contrato de Respuesta Unificada del Backend (`ActionResponse`)
 
@@ -313,29 +252,47 @@ El intercambio de datos y la persistencia local se rigen por contratos de interf
   "description": "Contrato universal de respuesta de Supabase ante mutaciones de datos",
   "required": ["success"],
   "properties": {
-    "success": {
-      "type": "boolean"
-    },
-    "data": {
-      "type": "object",
-      "properties": {
-        "sale_id": { "type": "string", "format": "uuid" },
-        "ticket_number": { "type": "integer" },
-        "status": { "type": "string" }
-      }
-    },
-    "error": {
-      "type": "string",
-      "description": "Mensaje de error técnico legible"
-    },
+    "success": { "type": "boolean" },
+    "data": { "type": "object" },
+    "error": { "type": "string" },
     "code": {
       "type": "string",
-      "enum": ["DUPLICATE_RESOLVED", "NO_OPEN_CASH_SESSION", "SHIFT_EXPIRED", "STORE_ACCESS_DENIED", "INSUFFICIENT_STOCK", "CREDIT_LIMIT_EXCEEDED"]
+      "enum": [
+        "DUPLICATE_RESOLVED",
+        "NO_OPEN_CASH_SESSION",
+        "SHIFT_EXPIRED",
+        "STORE_ACCESS_DENIED",
+        "INSUFFICIENT_STOCK",
+        "CREDIT_LIMIT_EXCEEDED",
+        "CONCURRENT_MUTATION_BLOCKED",
+        "ALREADY_APPLIED_IDEMPOTENT",
+        "MUTATION_COOLDOWN_ACTIVE"
+      ]
     },
-    "details": {
-      "type": "object",
-      "description": "Detalles estructurados de diagnóstico (ej. stock disponible real)"
-    }
+    "details": { "type": "object" }
+  }
+}
+```
+
+### 5.4 Contrato RPC: `rpc_actualizar_producto_catalogo`
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RpcActualizarProductoCatalogoParams",
+  "type": "object",
+  "required": ["p_product_id", "p_name", "p_price", "p_expected_old_price", "p_expected_name"],
+  "properties": {
+    "p_product_id": { "type": "string", "format": "uuid" },
+    "p_name": { "type": "string", "minLength": 2 },
+    "p_price": { "type": "number", "minimum": 50 },
+    "p_cost": { "type": "number", "minimum": 0 },
+    "p_min_stock": { "type": "integer", "minimum": 0 },
+    "p_plu": { "type": ["string", "null"] },
+    "p_category_id": { "type": ["string", "null"], "format": "uuid" },
+    "p_expected_old_price": { "type": "number", "description": "Sello Escudo 2: precio base que leyó el usuario" },
+    "p_expected_old_cost": { "type": "number" },
+    "p_expected_name": { "type": "string", "description": "Sello Escudo 2: nombre base que leyó el usuario" }
   }
 }
 ```
@@ -344,50 +301,48 @@ El intercambio de datos y la persistencia local se rigen por contratos de interf
 
 ## 6. GESTIÓN DE LA ESPERA, TOLERANCIA A FALLOS Y RESILIENCIA OFFLINE
 
-La interacción del usuario frente a demoras de red, pérdidas de conexión y contingencias locales se administra mediante patrones de experiencia de usuario (UX) asertivos:
-
-### 6.1 Matriz de Estados de Carga y Bloqueo de Interacción
-
 | Operación | Estado Pendiente (Wait State) | Mecanismo de Bloqueo | Manejo de Re-entrada |
 |---|---|---|---|
-| **Hidratación de Catálogos (Carga Inicial)** | Renderizado de Skeletons estructurales en tabla de productos y lista de clientes. | Bloqueo suave. La interfaz permite interactuar con controles de navegación general pero deshabilita acciones sobre filas no hidratadas. | Las solicitudes de hidratación concurrentes se unifican mediante promesa singleton (`dbPromise`). |
-| **Búsqueda en POS (Lectura Local)** | Búsqueda instantánea O(1) vía índices IndexedDB (`by_plu`, `by_category`). Cero spinners para latencias menores a 50ms. | Ninguno. La respuesta es instantánea y no bloquea el hilo principal. | Búsquedas reactivas amortiguadas por debounce de 150ms. |
-| **Cobro y Registro de Venta (Online/Offline)** | Indicador giratorio (*spinner*) incrustado en el botón "Cobrar" y barra de progreso indeterminada discreta. | Bloqueo estricto del modal de pago. Todos los botones de confirmación quedan deshabilitados inmediatamente tras el primer clic. | Prevención de doble clic mediante bandera reactiva `isSubmitting = true` hasta que la promesa del backend se resuelva o se asiente en la cola offline. |
-| **Sincronización de Fondo (Worker Offline)** | Ícono pulsante sutil en barra superior indicando "Sincronizando ventas pendientes (N restantes)...". | Cero bloqueo sobre el vendedor. El cajero continúa facturando ininterrumpidamente en el mostrador. | Procesamiento encolado estrictamente secuencial (FIFO) para evitar colisiones de inventario. |
-
-### 6.2 Notificaciones y Erradicación de Falsas Alarmas
-En consonancia con [SDD_011_MANEJO_ERRORES.md](file:///documentation/01_requirements/SDD/SDD_011_MANEJO_ERRORES.md), la aplicación implementa la política *Fail-Safe Silenciosa*:
-1. Si una petición a Supabase falla por interrupción temporal de red, la transacción se encola de inmediato en `sales_queue` y el sistema inicia un temporizador de gracia de 60 segundos.
-2. Si la conexión se recupera antes de los 60 segundos, la cola se vacía silenciosamente hacia el servidor sin haber alarmado innecesariamente al comerciante con carteles intrusivos.
-3. Solo si la desconexión persiste más de 60 segundos, se muestra el indicador visual persistente: *"Estás trabajando sin internet. Tus ventas se guardan localmente de forma segura"*.
+| **Carga de Catálogo (SWR)** | Retorna dato en RAM inmediatamente (0ms) si está fresco. Si está stale, muestra datos en caché e icono sutil de refresco de fondo. | Bloqueo cero. El usuario navega sin esperas. | Deduplicación singleton en vuelo; llamadas simultáneas comparten la misma promesa. |
+| **Edición de Producto (Guardar)** | Spinner en botón "Guardar" y formulario deshabilitado. | Bloqueo estricto del modal. Previene doble clic (`isSubmitting = true`). | Si falla por concurrencia (`CONCURRENT_MUTATION_BLOCKED`), cierra el modal, muestra toast de bloqueo y recarga datos reales. |
+| **Venta en POS** | Spinner en "Cobrar". | Bloqueo estricto del botón de pago. | Idempotencia garantizada por `local_id`. |
+| **Reconexión de Red** | Ícono de sincronización parpadeante en header. | Cero bloqueo sobre la navegación. | Revalidación global en segundo plano (`invalidateAll()`). |
 
 ---
 
 ## 7. MATRIZ DE TRAZABILIDAD, DEUDAS TÉCNICAS Y DECISIONES ARQUITECTÓNICAS (REGLA 7)
 
-Conforme a la **Regla 7 de AGENTS.md** ("Documentación Explícita de Trade-offs y Alcance Diferido") y al **Invariante de Reconciliación por Conteo de la Regla 9 (N = 5)**, se formalizan las decisiones técnicas, compensaciones (*trade-offs*) y condiciones de revisión del módulo de almacenamiento local y caché:
+### D-1 (H-1): Prohibición de Colecciones Masivas en LocalStorage y Persistencia en IndexedDB
+- **Qué se decidió:** Prohibir terminantemente el almacenamiento de arrays masivos en `localStorage`. Utilizar exclusivamente `IndexedDB` (`tienda-cache-db`) para la persistencia masiva.
+- **Por qué / Trade-off:** `localStorage` impone cuota rígida de ~5MB y bloquea el Event Loop. `IndexedDB` soporta cientos de megabytes de forma asíncrona.
+- **Condición de revisión futura:** Permanente.
 
-### D-1 (H-1): Prohibición de Colecciones Masivas en LocalStorage y Persistencia Asíncrona en IndexedDB (`RN-CACHE-01`)
-- **Qué se decidió:** Prohibir terminantemente el almacenamiento de arrays y colecciones de dominio (`products`, `clients`, `sales`, `cash_movements`, `inventory_batches`) en `localStorage` o `sessionStorage`. Utilizar exclusivamente `IndexedDB` (`tienda-cache-db`) para la persistencia masiva de catálogos en el cliente.
-- **Por qué / Trade-off:** `localStorage` impone un límite rígido de ~5MB y opera de forma síncrona en el hilo principal del navegador. Deserializar colecciones de miles de productos mediante `JSON.parse` congela el renderizado de la UI y dispara excepciones irreversibles `QuotaExceededError`. `IndexedDB` es asíncrono, no bloquea la interfaz y soporta volúmenes de datos de cientos de megabytes con búsquedas indexadas O(1).
-- **Condición de revisión futura:** Permanente. Invariante arquitectónica de almacenamiento en el cliente.
+### D-2 (H-2): Caché Optimista Cosmética vs Backend Authority Absoluto
+- **Qué se decidió:** Toda clave de estado en cliente es estrictamente optimista. Toda mutación se valida y calcula en PostgreSQL.
+- **Por qué / Trade-off:** El cliente es inspeccionable y manipulable. La soberanía del backend erradica fraudes y corrupción contable.
+- **Condición de revisión futura:** Permanente.
 
-### D-2 (H-2): Caché Optimista Cosmética vs Backend Authority Absoluto (`RN-CACHE-02`, Tampering Resistance)
-- **Qué se decidió:** Consagrar formalmente que toda clave de estado o catálogo residente en el almacenamiento local del navegador (`localStorage`, `IndexedDB`, memoria volátil) es estrictamente **optimista y cosmética**. Toda mutación transaccional, contable, financiera y de control de inventario se valida y calcula de manera soberana en PostgreSQL. Si un usuario adultera localmente el estado (ej. forzando `status = 'open'` en caja o alterando precios en DevTools), el backend rechaza la operación con excepciones tipadas (`SHIFT_CLOSED`, `STORE_ACCESS_DENIED`), y el cliente auto-corrige su almacenamiento purgando el dato manipulado.
-- **Por qué / Trade-off:** El entorno de ejecución del cliente en navegadores es inherentemente inseguro e inspeccionable. Asumir autoridad en el servidor erradica cualquier riesgo de fraude o corrupción contable sin degradar la fluidez visual de navegación en el mostrador.
-- **Condición de revisión futura:** Permanente. Principio rector de seguridad del sistema ("El dato es sagrado y no se negocia").
+### D-3 (H-3): Supervivencia Selectiva de Colas Transaccionales al Logout
+- **Qué se decidió:** Logout purga tokens pero **PRESERVA intactas** las colas de IndexedDB (`sync_queue`, `dead_letter_queue`).
+- **Por qué / Trade-off:** Destruir estas colas destruiría hechos económicos cobrados físicamente a clientes reales (*POL-AUD-01*).
+- **Condición de revisión futura:** Permanente.
 
-### D-3 (H-3): Supervivencia Selectiva de Colas Transaccionales al Logout (`RN-CACHE-03`)
-- **Qué se decidió:** Prohibir el uso de `localStorage.clear()` o borrados globales de IndexedDB durante el cierre de sesión voluntario. El flujo de logout ejecuta una purga selectiva: destruye tokens JWT y credenciales en `localStorage`, vacía carritos en memoria, pero **PRESERVA intactas e inmutables** las bases de datos de IndexedDB `tienda-sync-db` (`sync_queue` / `sales_queue`, `dead_letter_queue` y `corrupted_items`).
-- **Por qué / Trade-off:** Si un dependiente cierra sesión o se agota su turno existiendo ventas realizadas offline pendientes de sincronizar, un borrado ciego destruiría transacciones comerciales legítimas ya cobradas en efectivo a clientes reales, violando la inmutabilidad histórica (`POL-AUD-01`). Las colas preservadas quedan listas para su sincronización transparente en cuanto se reanude la sesión y la conectividad.
-- **Condición de revisión futura:** Permanente. Estándar transversal de arquitectura Offline-First.
+### D-4 (H-4): Resiliencia Progresiva ante Corrupción Local y Erradicación del WSOD
+- **Qué se decidió:** Envoltorios seguros `safeParseJson` con auto-sanación atómica ante datos corruptos.
+- **Por qué / Trade-off:** Impide la temida pantalla blanca de la muerte (*WSOD*) ante fallos de energía o versiones desactualizadas de esquemas.
+- **Condición de revisión futura:** Permanente.
 
-### D-4 (H-4): Resiliencia Progresiva ante Corrupción Local y Erradicación del WSOD (`RN-CACHE-04`)
-- **Qué se decidió:** Implementar envoltorios seguros de deserialización (`safeParseJson`) con manejo de fallos en dos niveles: ante registros individuales corruptos se descartan únicamente los inválidos; ante esquemas o bases de datos locales ilegibles se purga atómicamente la clave afectada y se re-descarga silenciosamente desde Supabase, impidiendo excepciones no controladas en el ciclo de vida de Vue.
-- **Por qué / Trade-off:** Actualizaciones de versiones de software, cierres intempestivos del navegador o fallos de energía pueden corromper fragmentos del almacenamiento local. Si la lectura lanza excepciones no controladas en el gancho `init()` de los stores de Pinia, el navegador muestra la "Pantalla Blanca de la Muerte" (WSOD). La auto-sanación silenciosa garantiza la continuidad operativa del negocio sin requerir asistencia técnica.
-- **Condición de revisión futura:** Permanente. Estándar de tolerancia a fallos en capa de presentación.
+### D-5 (H-5): Aislamiento Multi-tienda Forzado en Almacenamiento Local
+- **Qué se decidió:** Particionamiento obligatorio por tenant (`tienda-${currentStoreId}-${key}` y namespaces en RAM).
+- **Por qué / Trade-off:** Previene fuga de información o colisión de inventarios en terminales compartidas entre comercios.
+- **Condición de revisión futura:** Permanente.
 
-### D-5 (H-5): Aislamiento Multi-tienda Forzado en Almacenamiento Local (`scopedStorage` e índices `by_store`)
-- **Qué se decidió:** Implementar un adaptador de almacenamiento con particionamiento por tenant (`scopedStorage`), prefijando todas las claves de `localStorage` con `tienda-${currentStoreId}-${key}` y configurando índices compuestos `by_store` en las tablas de IndexedDB.
-- **Por qué / Trade-off:** En terminales físicas compartidas donde se operan múltiples tiendas o sucursales desde un mismo navegador web, la ausencia de prefijado provocaría contaminación de datos entre comercios, fuga de clientes o colisiones de inventario local.
-- **Condición de revisión futura:** Permanente. Mandato de multi-tenancy estricto en capa de presentación.
+### D-6 (H-CACHE-10): Desacoplamiento del Sello de Concurrencia respecto al Trigger de Venta
+- **Qué se decidió:** El Escudo 2 de concurrencia compara exclusivamente la fotografía del vector (`expected_old_price`, `expected_name`) y **TIENE PROHIBIDO** evaluar `products.updated_at` o `current_stock`.
+- **Por qué / Trade-off:** Cada venta en el POS dispara el trigger `update_product_stock()`, el cual ejecuta un `UPDATE products` que muta `updated_at`. Si el sello evaluara `updated_at`, cualquier venta en caja mientras el Administrador edita el precio provocaría un falso bloqueo y una falsa alerta de seguridad.
+- **Condición de revisión futura:** Permanente. Invariante de independencia vectorial entre catálogo comercial y logística física.
+
+### D-7 (H-CACHE-03): Erradicación de `current_stock` en Persistencia de Catálogo
+- **Qué se decidió:** Prohibir el uso del `UPDATE products` genérico que incluya `current_stock` desde el frontend. Toda mutación de catálogo debe ejecutarse mediante `rpc_actualizar_producto_catalogo` enviando únicamente atributos comerciales.
+- **Por qué / Trade-off:** El formulario de edición modal leía el stock al abrirse y, al guardar, sobrescribía el stock en la base de datos, destruyendo silenciosamente las ventas concurrentes del POS.
+- **Condición de revisión futura:** Permanente.

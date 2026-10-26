@@ -73,3 +73,18 @@ Este componente es crítico. Debe comunicar que se está realizando una "cirugí
     - **Color:** Rojo Intenso (`bg-red-600`).
     - **Mensaje:** "CRÍTICO: Existen conflictos de inventario pendientes. No se puede cerrar caja hasta resolverlos."
     - **Acción:** Botón "Ir a Resolver" (Redirige a `/admin/sync`).
+
+---
+
+### 5. Protocolo de Bloqueo por Edición Concurrente (Integridad de Datos y Seguridad)
+- **Disparador:** La invocación RPC de edición de catálogo retorna código `CONCURRENT_MUTATION_BLOCKED` o `MUTATION_COOLDOWN_ACTIVE`.
+- **Comportamiento UX Obligatorio:**
+  1. **Cierre Inmediato del Modal:** El formulario de edición (`ProductFormModal`, `ClientFormModal`) se cierra de forma inmediata para impedir que el operador reintente con datos obsoletos.
+  2. **Bloqueo Definitivo (Sin Override Manual):** En colisiones de concurrencia queda terminantemente prohibido permitir "Forzar guardado" o "Sobrescribir", ya que constituye un riesgo de corrupción contable o sospecha de alteración (*tampering*).
+  3. **Toast de Notificación Crítica:**
+     - **Icono:** 🛡️ (`ShieldAlert`)
+     - **Color:** Rojo Intenso de Seguridad (`bg-red-700 text-white`)
+     - **Título:** "Operación Bloqueada por Seguridad e Integridad"
+     - **Mensaje:** "Este registro fue modificado recientemente desde otra cuenta o terminal. Por seguridad, tus cambios fueron rechazados y se descargaron los datos vigentes."
+     - **Duración:** 7000ms.
+  4. **Auto-Purga y Recarga Reactiva:** El cliente invalida de inmediato la clave en `SystemCacheManager` y actualiza la lista o tabla visual con la verdad de PostgreSQL.
