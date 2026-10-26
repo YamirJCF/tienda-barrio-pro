@@ -260,7 +260,7 @@
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
 | FRD-028 | [FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md](FRD/FRD_028_ALMACENAMIENTO_LOCAL_SEGURO.md) | FRD | 🟢 | ✅ SDD_028 | — |
-| SDD-028 | [SDD_028_ALMACENAMIENTO_LOCAL.md](SDD/SDD_028_ALMACENAMIENTO_LOCAL.md) | SDD | 🟢 Validado | — | v2.0.0. Gobernanza de RAM (SWR, LRU, deduplicación en vuelo), Escudos 1 y 2 de concurrencia. Deudas D-6 y D-7 formalizadas. |
+| SDD-028 | [SDD_028_ALMACENAMIENTO_LOCAL.md](SDD/SDD_028_ALMACENAMIENTO_LOCAL.md) | SDD | 🟠 Aprobado con Deuda | — | v2.0.0. Gobernanza de RAM (SWR, LRU, deduplicación en vuelo), Escudos 1 y 2 de concurrencia. Deudas D-6 y D-7 formalizadas para Paso 2. |
 
 ---
 
