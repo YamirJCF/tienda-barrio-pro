@@ -2,8 +2,8 @@
 
 > **Asociado a:** [FRD-006](../FRD/FRD_006_INVENTARIO.md) (Gestión de Inventario y Catálogo)  
 > **Fase del Plan:** Ola 2 — Inventario, Lotes y Proveedores  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (PAC-SDD Completo 2026-10-14)  
-> **Última Actualización:** 2026-10-14  
+> **Estado:** 🟢 Aprobado con Adenda de Filtros y Gobernanza de Caché (PAC-SDD Completo 2026-10-26)  
+> **Última Actualización:** 2026-10-26  
 
 ---
 
@@ -28,6 +28,7 @@
 | **SDD_006_02 (Gestor de Reembolsos)** | Reingreso de stock por devoluciones. | La operación `rpc_procesar_reembolso_item` valida el ítem vendido, reingresa existencias al inventario y debita el dinero de la caja del canal seleccionado con control de sobregiro. |
 | **SDD_005 (Auditoría y Trazabilidad)** | Trazabilidad forense del Kardex. | Exige registrar en `inventory_movements` el usuario responsable (`created_by`), la estampa temporal inmutable (`created_at`) y la justificación (`reason`), alimentando el Evidence Hub. |
 | **SDD_018 (Control Operacional)** | Extracción de P&L e inventario final. | Consume la valuación de inventario y existencias para determinar el Costo de Mercancía Vendida (COGS) y el Balance General. |
+| **SDD_028 (Gobernanza Global de Caché)** | Gestión unificada de estados en memoria RAM y concurrencia. | El catálogo de productos se almacena en memoria bajo estrategia SWR Nivel 2 (TTL 5 min, MaxStale 30 min) para permitir filtrado, ordenamiento y renderizado reactivo instantáneo (100% en cliente sin round-trips). El historial de Kardex se gestiona bajo Nivel 5 LRU Bounded (MAX_ENTRIES = 10, TTL 2 min) consultado vía PostgREST con ventana por defecto de 7 días. Toda edición de catálogo se blinda con Escudos 1 (cooldown) y 2 (vector snapshot de precios/nombre). |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada)
 
@@ -231,18 +232,21 @@ stateDiagram-v2
 
 ## 5. Contrato de Interfaz
 
-### 5.1 Operación: Consulta Paginada de Catálogo de Productos (`get_inventory_products`)
-- **Tipo:** Consulta PostgREST / Lectura (READ)
-- **Entradas (Query Parameters):**
+### 5.1 Operación: Consulta y Filtrado de Catálogo de Productos (Arquitectura Dual SWR / PostgREST)
+- **Tipo:** Arquitectura Dual: Filtrado Reactivo en Memoria (Primario) / Consulta PostgREST (Contingencia y Carga Inicial)
+- **Desacople Arquitectónico (@user_global):**
+  - **Modo 1 (Primario / Operación Normal):** Filtrado y ordenamiento reactivo 100% en memoria en el cliente (Frontend Authority sobre presentación) a través del composable `useInventoryFilter` y `RecycleScroller` sobre la caché SWR Nivel 2 (`inventoryStore.products`). Preserva la capacidad de venta y consulta offline en el POS con latencia de 0ms.
+  - **Modo 2 (Contingencia / PostgREST):** Endpoint paginado directo en Supabase (`get_inventory_products`) utilizado para hidratación inicial, revalidación en segundo plano o catálogos masivos (> 10,000 SKUs).
+- **Entradas (Query Parameters / Filtros Reactivos en Memoria):**
   ```json
   {
-    "store_id": "UUID (Obligatorio, resuelto por RLS)",
-    "is_active": "BOOLEAN (Default: true, Admin puede consultar false)",
+    "store_id": "UUID (Obligatorio, resuelto por RLS / Store)",
+    "is_active": "BOOLEAN (Default: true, Admin puede alternar para auditar inactivos)",
     "category": "TEXT (Opcional, filtro por categoría exacta)",
     "low_stock_only": "BOOLEAN (Opcional, si true filtra current_stock <= min_stock)",
-    "search": "TEXT (Opcional, búsqueda parcial name ilike '%search%')",
-    "order_by": "TEXT (Valores: 'name.asc', 'name.desc', 'current_stock.asc', 'current_stock.desc', 'price.asc', 'price.desc')",
-    "limit": "INTEGER (Default: 20)",
+    "search": "TEXT (Opcional, búsqueda insensible a mayúsculas sobre name y plu, min 2 chars)",
+    "order_by": "TEXT (Valores: 'name_asc', 'name_desc', 'stock_asc', 'stock_desc', 'price_asc', 'price_desc')",
+    "limit": "INTEGER (Default: 20 en Modo 2; virtualizado ilimitado en Modo 1)",
     "offset": "INTEGER (Default: 0)"
   }
   ```
@@ -272,20 +276,21 @@ stateDiagram-v2
   | Código de Error | Causa | Mensaje Técnico |
   |-----------------|-------|-----------------|
   | `STORE_ACCESS_DENIED` | Usuario sin acceso a la tienda | El usuario no tiene permisos para consultar productos de esta tienda |
-  | `INVALID_PAGE_LIMIT` | `limit` mayor a 100 o menor a 1 | El límite de paginación debe estar entre 1 y 100 |
+  | `INVALID_PAGE_LIMIT` | `limit` mayor a 100 o menor a 1 (Modo 2) | El límite de paginación debe estar entre 1 y 100 |
 
 ---
 
 ### 5.2 Operación: Consulta Filtrada de Kardex (`get_inventory_kardex`)
-- **Tipo:** Consulta PostgREST / Lectura (READ)
+- **Tipo:** Consulta PostgREST / Lectura (READ) con Gobernanza LRU Nivel 5
+- **Estrategia de Caché (SDD_028):** Gobernado por `SystemCacheManager` bajo Nivel 5 (LRU Bounded, `MAX_ENTRIES = 10` por tienda, TTL 2 min, MaxStale 10 min). Evita saturación de RAM por acumulación histórica de movimientos.
 - **Entradas (Query Parameters):**
   ```json
   {
     "product_id": "UUID (Obligatorio)",
     "start_date": "TIMESTAMPTZ (Default: NOW() - INTERVAL '7 days')",
     "end_date": "TIMESTAMPTZ (Default: NOW())",
-    "movement_type": "TEXT (Opcional: 'entrada', 'salida', 'venta', 'merma', 'ajuste', 'devolucion')",
-    "created_by": "UUID (Opcional, filtro por usuario)",
+    "movement_type": "TEXT (Opcional: 'entrada', 'salida', 'venta', 'merma', 'ajuste', 'devolucion', 'CORRECCION_SISTEMA')",
+    "created_by": "UUID (Opcional, filtro por usuario/empleado)",
     "limit": "INTEGER (Default: 20)",
     "offset": "INTEGER (Default: 0)"
   }
@@ -588,4 +593,9 @@ erDiagram
 - **Qué se decidió:** Remover la validación bloqueante `PENDING_PAYABLES` de `rpc_soft_delete_product`, permitiendo la baja lógica (`is_active = false`, prefijo `DEL-` en PLU) de cualquier artículo con `current_stock = 0`, sin exigir la liquidación previa de las facturas en `supplier_invoices`.
 - **Por qué (trade-off concreto):** La baja lógica preserva íntegramente las filas y relaciones de clave foránea en `inventory_movements` y `supplier_invoices`. Las facturas impagas continúan registradas, visibles y exigibles en el módulo de Cuentas por Pagar (SDD-019). Bloquear la baja de un producto con stock en 0 violaba la Independencia Logística y Contable (`POL-LOG-02`) e impedía a los tenderos depurar su catálogo activo de productos descontinuados mientras mantuviesen créditos vigentes con proveedores mayoristas.
 - **Bajo qué condición futura se revisará:** Solo en caso de requerirse un proceso de absorción o condonación de deudas vinculadas directamente a la liquidación judicial del comercio.
+
+### D-006-02: Desacople de Filtrado de Catálogo en Memoria (SWR Nivel 2) vs Kardex en Servidor (LRU Nivel 5)
+- **Qué se decidió:** El filtrado, búsqueda y ordenamiento del catálogo en la vista de inventario se ejecuta 100% en memoria del cliente sobre la colección de productos cacheada en SWR Nivel 2 (`useInventoryFilter`). La consulta de Kardex por producto se delega al servidor vía PostgREST con ventana temporal acotada (default 7 días) y se cachea en Nivel 5 LRU Bounded (`MAX_ENTRIES = 10`).
+- **Por qué (trade-off concreto):** El catálogo de una tienda de barrio oscila entre 200 y 3,000 SKUs. Mantener el catálogo en memoria RAM con SWR garantiza latencia de 0ms en búsquedas instantáneas por teclado, preserva la continuidad operativa offline requerida para el POS, y respeta la Regla 1 (El Frontend es responsable de la presentación y visualización, sin violar Backend Authority porque no calcula stock ni finanzas). Por contraposición, el Kardex (`inventory_movements`) es un registro ilimitado y transaccional (`append-only`) que crecería indefinidamente; descargarlo completo saturaría la memoria del navegador.
+- **Bajo qué condición futura se revisará:** Si el catálogo de una sola tienda supera los 10,000 SKUs activos con restricciones severas de memoria RAM en terminales móviles o tabletas de gama baja.
 

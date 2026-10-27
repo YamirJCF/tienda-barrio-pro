@@ -17,6 +17,7 @@ import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
 import { createIndexedDBDataSource } from '../sources/IndexedDBDataSource';
 import type { LocalDataSource } from '../interfaces/DataSource';
+import { systemCacheManager, CacheLevel } from '../../services/systemCacheManager';
 
 // IDB Cache Layer — replaces localStorage for product data
 const productCache: LocalDataSource<Product> = createIndexedDBDataSource<Product>('products');
@@ -134,7 +135,16 @@ interface InventoryMovementHistory {
 /**
  * Interface extending base repository with product-specific methods
  */
+export interface MovementHistoryFilters {
+    startDate?: string;
+    endDate?: string;
+    movementType?: string;
+    createdBy?: string;
+    limit?: number;
+}
+
 export interface ProductRepository extends EntityRepository<Product> {
+    getAll(storeId?: string, includeInactive?: boolean): Promise<Product[]>;
     getByPlu(plu: string, storeId?: string): Promise<Product | null>;
     searchByName(query: string, storeId?: string): Promise<Product[]>;
     updateStock(id: string, quantity: number): Promise<boolean>;
@@ -149,7 +159,7 @@ export interface ProductRepository extends EntityRepository<Product> {
         invoiceRef?: string;
         paymentType?: 'contado' | 'credito';
     }): Promise<boolean>;
-    getMovementHistory(productId: string, limit?: number): Promise<InventoryMovementHistory[]>;
+    getMovementHistory(productId: string, optionsOrLimit?: number | MovementHistoryFilters): Promise<InventoryMovementHistory[]>;
     registerEntry(productId: string, quantity: number, purchasePrice: number, salePrice: number, reason?: string, supplierId?: string, paymentType?: string, invoiceRef?: string, referenceInvoiceId?: string): Promise<boolean>;
     updateBatchPrice(batchId: string, newSalePrice: number): Promise<boolean>;
     updateCatalog(params: {
@@ -186,7 +196,7 @@ export const productRepository: ProductRepository = {
      * 1. ONLINE: Fetch from Supabase (source of truth), update IDB cache
      * 2. OFFLINE: Return from IDB cache (or legacy localStorage fallback)
      */
-    async getAll(storeId?: string): Promise<Product[]> {
+    async getAll(storeId?: string, includeInactive: boolean = false): Promise<Product[]> {
         let results: Product[] = [];
         
         // 1. ONLINE: Always fetch fresh from Supabase
@@ -217,7 +227,10 @@ export const productRepository: ProductRepository = {
             }
         }
 
-        // 4. CRITICAL: Filter out soft-deleted products for UI consumption
+        // 4. CRITICAL: Filter out soft-deleted products for UI consumption unless includeInactive is true
+        if (includeInactive) {
+            return results;
+        }
         return results.filter(p => p.isActive !== false);
     },
 
@@ -308,60 +321,104 @@ export const productRepository: ProductRepository = {
     },
 
     /**
-     * Get movement history (Kardex)
+     * Get movement history (Kardex) under Nivel 5 LRU Cache Governance (SDD_028 / SDD_006)
      */
-    async getMovementHistory(productId: string, limit: number = 50): Promise<any[]> {
-        // Online first strategy for history
-        const isOnline = isSupabaseConfigured() && navigator.onLine;
-        let remoteHistory: any[] = [];
+    async getMovementHistory(
+        productId: string,
+        optionsOrLimit?: number | MovementHistoryFilters
+    ): Promise<InventoryMovementHistory[]> {
+        const filters: MovementHistoryFilters =
+            typeof optionsOrLimit === 'number'
+                ? { limit: optionsOrLimit }
+                : (optionsOrLimit || {});
+        const limit = filters.limit || 50;
 
-        if (isOnline) {
-            const supabase = getSupabaseClient();
-            if (supabase) {
-                const { data, error } = await supabase
-                    .from('inventory_movements')
-                    .select('*, employees(name)')
-                    .eq('product_id', productId)
-                    .order('created_at', { ascending: false })
-                    .limit(limit);
+        const cacheKey = `kardex:${productId}:${JSON.stringify(filters)}`;
+        const { data } = await systemCacheManager.fetchSWR<InventoryMovementHistory[]>(
+            cacheKey,
+            async () => {
+                // Online first strategy for history
+                const isOnline = isSupabaseConfigured() && navigator.onLine;
+                let remoteHistory: InventoryMovementHistory[] = [];
 
-                if (!error && data) {
-                    remoteHistory = data.map((m: any): InventoryMovementHistory => ({
-                        id: m.id,
-                        type: m.movement_type,
-                        quantity: m.quantity,
-                        reason: m.reason,
-                        date: m.created_at,
-                        user: m.employees?.name || 'Sistema'
-                    }));
-                } else {
-                    logger.error('[ProductRepo] Failed to fetch history', error);
+                if (isOnline) {
+                    const supabase = getSupabaseClient();
+                    if (supabase) {
+                        let query = supabase
+                            .from('inventory_movements')
+                            .select('*, employees(name)')
+                            .eq('product_id', productId);
+
+                        if (filters.startDate) {
+                            query = query.gte('created_at', filters.startDate);
+                        }
+                        if (filters.endDate) {
+                            query = query.lte('created_at', filters.endDate);
+                        }
+                        if (filters.movementType && filters.movementType !== 'all') {
+                            query = query.eq('movement_type', filters.movementType);
+                        }
+                        if (filters.createdBy && filters.createdBy !== 'all') {
+                            query = query.eq('created_by', filters.createdBy);
+                        }
+
+                        const { data: dbData, error } = await query
+                            .order('created_at', { ascending: false })
+                            .limit(limit);
+
+                        if (!error && dbData) {
+                            remoteHistory = dbData.map((m: any): InventoryMovementHistory => ({
+                                id: m.id,
+                                type: m.movement_type,
+                                quantity: m.quantity,
+                                reason: m.reason,
+                                date: m.created_at,
+                                user: m.employees?.name || 'Sistema'
+                            }));
+                        } else if (error) {
+                            logger.error('[ProductRepo] Failed to fetch history', error);
+                            throw error;
+                        }
+                    }
                 }
+
+                // Fetch Local Pending Movements (Offline / Audit Mode)
+                try {
+                    const { getPendingMovements } = await import('../syncQueue');
+                    const pending = await getPendingMovements(productId);
+
+                    // Transform pending to match InventoryMovementHistory if not already
+                    const formattedPending = pending
+                        .filter(p => {
+                            if (filters.movementType && filters.movementType !== 'all') {
+                                return p.movement_type === filters.movementType;
+                            }
+                            return true;
+                        })
+                        .map(p => ({
+                            id: p.id,
+                            type: p.movement_type,
+                            quantity: p.quantity,
+                            reason: p.reason,
+                            date: p.created_at,
+                            user: p.employees?.name || 'Pendiente'
+                        }));
+
+                    // Merge: Pending first (newest), then Remote
+                    return [...formattedPending, ...remoteHistory];
+
+                } catch (e) {
+                    logger.warn('[ProductRepo] Failed to load local history', e);
+                    return remoteHistory;
+                }
+            },
+            {
+                level: CacheLevel.LEVEL_5_QUERIES,
+                namespace: `kardex:${productId}`
             }
-        }
+        );
 
-        // Fetch Local Pending Movements (Offline / Audit Mode)
-        try {
-            const { getPendingMovements } = await import('../syncQueue');
-            const pending = await getPendingMovements(productId);
-
-            // Transform pending to match InventoryMovementHistory if not already
-            const formattedPending = pending.map(p => ({
-                id: p.id,
-                type: p.movement_type,
-                quantity: p.quantity,
-                reason: p.reason,
-                date: p.created_at,
-                user: p.employees?.name || 'Pendiente'
-            }));
-
-            // Merge: Pending first (newest), then Remote
-            return [...formattedPending, ...remoteHistory];
-
-        } catch (e) {
-            logger.warn('[ProductRepo] Failed to load local history', e);
-            return remoteHistory;
-        }
+        return data || [];
     },
 
     /**

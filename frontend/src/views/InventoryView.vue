@@ -42,15 +42,36 @@ const toast = useToast();
 const canViewInventory = computed(() => authStore.canViewInventory);
 const canManageInventory = computed(() => authStore.canManageInventory);
 
+// Admin role check
+const isAdmin = computed(() => authStore.isAdmin);
+
 // State
-// Composable: Inventory Filter
+// Composable: Inventory Filter (Gobernanza SWR Nivel 2 y Reactividad 100% en Memoria)
 const {
   searchQuery,
   selectedCategory,
+  onlyLowStock,
+  includeInactive,
+  sortBy,
+  activeFiltersCount,
+  resetFilters,
   categories,
   filteredProducts,
   getCategoryLabel
 } = useInventoryFilter();
+
+// Alerta de stock bajo verificada contra la regla de negocio (stock <= minStock && isActive !== false)
+const realLowStockCount = computed(() => {
+  return inventoryStore.products.filter(p => {
+    const isAct = p.isActive !== false;
+    const s = p.stock instanceof Decimal ? p.stock.toNumber() : Number(p.stock || 0);
+    const m = typeof p.minStock === 'number' ? p.minStock : Number(p.minStock || 0);
+    return isAct && s <= m;
+  }).length;
+});
+
+// Modal de Filtros Avanzados
+const showFilterModal = ref(false);
 
 // State
 const showProductModal = ref(false);
@@ -168,12 +189,20 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
             </template>
           </BaseInput>
         </div>
-        <button class="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:ring-2 hover:ring-primary/20 transition-all">
+        <button 
+          @click="showFilterModal = true"
+          aria-label="Abrir filtros de inventario"
+          class="relative p-2 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:ring-2 hover:ring-primary/20 transition-all">
           <Filter :size="20" :stroke-width="1.5" />
+          <span 
+            v-if="activeFiltersCount > 0" 
+            class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-sm">
+            {{ activeFiltersCount }}
+          </span>
         </button>
       </div>
 
-      <!-- Category Tags -->
+      <!-- Category Tags + Quick Filters -->
       <div class="flex gap-2 overflow-x-auto px-4 pb-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <BaseButton 
           v-for="cat in categories" 
@@ -185,6 +214,20 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
         >
           {{ getCategoryLabel(cat) }}
         </BaseButton>
+
+        <!-- Quick Low Stock Chip -->
+        <BaseButton 
+          @click="onlyLowStock = !onlyLowStock"
+          :variant="onlyLowStock ? 'danger' : 'outline'"
+          size="sm"
+          class="!rounded-full whitespace-nowrap flex items-center gap-1.5"
+        >
+          <AlertCircle :size="14" />
+          <span>Stock Bajo</span>
+          <span v-if="realLowStockCount > 0" class="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 font-bold">
+            {{ realLowStockCount }}
+          </span>
+        </BaseButton>
       </div>
     </header>
 
@@ -194,10 +237,14 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
         <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">
           Productos ({{ filteredProducts.length }})
         </span>
-        <span v-if="inventoryStore.lowStockProducts.length > 0" class="text-xs font-medium text-red-500 flex items-center gap-1">
+        <button 
+          v-if="realLowStockCount > 0" 
+          @click="onlyLowStock = !onlyLowStock"
+          class="text-xs font-medium text-red-500 flex items-center gap-1 hover:underline cursor-pointer"
+        >
           <AlertCircle :size="12" />
-          {{ inventoryStore.lowStockProducts.length }} con stock bajo
-        </span>
+          {{ realLowStockCount }} con stock bajo
+        </button>
       </div>
 
 
@@ -208,11 +255,11 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
       <!-- Empty State -->
       <BaseEmptyState
         v-else-if="filteredProducts.length === 0"
-        :title="searchQuery ? 'No se encontraron productos' : 'No hay productos aún'"
-        :description="searchQuery ? 'Intenta con otro término de búsqueda' : 'Agrega tu primer producto para comenzar'"
+        :title="activeFiltersCount > 0 || searchQuery ? 'No se encontraron productos' : 'No hay productos aún'"
+        :description="activeFiltersCount > 0 || searchQuery ? 'Intenta modificar o restablecer los filtros aplicados' : 'Agrega tu primer producto para comenzar'"
         :icon="Package"
-        :action-label="!searchQuery ? 'Crear primer producto' : undefined"
-        @action="openNewProduct"
+        :action-label="activeFiltersCount > 0 || searchQuery ? 'Restablecer filtros' : 'Crear primer producto'"
+        @action="activeFiltersCount > 0 || searchQuery ? resetFilters() : openNewProduct()"
       />
 
       <!-- Product Cards with Virtual Scrolling -->
@@ -333,6 +380,89 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
       :product-id="batchProduct?.id || null"
       :product-name="batchProduct?.name || null"
     />
+
+    <!-- Modal de Filtros Avanzados de Inventario (UXD-006 / SDD-006) -->
+    <BaseModal
+      v-model="showFilterModal"
+      title="Filtros de Catálogo"
+    >
+      <div class="p-6 space-y-4">
+        <!-- Low Stock Switch -->
+        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-gray-700">
+          <div>
+            <span class="text-sm font-semibold text-slate-800 dark:text-white block">Solo Stock Bajo</span>
+            <span class="text-xs text-slate-500">Muestra exclusivamente artículos con existencia &le; stock mínimo</span>
+          </div>
+          <input
+            type="checkbox"
+            v-model="onlyLowStock"
+            class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+          />
+        </div>
+
+        <!-- Inactive Switch (Admin only) -->
+        <div v-if="isAdmin" class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-gray-700">
+          <div>
+            <span class="text-sm font-semibold text-slate-800 dark:text-white block">Incluir Inactivos / Dados de baja</span>
+            <span class="text-xs text-slate-500">Visibilidad administrativa de artículos descontinuados</span>
+          </div>
+          <input
+            type="checkbox"
+            v-model="includeInactive"
+            class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+          />
+        </div>
+
+        <!-- Criterio de Ordenamiento -->
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Criterio de Ordenamiento</label>
+          <select
+            v-model="sortBy"
+            class="w-full text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white px-3 py-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
+          >
+            <option value="created_desc">Más recientes primero (Predeterminado)</option>
+            <option value="name_asc">Nombre (A &rarr; Z)</option>
+            <option value="name_desc">Nombre (Z &rarr; A)</option>
+            <option value="stock_asc">Stock (Menor a Mayor)</option>
+            <option value="stock_desc">Stock (Mayor a Menor)</option>
+            <option value="price_asc">Precio (Menor a Mayor)</option>
+            <option value="price_desc">Precio (Mayor a Menor)</option>
+          </select>
+        </div>
+
+        <!-- Filtro por Categoría -->
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Categoría</label>
+          <select
+            v-model="selectedCategory"
+            class="w-full text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white px-3 py-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
+          >
+            <option v-for="cat in categories" :key="cat" :value="cat">
+              {{ getCategoryLabel(cat) }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="p-6 pt-0 flex gap-3">
+          <BaseButton
+            @click="resetFilters"
+            variant="secondary"
+            class="flex-1"
+          >
+            Restablecer
+          </BaseButton>
+          <BaseButton
+            @click="showFilterModal = false"
+            variant="primary"
+            class="flex-1"
+          >
+            Listo
+          </BaseButton>
+        </div>
+      </template>
+    </BaseModal>
 
     <!-- T-010: Modal de Confirmación de Eliminación -->
     <BaseModal

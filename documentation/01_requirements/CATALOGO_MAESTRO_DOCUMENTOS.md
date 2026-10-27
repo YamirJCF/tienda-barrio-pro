@@ -76,12 +76,13 @@
 
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
-| FRD-006 | [FRD_006_INVENTARIO.md](FRD/FRD_006_INVENTARIO.md) | FRD | 🟢 | 🔴 SIN SDD padre | Documento padre. **Pendiente Fase 3-P3** |
+| FRD-006 | [FRD_006_INVENTARIO.md](FRD/FRD_006_INVENTARIO.md) | FRD | 🟢 | 🟢 SDD_006 | Documento padre. Aprobado con Adenda de Filtros y Caché |
 | FRD-006-01 | [FRD_006_01_NUCLEO_INVENTARIO.md](FRD/FRD_006_01_NUCLEO_INVENTARIO.md) | FRD | 🟢 | ✅ SDD_006_01 | — |
 | FRD-006-01-01 | [FRD_006_01_01_MOVIMIENTOS_ENTRADA_INVENTARIO.md](FRD/FRD_006_01_01_MOVIMIENTOS_ENTRADA_INVENTARIO.md) | FRD | 🟢 | ✅ SDD_006_01_01 | — |
 | FRD-006-01-02 | [FRD_006_01_02_MOVIMIENTOS_SALIDA_INVENTARIO.md](FRD/FRD_006_01_02_MOVIMIENTOS_SALIDA_INVENTARIO.md) | FRD | 🟢 | ✅ SDD_006_01_02 | — |
 | FRD-006-02 | [FRD_006_02_GESTOR_REEMBOLSOS.md](FRD/FRD_006_02_GESTOR_REEMBOLSOS.md) | FRD | 🟢 | ✅ SDD_006_02 | — |
 | FRD-006-03 | [FRD_006_03_CODIGO_PRODUCTO.md](FRD/FRD_006_03_CODIGO_PRODUCTO.md) | FRD | 🟢 | ✅ SDD_006_03 | — |
+| SDD-006 | [SDD_006_NUCLEO_INVENTARIO_PADRE.md](SDD/SDD_006_NUCLEO_INVENTARIO_PADRE.md) | SDD | 🟢 Aprobado | — | Documento padre de Inventario y Catálogo con Adenda de Filtros y SDD_028 |
 | SDD-006-01 | [SDD_006_01_NUCLEO_INVENTARIO.md](SDD/SDD_006_01_NUCLEO_INVENTARIO.md) | SDD | 🟡 Validado | — | — |
 | SDD-006-01-01 | [SDD_006_01_01_MOVIMIENTOS_ENTRADA.md](SDD/SDD_006_01_01_MOVIMIENTOS_ENTRADA.md) | SDD | 🟡 Validado | — | — |
 | SDD-006-01-02 | [SDD_006_01_02_MOVIMIENTOS_SALIDA.md](SDD/SDD_006_01_02_MOVIMIENTOS_SALIDA.md) | SDD | 🟡 Validado | — | — |
