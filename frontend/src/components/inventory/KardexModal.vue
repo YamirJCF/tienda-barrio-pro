@@ -6,109 +6,111 @@
     :show-close-button="true"
   >
     <div class="p-4 space-y-4">
-      <!-- Filter Controls (FRD-006 / SDD-006 / SDD-028) -->
-      <div class="bg-gray-100 dark:bg-gray-800/60 p-3 rounded-xl space-y-2 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-          <span>Filtros de Auditoría</span>
-          <span class="text-[11px] text-slate-400 font-normal">Caché LRU Nivel 5</span>
+      <!-- Stitch Mobile Controls Bar (FRD-006 / SDD-006 / SDD-028) -->
+      <div class="space-y-3 pb-1 border-b border-gray-100 dark:border-slate-800">
+        <!-- Row 1: Segmented Time Window Pills & Cache Pill -->
+        <div class="flex items-center justify-between gap-2">
+          <div class="inline-flex p-1 bg-gray-100 dark:bg-slate-900 rounded-full border border-gray-200 dark:border-slate-800">
+            <button
+              v-for="preset in datePresets"
+              :key="preset.value"
+              type="button"
+              @click="datePreset = preset.value"
+              class="px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer active:scale-95"
+              :class="datePreset === preset.value
+                ? 'bg-primary text-white shadow-sm shadow-primary/25 font-bold'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'"
+            >
+              {{ preset.label }}
+            </button>
+          </div>
+
+          <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium text-slate-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700/60">
+            LRU Nivel 5
+          </span>
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <!-- Movement Type Filter -->
-          <div>
-            <label class="block text-[11px] text-slate-600 dark:text-slate-300 mb-1 font-medium">Tipo</label>
-            <select 
-              v-model="selectedMovementType"
-              class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-slate-800 dark:text-white px-2 py-1.5 focus:ring-2 focus:ring-primary focus:outline-none"
-            >
-              <option value="all">Todos los movimientos</option>
-              <option value="entrada">Entradas (+)</option>
-              <option value="salida">Salidas (-)</option>
-              <option value="venta">Ventas (-)</option>
-              <option value="merma">Mermas (-)</option>
-              <option value="ajuste">Ajustes</option>
-              <option value="devolucion">Devoluciones (+)</option>
-              <option value="CORRECCION_SISTEMA">Corrección de Sistema</option>
-            </select>
-          </div>
-
-          <!-- Date Range Preset -->
-          <div>
-            <label class="block text-[11px] text-slate-600 dark:text-slate-300 mb-1 font-medium">Ventana Temporal</label>
-            <select 
-              v-model="datePreset"
-              class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-slate-800 dark:text-white px-2 py-1.5 focus:ring-2 focus:ring-primary focus:outline-none"
-            >
-              <option value="7d">Últimos 7 días (Default)</option>
-              <option value="30d">Últimos 30 días</option>
-              <option value="all">Todo el historial</option>
-            </select>
-          </div>
+        <!-- Row 2: Scrollable Movement Type Ribbon -->
+        <div class="flex gap-1.5 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <button
+            v-for="type in movementTypes"
+            :key="type.value"
+            type="button"
+            @click="selectedMovementType = type.value"
+            class="px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer active:scale-95"
+            :class="selectedMovementType === type.value
+              ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm font-bold'
+              : 'bg-gray-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700/60 hover:border-slate-400'"
+          >
+            {{ type.label }}
+          </button>
         </div>
       </div>
 
       <!-- Loading State -->
-      <div v-if="loading" class="flex flex-col items-center justify-center py-8 text-gray-400">
-        <span class="material-icons animate-spin text-3xl mb-2">refresh</span>
-        <span class="text-sm">Consultando movimientos bajo Nivel 5 LRU...</span>
+      <div v-if="loading" class="flex flex-col items-center justify-center py-10 text-gray-400 space-y-2">
+        <div class="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+        <span class="text-xs text-slate-400 font-medium">Consultando movimientos bajo Nivel 5 LRU...</span>
       </div>
 
       <!-- Error State -->
-      <div v-else-if="errorMessage" class="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl p-4 text-center">
+      <div v-else-if="errorMessage" class="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-2xl p-4 text-center">
         <p class="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Error al cargar historial</p>
         <p class="text-[11px] text-slate-600 dark:text-slate-300 mb-3">{{ errorMessage }}</p>
         <button 
           @click="loadHistory" 
-          class="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+          class="text-xs px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full font-semibold transition-colors active:scale-95 shadow-sm"
         >
           Reintentar
         </button>
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="movements.length === 0" class="text-center py-8 text-gray-400">
-        <span class="material-icons text-3xl mb-2">history_edu</span>
-        <p class="text-sm font-medium">No hay movimientos registrados.</p>
-        <p class="text-xs text-gray-500 mt-1">Prueba seleccionando una ventana temporal más amplia.</p>
+      <div v-else-if="movements.length === 0" class="text-center py-10">
+        <div class="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto mb-3">
+          <History :size="24" :stroke-width="1.5" />
+        </div>
+        <p class="text-sm font-semibold text-slate-800 dark:text-white">No hay movimientos registrados</p>
+        <p class="text-xs text-slate-400 mt-1">Prueba seleccionando una ventana temporal más amplia.</p>
       </div>
 
       <!-- History List -->
-      <div v-else class="space-y-3">
+      <div v-else class="space-y-2.5">
         <div class="flex justify-between items-center text-xs text-slate-400 px-1">
-          <span>Mostrando {{ movements.length }} movimientos</span>
+          <span class="font-medium">Mostrando {{ movements.length }} movimientos</span>
         </div>
         <div 
           v-for="move in movements" 
           :key="move.id"
-          class="bg-gray-800/50 rounded-lg p-3 border border-gray-700 items-start gap-3 flex"
+          class="bg-white dark:bg-slate-800/80 rounded-2xl p-3.5 border border-gray-100 dark:border-slate-700/60 shadow-soft items-start gap-3 flex transition-all"
         >
           <!-- Icon based on type -->
           <div 
-            class="p-2 rounded-full shrink-0"
-            :class="getTypeColor(move.type)"
+            class="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center"
+            :class="getTypeBgColor(move.type)"
           >
-            <span class="material-icons text-sm text-white">{{ getTypeIcon(move.type) }}</span>
+            <component :is="getTypeLucideIcon(move.type)" :size="16" :stroke-width="2.2" :class="getTypeIconColor(move.type)" />
           </div>
           
           <div class="flex-1 min-w-0">
-            <div class="flex justify-between items-start">
+            <div class="flex justify-between items-start gap-2">
               <div>
-                <p class="text-sm font-medium text-white capitalize">{{ move.type }}</p>
-                <p class="text-xs text-gray-400">{{ formatDate(move.date) }}</p>
+                <p class="text-sm font-bold text-slate-900 dark:text-white capitalize">{{ move.type }}</p>
+                <p class="text-xs text-slate-400">{{ formatDate(move.date) }}</p>
               </div>
-              <div class="text-right">
+              <div class="text-right shrink-0">
                 <span 
-                  class="font-mono font-bold text-sm"
+                  class="font-mono font-bold text-sm block"
                   :class="getQuantityColor(move.type)"
                 >
                   {{ formatQuantity(move.type, move.quantity) }}
                 </span>
-                <p class="text-[10px] text-gray-500 uppercase">{{ move.user }}</p>
+                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-mono uppercase tracking-wide">{{ move.user }}</p>
               </div>
             </div>
             
             <!-- Reason / Details -->
-            <p v-if="move.reason" class="mt-1 text-xs text-gray-300 italic">
+            <p v-if="move.reason" class="mt-2 text-xs text-slate-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-gray-100 dark:border-slate-800/80 italic">
               "{{ move.reason }}"
             </p>
           </div>
@@ -122,6 +124,17 @@
 import { ref, computed, watch } from 'vue';
 import BaseModal from '../ui/BaseModal.vue';
 import { productRepository, MovementHistoryFilters } from '../../data/repositories/productRepository';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ShoppingCart,
+  RotateCcw,
+  Trash2,
+  Sliders,
+  Wrench,
+  HelpCircle,
+  History
+} from 'lucide-vue-next';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -145,6 +158,23 @@ const movements = ref<any[]>([]);
 // Filter states
 const selectedMovementType = ref('all');
 const datePreset = ref<'7d' | '30d' | 'all'>('7d');
+
+const datePresets = [
+  { value: '7d', label: '7 días' },
+  { value: '30d', label: '30 días' },
+  { value: 'all', label: 'Histórico' }
+] as const;
+
+const movementTypes = [
+  { value: 'all', label: 'Todos' },
+  { value: 'entrada', label: 'Entradas' },
+  { value: 'salida', label: 'Salidas' },
+  { value: 'venta', label: 'Ventas' },
+  { value: 'merma', label: 'Mermas' },
+  { value: 'ajuste', label: 'Ajustes' },
+  { value: 'devolucion', label: 'Devoluciones' },
+  { value: 'CORRECCION_SISTEMA', label: 'Correcciones' }
+];
 
 const calculateStartDate = (preset: '7d' | '30d' | 'all'): string | undefined => {
   const now = Date.now();
@@ -201,36 +231,49 @@ const formatDate = (dateStr: string) => {
   });
 };
 
-const getTypeColor = (type: string) => {
+const getTypeLucideIcon = (type: string) => {
   switch (type) {
-    case 'entrada': return 'bg-emerald-600';
-    case 'salida': return 'bg-rose-600';
-    case 'venta': return 'bg-blue-600';
-    case 'devolucion': return 'bg-purple-600';
-    case 'merma': return 'bg-orange-600';
-    case 'ajuste': return 'bg-amber-600';
-    case 'CORRECCION_SISTEMA': return 'bg-cyan-600';
-    default: return 'bg-gray-600';
+    case 'entrada': return ArrowDownLeft;
+    case 'salida': return ArrowUpRight;
+    case 'venta': return ShoppingCart;
+    case 'devolucion': return RotateCcw;
+    case 'merma': return Trash2;
+    case 'ajuste': return Sliders;
+    case 'CORRECCION_SISTEMA': return Wrench;
+    default: return HelpCircle;
   }
 };
 
-const getTypeIcon = (type: string) => {
+const getTypeBgColor = (type: string) => {
   switch (type) {
-    case 'entrada': return 'arrow_downward';
-    case 'salida': return 'arrow_upward';
-    case 'venta': return 'shopping_cart';
-    case 'devolucion': return 'keyboard_return';
-    case 'merma': return 'delete_sweep';
-    case 'ajuste': return 'tune';
-    case 'CORRECCION_SISTEMA': return 'build';
-    default: return 'swap_horiz';
+    case 'entrada': return 'bg-emerald-500/15';
+    case 'salida': return 'bg-rose-500/15';
+    case 'venta': return 'bg-blue-500/15';
+    case 'devolucion': return 'bg-purple-500/15';
+    case 'merma': return 'bg-orange-500/15';
+    case 'ajuste': return 'bg-amber-500/15';
+    case 'CORRECCION_SISTEMA': return 'bg-cyan-500/15';
+    default: return 'bg-gray-500/15';
+  }
+};
+
+const getTypeIconColor = (type: string) => {
+  switch (type) {
+    case 'entrada': return 'text-emerald-500';
+    case 'salida': return 'text-rose-500';
+    case 'venta': return 'text-blue-500';
+    case 'devolucion': return 'text-purple-500';
+    case 'merma': return 'text-orange-500';
+    case 'ajuste': return 'text-amber-500';
+    case 'CORRECCION_SISTEMA': return 'text-cyan-500';
+    default: return 'text-gray-500';
   }
 };
 
 const getQuantityColor = (type: string) => {
-  if (type === 'entrada' || type === 'devolucion') return 'text-emerald-400';
-  if (type === 'salida' || type === 'venta' || type === 'merma') return 'text-rose-400';
-  return 'text-amber-400';
+  if (type === 'entrada' || type === 'devolucion') return 'text-emerald-600 dark:text-emerald-400';
+  if (type === 'salida' || type === 'venta' || type === 'merma') return 'text-rose-600 dark:text-rose-400';
+  return 'text-amber-600 dark:text-amber-400';
 };
 
 const formatQuantity = (type: string, qty: number) => {

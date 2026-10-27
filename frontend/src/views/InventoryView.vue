@@ -21,14 +21,21 @@ import BaseEmptyState from '../components/ui/BaseEmptyState.vue';
 import { 
   ArrowLeft, 
   Search, 
-  Filter, 
+  SlidersHorizontal,
   AlertCircle, 
+  AlertTriangle,
   Package, 
   Plus, 
   History, 
-  Trash2,
-  Archive,
-  Layers
+  Trash2, 
+  Archive, 
+  Layers,
+  RotateCcw,
+  Clock,
+  ArrowDownAZ,
+  Tag,
+  EyeOff,
+  Check
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -170,10 +177,10 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
       message="No tienes permiso para ver el inventario. Contacta a tu administrador si necesitas acceso."
       @go-back="goToDashboard" />
 
-    <!-- Header with Search -->
+    <!-- Header with Search and Tactile Controls (Stitch Mobile Pattern) -->
     <header
       class="sticky top-0 z-30 bg-white dark:bg-surface-dark border-b border-gray-200 dark:border-gray-800 shadow-sm">
-      <div class="px-4 py-3 flex items-center gap-3">
+      <div class="px-4 py-3 flex items-center gap-2.5">
         <button @click="goToDashboard" aria-label="Volver al Dashboard"
           class="flex items-center justify-center -ml-2 p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
           <ArrowLeft :size="24" :stroke-width="1.5" />
@@ -181,7 +188,7 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
         <div class="flex-1">
           <BaseInput
             v-model="searchQuery"
-            placeholder="Buscar producto..."
+            placeholder="Buscar producto o PLU..."
             class="w-full"
           >
             <template #prefix>
@@ -189,61 +196,59 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
             </template>
           </BaseInput>
         </div>
+
+        <!-- Stitch Pill Filter Button with Active Count -->
         <button 
           @click="showFilterModal = true"
           aria-label="Abrir filtros de inventario"
-          class="relative p-2 rounded-xl bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:ring-2 hover:ring-primary/20 transition-all">
-          <Filter :size="20" :stroke-width="1.5" />
+          class="flex items-center gap-1.5 px-3 py-2 rounded-full font-semibold text-xs transition-all shrink-0 active:scale-95"
+          :class="activeFiltersCount > 0 
+            ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary' 
+            : 'bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-gray-700/60 hover:bg-gray-200 dark:hover:bg-slate-700'">
+          <SlidersHorizontal :size="15" :stroke-width="2" />
+          <span>Filtros</span>
           <span 
             v-if="activeFiltersCount > 0" 
-            class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-sm">
+            class="w-4.5 h-4.5 rounded-full bg-white text-primary text-[10px] font-extrabold flex items-center justify-center">
             {{ activeFiltersCount }}
           </span>
         </button>
       </div>
 
-      <!-- Category Tags + Quick Filters -->
+      <!-- Clean Category Carousel (Horizontal Scroll) -->
       <div class="flex gap-2 overflow-x-auto px-4 pb-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <BaseButton 
+        <button 
           v-for="cat in categories" 
           :key="cat"
           @click="selectedCategory = cat"
-          :variant="selectedCategory === cat ? 'primary' : 'outline'"
-          size="sm"
-          class="!rounded-full whitespace-nowrap"
+          class="px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 active:scale-95 cursor-pointer"
+          :class="selectedCategory === cat 
+            ? 'bg-primary text-white shadow-sm shadow-primary/20 font-bold' 
+            : 'bg-gray-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-gray-700/60 hover:border-slate-400'"
         >
           {{ getCategoryLabel(cat) }}
-        </BaseButton>
-
-        <!-- Quick Low Stock Chip -->
-        <BaseButton 
-          @click="onlyLowStock = !onlyLowStock"
-          :variant="onlyLowStock ? 'danger' : 'outline'"
-          size="sm"
-          class="!rounded-full whitespace-nowrap flex items-center gap-1.5"
-        >
-          <AlertCircle :size="14" />
-          <span>Stock Bajo</span>
-          <span v-if="realLowStockCount > 0" class="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 font-bold">
-            {{ realLowStockCount }}
-          </span>
-        </BaseButton>
+        </button>
       </div>
     </header>
 
     <!-- Products List -->
     <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-      <div class="flex justify-between items-end px-1">
+      <div class="flex justify-between items-center px-1">
         <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">
           Productos ({{ filteredProducts.length }})
         </span>
+
+        <!-- Subtle Low Stock Indicator Pill -->
         <button 
           v-if="realLowStockCount > 0" 
           @click="onlyLowStock = !onlyLowStock"
-          class="text-xs font-medium text-red-500 flex items-center gap-1 hover:underline cursor-pointer"
+          class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer active:scale-95"
+          :class="onlyLowStock 
+            ? 'bg-amber-500 text-white font-bold shadow-sm shadow-amber-500/25' 
+            : 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50 hover:bg-amber-100 dark:hover:bg-amber-900/40'"
         >
-          <AlertCircle :size="12" />
-          {{ realLowStockCount }} con stock bajo
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500" :class="{ 'animate-pulse': !onlyLowStock, 'bg-white': onlyLowStock }"></span>
+          <span>{{ realLowStockCount }} con stock bajo</span>
         </button>
       </div>
 
@@ -381,85 +386,202 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
       :product-name="batchProduct?.name || null"
     />
 
-    <!-- Modal de Filtros Avanzados de Inventario (UXD-006 / SDD-006) -->
+    <!-- Bottom Sheet de Filtros y Orden (Stitch Mobile Design System) -->
     <BaseModal
       v-model="showFilterModal"
-      title="Filtros de Catálogo"
+      max-height="85vh"
     >
-      <div class="p-6 space-y-4">
-        <!-- Low Stock Switch -->
-        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-gray-700">
-          <div>
-            <span class="text-sm font-semibold text-slate-800 dark:text-white block">Solo Stock Bajo</span>
-            <span class="text-xs text-slate-500">Muestra exclusivamente artículos con existencia &le; stock mínimo</span>
+      <template #header>
+        <div class="flex items-center justify-between w-full pr-1">
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-bold text-slate-900 dark:text-white">Filtros y Orden</h2>
+            <span 
+              v-if="activeFiltersCount > 0" 
+              class="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">
+              {{ activeFiltersCount }} activos
+            </span>
           </div>
-          <input
-            type="checkbox"
-            v-model="onlyLowStock"
-            class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
-          />
+          <button 
+            @click="resetFilters" 
+            class="flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-primary active:scale-95 transition-all p-1"
+          >
+            <RotateCcw :size="13" />
+            <span>Restablecer</span>
+          </button>
         </div>
+      </template>
 
-        <!-- Inactive Switch (Admin only) -->
-        <div v-if="isAdmin" class="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-gray-700">
-          <div>
-            <span class="text-sm font-semibold text-slate-800 dark:text-white block">Incluir Inactivos / Dados de baja</span>
-            <span class="text-xs text-slate-500">Visibilidad administrativa de artículos descontinuados</span>
+      <div class="p-4 space-y-5 overflow-y-auto max-h-[calc(85vh-130px)]">
+        <!-- 1. Criterio de Ordenamiento (Segmented Pills 2x2) -->
+        <div class="space-y-2">
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Ordenar por
+          </label>
+          <div class="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-slate-900/90 rounded-2xl border border-gray-200 dark:border-slate-800">
+            <button
+              type="button"
+              @click="sortBy = 'created_desc'"
+              class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs transition-all cursor-pointer"
+              :class="sortBy === 'created_desc'
+                ? 'bg-primary text-white font-bold shadow-md shadow-primary/25'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium'"
+            >
+              <Clock :size="13" />
+              <span>Recientes</span>
+            </button>
+            <button
+              type="button"
+              @click="sortBy = 'name_asc'"
+              class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs transition-all cursor-pointer"
+              :class="sortBy === 'name_asc'
+                ? 'bg-primary text-white font-bold shadow-md shadow-primary/25'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium'"
+            >
+              <ArrowDownAZ :size="13" />
+              <span>Nombre A-Z</span>
+            </button>
+            <button
+              type="button"
+              @click="sortBy = 'stock_asc'"
+              class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs transition-all cursor-pointer"
+              :class="sortBy === 'stock_asc'
+                ? 'bg-primary text-white font-bold shadow-md shadow-primary/25'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium'"
+            >
+              <Package :size="13" />
+              <span>Menor Stock</span>
+            </button>
+            <button
+              type="button"
+              @click="sortBy = 'price_asc'"
+              class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs transition-all cursor-pointer"
+              :class="sortBy === 'price_asc'
+                ? 'bg-primary text-white font-bold shadow-md shadow-primary/25'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium'"
+            >
+              <Tag :size="13" />
+              <span>Menor Precio</span>
+            </button>
           </div>
-          <input
-            type="checkbox"
-            v-model="includeInactive"
-            class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
-          />
         </div>
 
-        <!-- Criterio de Ordenamiento -->
-        <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Criterio de Ordenamiento</label>
-          <select
-            v-model="sortBy"
-            class="w-full text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white px-3 py-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
-          >
-            <option value="created_desc">Más recientes primero (Predeterminado)</option>
-            <option value="name_asc">Nombre (A &rarr; Z)</option>
-            <option value="name_desc">Nombre (Z &rarr; A)</option>
-            <option value="stock_asc">Stock (Menor a Mayor)</option>
-            <option value="stock_desc">Stock (Mayor a Menor)</option>
-            <option value="price_asc">Precio (Menor a Mayor)</option>
-            <option value="price_desc">Precio (Mayor a Menor)</option>
-          </select>
+        <!-- 2. Condiciones de Stock y Estado (Interactive Touch Cards con Switches) -->
+        <div class="space-y-2">
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Condiciones de Inventario
+          </label>
+          <div class="space-y-2.5">
+            <!-- Card 1: Stock Crítico -->
+            <div 
+              @click="onlyLowStock = !onlyLowStock"
+              class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/70 border flex items-center justify-between cursor-pointer transition-all active:scale-[0.99]"
+              :class="onlyLowStock 
+                ? 'border-amber-500/50 shadow-sm shadow-amber-500/10' 
+                : 'border-gray-200 dark:border-slate-700/60 hover:border-gray-300 dark:hover:border-slate-600'"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                  <AlertTriangle :size="18" />
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-slate-900 dark:text-white">Solo Stock Crítico</span>
+                    <span v-if="realLowStockCount > 0" class="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300 text-[10px] font-bold">
+                      {{ realLowStockCount }} alertas
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-400">Existencias menores o iguales al stock mínimo</p>
+                </div>
+              </div>
+
+              <!-- Modern Touch Pill Switch -->
+              <div 
+                class="w-11 h-6 rounded-full p-0.5 transition-colors relative flex items-center shrink-0"
+                :class="onlyLowStock ? 'bg-amber-500' : 'bg-gray-300 dark:bg-slate-700'"
+              >
+                <div 
+                  class="w-5 h-5 rounded-full bg-white shadow-md transform transition-transform flex items-center justify-center"
+                  :class="onlyLowStock ? 'translate-x-5' : 'translate-x-0'"
+                >
+                  <Check v-if="onlyLowStock" :size="11" class="text-amber-600 stroke-[3]" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Inactivos (Admin Only) -->
+            <div 
+              v-if="isAdmin"
+              @click="includeInactive = !includeInactive"
+              class="p-3.5 rounded-2xl bg-white dark:bg-slate-800/70 border flex items-center justify-between cursor-pointer transition-all active:scale-[0.99]"
+              :class="includeInactive 
+                ? 'border-indigo-500/50 shadow-sm shadow-indigo-500/10' 
+                : 'border-gray-200 dark:border-slate-700/60 hover:border-gray-300 dark:hover:border-slate-600'"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center shrink-0">
+                  <EyeOff :size="18" />
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-slate-900 dark:text-white">Ver Inactivos</span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 text-[9px] font-extrabold uppercase">
+                      Admin
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-400">Artículos dados de baja lógica en mostrador</p>
+                </div>
+              </div>
+
+              <!-- Modern Touch Pill Switch -->
+              <div 
+                class="w-11 h-6 rounded-full p-0.5 transition-colors relative flex items-center shrink-0"
+                :class="includeInactive ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-slate-700'"
+              >
+                <div 
+                  class="w-5 h-5 rounded-full bg-white shadow-md transform transition-transform flex items-center justify-center"
+                  :class="includeInactive ? 'translate-x-5' : 'translate-x-0'"
+                >
+                  <Check v-if="includeInactive" :size="11" class="text-indigo-600 stroke-[3]" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Filtro por Categoría -->
-        <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Categoría</label>
-          <select
-            v-model="selectedCategory"
-            class="w-full text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-white px-3 py-2.5 focus:ring-2 focus:ring-primary focus:outline-none"
-          >
-            <option v-for="cat in categories" :key="cat" :value="cat">
-              {{ getCategoryLabel(cat) }}
-            </option>
-          </select>
+        <!-- 3. Categorías (Wrapping Chips) -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Categorías
+            </label>
+            <span v-if="selectedCategory !== 'all'" class="text-xs text-primary font-medium">1 seleccionada</span>
+          </div>
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button
+              v-for="cat in categories"
+              :key="cat"
+              type="button"
+              @click="selectedCategory = cat"
+              class="px-3.5 py-2 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+              :class="selectedCategory === cat
+                ? 'bg-primary text-white shadow-sm shadow-primary/20 font-bold'
+                : 'bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-gray-700/60 hover:border-slate-400'"
+            >
+              <span>{{ getCategoryLabel(cat) }}</span>
+              <Check v-if="selectedCategory === cat" :size="12" class="stroke-[3]" />
+            </button>
+          </div>
         </div>
       </div>
 
       <template #footer>
-        <div class="p-6 pt-0 flex gap-3">
-          <BaseButton
-            @click="resetFilters"
-            variant="secondary"
-            class="flex-1"
-          >
-            Restablecer
-          </BaseButton>
-          <BaseButton
+        <div class="p-4 pt-2 bg-surface-light dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800">
+          <button
             @click="showFilterModal = false"
-            variant="primary"
-            class="flex-1"
+            class="w-full py-3.5 rounded-full bg-primary hover:bg-blue-600 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-primary/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
-            Listo
-          </BaseButton>
+            <span>Mostrar {{ filteredProducts.length }} Productos</span>
+          </button>
         </div>
       </template>
     </BaseModal>
