@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useInventoryStore } from '../../stores/inventory';
-import { useInventoryFilter } from '../../composables/useInventoryFilter';
+import { useInventoryFilter, resetInventorySortBaseline } from '../../composables/useInventoryFilter';
 import { Decimal } from 'decimal.js';
 import type { Product } from '../../types';
 
@@ -41,7 +41,7 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
       brand: 'Gourmet',
       category: 'Abarrotes',
       price: new Decimal(12000),
-      stock: new Decimal(3), // Low stock (3 <= 5)
+      stock: new Decimal(3), // Low stock (3 <= 5) -> urgency: 3 - 5 = -2
       minStock: 5,
       measurementUnit: 'un',
       storeId: 'store-1',
@@ -55,7 +55,7 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
       brand: 'Riopaila',
       category: 'Abarrotes',
       price: new Decimal(3200),
-      stock: new Decimal(0), // Out of stock (0 <= 2)
+      stock: new Decimal(0), // Out of stock (0 <= 2) -> urgency: 0 - 2 = -2 (desempate por nombre: Aceite vs Panela)
       minStock: 2,
       measurementUnit: 'un',
       storeId: 'store-1',
@@ -81,15 +81,14 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
   beforeEach(() => {
     setActivePinia(createPinia());
     inventoryStore = useInventoryStore();
-    // Populate store products
     inventoryStore.products = [...mockProducts];
+    resetInventorySortBaseline();
   });
 
   it('debe excluir por defecto los productos inactivos y ordenar por fecha descendente', () => {
     const { filteredProducts, activeFiltersCount } = useInventoryFilter();
 
     expect(activeFiltersCount.value).toBe(0);
-    // Deberían verse 3 productos activos (prod-4 está inactivo)
     expect(filteredProducts.value.length).toBe(3);
     // Orden por defecto: created_desc -> prod-3 (Oct 10), prod-2 (Oct 5), prod-1 (Oct 1)
     expect(filteredProducts.value[0].id).toBe('prod-3');
@@ -106,7 +105,7 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
     expect(filteredProducts.value.some((p) => p.id === 'prod-4')).toBe(true);
   });
 
-  it('debe filtrar por búsqueda de texto en nombre, PLU o marca', () => {
+  it('debe filtrar por búsqueda de texto en nombre, PLU, marca y categoría', () => {
     const { filteredProducts, searchQuery } = useInventoryFilter();
 
     // Búsqueda por nombre
@@ -123,6 +122,11 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
     searchQuery.value = 'riopaila';
     expect(filteredProducts.value.length).toBe(1);
     expect(filteredProducts.value[0].id).toBe('prod-3');
+
+    // Búsqueda por Categoría en texto libre (nuevo)
+    searchQuery.value = 'granos';
+    expect(filteredProducts.value.length).toBe(1);
+    expect(filteredProducts.value[0].id).toBe('prod-1');
   });
 
   it('debe filtrar por categoría seleccionada', () => {
@@ -142,6 +146,19 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
     // prod-2 (stock: 3, minStock: 5) y prod-3 (stock: 0, minStock: 2)
     expect(filteredProducts.value.length).toBe(2);
     expect(filteredProducts.value.map((p) => p.id)).toEqual(['prod-3', 'prod-2']);
+  });
+
+  it('debe ordenar por "Más urgentes primero" (urgency_asc: stock - minStock)', () => {
+    const { filteredProducts, sortBy } = useInventoryFilter();
+
+    sortBy.value = 'urgency_asc';
+    // prod-2: 3 - 5 = -2 (nombre: Aceite Gourmet 1L)
+    // prod-3: 0 - 2 = -2 (nombre: Panela Pastilla 500g)
+    // prod-1: 15 - 10 = +5 (nombre: Arroz Diana 1kg)
+    // Desempate alfabético: Aceite Gourmet antes que Panela Pastilla
+    expect(filteredProducts.value[0].id).toBe('prod-2');
+    expect(filteredProducts.value[1].id).toBe('prod-3');
+    expect(filteredProducts.value[2].id).toBe('prod-1');
   });
 
   it('debe ordenar alfabéticamente por nombre (A-Z y Z-A)', () => {
@@ -186,22 +203,41 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
     expect(filteredProducts.value[2].id).toBe('prod-3'); // price 3200
   });
 
-  it('debe combinar múltiples filtros simultáneamente', () => {
-    const { filteredProducts, selectedCategory, onlyLowStock, sortBy, activeFiltersCount } = useInventoryFilter();
+  it('el orden NO debe contar en activeFiltersCount (regla D4)', () => {
+    const { selectedCategory, onlyLowStock, sortBy, activeFiltersCount } = useInventoryFilter();
 
     selectedCategory.value = 'Abarrotes';
     onlyLowStock.value = true;
     sortBy.value = 'price_desc';
 
-    expect(activeFiltersCount.value).toBe(3);
-    // En Abarrotes con stock bajo: prod-2 ($12000) y prod-3 ($3200)
-    // Orden price_desc: prod-2 primero, luego prod-3
-    expect(filteredProducts.value.length).toBe(2);
-    expect(filteredProducts.value[0].id).toBe('prod-2');
-    expect(filteredProducts.value[1].id).toBe('prod-3');
+    // Cuenta categoría (1) y stock bajo (1). El orden NO cuenta como filtro activo
+    expect(activeFiltersCount.value).toBe(2);
   });
 
-  it('debe restablecer todos los filtros a los valores base con resetFilters()', () => {
+  it('debe aplicar atajos internos con applyShortcutString()', () => {
+    const {
+      searchQuery,
+      onlyLowStock,
+      stockRule,
+      brandFilter,
+      applyShortcutString,
+      filteredProducts,
+    } = useInventoryFilter();
+
+    const res = applyShortcutString('aceite bajo stock<=5 marca:gourmet', true);
+
+    expect(res.remainingText).toBe('aceite');
+    expect(searchQuery.value).toBe('aceite');
+    expect(onlyLowStock.value).toBe(true);
+    expect(stockRule.value).toEqual({ op: '<=', value: 5 });
+    expect(brandFilter.value).toBe('gourmet');
+
+    // Prod-2 (Aceite Gourmet 1L) cumple todo (stock 3 <= minStock 5)
+    expect(filteredProducts.value.length).toBe(1);
+    expect(filteredProducts.value[0].id).toBe('prod-2');
+  });
+
+  it('debe restablecer filtros pero conservar el orden con resetFilters() (regla D4)', () => {
     const {
       searchQuery,
       selectedCategory,
@@ -219,7 +255,8 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
     includeInactive.value = true;
     sortBy.value = 'price_asc';
 
-    expect(activeFiltersCount.value).toBe(4);
+    // 3 filtros activos (categoría, stock bajo, inactivos)
+    expect(activeFiltersCount.value).toBe(3);
 
     resetFilters();
 
@@ -227,8 +264,8 @@ describe('useInventoryFilter (Gobernanza SWR Nivel 2 y Filtros 100% en Memoria)'
     expect(selectedCategory.value).toBe('all');
     expect(onlyLowStock.value).toBe(false);
     expect(includeInactive.value).toBe(false);
-    expect(sortBy.value).toBe('created_desc');
+    // sortBy se conserva por sesión (regla D4)
+    expect(sortBy.value).toBe('price_asc');
     expect(activeFiltersCount.value).toBe(0);
-    expect(filteredProducts.value.length).toBe(3);
   });
 });
