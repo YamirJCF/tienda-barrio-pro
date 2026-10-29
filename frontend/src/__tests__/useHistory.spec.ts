@@ -161,3 +161,106 @@ describe('useHistory — Historial de Caja (get_history_caja)', () => {
     expect(history.filteredItems.value).toHaveLength(2);
   });
 });
+
+describe('useHistory — Gobernanza de Filtros y Atajos (FRD-005, FRD-021)', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+  });
+
+  it('inicia por defecto con dateFilter = "week" (Últimos 7 días) según FRD-005 Regla 6', () => {
+    const history = useHistory();
+    expect(history.dateFilter.value).toBe('week');
+    expect(history.activeDateLabel.value).toBe('Últimos 7 días');
+    expect(history.hasActiveFilters.value).toBe(false);
+  });
+
+  it('detecta y aplica atajos internos con applyShortcutQuery()', async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+
+    const history = useHistory();
+    const employees = [{ id: 'emp-1', name: 'Carlos' }];
+
+    const result = await history.applyShortcutQuery('ventas hoy efectivo empleado:carlos ticket #99', employees);
+
+    expect(history.currentType.value).toBe('sales');
+    expect(history.dateFilter.value).toBe('today');
+    expect(history.paymentMethodFilter.value).toBe('CASH');
+    expect(history.employeeFilter.value).toBe('emp-1');
+    expect(history.searchQuery.value).toBe('ticket #99');
+    expect(result.freeText).toBe('ticket #99');
+    expect(result.matchedCount).toBe(4);
+    expect(history.hasActiveFilters.value).toBe(true);
+  });
+
+  it('restablece filtros a su valor por defecto con resetFilters()', async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+
+    const history = useHistory();
+    history.dateFilter.value = 'today';
+    history.paymentMethodFilter.value = 'NEQUI';
+    history.eventTypeFilter.value = 'cancellations';
+    history.employeeFilter.value = 'emp-1';
+    history.searchQuery.value = 'algo';
+
+    expect(history.hasActiveFilters.value).toBe(true);
+
+    await history.resetFilters();
+
+    expect(history.dateFilter.value).toBe('week');
+    expect(history.paymentMethodFilter.value).toBe('all');
+    expect(history.eventTypeFilter.value).toBe('all');
+    expect(history.employeeFilter.value).toBeNull();
+    expect(history.searchQuery.value).toBe('');
+    expect(history.hasActiveFilters.value).toBe(false);
+  });
+
+  it('filtra por método de pago multicanal (efectivo, nequi, digital)', () => {
+    const history = useHistory();
+    history.items.value = [
+      {
+        id: '1',
+        type: 'sales',
+        title: 'Venta #1',
+        subtitle: '1 item',
+        date: '2026-10-29',
+        user: 'Ana',
+        icon: 'cart',
+        colorClass: '',
+        metadata: { payment_method: 'efectivo' }
+      },
+      {
+        id: '2',
+        type: 'sales',
+        title: 'Venta #2',
+        subtitle: '1 item',
+        date: '2026-10-29',
+        user: 'Carlos',
+        icon: 'cart',
+        colorClass: '',
+        metadata: { payment_method: 'nequi' }
+      },
+      {
+        id: '3',
+        type: 'sales',
+        title: 'Venta #3',
+        subtitle: '1 item',
+        date: '2026-10-29',
+        user: 'Carlos',
+        icon: 'cart',
+        colorClass: '',
+        metadata: { payment_method: 'daviplata' }
+      }
+    ];
+
+    history.paymentMethodFilter.value = 'efectivo';
+    expect(history.filteredItems.value).toHaveLength(1);
+    expect(history.filteredItems.value[0].id).toBe('1');
+
+    history.paymentMethodFilter.value = 'digital';
+    expect(history.filteredItems.value).toHaveLength(2); // nequi + daviplata
+
+    history.paymentMethodFilter.value = 'nequi';
+    expect(history.filteredItems.value).toHaveLength(1);
+    expect(history.filteredItems.value[0].id).toBe('2');
+  });
+});

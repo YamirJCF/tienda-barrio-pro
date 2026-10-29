@@ -279,6 +279,11 @@ router.beforeEach(async (to, from, next) => {
     return next({ name: 'dashboard' });
   }
 
+  // 1b. Reports Hub & History: STRICTLY Admin only (Centro de Inteligencia)
+  if ((to.name === 'reports' || to.name === 'history') && !authStore.isAdmin) {
+    return next({ name: 'dashboard' });
+  }
+
   // 2. Admin Hub: Admin OR Reports Viewer
   if (to.name === 'admin') {
     if (!authStore.isAdmin && !authStore.canViewReports) {

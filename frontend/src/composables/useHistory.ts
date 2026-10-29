@@ -4,6 +4,7 @@ import { auditRepository } from '../data/repositories/auditRepository';
 import { getSupabaseClient } from '../data/supabaseClient';
 import { logger } from '../utils/logger';
 import { formatCurrency } from '../utils/currency';
+import { parseHistoryShortcuts, type EmployeeRef } from '../utils/historyShortcutParser';
 
 export type HistoryType = 'sales' | 'cash' | 'audit' | 'inventory' | 'expenses' | 'prices' | 'credits';
 export type DatePreset = 'today' | 'yesterday' | 'week' | 'month' | 'custom';
@@ -24,7 +25,7 @@ export interface HistoryItem {
 }
 
 export interface HistorySummary {
-    totalAmount: number;
+    totalAmount?: number;
     count: number;
     label: string;
 }
@@ -72,69 +73,111 @@ function getDateRange(preset: DatePreset, customStart?: string, customEnd?: stri
     }
 }
 
+function isDateWithinRange(dateStr?: string, startStr?: string, endStr?: string): boolean {
+    if (!dateStr || !startStr || !endStr) return true;
+    const itemDate = dateStr.slice(0, 10);
+    return itemDate >= startStr && itemDate <= endStr;
+}
+
 export function useHistory() {
     const authStore = useAuthStore();
     const isLoading = ref(false);
     const items = ref<HistoryItem[]>([]);
     const error = ref<string | null>(null);
 
-    // Filters
+    // Filters (FRD-005 Regla 6: Por defecto muestra los últimos 7 días)
     const currentType = ref<HistoryType>('sales');
-    const dateFilter = ref<DatePreset>('today');
+    const dateFilter = ref<DatePreset>('week');
     const employeeFilter = ref<string | null>(null); // UUID or null for all
     const eventTypeFilter = ref<string>('all');
     const paymentMethodFilter = ref<string>('all'); // 'all', 'efectivo', 'digital', 'nequi', 'daviplata'
 
-    // Custom date range (T3)
+    // Custom date range
     const customStartDate = ref<string>('');
     const customEndDate = ref<string>('');
 
-    // Search (T2)
+    // Search
     const searchQuery = ref<string>('');
 
-    // Filtered items — client-side search over loaded data
+    // Filtered items — client-side search and filters over loaded data
     const filteredItems = computed<HistoryItem[]>(() => {
         let result = items.value;
 
-        // Apply event type filter
-        if (eventTypeFilter.value !== 'all') {
+        // Apply employee filter
+        if (employeeFilter.value) {
+            const empId = employeeFilter.value;
             result = result.filter(item => {
-                const m = item.metadata;
-                if (!m) return false;
-                if (m.event_type && m.event_type === eventTypeFilter.value) return true;
-                if (m.transaction_type && m.transaction_type === eventTypeFilter.value) return true;
-                // fallback logic based on item type
-                if (item.type === 'audit' && m.event_type === eventTypeFilter.value) return true;
+                const m = item.metadata || {};
+                if (m.employee_id === empId || m.cashier_id === empId || m.user_id === empId || m.created_by === empId) {
+                    return true;
+                }
+                if (item.user && item.user.toLowerCase().includes(empId.toLowerCase())) {
+                    return true;
+                }
                 return false;
             });
         }
-        // Apply payment method filter (Multichannel)
-        if (paymentMethodFilter.value !== 'all') {
+
+        // Apply event type filter
+        if (eventTypeFilter.value && eventTypeFilter.value.toLowerCase() !== 'all') {
+            const ef = eventTypeFilter.value.toLowerCase();
+            result = result.filter(item => {
+                const m = item.metadata || {};
+                const et = (m.event_type || m.transaction_type || '').toLowerCase();
+
+                // Sales
+                if (currentType.value === 'sales') {
+                    if (ef === 'cancellations' || ef === 'anulaciones') return Boolean(m.is_voided);
+                    if (ef === 'creations' || ef === 'creaciones') return !m.is_voided;
+                }
+
+                // Inventory / Compras
+                if (currentType.value === 'inventory') {
+                    if (ef === 'entries' || ef === 'entradas') return (m.quantity || 0) > 0 || et === 'entry';
+                    if (ef === 'adjustments' || ef === 'ajustes') return et === 'adjustment' || et === 'ajuste';
+                }
+
+                // Cash
+                if (currentType.value === 'cash') {
+                    return et.includes(ef);
+                }
+
+                // Audit
+                if (currentType.value === 'audit') {
+                    return et.includes(ef) || (item.title && item.title.toLowerCase().includes(ef));
+                }
+
+                return et === ef;
+            });
+        }
+
+        // Apply payment method filter (Multichannel - FRD-021)
+        if (paymentMethodFilter.value && paymentMethodFilter.value.toLowerCase() !== 'all') {
+            const pmKey = paymentMethodFilter.value.toLowerCase();
             result = result.filter(item => {
                 const m = item.metadata;
                 if (!m) return false;
                 
-                const pm = m.payment_method;
-                if (!pm) return false; // If no payment method recorded, ignore or treat as 'efectivo'?
+                const pm = (m.payment_method || m.payment_type || '').toLowerCase();
+                if (!pm) return false;
 
-                if (paymentMethodFilter.value === 'digital') {
-                    return pm === 'nequi' || pm === 'daviplata';
+                if (pmKey === 'digital') {
+                    return pm === 'nequi' || pm === 'daviplata' || pm === 'digital';
                 }
                 
-                return pm === paymentMethodFilter.value;
+                return pm === pmKey;
             });
         }
 
+        // Apply free text search
         const q = searchQuery.value.trim().toLowerCase();
         if (!q) return result;
 
         return result.filter(item => {
-            // Search in title, subtitle, user
             if (item.title.toLowerCase().includes(q)) return true;
             if (item.subtitle.toLowerCase().includes(q)) return true;
             if (item.user.toLowerCase().includes(q)) return true;
 
-            // Search in metadata fields (type-specific)
             const m = item.metadata;
             if (!m) return false;
 
@@ -148,9 +191,8 @@ export function useHistory() {
         });
     });
 
-    // Summary
+    // Summary — cumple SPEC-010/011 (no suma montos financieros en frontend)
     const summary = computed<HistorySummary>(() => {
-        const total = items.value.reduce((sum, item) => sum + (item.amount || 0), 0);
         const labels: Record<HistoryType, string> = {
             sales: 'Total Ventas',
             cash: 'Sesiones',
@@ -161,10 +203,30 @@ export function useHistory() {
             credits: 'Movimientos'
         };
         return {
-            totalAmount: total,
-            count: items.value.length,
+            count: filteredItems.value.length,
             label: labels[currentType.value] || 'Total'
         };
+    });
+
+    const activeDateLabel = computed<string>(() => {
+        switch (dateFilter.value) {
+            case 'today': return 'Hoy';
+            case 'yesterday': return 'Ayer';
+            case 'week': return 'Últimos 7 días';
+            case 'month': return 'Últimos 30 días';
+            case 'custom': return `${customStartDate.value || '...'} a ${customEndDate.value || '...'}`;
+            default: return 'Período';
+        }
+    });
+
+    const hasActiveFilters = computed<boolean>(() => {
+        return (
+            dateFilter.value !== 'week' ||
+            paymentMethodFilter.value.toLowerCase() !== 'all' ||
+            eventTypeFilter.value.toLowerCase() !== 'all' ||
+            employeeFilter.value !== null ||
+            searchQuery.value.trim().length > 0
+        );
     });
 
     const setCustomDateRange = async (start: string, end: string) => {
@@ -172,6 +234,50 @@ export function useHistory() {
         customEndDate.value = end;
         dateFilter.value = 'custom';
         await fetchHistory();
+    };
+
+    const resetFilters = async () => {
+        searchQuery.value = '';
+        paymentMethodFilter.value = 'all';
+        eventTypeFilter.value = 'all';
+        employeeFilter.value = null;
+        customStartDate.value = '';
+        customEndDate.value = '';
+        if (dateFilter.value !== 'week') {
+            dateFilter.value = 'week';
+            await fetchHistory();
+        }
+    };
+
+    const applyShortcutQuery = async (rawQuery: string, employees?: EmployeeRef[]) => {
+        const { freeText, patches, matchedCount } = parseHistoryShortcuts(rawQuery, employees);
+        let needsRefetch = false;
+
+        if (patches.domain && patches.domain !== currentType.value) {
+            currentType.value = patches.domain;
+            needsRefetch = true;
+        }
+        if (patches.datePreset && patches.datePreset !== dateFilter.value) {
+            dateFilter.value = patches.datePreset;
+            needsRefetch = true;
+        }
+        if (patches.paymentMethod) {
+            paymentMethodFilter.value = patches.paymentMethod;
+        }
+        if (patches.eventType) {
+            eventTypeFilter.value = patches.eventType;
+        }
+        if (patches.employeeId !== undefined) {
+            employeeFilter.value = patches.employeeId;
+        }
+
+        if (needsRefetch) {
+            await fetchHistory();
+        }
+
+        searchQuery.value = freeText;
+
+        return { matchedCount, freeText };
     };
 
     const fetchHistory = async (type?: HistoryType, preset?: DatePreset) => {
@@ -419,11 +525,14 @@ export function useHistory() {
     };
 
     // =============================================
-    // Audit Logs (existing logic, preserved)
+    // Audit Logs (FRD-005)
     // =============================================
     const fetchAuditLogs = async (storeId: string) => {
-        const logs = await auditRepository.getLogs(storeId, 50);
-        items.value = logs.map(log => ({
+        const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
+        const logs = await auditRepository.getLogs(storeId, 200);
+        const filteredLogs = logs.filter(log => isDateWithinRange(log.created_at, start, end));
+
+        items.value = filteredLogs.map(log => ({
             id: log.id,
             type: 'audit' as HistoryType,
             title: mapAuditEventTitle(log.event_type),
@@ -437,11 +546,14 @@ export function useHistory() {
     };
 
     // =============================================
-    // Price Logs (existing logic, preserved)
+    // Price Logs (FRD-010)
     // =============================================
     const fetchPriceLogs = async (storeId: string) => {
-        const logs = await auditRepository.getPriceChangeLogs(storeId, 50);
-        items.value = logs.map(log => ({
+        const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
+        const logs = await auditRepository.getPriceChangeLogs(storeId, 200);
+        const filteredLogs = logs.filter(log => isDateWithinRange(log.date, start, end));
+
+        items.value = filteredLogs.map(log => ({
             id: log.id,
             type: 'prices' as HistoryType,
             title: `Cambio: ${log.productName}`,
@@ -455,12 +567,15 @@ export function useHistory() {
     };
 
     // =============================================
-    // Expenses (existing, uses expenseRepository)
+    // Expenses
     // =============================================
     const fetchExpenseLogs = async (storeId: string) => {
+        const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
         const { expenseRepository } = await import('../data/repositories/expenseRepository');
         const expenses = await expenseRepository.getTodayExpenses(storeId);
-        items.value = expenses.map(exp => ({
+        const filtered = expenses.filter(exp => isDateWithinRange(exp.created_at, start, end));
+
+        items.value = filtered.map(exp => ({
             id: exp.id,
             type: 'expenses' as HistoryType,
             title: exp.category || 'Gasto',
@@ -554,8 +669,12 @@ export function useHistory() {
         customStartDate,
         customEndDate,
         summary,
+        activeDateLabel,
+        hasActiveFilters,
         fetchHistory,
         setCustomDateRange,
-        getDateRange
+        getDateRange,
+        resetFilters,
+        applyShortcutQuery
     };
 }

@@ -1,105 +1,48 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-
-const props = defineProps<{
-  isEmbedded?: boolean;
-}>();
 import { useHistory, type HistoryType, type DatePreset } from '../composables/useHistory';
 import { useAuthStore } from '../stores/auth';
 import HistoryItemCard from '../components/history/HistoryItemCard.vue';
 import SaleDetailModal from '../components/history/SaleDetailModal.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
-import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+import BaseDropdown, { type DropdownOption } from '../components/ui/BaseDropdown.vue';
 import { 
   ArrowLeft, 
-  ShoppingCart, 
-  Landmark, 
-  ShieldCheck, 
-  Package, 
-  Banknote, 
-  Tags,
-  SearchX,
-  Search,
-  Calendar,
-  CalendarRange,
-  Users,
+  SearchX, 
+  Search, 
   X,
-  CreditCard,
-  Filter
+  RotateCcw
 } from 'lucide-vue-next';
+
+const props = defineProps<{
+  isEmbedded?: boolean;
+}>();
 
 const router = useRouter();
 const authStore = useAuthStore();
-const { formatCurrency } = useCurrencyFormat();
 const {
-  items, filteredItems, isLoading, error,
-  currentType, dateFilter, employeeFilter, eventTypeFilter, paymentMethodFilter,
-  searchQuery, customStartDate, customEndDate,
-  summary, fetchHistory, setCustomDateRange
+  items,
+  filteredItems,
+  isLoading,
+  error,
+  currentType,
+  dateFilter,
+  employeeFilter,
+  eventTypeFilter,
+  paymentMethodFilter,
+  searchQuery,
+  customStartDate,
+  customEndDate,
+  activeDateLabel,
+  hasActiveFilters,
+  fetchHistory,
+  setCustomDateRange,
+  resetFilters,
+  applyShortcutQuery
 } = useHistory();
 
-// Tab definitions
-const filters: { label: string; value: HistoryType; component: any }[] = [
-  { label: 'Ventas', value: 'sales', component: ShoppingCart },
-  { label: 'Caja', value: 'cash', component: Landmark },
-  { label: 'Compras', value: 'inventory', component: Package },
-  { label: 'Gastos', value: 'expenses', component: Banknote },
-  { label: 'Precios', value: 'prices', component: Tags },
-  { label: 'Créditos', value: 'credits', component: CreditCard },
-  { label: 'Auditoría', value: 'audit', component: ShieldCheck },
-];
-
-const eventTypeOptions = computed(() => {
-  switch (currentType.value) {
-    case 'sales': return [{ label: 'Todas', value: 'all' }, { label: 'Creaciones', value: 'CREACION' }, { label: 'Anulaciones', value: 'ANULACION' }];
-    case 'cash': return [{ label: 'Todos', value: 'all' }, { label: 'Aperturas', value: 'APERTURA' }, { label: 'Cierres', value: 'CIERRE' }];
-    case 'audit': return [{ label: 'Todos', value: 'all' }, { label: 'Login OK', value: 'LOGIN_SUCCESS' }, { label: 'Login Fallido', value: 'LOGIN_FAILED' }, { label: 'Cambio PIN', value: 'PIN_CHANGE' }];
-    case 'credits': return [{ label: 'Todos', value: 'all' }, { label: 'Abonos', value: 'payment' }, { label: 'Deudas', value: 'charge' }];
-    default: return [];
-  }
-});
-
-const paymentMethodOptions = [
-  { label: 'Todo', value: 'all' },
-  { label: 'Efectivo', value: 'efectivo' },
-  { label: 'Digitales', value: 'digital' }
-];
-
-const digitalPaymentOptions = [
-  { label: 'Nequi', value: 'nequi' },
-  { label: 'Daviplata', value: 'daviplata' }
-];
-
-// Date presets
-const datePresets: { label: string; value: DatePreset }[] = [
-  { label: 'Hoy', value: 'today' },
-  { label: 'Ayer', value: 'yesterday' },
-  { label: 'Semana', value: 'week' },
-  { label: 'Mes', value: 'month' },
-];
-
-// Custom date range panel (T3)
-const showDateRangePanel = ref(false);
-const tempStartDate = ref('');
-const tempEndDate = ref('');
-
-const applyCustomRange = () => {
-  if (!tempStartDate.value || !tempEndDate.value) return;
-  if (tempStartDate.value > tempEndDate.value) return;
-  showDateRangePanel.value = false;
-  setCustomDateRange(tempStartDate.value, tempEndDate.value);
-};
-
-const clearCustomRange = () => {
-  showDateRangePanel.value = false;
-  tempStartDate.value = '';
-  tempEndDate.value = '';
-  fetchHistory(undefined, 'today');
-};
-
-// Employee filter
-const showEmployeeFilter = ref(false);
+// Employees state
 const employees = ref<{ id: string; name: string }[]>([]);
 
 const loadEmployees = async () => {
@@ -122,7 +65,167 @@ const loadEmployees = async () => {
   }
 };
 
-// Sale Detail Modal (T4)
+// 1. Opciones de Dominio (7 dominios)
+const domainOptions: DropdownOption[] = [
+  { value: 'sales', label: '🛒 Ventas' },
+  { value: 'cash', label: '🏛️ Caja' },
+  { value: 'inventory', label: '📦 Compras' },
+  { value: 'expenses', label: '💵 Gastos' },
+  { value: 'credits', label: '📒 Créditos' },
+  { value: 'prices', label: '🏷️ Precios' },
+  { value: 'audit', label: '🛡️ Auditoría' },
+];
+
+const handleDomainChange = (val: string) => {
+  localSearch.value = '';
+  searchQuery.value = '';
+  fetchHistory(val as HistoryType);
+};
+
+// 2. Opciones de Período (FRD-005 Regla 6: default Últimos 7 días)
+const datePresetOptions: DropdownOption[] = [
+  { value: 'week', label: 'Últimos 7 días' },
+  { value: 'today', label: 'Hoy' },
+  { value: 'yesterday', label: 'Ayer' },
+  { value: 'month', label: 'Últimos 30 días' },
+  { value: 'custom', label: 'Rango personalizado...' },
+];
+
+const tempStartDate = ref('');
+const tempEndDate = ref('');
+
+const handleDateChange = (val: string) => {
+  if (val === 'custom') {
+    dateFilter.value = 'custom';
+    if (!tempStartDate.value) {
+      const now = new Date();
+      tempEndDate.value = now.toISOString().slice(0, 10);
+      now.setDate(now.getDate() - 7);
+      tempStartDate.value = now.toISOString().slice(0, 10);
+    }
+  } else {
+    fetchHistory(undefined, val as DatePreset);
+  }
+};
+
+const applyCustomRange = () => {
+  if (!tempStartDate.value || !tempEndDate.value) return;
+  if (tempStartDate.value > tempEndDate.value) return;
+  setCustomDateRange(tempStartDate.value, tempEndDate.value);
+};
+
+const expandDateRange = () => {
+  fetchHistory(undefined, 'month');
+};
+
+// 3. Opciones de Método de Pago (FRD-021 Multichannel)
+const isPaymentMethodApplicable = computed(() => {
+  return ['sales', 'expenses', 'credits'].includes(currentType.value);
+});
+
+const paymentOptions = computed<DropdownOption[]>(() => {
+  const base: DropdownOption[] = [
+    { value: 'all', label: 'Pago: Todos' },
+    { value: 'efectivo', label: '💵 Efectivo' },
+    { value: 'digital', label: '📱 Digitales (Todos)' },
+    { value: 'nequi', label: '📱 Nequi' },
+    { value: 'daviplata', label: '📱 Daviplata' },
+  ];
+  if (currentType.value === 'credits') {
+    base.push({ value: 'fiado', label: '📋 Fiado' });
+  }
+  return base;
+});
+
+// 4. Opciones de Tipo de Evento (Contextual por dominio)
+const eventTypeOptions = computed<DropdownOption[]>(() => {
+  switch (currentType.value) {
+    case 'sales':
+      return [
+        { value: 'all', label: 'Tipo: Todas' },
+        { value: 'creations', label: 'Creaciones' },
+        { value: 'cancellations', label: 'Anulaciones' },
+      ];
+    case 'inventory':
+      return [
+        { value: 'all', label: 'Tipo: Todas' },
+        { value: 'entries', label: 'Entradas' },
+        { value: 'adjustments', label: 'Ajustes' },
+      ];
+    case 'cash':
+      return [
+        { value: 'all', label: 'Tipo: Todos' },
+        { value: 'APERTURA', label: 'Aperturas' },
+        { value: 'CIERRE', label: 'Cierres' },
+      ];
+    case 'audit':
+      return [
+        { value: 'all', label: 'Tipo: Todos' },
+        { value: 'LOGIN_SUCCESS', label: 'Login OK' },
+        { value: 'LOGIN_FAILED', label: 'Login Fallido' },
+        { value: 'PIN_CHANGE', label: 'Cambio PIN' },
+      ];
+    case 'credits':
+      return [
+        { value: 'all', label: 'Tipo: Todos' },
+        { value: 'payment', label: 'Abonos' },
+        { value: 'charge', label: 'Deudas' },
+      ];
+    default:
+      return [];
+  }
+});
+
+// 5. Opciones de Empleado (Admin supervisa a todos los empleados)
+const employeeOptions = computed<DropdownOption[]>(() => {
+  const list: DropdownOption[] = [
+    { value: 'ALL', label: 'Todos los empleados' },
+  ];
+  for (const emp of employees.value) {
+    list.push({ value: emp.id, label: emp.name });
+  }
+  return list;
+});
+
+const currentEmployeeValue = computed(() => {
+  return employeeFilter.value || 'ALL';
+});
+
+const handleEmployeeChange = (val: string) => {
+  employeeFilter.value = val === 'ALL' ? null : val;
+};
+
+// 6. Buscador y Atajos
+const localSearch = ref('');
+let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const onSearchInput = (value: string) => {
+  if (searchTimeout) clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    searchQuery.value = value;
+  }, 250);
+};
+
+const handleSearchCommit = async () => {
+  if (!localSearch.value.trim()) return;
+  const { freeText, matchedCount } = await applyShortcutQuery(localSearch.value, employees.value);
+  if (matchedCount > 0) {
+    localSearch.value = freeText;
+  }
+};
+
+const clearSearch = () => {
+  localSearch.value = '';
+  searchQuery.value = '';
+};
+
+// Reset global de filtros
+const handleResetFilters = async () => {
+  localSearch.value = '';
+  await resetFilters();
+};
+
+// Sale Detail Modal
 const showSaleDetail = ref(false);
 const selectedSaleId = ref<string | null>(null);
 
@@ -133,39 +236,7 @@ const handleCardClick = (id: string) => {
   }
 };
 
-// Search debounce (T2)
-const localSearch = ref('');
-let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-
-const onSearchInput = (value: string) => {
-  if (searchTimeout) clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    searchQuery.value = value;
-  }, 300);
-};
-
 const goBack = () => router.back();
-
-const selectFilter = (type: HistoryType) => {
-  showDateRangePanel.value = false;
-  localSearch.value = '';
-  searchQuery.value = '';
-  fetchHistory(type);
-};
-
-const selectDate = (preset: DatePreset) => {
-  showDateRangePanel.value = false;
-  fetchHistory(undefined, preset);
-};
-
-const selectEmployee = (id: string | null) => {
-  employeeFilter.value = id;
-  showEmployeeFilter.value = false;
-  fetchHistory();
-};
-
-// Show employee filter only on sales tab
-const isEmployeeFilterable = () => currentType.value === 'sales';
 
 onMounted(async () => {
   await fetchHistory();
@@ -180,7 +251,7 @@ onUnmounted(() => {
 <template>
   <div class="min-h-screen bg-slate-50 dark:bg-[#0f172a] flex flex-col">
     <!-- Header -->
-    <header class="sticky top-0 z-30 bg-white dark:bg-[#1e293b] border-b border-slate-100 dark:border-slate-800 shadow-sm">
+    <header class="sticky top-0 z-30 bg-white/95 dark:bg-[#1e293b]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all">
       <div v-if="!isEmbedded" class="px-4 py-3 flex items-center gap-3">
         <BaseButton @click="goBack" variant="ghost" size="icon" class="-ml-2">
           <ArrowLeft :size="24" :stroke-width="1.5" />
@@ -190,282 +261,187 @@ onUnmounted(() => {
         </h1>
       </div>
 
-      <!-- Espaciador si está embebido para alinear padding -->
-      <div v-else class="pt-4"></div>
+      <div v-else class="pt-3"></div>
 
-      <!-- Search Bar (T2) -->
-      <div class="px-4 pb-2">
+      <!-- Fila 1: Buscador con soporte de atajos silenciosos -->
+      <div class="px-4 pb-2.5">
         <div class="relative">
-          <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search :size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 shrink-0 pointer-events-none" />
           <input
             v-model="localSearch"
             @input="onSearchInput(localSearch)"
+            @keydown.enter="handleSearchCommit"
             type="text"
-            :placeholder="currentType === 'sales' ? 'Buscar ticket, producto o cliente...' : 'Buscar en historial...'"
-            class="w-full pl-9 pr-8 py-2 text-sm bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            placeholder="Buscar ticket, producto, cliente o atajo (ej. efectivo, hoy)..."
+            class="w-full pl-10 pr-9 py-2 text-xs md:text-sm bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-inner"
           />
           <button
             v-if="localSearch"
-            @click="localSearch = ''; searchQuery = ''"
-            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            @click="clearSearch"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            title="Limpiar búsqueda"
           >
-            <X :size="14" class="text-slate-400" />
+            <X :size="14" />
           </button>
         </div>
       </div>
 
-      <!-- Category Tabs -->
-      <div class="px-4 pb-2 overflow-x-auto no-scrollbar">
-        <div class="flex gap-2">
-          <BaseButton
-            v-for="filter in filters"
-            :key="filter.value"
-            v-show="filter.value !== 'audit' || authStore.isAdmin"
-            @click="selectFilter(filter.value)"
-            :variant="currentType === filter.value ? 'primary' : 'outline'"
-            size="sm"
-            class="!rounded-full whitespace-nowrap"
-          >
-            <component :is="filter.component" :size="18" :stroke-width="1.5" class="mr-1.5" />
-            {{ filter.label }}
-          </BaseButton>
-        </div>
-      </div>
+      <!-- Fila 2: Barra de Desplegables Compactos (Opción A) -->
+      <div class="px-4 pb-3 flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+        <!-- 1. Dominio -->
+        <BaseDropdown
+          :model-value="currentType"
+          :options="domainOptions"
+          @update:model-value="handleDomainChange"
+        />
 
-      <!-- Date Filter Pills -->
-      <div class="px-4 pb-2 flex items-center gap-2">
-        <Calendar :size="16" class="text-slate-400 flex-shrink-0" />
-        <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
-          <button
-            v-for="preset in datePresets"
-            :key="preset.value"
-            @click="selectDate(preset.value)"
-            class="px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap transition-colors"
-            :class="dateFilter === preset.value 
-              ? 'bg-blue-600 text-white' 
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
-          >
-            {{ preset.label }}
-          </button>
+        <!-- 2. Período -->
+        <BaseDropdown
+          :model-value="dateFilter"
+          :options="datePresetOptions"
+          prefix-label="📅 "
+          @update:model-value="handleDateChange"
+        />
 
-          <!-- Custom Range Button (T3) -->
-          <button
-            @click="showDateRangePanel = !showDateRangePanel"
-            class="px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap transition-colors flex items-center gap-1"
-            :class="dateFilter === 'custom'
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
-          >
-            <CalendarRange :size="12" />
-            Rango
-          </button>
-        </div>
+        <!-- 3. Medio de Pago (Contextual) -->
+        <BaseDropdown
+          v-if="isPaymentMethodApplicable"
+          :model-value="paymentMethodFilter"
+          :options="paymentOptions"
+          @update:model-value="(val) => paymentMethodFilter = val"
+        />
 
+        <!-- 4. Tipo de Evento (Contextual) -->
+        <BaseDropdown
+          v-if="eventTypeOptions.length > 0"
+          :model-value="eventTypeFilter"
+          :options="eventTypeOptions"
+          @update:model-value="(val) => eventTypeFilter = val"
+        />
+
+        <!-- 5. Empleado -->
+        <BaseDropdown
+          :model-value="currentEmployeeValue"
+          :options="employeeOptions"
+          prefix-label="👤 "
+          :searchable="true"
+          :search-threshold="6"
+          @update:model-value="handleEmployeeChange"
+        />
+
+        <!-- Botón Limpiar Filtros -->
         <button
-          v-if="isEmployeeFilterable()"
-          @click="showEmployeeFilter = !showEmployeeFilter"
-          class="ml-auto flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full transition-colors whitespace-nowrap"
-          :class="employeeFilter 
-            ? 'bg-violet-600 text-white' 
-            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+          v-if="hasActiveFilters"
+          @click="handleResetFilters"
+          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-900/50 transition-colors shrink-0"
+          title="Restablecer filtros"
         >
-          <Users :size="14" />
-          {{ employeeFilter ? 'Filtrando' : 'Empleado' }}
+          <RotateCcw :size="12" />
+          Limpiar
         </button>
       </div>
 
-      <!-- Event Type Filter -->
-      <div v-if="eventTypeOptions.length > 0" class="px-4 pb-2 flex items-center gap-1 overflow-x-auto no-scrollbar">
-        <Filter :size="14" class="text-slate-400 flex-shrink-0 mr-1" />
-        <button
-          v-for="evt in eventTypeOptions"
-          :key="evt.value"
-          @click="eventTypeFilter = evt.value"
-          class="px-3 py-1 text-[11px] font-bold rounded-full whitespace-nowrap transition-colors uppercase tracking-wider"
-          :class="eventTypeFilter === evt.value 
-            ? 'bg-slate-700 text-white dark:bg-slate-600' 
-            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
-        >
-          {{ evt.label }}
-        </button>
-      </div>
-
-      <!-- Payment Method Filter (FRD-021 Multichannel) -->
-      <div v-if="currentType === 'sales' || currentType === 'credits'" class="px-4 pb-2 flex flex-col gap-2">
-        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          <Banknote :size="14" class="text-slate-400 flex-shrink-0 mr-1" />
-          <button
-            v-for="pm in paymentMethodOptions"
-            :key="pm.value"
-            @click="paymentMethodFilter = pm.value"
-            class="px-3 py-1 text-[11px] font-bold rounded-full whitespace-nowrap transition-colors uppercase tracking-wider"
-            :class="paymentMethodFilter === pm.value || (pm.value === 'digital' && (paymentMethodFilter === 'nequi' || paymentMethodFilter === 'daviplata'))
-              ? 'bg-blue-600 text-white' 
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
-          >
-            {{ pm.label }}
-          </button>
-        </div>
-
-        <!-- Sub-filters for Digital -->
-        <div v-if="paymentMethodFilter === 'digital' || paymentMethodFilter === 'nequi' || paymentMethodFilter === 'daviplata'" class="flex items-center gap-1 pl-6 overflow-x-auto no-scrollbar">
-          <button
-            v-for="dpm in digitalPaymentOptions"
-            :key="dpm.value"
-            @click="paymentMethodFilter = dpm.value"
-            class="px-3 py-1 text-[10px] font-bold rounded-full whitespace-nowrap transition-colors uppercase tracking-wider"
-            :class="paymentMethodFilter === dpm.value
-              ? 'bg-indigo-500 text-white' 
-              : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'"
-          >
-            {{ dpm.label }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Custom Date Range Panel (T3) -->
-      <div v-if="showDateRangePanel" class="px-4 pb-3">
-        <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700 space-y-3">
-          <div class="flex gap-3">
+      <!-- Panel de Rango Personalizado (cuando Período = 'custom') -->
+      <div v-if="dateFilter === 'custom'" class="px-4 pb-3">
+        <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 border border-slate-200 dark:border-slate-700/80 space-y-2">
+          <div class="flex items-center gap-3">
             <div class="flex-1">
-              <label class="block text-xs font-medium text-slate-500 mb-1">Desde</label>
+              <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Desde</label>
               <input
                 v-model="tempStartDate"
                 type="date"
                 max="9999-12-31"
-                class="w-full px-3 py-2 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div class="flex-1">
-              <label class="block text-xs font-medium text-slate-500 mb-1">Hasta</label>
+              <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Hasta</label>
               <input
                 v-model="tempEndDate"
                 type="date"
                 max="9999-12-31"
-                class="w-full px-3 py-2 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
+            <div class="self-end">
+              <BaseButton
+                @click="applyCustomRange"
+                variant="primary"
+                size="sm"
+                :disabled="!tempStartDate || !tempEndDate || tempStartDate > tempEndDate"
+              >
+                Aplicar
+              </BaseButton>
+            </div>
           </div>
-          <div class="flex gap-2">
-            <BaseButton
-              @click="applyCustomRange"
-              variant="primary"
-              size="sm"
-              class="flex-1"
-              :disabled="!tempStartDate || !tempEndDate || tempStartDate > tempEndDate"
-            >
-              Aplicar
-            </BaseButton>
-            <BaseButton
-              v-if="dateFilter === 'custom'"
-              @click="clearCustomRange"
-              variant="outline"
-              size="sm"
-            >
-              Limpiar
-            </BaseButton>
-          </div>
-          <p v-if="tempStartDate && tempEndDate && tempStartDate > tempEndDate" class="text-xs text-red-500">
-            La fecha "Desde" no puede ser mayor que "Hasta"
+          <p v-if="tempStartDate && tempEndDate && tempStartDate > tempEndDate" class="text-xs text-rose-500 font-medium">
+            La fecha inicial no puede ser posterior a la fecha final.
           </p>
-        </div>
-      </div>
-
-      <!-- Employee Dropdown -->
-      <div v-if="showEmployeeFilter && isEmployeeFilterable()" class="px-4 pb-3">
-        <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-2 border border-slate-200 dark:border-slate-700 flex flex-wrap gap-1.5">
-          <button
-            @click="selectEmployee(null)"
-            class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
-            :class="!employeeFilter 
-              ? 'bg-violet-600 text-white' 
-              : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600'"
-          >
-            Todos
-          </button>
-          <button
-            v-for="emp in employees"
-            :key="emp.id"
-            @click="selectEmployee(emp.id)"
-            class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
-            :class="employeeFilter === emp.id 
-              ? 'bg-violet-600 text-white' 
-              : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600'"
-          >
-            {{ emp.name }}
-          </button>
         </div>
       </div>
     </header>
-
-    <!-- Summary Bar (T5) -->
-    <div v-if="!isLoading && filteredItems.length > 0" class="px-4 pt-3">
-      <div class="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
-        <div>
-          <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">{{ summary.label }}</p>
-          <p class="text-sm text-slate-600 dark:text-slate-300">
-            {{ filteredItems.length }} registro{{ filteredItems.length !== 1 ? 's' : '' }}
-            <span v-if="searchQuery && filteredItems.length !== items.length" class="text-blue-500">
-              (de {{ items.length }})
-            </span>
-          </p>
-        </div>
-        <div v-if="summary.totalAmount > 0" class="text-right">
-          <p class="text-lg font-bold text-slate-900 dark:text-white">
-            {{ formatCurrency(summary.totalAmount) }}
-          </p>
-        </div>
-      </div>
-    </div>
 
     <!-- Main Content -->
     <main class="flex-1 p-4 overflow-y-auto">
       <!-- Loading State -->
       <div v-if="isLoading" class="flex flex-col items-center justify-center py-20">
-        <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p class="mt-4 text-sm font-medium text-slate-500">Cargando registros...</p>
+        <div class="w-9 h-9 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <p class="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Cargando registros...</p>
       </div>
 
       <!-- Error State -->
-      <div v-else-if="error" class="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl text-center">
-        <p class="text-red-600 dark:text-red-400 font-medium pb-2">{{ error }}</p>
+      <div v-else-if="error" class="bg-rose-50 dark:bg-rose-950/20 p-5 rounded-2xl text-center border border-rose-200 dark:border-rose-900/40 max-w-md mx-auto my-6">
+        <p class="text-rose-600 dark:text-rose-400 text-sm font-semibold pb-3">{{ error }}</p>
         <BaseButton
           @click="fetchHistory(currentType)"
-          variant="ghost"
+          variant="outline"
           size="sm"
-          class="underline font-bold text-primary"
         >
           Reintentar
         </BaseButton>
       </div>
 
-      <!-- Empty State -->
+      <!-- Empty State (FRD-005 Regla 6: contextual con período y botón para ampliar) -->
       <div
         v-else-if="filteredItems.length === 0"
-        class="flex flex-col items-center justify-center py-20 text-center opacity-60"
+        class="flex flex-col items-center justify-center py-16 px-4 text-center max-w-sm mx-auto"
       >
-        <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-          <SearchX :size="40" :stroke-width="1.5" class="text-slate-400" />
+        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
+          <SearchX :size="32" :stroke-width="1.5" class="text-slate-400" />
         </div>
-        <h3 class="text-lg font-bold text-slate-700 dark:text-slate-300">
+        <h3 class="text-base font-bold text-slate-800 dark:text-slate-200">
           {{ searchQuery ? 'Sin resultados' : 'Sin registros' }}
         </h3>
-        <p class="text-sm text-slate-500">
-          {{ searchQuery ? `No se encontraron resultados para "${searchQuery}"` : 'No hay movimientos en este período.' }}
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+          {{ searchQuery 
+            ? `No se encontraron coincidencias para "${searchQuery}"`
+            : `No se encontraron movimientos registrados en: ${activeDateLabel}.` 
+          }}
         </p>
-        <BaseButton
-          v-if="searchQuery"
-          @click="localSearch = ''; searchQuery = ''"
-          variant="ghost"
-          size="sm"
-          class="mt-3 text-primary font-semibold"
-        >
-          Limpiar búsqueda
-        </BaseButton>
+
+        <!-- Botones de ampliación de rango y restablecimiento -->
+        <div class="flex flex-wrap items-center justify-center gap-2 mt-5">
+          <BaseButton
+            v-if="dateFilter === 'today' || dateFilter === 'yesterday' || dateFilter === 'week'"
+            @click="expandDateRange"
+            variant="primary"
+            size="sm"
+          >
+            Ver últimos 30 días
+          </BaseButton>
+          <BaseButton
+            v-if="hasActiveFilters"
+            @click="handleResetFilters"
+            variant="outline"
+            size="sm"
+          >
+            Restablecer filtros
+          </BaseButton>
+        </div>
       </div>
 
-      <!-- List -->
-      <div v-else class="space-y-3 max-w-3xl mx-auto">
+      <!-- List of Items -->
+      <div v-else class="space-y-2.5 max-w-3xl mx-auto">
         <HistoryItemCard
           v-for="item in filteredItems"
           :key="item.id"
@@ -473,16 +449,19 @@ onUnmounted(() => {
           @click="handleCardClick"
         />
         
-        <!-- Pagination / Load More Hint -->
-        <div class="pt-4 text-center">
-          <p class="text-xs text-slate-400">
-            Mostrando {{ filteredItems.length }} registros
+        <!-- Conteo sobrio al pie -->
+        <div class="pt-4 pb-2 text-center">
+          <p class="text-xs font-medium text-slate-400 dark:text-slate-500">
+            Mostrando {{ filteredItems.length }} registro{{ filteredItems.length !== 1 ? 's' : '' }}
+            <span v-if="searchQuery && filteredItems.length !== items.length" class="text-primary dark:text-blue-400">
+              (de {{ items.length }})
+            </span>
           </p>
         </div>
       </div>
     </main>
 
-    <!-- Sale Detail Modal (T4) -->
+    <!-- Sale Detail Modal -->
     <SaleDetailModal
       v-model="showSaleDetail"
       :saleId="selectedSaleId"
