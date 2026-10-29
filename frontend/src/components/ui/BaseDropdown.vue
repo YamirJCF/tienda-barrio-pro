@@ -1,5 +1,9 @@
 <template>
-  <div class="relative inline-block text-left" ref="dropdownRef">
+  <div 
+    class="relative inline-block text-left" 
+    :class="isOpen ? 'z-50' : 'z-10'"
+    ref="dropdownRef"
+  >
     <!-- Trigger Button -->
     <button
       type="button"
@@ -12,7 +16,7 @@
         ? 'bg-primary/10 text-primary border-primary/30 dark:bg-primary/20 dark:text-blue-400 dark:border-primary/40 font-bold shadow-sm'
         : 'bg-white dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 border-gray-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500'"
     >
-      <span class="truncate max-w-[140px]">{{ currentLabel }}</span>
+      <span class="truncate max-w-[150px]">{{ currentLabel }}</span>
       <ChevronDown 
         :size="14" 
         class="transition-transform duration-200 shrink-0 text-slate-400"
@@ -31,7 +35,8 @@
     >
       <div
         v-if="isOpen"
-        class="absolute left-0 top-full mt-1.5 z-50 min-w-[200px] max-w-[280px] w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden focus:outline-none"
+        class="absolute top-full mt-1.5 z-50 min-w-[200px] max-w-[280px] w-max bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden focus:outline-none"
+        :class="alignRight ? 'right-0' : 'left-0'"
         role="listbox"
       >
         <!-- Mini buscador interno si hay más de searchThreshold opciones -->
@@ -106,6 +111,7 @@ const emit = defineEmits<{
 const isOpen = ref(false);
 const searchQuery = ref('');
 const dropdownRef = ref<HTMLElement | null>(null);
+const alignRight = ref(false);
 
 const currentOption = computed(() =>
   props.options.find((o) => o.value === props.modelValue)
@@ -117,7 +123,7 @@ const currentLabel = computed(() => {
 });
 
 const isActiveSelection = computed(() => {
-  return props.modelValue !== 'all' && props.modelValue !== 'created_desc';
+  return props.modelValue !== 'all' && props.modelValue !== 'created_desc' && props.modelValue !== 'ALL' && props.modelValue !== 'week';
 });
 
 const shouldShowSearch = computed(() => {
@@ -135,6 +141,10 @@ const toggleDropdown = () => {
   isOpen.value = !isOpen.value;
   if (isOpen.value) {
     searchQuery.value = '';
+    if (dropdownRef.value && typeof window !== 'undefined') {
+      const rect = dropdownRef.value.getBoundingClientRect();
+      alignRight.value = rect.left + 240 > window.innerWidth;
+    }
   }
 };
 

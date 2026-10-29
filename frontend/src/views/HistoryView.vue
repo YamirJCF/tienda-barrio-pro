@@ -251,7 +251,7 @@ onUnmounted(() => {
 <template>
   <div class="min-h-screen bg-slate-50 dark:bg-[#0f172a] flex flex-col">
     <!-- Header -->
-    <header class="sticky top-0 z-30 bg-white/95 dark:bg-[#1e293b]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all">
+    <header class="bg-white/95 dark:bg-[#1e293b]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all" :class="isEmbedded ? 'relative z-20' : 'sticky top-0 z-30'">
       <div v-if="!isEmbedded" class="px-4 py-3 flex items-center gap-3">
         <BaseButton @click="goBack" variant="ghost" size="icon" class="-ml-2">
           <ArrowLeft :size="24" :stroke-width="1.5" />
@@ -287,7 +287,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Fila 2: Barra de Desplegables Compactos (Opción A) -->
-      <div class="px-4 pb-3 flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+      <div class="px-4 pb-3 flex items-center gap-2 flex-wrap py-0.5">
         <!-- 1. Dominio -->
         <BaseDropdown
           :model-value="currentType"
@@ -299,7 +299,7 @@ onUnmounted(() => {
         <BaseDropdown
           :model-value="dateFilter"
           :options="datePresetOptions"
-          prefix-label="📅 "
+          prefix-label="Período"
           @update:model-value="handleDateChange"
         />
 
@@ -323,7 +323,7 @@ onUnmounted(() => {
         <BaseDropdown
           :model-value="currentEmployeeValue"
           :options="employeeOptions"
-          prefix-label="👤 "
+          prefix-label="Empleado"
           :searchable="true"
           :search-threshold="6"
           @update:model-value="handleEmployeeChange"
