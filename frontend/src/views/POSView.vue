@@ -7,6 +7,7 @@ import type { Product } from '../types';
 import { useSalesStore } from '../stores/sales';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
+import { useClientsStore } from '../stores/clients';
 import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useQuantityFormat } from '../composables/useQuantityFormat';
@@ -45,6 +46,7 @@ const inventoryStore = useInventoryStore();
 const salesStore = useSalesStore();
 const cashRegisterStore = useCashRegisterStore();
 const authStore = useAuthStore();
+const clientsStore = useClientsStore();
 const { showSuccess, showError, showWarning } = useNotifications();
 const { formatWithSign: formatCurrency } = useCurrencyFormat();
 const { isPaused, setPause } = useHeartbeat();
@@ -223,8 +225,10 @@ onMounted(() => {
   inventoryStore.initialize();
 
   // FIX: Force sync of Cash Register status.
-  if (authStore.currentStore?.id) {
-    cashRegisterStore.syncFromBackend(authStore.currentStore.id);
+  const storeId = authStore.currentStore?.id || authStore.currentUser?.storeId;
+  if (storeId) {
+    cashRegisterStore.syncFromBackend(storeId);
+    clientsStore.initialize(storeId);
   }
 });
 

@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/auth';
 import type { Client } from '../../types';
 import Decimal from 'decimal.js';
 import UIBaseModal from '@/components/ui/BaseModal.vue';
+import ClientSearchModal from './ClientSearchModal.vue';
 import {
   Banknote,
   CreditCard,
@@ -13,7 +14,10 @@ import {
   CheckCircle2,
   Search,
   QrCode,
-  Smartphone
+  Smartphone,
+  Users,
+  UserPlus,
+  AlertTriangle
 } from 'lucide-vue-next';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
 import { useNotifications } from '../../composables/useNotifications';
@@ -45,6 +49,13 @@ const inputAmount = ref<string>('');
 const reference = ref<string>('');
 const clientSearch = ref('');
 const selectedFiadoClient = ref<Client | null>(null);
+const showClientSearchModal = ref(false);
+
+const isCreditLimitExceeded = computed(() => {
+  if (!selectedFiadoClient.value || !selectedFiadoClient.value.creditLimit) return false;
+  const currentDebt = selectedFiadoClient.value.totalDebt || new Decimal(0);
+  return currentDebt.plus(props.total).gt(selectedFiadoClient.value.creditLimit);
+});
 
 // Computed: Dynamic Methods
 const activeMethods = computed(() => configStore.activePaymentMethods);
@@ -218,6 +229,12 @@ watch(() => props.modelValue, async (val) => {
   }
 });
 
+watch(() => props.selectedClient, (client) => {
+  if (client !== undefined) {
+    selectedFiadoClient.value = client;
+  }
+}, { immediate: true });
+
 watch(currentMethod, (newMethod) => {
     reference.value = ''; 
     payments.value = []; 
@@ -377,65 +394,103 @@ watch(currentMethod, (newMethod) => {
                 </div>
             </div>
 
-            <!-- Scenario C: Fiado w/ Client Selection -->
-            <div v-else-if="isFiado" class="flex flex-col h-full gap-4">
-                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                    <label class="text-xs font-bold text-indigo-500 uppercase mb-2 block">Cliente Seleccionado</label>
-                    <div v-if="selectedFiadoClient" class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-indigo-200 dark:bg-indigo-700 flex items-center justify-center text-indigo-700 dark:text-white font-bold">
+            <!-- Scenario C: Fiado w/ Client Selection (Modal Dedicado) -->
+            <div v-else-if="isFiado" class="flex flex-col gap-4">
+                <!-- 1. Tarjeta de Cliente Seleccionado O Botón para Seleccionar -->
+                <div v-if="selectedFiadoClient" class="bg-indigo-50 dark:bg-indigo-950/30 p-4 rounded-2xl border border-indigo-200 dark:border-indigo-800/60 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
+                            Cliente para Crédito
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <button 
+                                @click="showClientSearchModal = true"
+                                class="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                            >
+                                <Users :size="14" />
+                                Cambiar
+                            </button>
+                            <button 
+                                @click="selectedFiadoClient = null"
+                                class="text-gray-400 hover:text-red-500 p-1 rounded-lg transition-colors"
+                                title="Quitar cliente"
+                            >
+                                <X :size="16" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
                             {{ selectedFiadoClient.name.substring(0,2).toUpperCase() }}
                         </div>
-                        <div>
-                            <div class="font-bold text-gray-900 dark:text-white text-lg">{{ selectedFiadoClient.name }}</div>
-                            <div class="text-xs text-gray-500">Cupo: {{ formatCurrency(selectedFiadoClient.creditLimit) }}</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-black text-gray-900 dark:text-white text-lg truncate">
+                                {{ selectedFiadoClient.name }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                                <span v-if="selectedFiadoClient.cc">CC: {{ selectedFiadoClient.cc }}</span>
+                                <span v-if="selectedFiadoClient.phone">• {{ selectedFiadoClient.phone }}</span>
+                            </div>
                         </div>
-                        <button @click="selectedFiadoClient = null" class="ml-auto text-gray-400 hover:text-red-500">
-                            <X :size="20" />
-                        </button>
                     </div>
-                    <div v-else class="text-center py-4 text-gray-400 italic text-sm">
-                        Selecciona un cliente de la lista
+
+                    <!-- Métricas Financieras del Cliente -->
+                    <div class="grid grid-cols-2 gap-2 pt-2 border-t border-indigo-100 dark:border-indigo-900/50 text-xs">
+                        <div>
+                            <span class="text-[10px] font-bold text-gray-400 uppercase block">Cupo Límite</span>
+                            <span class="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                                ${{ formatCurrency(selectedFiadoClient.creditLimit) }}
+                            </span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase block">Deuda Actual</span>
+                            <span class="font-bold text-sm" :class="selectedFiadoClient.totalDebt && selectedFiadoClient.totalDebt.gt(0) ? 'text-red-600 dark:text-red-400' : 'text-gray-500'">
+                                ${{ formatCurrency(selectedFiadoClient.totalDebt || 0) }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Advertencia si excede cupo disponible -->
+                    <div 
+                        v-if="isCreditLimitExceeded"
+                        class="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-medium"
+                    >
+                        <AlertTriangle :size="16" class="shrink-0 text-amber-600" />
+                        <span>Esta venta (${{ formatCurrency(total) }}) superará el cupo disponible del cliente.</span>
                     </div>
                 </div>
 
-                <!-- Reference / Note -->
-                <div class="animate-fade-in">
-                    <label class="text-xs font-bold text-gray-400 uppercase mb-1 block">Nota de Fiado</label>
+                <!-- Botón Grande de Selección si no hay cliente -->
+                <button
+                    v-else
+                    @click="showClientSearchModal = true"
+                    class="w-full p-6 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-indigo-700/80 hover:border-indigo-500 dark:hover:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex flex-col items-center justify-center gap-2.5 group transition-all"
+                >
+                    <div class="w-14 h-14 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
+                        <UserPlus :size="28" />
+                    </div>
+                    <div class="text-center">
+                        <span class="text-base font-black text-indigo-900 dark:text-indigo-200 block">
+                            Seleccionar Cliente de Cartera
+                        </span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
+                            Toca aquí para buscar por nombre, cédula o teléfono
+                        </span>
+                    </div>
+                </button>
+
+                <!-- 2. Nota de Fiado / Referencia -->
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block">
+                        Nota de Fiado (Opcional)
+                    </label>
                     <input 
                         v-model="reference"
-                        type="text"
-                        placeholder="Ej: Paga quincena..."
-                        class="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        type="text" 
+                        placeholder="Ej: Paga quincena, autorizado por dueño..."
+                        class="w-full p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-medium"
                     />
-                </div>
-
-                <!-- Client Search -->
-                <div class="flex flex-col flex-1 gap-3 min-h-0">
-                    <div class="relative">
-                        <Search :size="20" class="absolute left-3 top-3 text-gray-400" />
-                        <input 
-                            v-model="clientSearch"
-                            type="text" 
-                            placeholder="Buscar cliente..."
-                            class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                    </div>
-                    <div class="flex-1 overflow-y-auto min-h-0 space-y-2 pr-1">
-                        <button 
-                            v-for="client in filteredClients" 
-                            :key="client.id"
-                            @click="selectedFiadoClient = client"
-                            class="w-full p-3 rounded-xl border flex items-center gap-3 transition-all text-left"
-                            :class="selectedFiadoClient?.id === client.id ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-gray-800 border-gray-100 hover:border-indigo-300'"
-                        >
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 bg-gray-100 text-gray-600">
-                                {{ client.name.substring(0,2).toUpperCase() }}
-                            </div>
-                            <div class="min-w-0">
-                                <div class="font-bold truncate">{{ client.name }}</div>
-                            </div>
-                        </button>
-                    </div>
                 </div>
             </div>
 
@@ -484,6 +539,14 @@ watch(currentMethod, (newMethod) => {
 
     </div>
   </UIBaseModal>
+
+  <!-- Sub-modal de Búsqueda de Clientes para Fiado -->
+  <ClientSearchModal
+    v-model="showClientSearchModal"
+    :selectedClientId="selectedFiadoClient?.id"
+    :saleTotal="total"
+    @select="(client) => selectedFiadoClient = client"
+  />
 </template>
 
 <style scoped>

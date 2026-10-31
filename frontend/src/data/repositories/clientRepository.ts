@@ -17,7 +17,7 @@ import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 
 // Constants
 const TABLE_NAME = 'clients';
-const STORAGE_KEY = 'tienda-clients';
+const STORAGE_KEY = 'tienda-clients-db-cache'; // Changed to avoid collision with Pinia persist
 
 // Type definitions
 type ClientDB = Database['public']['Tables']['clients']['Row'];
