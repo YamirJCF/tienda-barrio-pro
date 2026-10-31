@@ -217,9 +217,6 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // =============================================
-  // WO-008: Daily Access Check (Zero Trust)
-  // =============================================
-  // =============================================
   // WO-008: Email Confirmation Check (Security Enforcer)
   // =============================================
   if (isAuthenticated && to.meta.requiresAuth && to.name !== 'check-email' && to.name !== 'waiting-verification') {
@@ -235,6 +232,29 @@ router.beforeEach(async (to, from, next) => {
           name: 'waiting-verification',
           query: { email: session.user.email }
         });
+      }
+    }
+  }
+
+  // =============================================
+  // SDD-013 v3.1.0: Server Session Authority Check
+  // =============================================
+  if (isAuthenticated && to.meta.requiresAuth && to.name !== 'check-email' && to.name !== 'waiting-verification' && to.name !== 'update-password') {
+    if (!from.name) {
+      try {
+        const { verifySessionDeduped } = await import('../composables/useSessionGuard');
+        const verification = await verifySessionDeduped();
+        if (verification.status === 'requires_login' || verification.status === 'revoked_or_disabled') {
+          logger.warn('🔒 [Router] Servidor requiere inicio de sesión. Redirigiendo a login.');
+          await authStore.logout();
+          return next({ name: 'login' });
+        }
+        if (verification.status === 'requires_daily_pass') {
+          logger.warn('🔒 [Router] Pase diario expirado o ausente. Redirigiendo a sala de espera.');
+          return next({ name: 'daily-waiting-room' });
+        }
+      } catch (err) {
+        logger.error('🔒 [Router] Error verificando sesión con servidor:', err);
       }
     }
   }
