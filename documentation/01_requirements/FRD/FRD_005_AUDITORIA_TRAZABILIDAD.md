@@ -24,9 +24,10 @@ Implementación de un sistema centralizado de historiales que permite auditar to
         - Tipo de operación
         - Datos del evento (payload)
 
-3. **Seguridad por Niveles:**
-    - El acceso a ciertos historiales (ej: Auditoría de Seguridad) está restringido estrictamente al rol Admin.
-    - Empleados solo pueden ver historiales operativos según sus permisos.
+3. **Seguridad y Acceso Exclusivo de Administrador:**
+    - El acceso al módulo centralizado del Evidence Hub (Historial y Auditoría en el Centro de Inteligencia) está restringido **estrictamente al rol Admin**.
+    - Los usuarios sin rol de Administrador tienen prohibido el acceso a esta vista centralizada y a sus herramientas de supervisión de personal.
+    - Los historiales operativos contextuales (ej: abonos de un cliente desde su ficha) permanecen sujetos a los permisos específicos del módulo respectivo.
 
 4. **Estructura de Almacenamiento:**
     - El sistema utiliza **tablas separadas por dominio** para mejor rendimiento y organización.

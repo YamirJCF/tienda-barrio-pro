@@ -1,7 +1,7 @@
 # 📋 Catálogo Maestro de Documentos — Tienda Barrio Pro
 
-> **Versión:** 2.2  
-> **Fecha:** 2026-10-26  
+> **Versión:** 2.3  
+> **Fecha:** 2026-10-29  
 > **Propósito:** Mapa oficial y único de todos los documentos del proyecto. Sirve como hoja de ruta de implementación y registro de trazabilidad documental.  
 > **Norma:** Todo documento nuevo debe registrarse aquí antes de ser aprobado.
 
@@ -68,7 +68,9 @@
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
 | FRD-005-INV | [FRD_005_AUDITORIA_INVIOLABLE.md](FRD/FRD_005_AUDITORIA_INVIOLABLE.md) | FRD | 🟢 | 🔴 SIN SDD | Principio de Inmutabilidad (contrapesos). **Pendiente Fase 3-P3** |
-| FRD-005-TRZ | [FRD_005_AUDITORIA_TRAZABILIDAD.md](FRD/FRD_005_AUDITORIA_TRAZABILIDAD.md) | FRD | 🟢 | 🔴 SIN SDD | Principio de Trazabilidad. Complementario a FRD_005_INVIOLABLE. **Pendiente Fase 3-P3** |
+| FRD-005-TRZ | [FRD_005_AUDITORIA_TRAZABILIDAD.md](FRD/FRD_005_AUDITORIA_TRAZABILIDAD.md) | FRD | 🟢 | ✅ SDD_005 | Principio de Trazabilidad. Complementario a FRD_005_INVIOLABLE. |
+| SDD-005 | [SDD_005_AUDITORIA_TRAZABILIDAD.md](SDD/SDD_005_AUDITORIA_TRAZABILIDAD.md) | SDD | 🟢 Aprobado | — | Evidence Hub y Trazabilidad Centralizada. Backend Authority SPEC-010/011 |
+| UXD-005 | [UXD_005_INTERFAZ_HISTORIAL_AUDITORIA.md](UXD/UXD_005_INTERFAZ_HISTORIAL_AUDITORIA.md) | UXD | 🟢 Aprobado | — | Interfaz Evidence Hub (Opción A+C, Admin-Only) |
 
 ---
 
@@ -88,6 +90,7 @@
 | SDD-006-01-02 | [SDD_006_01_02_MOVIMIENTOS_SALIDA.md](SDD/SDD_006_01_02_MOVIMIENTOS_SALIDA.md) | SDD | 🟡 Validado | — | — |
 | SDD-006-02 | [SDD_006_02_GESTOR_REEMBOLSOS.md](SDD/SDD_006_02_GESTOR_REEMBOLSOS.md) | SDD | 🟡 Validado | — | — |
 | SDD-006-03 | [SDD_006_03_CODIGO_PRODUCTO.md](SDD/SDD_006_03_CODIGO_PRODUCTO.md) | SDD | 🟡 Validado | — | — |
+| UXD-006 | [UXD_006_INTERFAZ_INVENTARIO.md](UXD/UXD_006_INTERFAZ_INVENTARIO.md) | UXD | 🟢 Aprobado | — | Interfaz de Catálogo e Inventario (Opción A+C) |
 
 ---
 
@@ -221,10 +224,10 @@
 
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
-| FRD-021 | [FRD_021_HISTORIALES_MULTICANAL.md](FRD/FRD_021_HISTORIALES_MULTICANAL.md) | FRD | 🟢 | 🔴 SIN SDD | **Prioridad P1 Fase 3** |
+| FRD-021 | [FRD_021_HISTORIALES_MULTICANAL.md](FRD/FRD_021_HISTORIALES_MULTICANAL.md) | FRD | 🟢 | ✅ SDD_021 | Cobertura en Evidence Hub y flujos de pago |
 | FRD-022 | [FRD_022_GASTOS_MULTICANAL.md](FRD/FRD_022_GASTOS_MULTICANAL.md) | FRD | 🟢 | 🔴 SIN SDD | **Prioridad P1 Fase 3** |
 | FRD-023 | [FRD_023_IMPACTO_CRUZADO_MULTICANAL.md](FRD/FRD_023_IMPACTO_CRUZADO_MULTICANAL.md) | FRD | 🟢 | 🔴 SIN SDD | **Prioridad P2 Fase 3** |
-| SDD-021 | — | SDD | 🔴 POR CREAR | — | **Prioridad P1** |
+| SDD-021 | [SDD_021_HISTORIALES_MULTICANAL.md](SDD/SDD_021_HISTORIALES_MULTICANAL.md) | SDD | 🟢 Aprobado | — | Historiales Multicanal e integración de pagos cerrados |
 | SDD-022 | — | SDD | 🔴 POR CREAR | — | **Prioridad P1** |
 | SDD-023 | — | SDD | 🔴 POR CREAR | — | **Prioridad P2** |
 
@@ -298,6 +301,7 @@
 | 1.0 | 2026-08-07 | Creación inicial — 76 documentos catalogados. Decisiones D-01 a D-04 incorporadas. |
 | 2.0 | 2026-08-07 | Consolidación total de Fases 1, 2A, 2B, 2C y 3. Cobertura 100% SDD/SPEC completada. |
 | 2.1 | 2026-10-24 | Re-especificación v3.0.0 de SDD_012, SDD_013 y SDD_017 bajo PAC-SDD y PAC-UXD. Registro de documentos derogados en `archive/` y reportes en `VERIFICACION/` y `TECHNICAL_REPORTS/`. |
+| 2.3 | 2026-10-29 | Registro de interfaces UXD_005 y UXD_006 (Filtros Opción A+C para Inventario e Historial). Actualización de cobertura SDD_005 y SDD_021. Registro de Órdenes de Trabajo WO_010 y WO_011. |
 
 ---
 
