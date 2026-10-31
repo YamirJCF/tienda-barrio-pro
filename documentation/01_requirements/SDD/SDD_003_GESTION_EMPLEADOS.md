@@ -1,13 +1,13 @@
 # SDD-003: Gestión de Empleados y Permisos
 
 > **Módulo:** Personal / Seguridad / RBAC Operativo  
-> **Versión:** 2.0 (PAC-SDD v2.0 — Cero Código Fuente, Estructura Canónica 0–7)  
+> **Versión:** 2.1 (PAC-SDD v2.0 — Cero Código Fuente, Estructura Canónica 0–7)  
 > **Fase del Plan:** 🌊 Ola 5: Sesiones, Autenticación y Offline (Ítem 1)  
 > **Estado:** 🟢 Aprobado y Certificado en BD (Migración Ola 5 Aplicada con Evidencia)
 > **Asociado a:** [FRD-003](../FRD/FRD_003_GESTION_EMPLEADOS.md)
-> **Última Actualización:** 2026-10-17
+> **Última Actualización:** 2026-10-31
 > **FRD Asociado:** [FRD-003: Gestión de Empleados y Permisos](../FRD/FRD_003_GESTION_EMPLEADOS.md)  
-> **Fecha de Certificación:** 2026-10-17  
+> **Fecha de Certificación:** 2026-10-31  
 
 ---
 
@@ -44,7 +44,8 @@
 | **D-1** | Filtros y Búsqueda en Directorio (`rpc_obtener_empleados` - H14) | 🟢 Resuelto | Implementado y verificado en `20261017134000_wave5_daily_security_devices_and_employees.sql` con máscara segura de PIN (`pin = ''`). |
 | **D-2** | Revocación Reactiva al Desactivar (`toggle_empleado_activo`) | 🟢 Resuelto | Al conmutar `is_active = false`, actualiza atómicamente `daily_passes.status = 'rejected'` para pases aprobados del día actual. |
 | **D-3** | Unicidad Global de `username` | 🟢 Resuelto | Verificado con constraint `employees_username_key` y validación en `crear_empleado`. |
-| **D-4** | **Tope de Personal incluye al Propietario (`crear_empleado` / `toggle_empleado_activo`).** | 🟡 Deuda Formalizada (Ola 6) | `FRD_003` (RN-7) y `FRD_013` (RN-013-02) fijan `1 Admin + 5 Empleados Operativos`. En la BD física, el dueño tiene un registro en `employees` (`owner_*`), por lo que el conteo sin filtrar reduce el cupo a 4 empleados. En la migración Ola 6 se agregará `AND NOT EXISTS (SELECT 1 FROM public.admin_profiles ap WHERE ap.id = employees.id)`. |
+| **D-4** | **Tope de Personal excluye al Propietario (`crear_empleado` / `toggle_empleado_activo`).** | 🟢 Resuelto | Verificado con filtro `AND NOT EXISTS (SELECT 1 FROM public.admin_profiles ap WHERE ap.id = e.id)`. Permite exactamente 1 Admin + 5 Colaboradores activos. |
+| **D-5** | **Resolución pgcrypto y search_path en RPCs de Personal (`crear_empleado`, `actualizar_pin_empleado`).** | 🟢 Resuelto | Implementado y verificado en `20261031140000_fix_employee_pgcrypto_search_path.sql` con `SET search_path = public, extensions`, llamadas explícitas a `extensions.crypt` y `extensions.gen_salt('bf')`, y sanitización de FK en `audit_logs`. |
 
 ---
 

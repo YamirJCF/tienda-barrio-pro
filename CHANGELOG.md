@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.1] - 2026-10-31
+
+### Fixed
+- **Seguridad y Criptografía de Personal (`crear_empleado`, `actualizar_pin_empleado`, `request_employee_access`):**
+  - **Resolución de Esquema `pgcrypto`:** Se corrigió el error `42883 gen_salt(unknown) does not exist` y `crypt(text, text) does not exist` incorporando `SET search_path = public, extensions` y calificando explícitamente `extensions.crypt(...)` y `extensions.gen_salt('bf')` en todos los RPCs de gestión de credenciales de empleados.
+  - **Resiliencia ante Hashes Inválidos o Vacíos:** Protección defensiva en `request_employee_access` que captura excepciones `22023 invalid salt` ante registros legados sin PIN configurado (`pin_hash = ""`), respondiendo formalmente con código de rechazo `INVALID_CREDENTIALS` en lugar de quebrar el motor de base de datos.
+  - **Sanitización de Auditoría Forense:** Resolución desacoplada de `actor_id` en inserciones a `audit_logs` mediante `(SELECT id FROM public.employees WHERE id = auth.uid())`, eliminando el riesgo de Foreign Key Violation en operaciones administrativas ejecutadas por dueños/admins.
+  - **Especificaciones Actualizadas:** Sincronización de deudas técnicas `D-4` y `D-5` en `SDD_003_GESTION_EMPLEADOS.md` (v2.1) y `D-6` en `SDD_001_SEGURIDAD_DIARIA.md`.
+  - **Migración Certificada en Producción:** `20261031140000_fix_employee_pgcrypto_search_path.sql` aplicada y verificada con pruebas reales en vivo.
+
 ## [1.7.0] - 2026-10-24
 
 ### Added

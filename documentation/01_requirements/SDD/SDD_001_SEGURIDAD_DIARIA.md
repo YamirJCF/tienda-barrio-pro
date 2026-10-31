@@ -39,7 +39,8 @@ En cumplimiento de las Reglas 2, 4, 6, 7 y 9 de `AGENTS.md`, la inspección emp�
 | **D-2** | **Asimetría entre `request_employee_access` y `solicitar_pase_diario`.** | 🟢 Resuelto | Ambas funciones homologadas con `pass_date = (now() AT TIME ZONE 'America/Bogota')::date`, control de 3 reintentos (`MAX_RETRIES`) y alertas a `notifications`. |
 | **D-3** | **Ausencia de `assert_store_access` y soporte de revocación en `aprobar_pase_diario`.** | 🟢 Resuelto | Homologado con `rpc_gestionar_dispositivo` (acciones `approve`, `reject`, `revoke`), `assert_store_access`, validación en `admin_profiles` y auditoría dual (`audit_logs` + `audit_seguridad`). |
 | **D-4** | **Sinceramiento de Esquema Físico en `daily_passes` (14 columnas reales).** | 🟢 Resuelto | Modelo sincronizado sin alucinaciones (`expires_at` eliminado) e índice operativo `idx_daily_passes_store_date_status` creado. |
-| **D-5** | **Asimetría Horaria en Funciones Auxiliares RLS (`get_current_store_id()`, `get_employee_id_from_session()`).** | 🟡 Deuda Formalizada (Ola 6) | `solicitar_pase_diario` y `request_employee_access` usan `(now() AT TIME ZONE 'America/Bogota')::date`, pero los helpers RLS aún usan `CURRENT_DATE` (UTC en servidor). Entre 19:00 y 23:59 hora Bogotá, `CURRENT_DATE` avanza a mañana, desconectando la sesión. Se corregirá en migración Ola 6. |
+| **D-5** | **Asimetría Horaria en Funciones Auxiliares RLS (`get_current_store_id()`, `get_employee_id_from_session()`).** | 🟢 Resuelto | Helpers RLS y pases unificados con zona horaria de Bogotá y soporte para turnos de caja nocturnos de hasta 24h (`20261031000000`). |
+| **D-6** | **Resolución pgcrypto y Blindaje ante Hashes Inválidos (`request_employee_access`).** | 🟢 Resuelto | Implementado y verificado en `20261031140000_fix_employee_pgcrypto_search_path.sql` con `SET search_path = public, extensions`, `extensions.crypt` y captura de `SQLSTATE 22023`. |
 
 ---
 
