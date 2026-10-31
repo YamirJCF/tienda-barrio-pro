@@ -48,6 +48,7 @@ Los valores numéricos (límites, porcentajes, umbrales) tienden a quedar enterr
 | `P_MAX_ACCESS_ATTEMPTS` | Máximo de reintentos de alerta de acceso (pase diario) | 3 | Intentos | POL-SEG-03 | FRD-001 | 1 - 10 |
 | `P_WAIT_TIME_RETRY_1` | Tiempo de espera en sala antes de permitir 1er reintento | 2 | Minutos | POL-SEG-03 | FRD-001 | 1 - 15 |
 | `P_WAIT_TIME_RETRY_2` | Tiempo de espera en sala antes de permitir 2do reintento | 5 | Minutos | POL-SEG-03 | FRD-001 | 2 - 30 |
+| `P_INTERVALO_VERIFICACION_SESION` | Intervalo periódico de verificación de sesión activa | 5 | Minutos | POL-SEG-03 | FRD-013 | 1 - 30 |
 
 > [!NOTE]
 > **Alcance Diferido:** A medida que se formalicen nuevos FRDs o se descubran valores numéricos enterrados en las reglas existentes, este diccionario DEBE actualizarse. *Condición de revisión:* "Si un FRD contiene un número que podría cambiar por decisión del dueño sin alterar la lógica del software, ese número debe extraerse aquí". *Trade-off:* Se acepta iniciar con 3 parámetros porque el sistema aún está en fase de especificación y los restantes valores aún no han sido formalmente decretados por el Arquitecto. *Revisión futura:* Al finalizar la fase de FRDs y antes de iniciar la implementación técnica (DSD), se debe hacer un barrido exhaustivo de todos los FRDs para extraer parámetros pendientes.

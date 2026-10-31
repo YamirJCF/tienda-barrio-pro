@@ -38,7 +38,7 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 | POL-SEG-03 | Control de Acceso por Roles | FRD-006-02, FRD-007-01, FRD-001, FRD-003, FRD-012-01, FRD-028, FRD-019, FRD-013, FRD-017 | Reembolsos, POS, Seguridad, Pase Diario, Empleados, Sincronización, Almacenamiento, Proveedores, Sesiones, Ciclo Contable |
 | POL-AUD-01 | Inmutabilidad Histórica | FRD-027-01, FRD-006-01, FRD-012-01, FRD-028, FRD-019, FRD-007, FRD-013, FRD-017 | Reportes, Inventario, Sincronización, Almacenamiento, Proveedores, Sesiones, Ciclo Contable |
 | POL-AUD-02 | Trazabilidad Universal | FRD-027-01, FRD-006-01-01, FRD-006-01-02, FRD-007-01, FRD-006-02, FRD-007-02, FRD-006-03, FRD-012-01, FRD-013, FRD-017 | Todos |
-| POL-AUD-03 | Detección de Anomalías | FRD-027-01, FRD-027-02, FRD-017 | Reportes, Caja, Ciclo Contable |
+| POL-AUD-03 | Detección de Anomalías | FRD-027-01, FRD-027-02, FRD-017, FRD-013 | Reportes, Caja, Ciclo Contable, Sesiones |
 
 ---
 
@@ -60,7 +60,7 @@ Sin una matriz centralizada, es imposible responder rápidamente: "¿Qué FRDs s
 | FRD-009 (Clientes) | POL-FIN-01, POL-FIN-02, POL-FIN-04, POL-LOG-04 |
 | FRD-012 (Sincronización Offline) | POL-LOG-01, POL-LOG-02, POL-LOG-04, POL-SEG-02, POL-AUD-01 |
 | FRD-012-01 (Límites Sistema Offline) | POL-LOG-01, POL-LOG-02, POL-LOG-04, POL-SEG-02, POL-SEG-03, POL-AUD-01, POL-AUD-02, POL-FIN-01 |
-| FRD-013 (Gestión Sesiones) | POL-SEG-02, POL-SEG-03, POL-LOG-01, POL-AUD-01, POL-AUD-02 |
+| FRD-013 (Gestión Sesiones) | POL-SEG-02, POL-SEG-03, POL-LOG-01, POL-AUD-01, POL-AUD-02, POL-AUD-03 |
 | FRD-017 (Ciclo Contable y Sesiones) | POL-FIN-01, POL-SEG-02, POL-SEG-03, POL-LOG-01, POL-AUD-01, POL-AUD-02, POL-AUD-03 |
 | FRD-019 (Cuentas por Pagar) | POL-FIN-02, POL-FIN-03, POL-FIN-04, POL-LOG-01, POL-LOG-04, POL-SEG-03, POL-AUD-01 |
 | FRD-024 (Fiados Clientes) | POL-FIN-03, POL-FIN-04, POL-LOG-04 |
