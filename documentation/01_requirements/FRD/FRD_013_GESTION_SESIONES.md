@@ -1,10 +1,10 @@
 # FRD-013: Gestión de Sesiones
 
 > **Módulo:** Autenticación / Sesiones  
-> **Versión:** 2.0  
-> **Fecha:** 2026-10-24  
-> **Estado:** Borrador Formalizado  
-> **Políticas Rectoras:** `POL-SEG-02`, `POL-SEG-03`, `POL-LOG-01`, `POL-AUD-02`
+> **Versión:** 2.1 (Enmienda aditiva: Verificación Continua de Sesión — RN-013-09 a RN-013-15)  
+> **Fecha:** 2026-10-30  
+> **Estado:** ✅ Aprobado y Validado Formalmente (Enmienda v2.1 validada bajo /validate-policy). Las reglas RN-013-01 a RN-013-08 permanecen vigentes e intactas.  
+> **Políticas Rectoras:** `POL-SEG-02`, `POL-SEG-03`, `POL-LOG-01`, `POL-AUD-01`, `POL-AUD-02`, `POL-AUD-03`
 
 ---
 
@@ -89,6 +89,56 @@ El Administrador DEBE poder revocar remotamente el dispositivo de un colaborador
 - Al revocar el dispositivo, el servidor cancela el acceso de ese dispositivo, libera el cupo de concurrencia e invalida el Pase Diario correspondiente.
 - El colaborador afectado DEBE recibir el aviso: "Tu sesión fue cerrada por el administrador" y ser conducido a la pantalla de ingreso.
 
+### RN-013-09: Verificación Continua de Sesión con la Aplicación Abierta (Enmienda v2.1)
+`RN-013-01` define qué ocurre al **abrir** la aplicación. Esta regla cubre el vacío restante: la aplicación que permanece abierta durante horas o días sin cerrarse, de forma indefinida.
+1. El sistema DEBE evaluar la vigencia del acceso durante toda la permanencia de la aplicación abierta, sin límite de duración, y no solo al arrancar.
+2. La evaluación es obligatoria en cada uno de estos momentos:
+   - Al abrir o cargar la aplicación.
+   - Cuando la aplicación vuelve a primer plano tras estar oculta o cuando el dispositivo despierta de suspensión.
+   - Cuando el dispositivo recupera conectividad.
+   - Cuando cambia el estado de autenticación del dispositivo (por ejemplo, la sesión maestra se invalida).
+   - Cuando el servidor rechaza cualquier operación por falta de acceso a la tienda.
+   - De forma periódica, cada `P_INTERVALO_VERIFICACION_SESION`, mientras la aplicación esté visible y con conexión.
+3. Esta verificación **NO es un temporizador de inactividad**. No depende de que el usuario interactúe y NO PUEDE cerrar una sesión que el servidor considera vigente. Es plenamente compatible con `RN-013-04`.
+
+### RN-013-10: Autoridad Única del Servidor sobre la Vigencia (Enmienda v2.1)
+1. El servidor es la única fuente de verdad sobre si un usuario tiene acceso vigente. El dispositivo NO PUEDE deducir la vigencia a partir de datos que él mismo guardó (identidad recordada, pase recordado, marca de "autenticado").
+2. Con conexión disponible, el dispositivo NO PUEDE exhibir datos de negocio de una pantalla operativa hasta que el servidor haya confirmado el acceso vigente en la evaluación de arranque o de reanudación.
+3. El servidor DEBE responder siempre uno de estos cuatro estados, con su motivo: **Vigente**, **Requiere ingreso**, **Requiere pase del día**, **Acceso revocado o cuenta desactivada**.
+4. La evaluación aplica a TODOS los roles, incluido el Administrador. Ningún rol queda exento.
+
+### RN-013-11: Definición Única de "Acceso Vigente" (Enmienda v2.1)
+1. **Administrador:** tiene acceso vigente mientras su sesión maestra sea válida.
+2. **Colaborador:** tiene acceso vigente cuando posee un Pase Diario aprobado del día calendario en curso, o del día calendario anterior si la tienda mantiene un turno de caja abierto con menos de `P_MAX_HORAS_TURNO` (`RN-013-07`).
+3. Esta definición DEBE ser la misma para (a) el estado que se informa al dispositivo y (b) la autorización de cada operación que el servidor recibe. Está PROHIBIDO que coexistan dos criterios distintos de vigencia (por ejemplo, una ventana móvil de 24 horas para informar y el día calendario para autorizar), porque produce el síntoma "la pantalla dice que tengo acceso, pero todo falla".
+
+### RN-013-12: Respuesta Ante la Pérdida de Acceso Detectada con la App Abierta (Enmienda v2.1)
+Al detectar que el acceso dejó de ser vigente, el sistema DEBE actuar de inmediato según el motivo:
+
+| Motivo reportado por el servidor | Destino | Mensaje al usuario |
+|:---|:---|:---|
+| Sesión maestra del Administrador vencida o inexistente | Pantalla de ingreso | "Tu sesión terminó. Inicia sesión nuevamente." |
+| Colaborador: nuevo día calendario sin turno nocturno abierto | Solicitud de Pase Diario del día | "Comienza un nuevo día. Solicita tu pase para continuar." |
+| Cuenta de colaborador desactivada (`RN-013-05`) | Pantalla de ingreso | "Tu cuenta ha sido desactivada. Contacta al administrador." |
+| Dispositivo revocado (`RN-013-08`) | Pantalla de ingreso | "Tu sesión fue cerrada por el administrador." |
+
+Reglas comunes:
+1. El sistema DEBE ocultar de inmediato los datos de negocio visibles.
+2. El carrito de venta en curso se descarta, igual que en el cierre voluntario (`RN-013-03`). Las ventas ya confirmadas y pendientes de sincronizar NO se descartan jamás.
+3. Las colas de sincronización offline DEBEN preservarse íntegras y quedar en pausa hasta un nuevo ingreso con conexión (`FRD-012`, `FRD-028`).
+4. Si varias operaciones fallan a la vez por la misma causa, el usuario DEBE ver **un solo aviso** y ocurrir **una sola** transición.
+
+### RN-013-13: La Pérdida de Acceso Nunca es Silenciosa (Enmienda v2.1)
+1. Ninguna pantalla PUEDE mostrar valores en cero, listas vacías o paneles en blanco como consecuencia de una pérdida de acceso. El usuario DEBE ver el aviso de `RN-013-12`.
+2. La pérdida de acceso NO PUEDE confundirse con la falta de conexión. Sin conexión, el sistema NO expulsa al usuario: opera en modo offline conforme a `FRD-012` y lo indica de forma visible.
+3. Al recuperar la conexión, el sistema DEBE evaluar el acceso **antes** de sincronizar cualquier cola pendiente.
+
+### RN-013-14: Coherencia entre Pestañas y Ventanas del Mismo Dispositivo (Enmienda v2.1)
+Si la pérdida de acceso se detecta en una pestaña o ventana, TODAS las demás del mismo dispositivo DEBEN reflejar el mismo estado sin esperar su propia evaluación.
+
+### RN-013-15: Trazabilidad de la Pérdida de Acceso (Enmienda v2.1)
+Cada pérdida de acceso detectada DEBE registrarse como un evento de seguridad (`POL-AUD-02`), con motivo y momento de detección, en cuanto exista conexión. Se registra **un evento por pérdida**, no uno por cada petición rechazada.
+
 ---
 
 ## Casos de Uso
@@ -124,6 +174,34 @@ El Administrador DEBE poder revocar remotamente el dispositivo de un colaborador
   4. El servidor acepta la transacción sin exigir un nuevo pase diario ni interrumpir la atención al público.
 - **Postcondición:** Continuidad contable y operativa del hecho económico ininterrumpida.
 
+**Caso D: Aplicación del Administrador Abierta Durante Días (Enmienda v2.1)**
+- **Actor:** Administrador.
+- **Precondición:** El Administrador dejó la aplicación abierta en una tablet o computador durante varios días. La sesión maestra ya no es válida en el servidor.
+- **Flujo Principal:**
+  1. El Administrador toca la pantalla o el dispositivo vuelve a primer plano.
+  2. El sistema evalúa el acceso con el servidor (`RN-013-09`) y recibe "Requiere ingreso".
+  3. El sistema oculta los datos de negocio y lleva al Administrador a la pantalla de ingreso con el mensaje de `RN-013-12`.
+- **Flujo Alternativo:** Si el dispositivo está sin conexión, el sistema NO expulsa al Administrador; opera en modo offline y evalúa al recuperar la conexión (`RN-013-13`).
+- **Postcondición:** El Administrador nunca ve paneles en cero ni errores técnicos; ve el motivo y la acción a seguir.
+
+**Caso E: Colaborador Deja la Aplicación Abierta Toda la Noche (Enmienda v2.1)**
+- **Actor:** Colaborador.
+- **Precondición:** Se retiró con pase aprobado de ayer; la caja se cerró y no hay turno nocturno abierto. La aplicación quedó abierta toda la noche.
+- **Flujo Principal:**
+  1. A las 08:00 AM el colaborador despierta el dispositivo.
+  2. El sistema evalúa el acceso y recibe "Requiere pase del día".
+  3. El sistema lo lleva a la solicitud del Pase Diario con un solo toque (`RN-013-12`), sin mostrar datos del día anterior.
+- **Postcondición:** Cero sesiones fantasma, sin necesidad de logout manual.
+
+**Caso F: Varias Pantallas Fallan al Mismo Tiempo (Enmienda v2.1)**
+- **Actor:** Cualquier usuario.
+- **Precondición:** El acceso se perdió mientras el usuario tenía abierto un tablero que consulta varios reportes a la vez.
+- **Flujo Principal:**
+  1. Varias consultas son rechazadas simultáneamente por falta de acceso.
+  2. El sistema consolida las fallas en una sola evaluación.
+  3. El usuario ve un único aviso y una única transición (`RN-013-12`, regla común 4).
+- **Postcondición:** El usuario no presencia una cascada de errores.
+
 ---
 
 ## Criterios de Aceptación
@@ -133,3 +211,32 @@ El Administrador DEBE poder revocar remotamente el dispositivo de un colaborador
 - [ ] **CA-SES-04:** Un colaborador en labores de inventario no sufre cierre de sesión ni alertas de abandono por apagado de pantalla.
 - [ ] **CA-SES-05:** Durante un turno abierto de menos de `P_MAX_HORAS_TURNO`, el cambio de día a medianoche no invalida las solicitudes ni bloquea las ventas de los colaboradores.
 - [ ] **CA-SES-06:** El cierre de sesión voluntario preserva intactas las colas de sincronización offline pendientes.
+- [ ] **CA-SES-07:** Una aplicación del Administrador que permaneció abierta varios días con la sesión maestra inválida, al volver a primer plano, ¿conduce a la pantalla de ingreso con el mensaje de `RN-013-12` sin mostrar paneles en cero?
+- [ ] **CA-SES-08:** Una aplicación de colaborador abierta de un día a otro sin turno nocturno abierto, al despertar, ¿conduce a la solicitud del Pase Diario sin mostrar datos del día anterior?
+- [ ] **CA-SES-09:** Si el servidor informa un estado de acceso a la interfaz, ¿ese mismo criterio es el que el servidor aplica al autorizar las operaciones (el dispositivo nunca ve "vigente" y recibe un rechazo por falta de acceso)?
+- [ ] **CA-SES-10:** Si varias operaciones son rechazadas a la vez por la misma pérdida de acceso, ¿el usuario ve un único aviso y una única transición?
+- [ ] **CA-SES-11:** Una pestaña de la aplicación con pantalla visible y sin interacción del usuario durante `P_INTERVALO_VERIFICACION_SESION`, ¿sigue operando sin cierre alguno si el servidor considera vigente el acceso (compatibilidad con `RN-013-04`)?
+- [ ] **CA-SES-12:** Un dispositivo sin conexión, ¿permanece operando en modo offline sin ser expulsado, y evalúa el acceso antes de sincronizar al reconectar?
+- [ ] **CA-SES-13:** Tras una pérdida de acceso, ¿las ventas confirmadas pendientes de sincronización siguen intactas en la cola y el carrito en curso se descarta?
+- [ ] **CA-SES-14:** Si la pérdida de acceso se detecta en una pestaña, ¿las demás pestañas del mismo dispositivo muestran el mismo estado sin consultar por su cuenta?
+- [ ] **CA-SES-15:** ¿Se registra exactamente un evento de seguridad por cada pérdida de acceso detectada (no uno por petición rechazada)?
+- [ ] **CA-SES-16:** El turno nocturno abierto con menos de `P_MAX_HORAS_TURNO`, al cruzar la medianoche, ¿sigue siendo evaluado como "Vigente" para el colaborador (`RN-013-07` no se degrada)?
+
+---
+
+## Decisiones de Alcance y Trade-offs (Enmienda v2.1)
+
+| Decisión | Por qué (trade-off concreto) | Condición para revisarla |
+|:---|:---|:---|
+| El carrito en curso se descarta al perder el acceso. | Evita conservar en el dispositivo una intención de venta atada a una identidad ya no válida. El carrito no es un hecho económico; las ventas confirmadas sí se preservan. Costo: el colaborador puede perder una venta a medio armar. | Si se observan pérdidas de ventas en curso frecuentes o quejas reiteradas en operación, evaluar la re-autenticación en sitio sin perder el carrito. |
+| Verificación periódica además de las basadas en eventos. | Cubre la pantalla visible sin ningún evento (nadie la toca, el dispositivo no duerme). Costo: tráfico mínimo y constante por dispositivo. | Si el consumo de solicitudes al servidor resulta material frente al límite del plan contratado. |
+| No se introduce timeout por inactividad. | `RN-013-04` lo prohíbe: las tablets de tienda permanecen sin interacción durante labores físicas. | Solo con enmienda explícita de `RN-013-04` aprobada por el usuario. |
+
+---
+
+## Requisitos de Datos (Para Equipo Data)
+1. **Consulta de estado de acceso:** el servidor DEBE exponer una única consulta de lectura, invocable por cualquier rol autenticado, que devuelva el estado de acceso (uno de los cuatro de `RN-013-10`), el motivo, el rol y la tienda asociada. DEBE reutilizar la misma resolución de tienda y de acceso ya usada para autorizar el resto de operaciones.
+2. **Unificación de criterio:** la definición de "Acceso Vigente" de `RN-013-11` DEBE residir en un único lugar del servidor y ser consumida por la consulta anterior y por la autorización de las operaciones. El criterio de ventana móvil de 24 horas existente para informar el estado del pase DEBE desaparecer.
+3. **Cobertura de roles:** la consulta DEBE cubrir al Administrador, que hoy no pasa por ninguna verificación de pase.
+4. **Parámetro nuevo:** `P_INTERVALO_VERIFICACION_SESION` (propuesto: 5 minutos). Debe registrarse en el diccionario de parámetros.
+5. **Evento de seguridad:** se reutiliza el tipo de evento de sesión expirada ya catalogado en la auditoría de seguridad; DEBE permitir registrar el motivo y el momento de detección.

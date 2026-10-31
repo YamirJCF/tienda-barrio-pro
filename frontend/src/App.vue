@@ -34,6 +34,10 @@ const { currentAlert, isVisible, handlePrimary, handleSecondary, dismissAlert } 
 import { useHeartbeat } from './composables/useHeartbeat';
 useHeartbeat();
 
+// Security: Session Continuous Verification Guard (SDD-013 v3.1.0)
+import { useSessionGuard } from './composables/useSessionGuard';
+useSessionGuard();
+
 // Security: Revocation Guard (Checks for ban/revocation)
 import { useRevocationGuard } from './composables/useRevocationGuard';
 useRevocationGuard();

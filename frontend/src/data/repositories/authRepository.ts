@@ -42,6 +42,19 @@ export interface AccessRequestResponse {
     error_code?: string;
 }
 
+export interface SessionVerificationResult {
+    success: boolean;
+    status: 'active' | 'requires_login' | 'requires_daily_pass' | 'revoked_or_disabled';
+    role?: string;
+    store_id?: string;
+    store_name?: string;
+    user_id?: string;
+    employee_id?: string;
+    user_name?: string;
+    pass_id?: string | null;
+    reason?: string;
+}
+
 
 
 /**
@@ -615,6 +628,31 @@ export const authRepository = {
         } catch (err) {
             logger.error('[AuthRepo] Check Status Exception:', err);
             return { status: 'none' };
+        }
+    },
+
+    /**
+     * SDD-013 v3.1.0: Consulta al servidor la validez real de la sesión (Supabase Auth + Daily Passes + Roles)
+     */
+    async verifySessionAccessState(): Promise<SessionVerificationResult> {
+        try {
+            const { data, error } = await supabase.rpc('rpc_verificar_estado_sesion');
+            if (error) {
+                logger.error('[AuthRepo] Session verification RPC error:', error);
+                return {
+                    success: false,
+                    status: 'requires_login',
+                    reason: error.message || 'RPC_ERROR'
+                };
+            }
+            return data as unknown as SessionVerificationResult;
+        } catch (err: any) {
+            logger.error('[AuthRepo] Session verification exception:', err);
+            return {
+                success: false,
+                status: 'requires_login',
+                reason: err?.message || 'EXCEPTION'
+            };
         }
     }
 };

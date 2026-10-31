@@ -1431,7 +1431,7 @@ export type Database = {
         Returns: Json
       }
       check_daily_pass_status: {
-        Args: { p_device_fingerprint: string; p_employee_id: string }
+        Args: { p_device_fingerprint?: string; p_employee_id: string }
         Returns: Json
       }
       check_my_pass_status: { Args: { p_pass_id: string }; Returns: Json }
@@ -1599,6 +1599,21 @@ export type Database = {
             Args: { p_batch_id: string; p_new_sale_price: number }
             Returns: Json
           }
+      rpc_actualizar_producto_catalogo: {
+        Args: {
+          p_category?: string
+          p_cost?: number
+          p_expected_name: string
+          p_expected_old_cost?: number
+          p_expected_old_price: number
+          p_min_stock?: number
+          p_name: string
+          p_plu?: string
+          p_price: number
+          p_product_id: string
+        }
+        Returns: Json
+      }
       rpc_admin_get_clients: {
         Args: {
           p_filter_debt?: string
@@ -1786,6 +1801,7 @@ export type Database = {
         Returns: Json
       }
       rpc_soft_delete_product: { Args: { p_product_id: string }; Returns: Json }
+      rpc_verificar_estado_sesion: { Args: never; Returns: Json }
       rpc_verify_store_pin: {
         Args: { p_pin: string; p_store_id: string }
         Returns: boolean

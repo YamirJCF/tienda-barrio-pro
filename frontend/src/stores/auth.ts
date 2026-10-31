@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { logger } from '../utils/logger';
 import { getStorageKey } from '../utils/storage';
-import { authRepository, type RegisterResponse } from '../data/repositories/authRepository';
+import { authRepository, type RegisterResponse, type SessionVerificationResult } from '../data/repositories/authRepository';
 import { useNotificationsStore } from './notificationsStore';
 import { requireSupabase } from '../data/supabaseClient';
 
@@ -453,8 +453,80 @@ export const useAuthStore = defineStore(
       return btoa(`${navigator.userAgent}-${window.screen.width}x${window.screen.height}-${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
     };
 
-    // Action: Verificar estado al cargar app
-    // Action: Verificar estado al cargar app (Real Backend)
+    /**
+     * SDD-013 v3.1.0: Consulta al Backend la verdad de la sesión (Supabase Auth + Daily Passes + Roles)
+     * Resuelve inconsistencias cuando el cliente tiene token expirado o pase vencido.
+     */
+    const verifySessionWithServer = async (): Promise<SessionVerificationResult> => {
+      try {
+        const result = await authRepository.verifySessionAccessState();
+
+        if (result.status === 'active') {
+          // Sesión válida en servidor
+          if (dailyAccessState.value.status !== 'approved') {
+            dailyAccessState.value.status = 'approved';
+            dailyAccessState.value.lastApprovedAt = new Date().toISOString();
+          }
+          if (result.pass_id) {
+            dailyAccessState.value.passId = result.pass_id;
+          }
+          return result;
+        }
+
+        // Si no está activa en servidor
+        logger.warn(`[Auth Store] Sesión no activa en servidor: ${result.status} (${result.reason || 'Sin razón'})`);
+
+        if (result.status === 'requires_daily_pass') {
+          // El pase expiró (ej. cambio de día o medianoche superada)
+          dailyAccessState.value.status = 'expired';
+          // Descartar carrito en curso (RN-013-12)
+          try {
+            const { useCartStore } = await import('./cart');
+            useCartStore().clearCart();
+          } catch (e) {
+            // Cart store might not be ready yet
+          }
+        } else if (result.status === 'requires_login' || result.status === 'revoked_or_disabled') {
+          // Token expirado o revocado en servidor
+          isAuthenticated.value = false;
+          clearCryptoKey();
+          dailyAccessState.value.status = 'expired';
+          // Descartar carrito en curso (RN-013-12)
+          try {
+            const { useCartStore } = await import('./cart');
+            useCartStore().clearCart();
+          } catch (e) {
+            // Cart store might not be ready yet
+          }
+        }
+
+        // Notificar a otras pestañas mediante BroadcastChannel (RN-013-13)
+        if (typeof BroadcastChannel !== 'undefined') {
+          try {
+            const channel = new BroadcastChannel('tienda-auth-sync');
+            channel.postMessage({
+              type: 'SESSION_STATE_CHANGED',
+              status: result.status,
+              reason: result.reason,
+              timestamp: Date.now()
+            });
+            channel.close();
+          } catch (e) {
+            logger.warn('[Auth Store] BroadcastChannel postMessage error:', e);
+          }
+        }
+
+        return result;
+      } catch (err: any) {
+        logger.error('[Auth Store] verifySessionWithServer exception:', err);
+        return {
+          success: false,
+          status: 'requires_login',
+          reason: err?.message || 'EXCEPTION'
+        };
+      }
+    };
+
     // Action: Verificar estado al cargar app (Real Backend)
     const checkDailyApproval = async () => {
       // FIX: Removed 'username' check as CurrentUser interface uses 'email' for employees/admins
@@ -585,6 +657,7 @@ export const useAuthStore = defineStore(
       resetToDemo,
       // SPEC-005: IAM Methods
       checkDailyApproval,
+      verifySessionWithServer,
       requestDailyPass,
       setDeviceStatus,
     };

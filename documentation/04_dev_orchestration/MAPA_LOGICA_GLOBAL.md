@@ -148,7 +148,7 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | **Clientes** | FRD-009 / SDD-009 | 🟢 Validado |
 | **Valoración FIFO / Costo Ventas** | FRD-010 / SDD-010 | 🟢 Validado |
 | **Sincronización Offline** | FRD-012 / FRD-012-01 / SDD-012 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
-| **Gestión Sesiones** | FRD-013 / SDD-013 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
+| **Gestión Sesiones** | FRD-013 (v2.1) / SDD-013 (v3.1.0) | 🟢 Validado (PAC-SDD Bloques 0-5 Verificado — Listo para Implementación DSD/UXD) |
 | **Ciclo Contable y Caja** | FRD-017 / SDD-017 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
 | **Cuentas por Pagar (Proveedores)** | FRD-019 / SDD-019 | 🟢 Validado |
 

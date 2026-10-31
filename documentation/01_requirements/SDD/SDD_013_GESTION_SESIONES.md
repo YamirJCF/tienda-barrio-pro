@@ -1,9 +1,9 @@
 # SDD-013: Gestión de Sesiones y Control de Concurrencia
 
 > **Módulo:** Autenticación / Gestión de Sesiones y Control de Concurrencia  
-> **Versión Documental:** 3.0.0 (Redactado bajo Protocolo PAC-SDD)  
+> **Versión Documental:** 3.1.0 (Enmienda: Verificación Continua de Sesión, Unificación de Criterio de Vigencia y Defensa en Profundidad — Redactado bajo Protocolo PAC-SDD)  
 > **Estado:** 🟢 ESPECIFICACIÓN APROBADA  
-> **FRD Fuente:** [`documentation/01_requirements/FRD/FRD_013_GESTION_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/FRD/FRD_013_GESTION_SESIONES.md)  
+> **FRD Fuente:** [`documentation/01_requirements/FRD/FRD_013_GESTION_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/FRD/FRD_013_GESTION_SESIONES.md) (v2.1)  
 > **SDDs Vecinos Vinculados:** [`SDD_001_SEGURIDAD_DIARIA.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_001_SEGURIDAD_DIARIA.md), [`SDD_003_GESTION_EMPLEADOS.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_003_GESTION_EMPLEADOS.md), [`SDD_004_CONTROL_DE_CAJA.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_004_CONTROL_DE_CAJA.md), [`SDD_012_SINCRONIZACION_OFFLINE.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_012_SINCRONIZACION_OFFLINE.md), [`SDD_015_GESTION_DISPOSITIVOS.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_015_GESTION_DISPOSITIVOS.md), [`SDD_017_CICLO_CONTABLE_Y_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_017_CICLO_CONTABLE_Y_SESIONES.md), [`SDD_028_ALMACENAMIENTO_LOCAL.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_028_ALMACENAMIENTO_LOCAL.md)
 
 ---
@@ -13,18 +13,21 @@
 En cumplimiento estricto del Protocolo de Pre-Análisis Contextual (PAC-SDD), este diseño técnico se fundamenta exclusivamente en la evidencia real auditada y contrastada de forma autónoma:
 
 1. **Esquema Real Verificado (PAC Bloque 2):**
-   - Se verificaron 5 tablas en el catálogo de PostgreSQL (`ihtjocmhzuliwwvdzfnz`): `daily_passes` (14 columnas), `employees` (9 columnas), `admin_profiles` (5 columnas), `cash_sessions` (12 columnas) y `audit_logs` (12 columnas). Total: 52 columnas físicas verificadas.
+   - Se verificaron 7 tablas en el catálogo de PostgreSQL (`ihtjocmhzuliwwvdzfnz`): `daily_passes` (14 columnas), `employees` (9 columnas), `admin_profiles` (5 columnas), `cash_sessions` (12 columnas), `audit_logs` (12 columnas), `audit_seguridad` (8 columnas) y `stores` (9 columnas). Total: 69 columnas físicas verificadas.
    - Constatación anti-alucinación: Las tablas hipotéticas `active_devices` o `user_sessions` NO existen en `public`. La persistencia y el control de concurrencia de dispositivos residen de forma nativa en la entidad viva `daily_passes`.
    - Nomenclatura confirmada: La columna física para el alias numérico del colaborador es `employees.username`.
 2. **Seguridad Centralizada (PAC Bloque 3):**
-   - Funciones multi-tenant obligatorias: `public.assert_store_access(p_store_id uuid)` y `public.get_current_store_id()`.
+   - Funciones multi-tenant obligatorias verificadas: `public.assert_store_access(p_store_id uuid)` y `public.get_current_store_id()`.
    - Funciones de resolución de identidad de sesión: `public.get_employee_id_from_session()` y `public.is_authorized_employee()`.
+   - Reutilización estricta: Toda nueva operación de sesión (`rpc_verificar_estado_sesion`) delega en `get_current_store_id()` y `assert_store_access()` sin duplicar comprobaciones aisladas (Regla 4).
 3. **Radio de Impacto Cruzado Auditado (PAC Bloque 4):**
-   - 9 funciones y procedimientos identificados en `pg_proc` que gobiernan el ciclo de vida de `daily_passes`.
+   - Exactamente 8 funciones físicas identificadas en `pg_proc` que referencian `daily_passes`: `check_daily_pass_status`, `check_my_pass_status`, `get_current_store_id`, `get_employee_id_from_session`, `request_employee_access`, `rpc_gestionar_dispositivo`, `solicitar_pase_diario` y `toggle_empleado_activo`.
+   - **Hallazgo Crítico H-1:** `check_daily_pass_status` evalúa una ventana móvil de 24 horas (`requested_at > now() - interval '24 hours'`), violando la `RN-013-11`. Provoca que el dispositivo crea que el pase está vigente al día siguiente, mientras el backend lo rechaza con error 42501. Debe ser unificada canónicamente con `pass_date = v_today` / turno nocturno.
    - Desacople comprobado: Se verificó la inexistencia del trigger `trg_expire_passes_on_cash_close` (eliminado en Wave 5); el cierre de caja ordinario o forzado NO altera el estado de `daily_passes`.
    - Concurrencia atómica: `rpc_gestionar_dispositivo` aplica `SELECT FOR UPDATE` y valida `v_active_employees >= 5` arrojando `SESSION_LIMIT_REACHED`.
 4. **Contratos Vecinos Validados (PAC Bloque 5):**
    - Compatible 100% con `SDD-001` (solicitud y aprobación diaria), `SDD-003` (límite de 5 colaboradores activos y desactivación vía `toggle_empleado_activo`), `SDD-015` (`rpc_gestionar_dispositivo(p_pass_id UUID, p_action TEXT)`), `SDD-004`/`SDD-017` (independencia logística y cruce de medianoche en turnos < 24h) y `SDD-028` (§4.3 `RN-CACHE-03`: preservación de IndexedDB y colas en logout).
+   - Defensa en profundidad: La verificación continua actúa como salvaguarda complementaria ante apagados de pantalla o suspensiones sin sustituir al canal Realtime WebSocket (`H15`, `< 2s`).
 
 ---
 
@@ -86,6 +89,24 @@ sequenceDiagram
     Note over C, UI: El Administrador cierra caja física (cash_sessions.status = 'closed')
     C->>UI: Realiza conteo físico de inventario (pantalla apagada por intervalos)
     Note over UI: Sesión permanece activa; prohibido emitir alertas GHOST o cierre forzado
+
+    Note over C, RPC: 4. VERIFICACIÓN CONTINUA Y EXPULSIÓN REACTIVA (RN-013-09 a RN-013-15)
+    Note over UI: Disparadores: onFocus / onOnline / Intervalo 5m / Error 401 ó STORE_ACCESS_DENIED
+    UI->>RPC: POST rpc_verificar_estado_sesion()
+    RPC->>RPC: assert_store_access + get_current_store_id()
+    
+    alt Sesión Válida en Servidor
+        RPC-->>UI: HTTP 200 { status: 'active', store_id, role, employee_id }
+        Note over UI: Operación continúa sin parpadeos
+    else Sesión Expirada / Pase de ayer sin nocturno / Revocada
+        RPC-->>UI: HTTP 200 { status: 'requires_login | requires_daily_pass | revoked', reason }
+        Note over UI: 1. Oculta datos de negocio inmediatamente
+        Note over UI: 2. Vacía carrito en curso (preserva colas offline)
+        Note over UI: 3. Un solo aviso y una sola transición (RN-013-12)
+        UI->>AUD: Registra evento en audit_seguridad (RN-013-15)
+        UI->>UI: BroadcastChannel notifica a todas las pestañas (RN-013-14)
+        UI->>UI: Redirección limpia a /login o /daily-waiting-room
+    end
 ```
 
 ### 2.2 Diagrama de Estados: Ciclo de Vida de la Sesión
@@ -102,13 +123,15 @@ stateDiagram-v2
     Activa --> Activa: Operación normal / Pantalla apagada en inventario (Sin Timeout)
     Activa --> Activa: Cruce de medianoche con turno nocturno abierto (< 24h)
     
-    Activa --> RelevoJornada: Nuevo día calendario sin turno nocturno abierto
-    RelevoJornada --> PendienteAprobacion: Solicitud automática del nuevo pase del día
+    Activa --> RelevoJornada: Nuevo día calendario sin turno nocturno abierto (al despertar/verificar)
+    RelevoJornada --> PendienteAprobacion: Solicitud automática del nuevo pase del día (RN-013-12)
     
     Activa --> Inactiva: Logout voluntario (RN-013-03: Credenciales purgadas, IndexedDB intacto)
     Activa --> RevocadaRemota: Admin revoca dispositivo en FRD-015 (rpc_gestionar_dispositivo 'revoke')
     Activa --> Desactivada: Admin desactiva empleado en FRD-003 (toggle_empleado_activo)
+    Activa --> SesionExpirada: JWT admin vencido o pase no vigente detectado en verificación continua
     
+    SesionExpirada --> Inactiva: Redirección limpia a login (RN-013-12)
     RevocadaRemota --> Inactiva: Redirección inmediata a login
     Desactivada --> Inactiva: Redirección inmediata a login
 ```
@@ -168,6 +191,45 @@ stateDiagram-v2
 2. El procedimiento actualiza `status = 'rejected'`, liberando de inmediato un slot en el cupo de concurrencia.
 3. El dispositivo afectado recibe la notificación y redirige a login informando: *"Tu sesión fue cerrada por el administrador"*.
 
+### 3.9 RN-013-09: Verificación Continua de Sesión con la Aplicación Abierta
+1. El sistema evalúa la vigencia del acceso durante toda la permanencia de la aplicación abierta, sin límite de duración, y no solo al arrancar.
+2. La evaluación es obligatoria en:
+   - Carga o apertura de la aplicación.
+   - Retorno a primer plano (`visibilitychange === 'visible'`) o despertar de suspensión.
+   - Reconexión de red (`window.online`).
+   - Disparo de eventos de cambio de autenticación (`onAuthStateChange`).
+   - Rechazo de cualquier RPC con `401 Unauthorized` o `STORE_ACCESS_DENIED`.
+   - Periódicamente cada `P_INTERVALO_VERIFICACION_SESION` (5 minutos) mientras la app esté visible.
+3. Esta comprobación es reactiva y defensiva; NO es un temporizador de inactividad (`RN-013-04`).
+
+### 3.10 RN-013-10: Autoridad Única del Servidor sobre la Vigencia
+1. El servidor es la única autoridad sobre si una sesión es vigente. El cliente tiene prohibido deducir vigencia de flags locales en `localStorage`.
+2. La consulta responde uno de cuatro estados canónicos: `active`, `requires_login`, `requires_daily_pass`, `revoked_or_disabled`.
+3. Aplica a Administradores y a Colaboradores sin excepción.
+
+### 3.11 RN-013-11: Definición Única de "Acceso Vigente"
+1. **Administrador:** Sesión maestra de Supabase Auth activa con perfil en `admin_profiles`.
+2. **Colaborador:** Pase Diario aprobado para `pass_date = v_today` (Bogotá), o `pass_date = v_today - 1` si existe turno nocturno con caja abierta `< 24h`.
+3. Coexistencia prohibida: La función de verificación (`rpc_verificar_estado_sesion`) y los procedimientos de autorización backend aplican exactamente este mismo predicado.
+
+### 3.12 RN-013-12: Respuesta Ante la Pérdida de Acceso Detectada con la App Abierta
+1. Ocultamiento inmediato de datos sensibles de negocio.
+2. Vaciado del carrito de venta en curso; preservación estricta de ventas confirmadas en cola offline (`sync_queue` / DLQ).
+3. Redirección al destino según motivo:
+   - Admin vencido o Colaborador desactivado/revocado → `/login`.
+   - Colaborador sin pase del día → `/daily-waiting-room` (Solicitud a 1 toque).
+4. Unificación de experiencia: Un solo aviso y una sola transición aunque fallen múltiples consultas concurrentes.
+
+### 3.13 RN-013-13: La Pérdida de Acceso Nunca es Silenciosa
+1. Prohibido mostrar paneles vacíos, ceros o pantallas en blanco ante pérdida de sesión.
+2. Distinción offline: Sin red, el sistema opera normalmente en modo offline sin expulsar al usuario. La verificación se posterga hasta la reconexión.
+
+### 3.14 RN-013-14: Coherencia entre Pestañas y Ventanas del Mismo Dispositivo
+Al detectarse pérdida de acceso en una pestaña, se transmite un pulso por `BroadcastChannel('tienda-auth-sync')` expulsando sincrónicamente a todas las ventanas abiertas en el mismo navegador.
+
+### 3.15 RN-013-15: Trazabilidad de la Pérdida de Acceso
+Inserción de un único registro de seguridad en `audit_seguridad` con `event_type = 'SESSION_EXPIRED'` o `'ACCESS_REVOKED'` consolidando la causa técnica.
+
 ---
 
 ## 4. Casos Límite y Manejo de Contingencias
@@ -180,6 +242,11 @@ stateDiagram-v2
 | **CL-SES-04** | Inactividad prolongada en bodega | Dispositivo apaga pantalla durante 45 minutos mientras cuenta estanterías. | Sesión Intacta | Al encender pantalla, el usuario continúa en la misma vista sin recarga. |
 | **CL-SES-05** | Empleado desactivado en nómina | Administrador apaga toggle de empleado activo mientras el colaborador opera. | `ACCOUNT_DISABLED` | Expulsión defensiva inmediata al login con banner explicativo. |
 | **CL-SES-06** | Cruce de 00:00 con caja abierta | Turno de caja continúa abierto a las 00:15 AM y colaborador procesa venta. | Transacción Aceptada | Venta procesada normalmente imputada al turno abierto nocturno. |
+| **CL-SES-07** | Admin abierto varios días | Sesión maestra vencida en Supabase; frontend despierta tras suspensión. | `ADMIN_SESSION_EXPIRED` | Un solo aviso: "Tu sesión terminó. Inicia sesión nuevamente" y redirección a `/login`. |
+| **CL-SES-08** | Colaborador abierta toda la noche | App abierta sin turno nocturno; amanece un nuevo día calendario. | `REQUIRES_DAILY_PASS` | Redirección automática a `/daily-waiting-room` sin parches ni errores técnicos. |
+| **CL-SES-09** | Avalancha de errores 400 por sesión | 4 o más RPCs paralelos devuelven `STORE_ACCESS_DENIED`. | `STORE_ACCESS_DENIED` | El interceptor deduplica las llamadas, ejecuta `rpc_verificar_estado_sesion` 1 sola vez y muestra 1 solo aviso. |
+| **CL-SES-10** | Pérdida de red vs pérdida de sesión | Petición falla por `TypeError: Failed to fetch`. | Modo Offline | Se conserva la pantalla actual; no se confunde caída de red con revocación de credenciales. |
+| **CL-SES-11** | Multiventana en misma tablet | Usuario pierde sesión en pestaña A. | `SESSION_BROADCAST_SYNC` | Pestaña B recibe señal vía `BroadcastChannel` y redirige a login inmediatamente. |
 
 ---
 
@@ -360,6 +427,46 @@ stateDiagram-v2
 
 ---
 
+### 5.6 Operación: `rpc_verificar_estado_sesion` (Verificación Continua de Sesión Reactiva)
+
+- **Tipo:** RPC PostgreSQL / Consulta Centralizada de Acceso (READ - `SECURITY DEFINER`)
+- **Firma de Entrada:** Ninguna (`{}`) — opera sobre el contexto de autenticación de Supabase (`auth.uid()`, `auth.jwt()`).
+- **Seguridad (Regla 4 `AGENTS.md`):**
+  - Invocable por roles `anon` y `authenticated`.
+  - Reutiliza de forma obligatoria las funciones centrales:
+    ```sql
+    v_store_id := public.get_current_store_id();
+    v_employee_id := public.get_employee_id_from_session();
+    ```
+  - Si `v_store_id IS NOT NULL`, ejecuta:
+    ```sql
+    PERFORM public.assert_store_access(v_store_id);
+    ```
+- **Respuesta Exitosa (HTTP 200 - Sesión Vigente en Servidor):**
+  ```json
+  {
+    "success": true,
+    "status": "active",
+    "store_id": "UUID",
+    "role": "admin | employee",
+    "employee_id": "UUID | null",
+    "reason": "SESSION_VALID"
+  }
+  ```
+- **Respuesta Exitosa (HTTP 200 - Pérdida de Acceso Tipificada sin Excepción Bloqueante):**
+  > **Nota Arquitectural:** Para evitar que el sondeo defensivo arroje errores `400 Bad Request` en la consola del navegador, la consulta devuelve `success: false` estructurado cuando detecta que la sesión no es válida, permitiendo al cliente orquestar la transición limpia sin generar ruido en los registros.
+  ```json
+  {
+    "success": false,
+    "status": "requires_login | requires_daily_pass | revoked_or_disabled",
+    "code": "AUTH_EXPIRED | PASS_EXPIRED_CALENDAR | DEVICE_REVOKED | ACCOUNT_DISABLED",
+    "message": "Descripción técnica amigable",
+    "redirect_to": "login | daily_waiting_room"
+  }
+  ```
+
+---
+
 ## 6. Seguridad y Permisos
 
 1. **Aislamiento Multi-Tenant (Regla 4 `AGENTS.md`):**
@@ -381,7 +488,7 @@ stateDiagram-v2
 
 ## 7. Modelo de Datos Físico (Catálogo Real PostgreSQL)
 
-El diseño opera estrictamente sobre las 5 tablas físicas verificadas en el Bloque 2:
+El diseño opera estrictamente sobre las 7 tablas físicas verificadas en el Bloque 2:
 
 1. **`daily_passes` (14 columnas):**
    `id` (uuid, PK), `employee_id` (uuid, FK), `pass_date` (date), `status` (text), `device_fingerprint` (text), `retry_count` (integer), `requested_at` (timestamptz), `resolved_at` (timestamptz), `resolved_by` (uuid), `store_id` (uuid), `auth_user_id` (uuid), `approved_at` (timestamptz), `approved_by` (uuid), `updated_at` (timestamptz).
@@ -393,6 +500,10 @@ El diseño opera estrictamente sobre las 5 tablas físicas verificadas en el Blo
    `id` (uuid, PK), `store_id` (uuid), `opened_by` (uuid), `closed_by` (uuid), `opening_balance` (numeric), `expected_balance` (numeric), `actual_balance` (numeric), `difference` (numeric), `status` (text), `opened_at` (timestamptz), `closed_at` (timestamptz), `forced_close` (boolean).
 5. **`audit_logs` (12 columnas):**
    `id` (uuid, PK), `actor_id` (uuid), `event_type` (text), `resource_id` (text), `metadata` (jsonb), `created_at` (timestamptz), `store_id` (uuid), `severity` (text), `ip_address` (text), `reviewed_by` (uuid), `reviewed_at` (timestamptz), `review_notes` (text).
+6. **`audit_seguridad` (8 columnas):**
+   `id` (uuid, PK), `actor_id` (uuid), `store_id` (uuid), `event_type` (text), `ip_address` (text), `user_agent` (text), `created_at` (timestamptz), `metadata` (jsonb).
+7. **`stores` (9 columnas):**
+   `id` (uuid, PK), `name` (text), `slug` (text), `subscription_plan` (text), `store_pin_hash` (text), `created_at` (timestamptz), `updated_at` (timestamptz), `pin_hash` (text), `crypto_salt` (text).
 
 ---
 
@@ -402,6 +513,8 @@ En cumplimiento de la Regla 7 de `AGENTS.md`, se registran las decisiones y adap
 
 | ID | Hallazgo / Requerimiento | Justificación / Trade-off | Condición de Revisión |
 |---|---|---|---|
-| **D-SES-01** | Cruce de medianoche en usuarios anónimos | `get_current_store_id()` evalúa `pass_date = (now() AT TIME ZONE 'America/Bogota')::date`. Los colaboradores que operan turnos nocturnos con caja abierta del día anterior requieren una ventana de gracia o resolución de tienda en backend. | Migración de seguridad nocturna en Ola 6. |
+| **D-SES-01** | Cruce de medianoche en usuarios anónimos | `get_current_store_id()` evalúa `pass_date = (now() AT TIME ZONE 'America/Bogota')::date`. Los colaboradores que operan turnos nocturnos con caja abierta del día anterior cuentan con fallback de tolerancia `< 24h` ya integrado en BD. | Consolidación en Ola 6 SQL. |
 | **D-SES-02** | Dualidad de columnas de aprobación en `daily_passes` | Coexisten `(resolved_at, resolved_by)` y `(approved_at, approved_by)`. `rpc_gestionar_dispositivo` actualiza ambos pares simultáneamente para no romper compatibilidad. | Limpieza de esquema en consolidación final. |
-| **D-SES-03** | Preservación de colas en logout selectivo | Se norma a nivel de composables en frontend (`authStore.logout()`) la destrucción exclusiva de tokens sin tocar `IndexedDB` para cumplir con `POL-AUD-01`. | Verificación con tests E2E de logout. |
+| **D-SES-03** | Preservación de colas en logout selectivo | Se norma a nivel de composables en frontend (`authStore.logout()`) la destrucción exclusiva de tokens sin tocar `IndexedDB` para cumplir con `POL-AUD-01` y `SDD-028`. | Verificación con tests E2E de logout. |
+| **D-SES-04** | Discrepancia temporal en `check_daily_pass_status` (PAC Bloque 4 H-1) | `check_daily_pass_status` evalúa ventana móvil de 24 horas (`requested_at > now() - interval '24 hours'`), violando `RN-013-11`. Debe alinearse canónicamente con `pass_date = v_today` / turno nocturno. | Migración de sesión unificada en Ola 6 SQL. |
+| **D-SES-05** | Deprecación y purga de `useSessionManager.ts` | El archivo `useSessionManager.ts` es código muerto no importado que implementa un timeout de 30 minutos por inactividad (`SESSION_TIMEOUT_MS`), en abierta contradicción con `RN-013-04`. | Purga física en la orden de trabajo WO de frontend. |
