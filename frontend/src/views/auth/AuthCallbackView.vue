@@ -31,6 +31,15 @@ const router = useRouter();
 const authStore = useAuthStore();
 const errorMessage = ref('');
 
+const handleBackToLogin = async () => {
+  try {
+    await authStore.logout();
+  } catch (err) {
+    logger.warn('[AuthCallback] Error during logout:', err);
+  }
+  router.push('/login');
+};
+
 // Store subscription for cleanup on unmount (fixes memory leak)
 let authSubscription: { unsubscribe: () => void } | null = null;
 
@@ -80,11 +89,23 @@ onMounted(async () => {
   // Check if the interceptor cached a profile (signup already handled)
   const cachedProfile = sessionStorage.getItem('__auth_callback_profile__');
   if (cachedProfile) {
-    // Interceptor already set session — just init the store and redirect
     const initialized = await authStore.initializeFromSession();
     if (initialized) {
-      router.replace('/dashboard');
+      router.replace({ name: 'dashboard' });
       return;
+    }
+  }
+
+  // Active session check (e.g. direct redirect or autologin after signup)
+  if (!hash.includes('error=') && !hash.includes('access_token=')) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      logger.log('[AuthCallback] Active session detected, redirecting to dashboard');
+      const initialized = await authStore.initializeFromSession();
+      if (initialized) {
+        router.replace({ name: 'dashboard' });
+        return;
+      }
     }
   }
 
@@ -149,7 +170,7 @@ onMounted(async () => {
         logger.log('[AuthCallback] Session established, initializing auth store...');
         const initialized = await authStore.initializeFromSession();
         if (initialized) {
-          router.replace('/dashboard');
+          router.replace({ name: 'dashboard' });
         } else {
           // Session exists but store init failed — redirect to login
           logger.warn('[AuthCallback] Store init failed, redirecting to login');
@@ -176,7 +197,7 @@ onMounted(async () => {
     if (event === 'SIGNED_IN' || session) {
       const initialized = await authStore.initializeFromSession();
       if (initialized) {
-        router.replace('/dashboard');
+        router.replace({ name: 'dashboard' });
       } else {
         router.replace('/login');
       }

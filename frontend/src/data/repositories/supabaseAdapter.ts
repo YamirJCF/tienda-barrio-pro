@@ -115,29 +115,9 @@ export function createSupabaseRepository<TDomain extends { id: string }, TPersis
                 return localData as unknown as TDomain[];
             }
 
-            // Sync cache to localStorage on successful fetch
-            // SAFETY: Only update LS if Supabase returned data  
-            // Protect against wiping local cache when RLS returns empty due to session issues
-            if (data && data.length > 0) {
+            // Sync cache to localStorage on successful fetch (Supabase is authority)
+            if (data) {
                 localStorageAdapter.set(localStorageKey, data);
-            } else if (data && data.length === 0) {
-                // Supabase returned empty - check if we had local data
-                const localData = localStorageAdapter.get<TPersistence[]>(localStorageKey) || [];
-                if (localData.length > 0) {
-                    logger.warn(`[SupabaseRepo:${tableName}] ⚠️ Supabase returned 0 items but localStorage has ${localData.length}. Possible RLS issue. NOT overwriting localStorage.`);
-                    // Emit event so the UI can warn the user
-                    window.dispatchEvent(new CustomEvent('sync:data_desync', {
-                        detail: {
-                            table: tableName,
-                            localCount: localData.length,
-                            remoteCount: 0,
-                            message: `Supabase devolvió 0 ${tableName} pero hay ${localData.length} localmente. Posible problema de sesión/RLS.`
-                        }
-                    }));
-                } else {
-                    // Both empty - safe to sync
-                    localStorageAdapter.set(localStorageKey, data);
-                }
             }
 
             // Defensive: Ensure data is not null

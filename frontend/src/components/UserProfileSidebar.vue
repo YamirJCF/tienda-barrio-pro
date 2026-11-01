@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useDataSource } from '../composables/useDataSource';
+import { getQueueSize } from '../data/syncQueue';
 import { useRouter } from 'vue-router';
 // T-011: Store para preferencias persistentes
 import { usePreferencesStore } from '../stores/preferences';
@@ -50,6 +52,30 @@ const authStore = useAuthStore();
 // T-011: Usar store persistente en lugar de refs locales
 const preferencesStore = usePreferencesStore();
 
+// Guardia Silenciosa de Cierre de Sesión (RN: Cero pérdida de datos offline)
+const { isOnline } = useDataSource();
+const pendingSyncCount = ref(0);
+
+const checkQueue = async () => {
+  try {
+    pendingSyncCount.value = await getQueueSize();
+  } catch (e) {
+    pendingSyncCount.value = 0;
+  }
+};
+
+watch(() => props.isOpen, (newVal) => {
+  if (newVal) {
+    checkQueue();
+  }
+});
+
+onMounted(() => {
+  checkQueue();
+});
+
+const canLogout = computed(() => isOnline.value && pendingSyncCount.value === 0);
+
 // User info from store (Authority source)
 const currentUser = computed(() => authStore.currentUser);
 const displayUserName = computed(() => currentUser.value?.name || props.userName);
@@ -92,9 +118,12 @@ const closeSidebar = () => {
 };
 
 const handleLogout = async () => {
-  emit('logout');
-  await authStore.logout();
-  router.push('/login');
+  if (!canLogout.value) return;
+  const success = await authStore.logout();
+  if (success) {
+    emit('logout');
+    router.push('/login');
+  }
 };
 
 const toggleDarkMode = () => {
@@ -425,7 +454,8 @@ const navigateToSecurity = () => {
           >
             <button
               @click="handleLogout"
-              class="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 transition-colors font-semibold shadow-sm border border-transparent focus:outline-none focus:ring-2 focus:ring-red-500/50"
+              :disabled="!canLogout"
+              class="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 transition-colors font-semibold shadow-sm border border-transparent focus:outline-none focus:ring-2 focus:ring-red-500/50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <LogOut :size="18" :stroke-width="1.5" />
               Cerrar Sesión

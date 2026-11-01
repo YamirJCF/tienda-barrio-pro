@@ -22,9 +22,10 @@ export function useRevocationGuard() {
 
             if (status === 'rejected' || status === 'expired') {
                 logger.warn('[RevocationGuard] Access revoked/expired! Logging out...');
-                await authStore.logout();
-                router.push('/login');
-                // Opcional: Mostrar Toast o Alerta
+                const success = await authStore.logout();
+                if (success) {
+                    router.push('/login');
+                }
             }
         } catch (error) {
             // Silenciar errores de red para no spamear

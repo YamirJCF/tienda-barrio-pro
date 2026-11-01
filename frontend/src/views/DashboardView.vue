@@ -129,10 +129,8 @@ const closeProfileSidebar = () => {
   profileSidebarOpen.value = false;
 };
 
-const handleLogout = async () => {
+const handleLogout = () => {
   profileSidebarOpen.value = false;
-  await authStore.logout();
-  router.push('/login');
 };
 
 const navigateToNotifications = () => {

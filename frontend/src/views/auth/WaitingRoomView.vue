@@ -9,10 +9,13 @@
 
         <h2 class="text-2xl font-bold text-gray-900 mb-2">Revisa tu correo</h2>
         
-        <p class="text-gray-600 mb-8">
+        <p v-if="email" class="text-gray-600 mb-8">
           Hemos enviado un enlace de confirmación a <br>
           <strong class="text-gray-900">{{ email }}</strong>
         </p>
+        <div v-else class="mb-8 p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-800 text-sm">
+          No pudimos detectar tu correo de registro. Por favor regresa e intenta de nuevo.
+        </div>
 
         <!-- Primary Actions -->
         <div class="space-y-4">
@@ -39,7 +42,7 @@
             <span class="text-gray-500">¿No llegó el correo? </span>
             <button 
               @click="handleResend"
-              :disabled="cooldown > 0 || isResending"
+              :disabled="cooldown > 0 || isResending || !email"
               class="font-medium text-blue-600 hover:text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span v-if="isResending">Enviando...</span>
@@ -65,9 +68,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { supabase } from '../../lib/supabase'; // Access direct supabase client or via repo
+import { supabase } from '../../lib/supabase';
+import { authRepository } from '../../data/repositories/authRepository';
 import { Mail as MailIcon } from 'lucide-vue-next';
 import { useAuthStore } from '../../stores/auth';
+import { useToast } from 'vue-toastification';
+import { logger } from '../../utils/logger';
+
+const toast = useToast();
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -80,33 +88,42 @@ let authSubscription: { unsubscribe: () => void } | null = null;
 const isGmail = computed(() => email.value.includes('@gmail.com'));
 
 const handleResend = async () => {
-  if (cooldown.value > 0) return;
+  if (cooldown.value > 0 || isResending.value) return;
+
+  if (!email.value) {
+    toast.error('No se detectó un correo asociado. Por favor inicia sesión o regístrate.');
+    return;
+  }
   
   isResending.value = true;
   try {
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: email.value
-    });
+    const result = await authRepository.resendConfirmationEmail(email.value);
     
-    if (error) throw error;
-    
-    // Start cooldown
-    cooldown.value = 60;
-    const timer = setInterval(() => {
-      cooldown.value--;
-      if (cooldown.value <= 0) clearInterval(timer);
-    }, 1000);
-    
-  } catch (err) {
-    console.error('Error resending email:', err);
-    alert('Error al reenviar. Intenta más tarde.');
+    if (result.success) {
+      toast.success('Correo de confirmación reenviado exitosamente.');
+      // Start cooldown
+      cooldown.value = 60;
+      const timer = setInterval(() => {
+        cooldown.value--;
+        if (cooldown.value <= 0) clearInterval(timer);
+      }, 1000);
+    } else {
+      if (result.code === 'RATE_LIMIT') {
+        toast.warning(result.error || 'Espera unos momentos antes de intentar nuevamente.');
+      } else {
+        toast.error(result.error || 'Error al reenviar el correo.');
+      }
+    }
+  } catch (err: any) {
+    logger.error('Error resending email:', err);
+    toast.error('Error de conexión al reenviar. Intenta más tarde.');
   } finally {
     isResending.value = false;
   }
 };
 
 const handleLogout = async () => {
+  sessionStorage.removeItem('pending_verification_email');
   await authStore.logout();
   router.push('/login');
 };
@@ -120,23 +137,28 @@ const checkStatus = async () => {
   if (user?.email_confirmed_at) {
     // User verified! Refresh local session so Router Guard sees updated state
     await supabase.auth.refreshSession();
-    router.replace('/dashboard');
+    router.replace({ name: 'dashboard' });
   }
 };
 
 onMounted(async () => {
-  // Get current user email
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user?.email) {
-    email.value = user.email;
+  // 1. Prioritize query param
+  const routeEmail = router.currentRoute.value.query.email as string;
+  // 2. Fallback to sessionStorage
+  const sessionEmail = sessionStorage.getItem('pending_verification_email');
+  
+  if (routeEmail) {
+    email.value = routeEmail;
+  } else if (sessionEmail) {
+    email.value = sessionEmail;
   } else {
-    // If no user/session, maybe redirect to login? 
-    // For waiting room, we assume they just signed up and might have a partial session or local state
-    // But Supabase sign up returns session null if email confirmation enabled.
-    // We might need to pass email via query param or store if session is null.
-    // For now, let's try reading from authStore or query param
-    const routeEmail = router.currentRoute.value.query.email as string;
-    if (routeEmail) email.value = routeEmail;
+    // 3. Fallback to Supabase user or store
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      email.value = user.email;
+    } else if (authStore.currentUser?.email) {
+      email.value = authStore.currentUser.email;
+    }
   }
 
   // Polling for verification
@@ -146,7 +168,7 @@ onMounted(async () => {
   const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' || (session?.user?.email_confirmed_at)) {
       await supabase.auth.refreshSession();
-      router.replace('/dashboard');
+      router.replace({ name: 'dashboard' });
     }
   });
   authSubscription = subscription;

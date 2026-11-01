@@ -42,6 +42,111 @@ export interface CurrentUser {
 // =============================================
 // Demo Account definition removed for Audit Mode security
 
+/**
+ * Protocolo de Autodestrucción Total (Scorched Earth Teardown)
+ * Destruye el 100% de datos en memoria RAM viva, localStorage, sessionStorage,
+ * IndexedDB y SystemCacheManager para garantizar un navegador virgen tras logout.
+ */
+export async function destroyAllLocalData() {
+  logger.log('[Auth Store] 💥 Ejecutando Autodestrucción Total (RAM + Disco)...');
+
+  // 1. Vaciar estado en memoria RAM viva de los Stores activos de Pinia
+  try {
+    const { useInventoryStore } = await import('./inventory');
+    useInventoryStore().products = [];
+  } catch (e) {}
+
+  try {
+    const { useSalesStore } = await import('./sales');
+    const salesStore = useSalesStore();
+    salesStore.sales = [];
+    salesStore.nextTicketNumber = 1;
+    salesStore.loadedStoreId = null;
+  } catch (e) {}
+
+  try {
+    const { useClientsStore } = await import('./clients');
+    const clientsStore = useClientsStore();
+    clientsStore.clients = [];
+    clientsStore.transactions = [];
+  } catch (e) {}
+
+  try {
+    const { useCashRegisterStore } = await import('./cashRegister');
+    const cashStore = useCashRegisterStore();
+    cashStore.currentSession = null;
+    cashStore.sessionHistory = [];
+  } catch (e) {}
+
+  try {
+    const { useExpensesStore } = await import('./expenses');
+    useExpensesStore().expenses = [];
+  } catch (e) {}
+
+  try {
+    const { useSuppliersStore } = await import('./suppliers');
+    useSuppliersStore().suppliers = [];
+  } catch (e) {}
+
+  try {
+    const { useEmployeesStore } = await import('./employees');
+    useEmployeesStore().employees = [];
+  } catch (e) {}
+
+  try {
+    const { useFinancialStore } = await import('./financial');
+    const finStore = useFinancialStore();
+    finStore.summary = null;
+    finStore.inventoryHealth = null;
+    finStore.clientLedger = null;
+    finStore.stagnantProducts = [];
+    finStore.topProductsByUnits = [];
+  } catch (e) {}
+
+  try {
+    const { usePayablesStore } = await import('./payables');
+    usePayablesStore().invoices = [];
+  } catch (e) {}
+
+  try {
+    const { useCartStore } = await import('./cart');
+    useCartStore().clearCart();
+  } catch (e) {}
+
+  // 2. Limpiar colecciones locales en IndexedDB
+  try {
+    const { getDB } = await import('../data/sources/IndexedDBDataSource');
+    const db = await getDB();
+    await db.clear('products');
+    await db.clear('clients');
+    await db.clear('sales');
+  } catch (e) {
+    logger.warn('[Auth Store] Advertencia limpiando caché IndexedDB:', e);
+  }
+
+  // 3. Resetear Gestor de Caché SWR
+  try {
+    const { systemCacheManager } = await import('../services/systemCacheManager');
+    systemCacheManager.reset();
+  } catch (e) {
+    logger.warn('[Auth Store] Advertencia reseteando systemCacheManager:', e);
+  }
+
+  // 4. Barrido total de almacenamiento local (Disco)
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear();
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.clear();
+    }
+  } catch (e) {
+    logger.warn('[Auth Store] Error en barrido localStorage/sessionStorage:', e);
+  }
+}
+
+export const clearTenantLocalData = destroyAllLocalData;
+
 export const useAuthStore = defineStore(
   'auth',
   () => {
@@ -390,21 +495,43 @@ export const useAuthStore = defineStore(
       logger.log('[Auth Store] CryptoKey cleared from RAM');
     };
 
-    const logout = async () => {
-      await authRepository.logout();
+    const logout = async (): Promise<boolean> => {
+      // Guardia de salida: No permitir cierre sin internet o con transacciones pendientes en cola
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        logger.warn('[Auth Store] 🔒 Cierre de sesión bloqueado: Dispositivo fuera de línea.');
+        return false;
+      }
+
+      try {
+        const { getQueueSize } = await import('../data/syncQueue');
+        const pendingCount = await getQueueSize();
+        if (pendingCount > 0) {
+          logger.warn(`[Auth Store] 🔒 Cierre de sesión bloqueado: Hay ${pendingCount} transacciones pendientes por sincronizar.`);
+          return false;
+        }
+      } catch (e) {
+        logger.warn('[Auth Store] No se pudo verificar la cola de sincronización:', e);
+      }
+
+      try {
+        await authRepository.logout();
+      } catch (e) {
+        logger.warn('[Auth Store] Fallo al cerrar sesión en authRepository:', e);
+      }
+
       currentUser.value = null;
       isAuthenticated.value = false;
       clearCryptoKey();
-      localStorage.removeItem('pin_auth_token');
-      // Reset daily access? Maybe not, device is still same.
-      // But user session is gone.
-      // Reset IAM states
+
       dailyAccessState.value = {
         status: 'expired',
         lastApprovedAt: null,
         fingerprint: null,
         requestedAt: null
       };
+
+      await destroyAllLocalData();
+      return true;
     };
 
     const recoverPassword = async (email: string) => {
@@ -487,11 +614,8 @@ export const useAuthStore = defineStore(
             // Cart store might not be ready yet
           }
         } else if (result.status === 'requires_login' || result.status === 'revoked_or_disabled') {
-          // Token expirado o revocado en servidor
-          isAuthenticated.value = false;
-          clearCryptoKey();
-          dailyAccessState.value.status = 'expired';
-          // Descartar carrito en curso (RN-013-12)
+          // Token expirado o revocado en servidor: invocar autodestrucción total
+          await logout();
           try {
             const { useCartStore } = await import('./cart');
             useCartStore().clearCart();

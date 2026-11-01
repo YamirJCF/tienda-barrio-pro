@@ -198,32 +198,30 @@ export const productRepository: ProductRepository = {
      */
     async getAll(storeId?: string, includeInactive: boolean = false): Promise<Product[]> {
         let results: Product[] = [];
+        let fetchedOnline = false;
         
-        // 1. ONLINE: Always fetch fresh from Supabase
+        // 1. ONLINE: Always fetch fresh from Supabase (source of truth)
         if (navigator.onLine && isSupabaseConfigured()) {
             try {
                 const fresh = await baseRepository.getAll(storeId);
-                if (fresh.length > 0) {
-                    // Update IDB cache with fresh data
-                    productCache.saveBulk(fresh).catch(e =>
-                        logger.warn('[ProductRepo] IDB cache update failed:', e)
-                    );
-                }
+                // Supabase is authority: sync cache with fresh data (even if empty)
+                productCache.saveBulk(fresh).catch(e =>
+                    logger.warn('[ProductRepo] IDB cache update failed:', e)
+                );
                 results = fresh;
+                fetchedOnline = true;
             } catch (e) {
                 logger.warn('[ProductRepo] Supabase fetch failed, falling back to cache', e);
-                // Fall through to IDB cache on network error
+                // Fall through to IDB cache on real network error
             }
         }
 
-        // 2. OFFLINE or network error: Try IDB cache
-        if (results.length === 0) {
-            const cached = await productCache.getAll();
-            if (cached.length > 0) {
-                results = cached;
+        // 2. OFFLINE or real network error: Read from cache scoped to storeId
+        if (!fetchedOnline) {
+            if (storeId) {
+                results = await productCache.getByIndex('by_store', storeId);
             } else {
-                // 3. Last resort: legacy localStorage fallback via baseRepository
-                results = await baseRepository.getAll(storeId);
+                results = await productCache.getAll();
             }
         }
 

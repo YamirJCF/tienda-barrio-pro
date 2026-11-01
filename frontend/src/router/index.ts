@@ -16,6 +16,7 @@ import EmployeeManagerView from '../views/EmployeeManagerView.vue';
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
+    alias: ['/dashboard'],
     name: 'dashboard',
     component: DashboardView,
     meta: { requiresAuth: true },
@@ -246,8 +247,10 @@ router.beforeEach(async (to, from, next) => {
         const verification = await verifySessionDeduped();
         if (verification.status === 'requires_login' || verification.status === 'revoked_or_disabled') {
           logger.warn('🔒 [Router] Servidor requiere inicio de sesión. Redirigiendo a login.');
-          await authStore.logout();
-          return next({ name: 'login' });
+          const loggedOut = await authStore.logout();
+          if (loggedOut) {
+            return next({ name: 'login' });
+          }
         }
         if (verification.status === 'requires_daily_pass') {
           logger.warn('🔒 [Router] Pase diario expirado o ausente. Redirigiendo a sala de espera.');
@@ -269,8 +272,10 @@ router.beforeEach(async (to, from, next) => {
     // Handles User Request: "Always start at login"
     if (dailyStatus === 'expired' || dailyStatus === 'none') {
       logger.log('🔒 [Router] Session expired or invalid on sensitive route. Forcing logout.');
-      await authStore.logout();
-      return next({ name: 'login' });
+      const loggedOut = await authStore.logout();
+      if (loggedOut) {
+        return next({ name: 'login' });
+      }
     }
 
     // Si el status no es 'approved' (pending/rejected), bloquear acceso ir a Waiting Room

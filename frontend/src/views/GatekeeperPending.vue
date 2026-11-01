@@ -136,8 +136,10 @@ const stopPolling = (): void => {
  */
 const handleLogout = async (): Promise<void> => {
   stopPolling();
-  await authStore.logout();
-  router.push('/login');
+  const success = await authStore.logout();
+  if (success) {
+    router.push('/login');
+  }
 };
 
 /**

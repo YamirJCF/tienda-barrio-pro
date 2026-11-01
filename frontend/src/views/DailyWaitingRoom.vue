@@ -109,10 +109,12 @@ const handlePing = async () => {
     }
 };
 
-const handleLogout = () => {
+const handleLogout = async () => {
     cleanupChannel();
-    authStore.logout();
-    router.push('/login');
+    const success = await authStore.logout();
+    if (success) {
+        router.push('/login');
+    }
 };
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────

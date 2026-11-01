@@ -42,13 +42,49 @@ const errorMessage = ref('');
 // ============================================
 // VALIDATION RULES
 // ============================================
-// Regex para validación estricta de email
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Regex para validación estricta de email (mínimo 2 letras en el TLD)
+const emailRegex = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
 
 // Computed validations
 const isStoreNameValid = computed(() => storeName.value.trim().length >= 3);
 const isOwnerNameValid = computed(() => ownerName.value.trim().length > 0);
-const isEmailValid = computed(() => emailRegex.test(email.value.trim()));
+// Detección proactiva de errores tipográficos en dominios comunes y TLDs incompletos
+const emailTypoWarning = computed(() => {
+  const trimmed = email.value.trim().toLowerCase();
+  if (!trimmed.includes('@')) return '';
+
+  const domain = trimmed.split('@')[1] || '';
+
+  if (domain.startsWith('gmail.')) {
+    if (domain !== 'gmail.com') {
+      return 'Los correos de Gmail deben terminar en @gmail.com';
+    }
+  }
+
+  if (domain.startsWith('hotmail.')) {
+    if (domain !== 'hotmail.com' && domain !== 'hotmail.es') {
+      return 'Los correos de Hotmail deben terminar en @hotmail.com o .es';
+    }
+  }
+
+  if (domain.startsWith('outlook.')) {
+    if (domain !== 'outlook.com' && domain !== 'outlook.es') {
+      return 'Los correos de Outlook deben terminar en @outlook.com o .es';
+    }
+  }
+
+  const parts = domain.split('.');
+  if (parts.length > 1) {
+    const ext = parts[parts.length - 1];
+    if (ext.length === 1) {
+      return 'La extensión del correo debe tener mínimo 2 letras (ej. .com, .co)';
+    }
+  }
+
+  return '';
+});
+
+const isEmailValid = computed(() => emailRegex.test(email.value.trim()) && !emailTypoWarning.value);
 // WO-PHASE4-001 AU-07: Strong Password Policy (Min 8, 1 Letter, 1 Number, Special chars allowed)
 const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const isPasswordValid = computed(() => passwordRegex.test(password.value));
@@ -124,19 +160,38 @@ const handleSubmit = async () => {
       password: password.value,
     });
 
+    const cleanEmail = email.value.trim().toLowerCase();
+
     if (!result.success) {
-       // Check for specific "User already exists" error
+       // Mensajes amigables traducidos según Regla 2.2 de UX
        if (result.error?.includes('already registered') || result.error_code === 'user_already_exists') {
-         // Show a more helpful message
          throw new Error('Este correo ya está registrado. Por favor, inicia sesión.');
        }
-       // Error devuelto por Supabase/Repo
+       if (result.error?.includes('rate limit') || result.error_code === 'over_email_send_rate_limit') {
+         throw new Error('Límite de envíos alcanzado por seguridad. Por favor, espera unos minutos antes de intentar de nuevo.');
+       }
+       if (result.error?.includes('invalid') || result.error_code === 'email_address_invalid') {
+         throw new Error('La dirección de correo electrónico ingresada no es válida.');
+       }
+       // Error general devuelto por Supabase/Repo
        throw new Error(result.error || 'Autenticación fallida.');
     }
 
+    // Si el usuario ya fue autoconfirmado en Supabase, iniciar sesión y dirigir a Dashboard
+    if (result.session || result.user?.email_confirmed_at) {
+       logger.log('✅ Tienda registrada y confirmada automáticamente');
+       await authStore.login(cleanEmail, password.value);
+       router.push({ name: 'dashboard' });
+       return;
+    }
+
     logger.log('✅ Tienda registrada exitosamente (Esperando confirmación)');
-    // Redirección a sala de espera WO-008
-    router.push('/auth/waiting-verification');
+    sessionStorage.setItem('pending_verification_email', cleanEmail);
+    // Redirección a sala de espera WO-008 pasando el email
+    router.push({
+      path: '/auth/waiting-verification',
+      query: { email: cleanEmail }
+    });
 
   }, {
     errorMessage: 'Error del sistema. Por favor, intenta nuevamente.',
@@ -251,6 +306,9 @@ const handleSubmit = async () => {
                     <Mail :size="18" class="text-gray-400" />
                 </template>
             </BaseInput>
+            <p v-if="emailTypoWarning" class="text-xs text-amber-600 dark:text-amber-400 font-medium ml-1">
+              {{ emailTypoWarning }}
+            </p>
           </div>
 
           <div class="flex flex-col gap-1.5">

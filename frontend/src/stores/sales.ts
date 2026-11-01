@@ -173,13 +173,8 @@ export const useSalesStore = defineStore(
         // For now, assume repo mapper handles it or we filter client side
         const remoteSales = await saleRepository.getByDateRange(today, today, storeId);
 
-        // Merge with existing (if any) to avoid overwrite if persisted
-        const existingIds = new Set(sales.value.map(s => s.id));
-        remoteSales.forEach(s => {
-          if (!existingIds.has(s.id)) {
-            sales.value.push(s);
-          }
-        });
+        // Reemplazo autoritativo desde Supabase (Regla 1: Backend Authority)
+        sales.value = [...remoteSales];
 
         // Re-sort
         sales.value.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

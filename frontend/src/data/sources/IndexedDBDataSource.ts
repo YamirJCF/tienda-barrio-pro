@@ -204,8 +204,6 @@ export function createIndexedDBDataSource<T extends { id: string }>(
         },
 
         async saveBulk(items: T[]): Promise<void> {
-            if (items.length === 0) return;
-
             try {
                 const db = await getDB();
                 const tx = db.transaction(storeName, 'readwrite');

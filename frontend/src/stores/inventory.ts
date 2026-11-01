@@ -162,6 +162,11 @@ export const useInventoryStore = defineStore(
         return;
       }
 
+      // If switching to a different store, reset products in memory immediately
+      if (loadedStoreId.value && loadedStoreId.value !== effectiveStoreId) {
+        products.value = [];
+      }
+
       isLoading.value = true;
       try {
         const cacheKey = `products:${effectiveStoreId}`;
