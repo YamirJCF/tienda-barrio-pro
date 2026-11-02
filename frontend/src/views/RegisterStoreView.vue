@@ -177,15 +177,8 @@ const handleSubmit = async () => {
        throw new Error(result.error || 'Autenticación fallida.');
     }
 
-    // Si el usuario ya fue autoconfirmado en Supabase, iniciar sesión y dirigir a Dashboard
-    if (result.session || result.user?.email_confirmed_at) {
-       logger.log('✅ Tienda registrada y confirmada automáticamente');
-       await authStore.login(cleanEmail, password.value);
-       router.push({ name: 'dashboard' });
-       return;
-    }
-
-    logger.log('✅ Tienda registrada exitosamente (Esperando confirmación)');
+    // Flujo Obligatorio: Toda cuenta nueva debe confirmar correo y pasar por la Sala de Espera
+    logger.log('✅ Tienda registrada exitosamente (Esperando confirmación obligatoria)');
     sessionStorage.setItem('pending_verification_email', cleanEmail);
     // Redirección a sala de espera WO-008 pasando el email
     router.push({
