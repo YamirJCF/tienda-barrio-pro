@@ -74,7 +74,7 @@ let dbPromise: Promise<IDBPDatabase> | null = null;
  * Gets or creates the shared IndexedDB connection.
  * Uses a singleton pattern to avoid multiple connections.
  */
-function getDB(): Promise<IDBPDatabase> {
+export function getDB(): Promise<IDBPDatabase> {
     if (!dbPromise) {
         dbPromise = openDB(DB_NAME, DB_VERSION, {
             upgrade(db) {

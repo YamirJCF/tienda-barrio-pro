@@ -69,7 +69,7 @@ const routes: RouteRecordRaw[] = [
     path: '/auth/waiting-verification',
     name: 'waiting-verification',
     component: () => import('../views/auth/WaitingRoomView.vue'),
-    meta: { requiresAuth: false } // Public but logic driven
+    meta: { guest: true, requiresAuth: false }
   },
   // Rutas Protegidas
   {

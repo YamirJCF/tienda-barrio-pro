@@ -177,16 +177,14 @@ const handleResend = async () => {
   }
 };
 
-const goToLogin = async () => {
+const goToLogin = () => {
   sessionStorage.removeItem('pending_verification_email');
-  await authStore.logout();
-  router.push('/login');
+  router.push({ name: 'login' });
 };
 
-const goToRegister = async () => {
+const goToRegister = () => {
   sessionStorage.removeItem('pending_verification_email');
-  await authStore.logout();
-  router.push('/register-store');
+  router.push({ name: 'register-store' });
 };
 
 const checkStatus = async () => {
