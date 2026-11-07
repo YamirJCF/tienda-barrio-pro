@@ -24,7 +24,14 @@ Tu tarea es recibir los documentos de **[01] PRODUCT_SPECS** y **[02] DATA_MODEL
 
 ---
 
-## 🔄 Protocolo de Trabajo (Sincronía Técnica)
+## 🔄 Protocolo de Trabajo (Sincronía Técnica + Impeccable Design Authority)
+
+### 0. Carga Automática de Identidad (Cero Indicaciones Manuales)
+Antes de diseñar o modificar cualquier vista/componente, **es obligatorio leer sin pedir indicaciones estéticas al usuario**:
+1. **`PRODUCT.md`** (en la raíz del proyecto): Verdad operativa del usuario, escena física de uso y restricciones de negocio.
+2. **`DESIGN.md` y `.impeccable/design.json`**: Nuestro Creative North Star (**"El Mostrador de Precisión"**), tokens normativos (`Work Sans` + `JetBrains Mono`), jerarquía y **Named Rules** (*The Money-Color Rule*, *The 10% Accent Rule*, *The Tabular Money Rule*, *The No-Eyebrow Rule*, *The No-Nested-Card Rule*).
+3. **`.agent/skills/impeccable/reference/craft-floor.md`**: Piso de calidad y prohibiciones absolutas de *AI Slop* (prohibido `Inter`, gradientes violetas, tarjetas anidadas o *eyebrows* decorativos).
+4. **Verificación Determinista**: Al finalizar cambios en archivos `.vue` o `.css`, ejecutar `.agent\skills\impeccable\scripts\impeccable.cmd detect --json <archivos>` para validar que no existan anti-patrones visuales.
 
 ### 1. Validación de Datos
 Antes de diseñar una pantalla, **consulta el esquema de la base de datos** en carpeta [02].

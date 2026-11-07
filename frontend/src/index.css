@@ -18,8 +18,9 @@
   --color-surface-dark: #1e2736;
 
   /* Font Family */
-  --font-family-display: 'Work Sans', sans-serif;
-  --font-family-body: 'Work Sans', sans-serif;
+  --font-family-display: 'Work Sans', system-ui, -apple-system, sans-serif;
+  --font-family-body: 'Work Sans', system-ui, -apple-system, sans-serif;
+  --font-family-mono: 'JetBrains Mono', monospace;
 
   /* Border Radius */
   --radius: 0.5rem;
@@ -28,13 +29,29 @@
   --radius-2xl: 1.5rem;
 }
 
-/* Base Styles */
+/* Base Styles & Browser Surface Theming (Impeccable Craft Floor) */
 body {
   font-family: var(--font-family-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: light-dark(var(--color-background-light), var(--color-background-dark));
   color: light-dark(rgb(17 24 39), rgb(255 255 255));
+  caret-color: var(--color-primary);
+}
+
+::selection {
+  background-color: rgba(36, 95, 235, 0.18);
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+.tabular-money {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 

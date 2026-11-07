@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-06T18:55:00-05:00",
+  "title": "Design System: Tienda Barrio Pro",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Azul Mostrador",
+        "canonical": "#245feb",
+        "tonalRamp": ["#0a1d4d", "#123282", "#1a46b0", "#245feb", "#5a8aff", "#94b4ff", "#c9daff", "#eef3ff"]
+      },
+      "brand-teal": {
+        "role": "secondary",
+        "displayName": "Teal Editorial",
+        "canonical": "#0f766e",
+        "tonalRamp": ["#042f2e", "#115e59", "#0f766e", "#0d9488", "#14b8a6", "#5eead4", "#99f6e4", "#f0fdfa"]
+      },
+      "accent-emerald": {
+        "role": "secondary",
+        "displayName": "Esmeralda Liquidez",
+        "canonical": "#10b981",
+        "tonalRamp": ["#064e3b", "#065f46", "#047857", "#059669", "#10b981", "#34d399", "#a7f3d0", "#ecfdf5"]
+      },
+      "warning-amber": {
+        "role": "tertiary",
+        "displayName": "Ámbar Fiado",
+        "canonical": "#f59e0b",
+        "tonalRamp": ["#451a03", "#78350f", "#b45309", "#d97706", "#f59e0b", "#fbbf24", "#fde68a", "#fffbeb"]
+      },
+      "danger-red": {
+        "role": "tertiary",
+        "displayName": "Rojo Arqueo",
+        "canonical": "#dc2626",
+        "tonalRamp": ["#450a0a", "#7f1d1d", "#991b1b", "#b91c1c", "#dc2626", "#f87171", "#fecaca", "#fef2f2"]
+      },
+      "background-light": {
+        "role": "neutral",
+        "displayName": "Lienzo Mostrador Claro",
+        "canonical": "#f6f6f8",
+        "tonalRamp": ["#0c0e12", "#1e2736", "#334155", "#64748b", "#94a3b8", "#cbd5e1", "#e2e8f0", "#f6f6f8"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Titulares de impacto en landing y montos totales en cierre de venta."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Encabezados de sección y resúmenes financieros diarios."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Títulos de vistas móviles, modales y cifras destacadas en StatCard."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Nombres de productos, listas operativas, formularios e instrucciones."
+      },
+      "label": {
+        "displayName": "Label / Mono",
+        "purpose": "Precios, cantidades, saldos tabulares, atajos y etiquetas de métrica."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-soft",
+        "value": "0 2px 8px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02)",
+        "purpose": "Elevación sutil para tarjetas operativas y contenedores en reposo."
+      },
+      {
+        "name": "shadow-soft-md",
+        "value": "0 4px 16px 0 rgba(0, 0, 0, 0.08), 0 2px 4px 0 rgba(0, 0, 0, 0.04)",
+        "purpose": "Elevación media para controles flotantes, menús desplegables y hover."
+      },
+      {
+        "name": "app-frame",
+        "value": "0 4px 6px rgba(0, 0, 0, 0.04), 0 16px 40px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06)",
+        "purpose": "Marco de demostración interactiva en superficie comercial (landing)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-quart",
+        "value": "cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Transiciones de lista FLIP y entrada de modales operativos."
+      },
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Transición estándar de color, sombra y micro-compresión táctil."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Botón de acción principal en el mostrador con respuesta táctil active:scale-95.",
+      "html": "<button class=\"ds-btn-primary\">Cobrar $ 24.500</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #245feb; color: #ffffff; font-family: 'Work Sans', sans-serif; font-size: 0.875rem; font-weight: 600; padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; font-variant-numeric: tabular-nums; transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s ease; } .ds-btn-primary:hover { background: #1a46b0; } .ds-btn-primary:active { transform: scale(0.95); } .ds-btn-primary:focus-visible { outline: 2px solid #5a8aff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Success Cash Button",
+      "kind": "button",
+      "refersTo": "button-success",
+      "description": "Botón de confirmación de cobro en efectivo o entrada de inventario.",
+      "html": "<button class=\"ds-btn-success\">Confirmar Efectivo</button>",
+      "css": ".ds-btn-success { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #10b981; color: #ffffff; font-family: 'Work Sans', sans-serif; font-size: 0.875rem; font-weight: 600; padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.2s ease, transform 0.15s ease; } .ds-btn-success:hover { background: #059669; } .ds-btn-success:active { transform: scale(0.95); } .ds-btn-success:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }"
+    },
+    {
+      "name": "Precision Currency Input",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Campo de entrada con tipografía tabular para montos, precios y búsqueda rápida.",
+      "html": "<div class=\"ds-input-wrap\"><label class=\"ds-input-label\">PRECIO DE VENTA</label><input class=\"ds-input\" type=\"text\" value=\"$ 4.800\" /></div>",
+      "css": ".ds-input-wrap { display: flex; flex-direction: column; gap: 4px; } .ds-input-label { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; color: #334155; } .ds-input { width: 100%; border-radius: 12px; border: 1px solid #cbd5e1; background: #ffffff; color: #0c0e12; font-family: 'JetBrains Mono', monospace; font-size: 0.9375rem; font-variant-numeric: tabular-nums; padding: 10px 12px; transition: border-color 0.2s ease, box-shadow 0.2s ease; } .ds-input:focus-visible { outline: none; border-color: #245feb; box-shadow: 0 0 0 3px rgba(36, 95, 235, 0.15); }"
+    },
+    {
+      "name": "Financial StatCard",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Tarjeta de métrica financiera con ícono squircle y cifra tabular.",
+      "html": "<div class=\"ds-stat-card\"><div class=\"ds-stat-icon\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\"><rect x=\"2\" y=\"6\" width=\"20\" height=\"12\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg></div><div class=\"ds-stat-body\"><p class=\"ds-stat-label\">VENTAS HOY</p><h3 class=\"ds-stat-value\">$ 1.245.000</h3><p class=\"ds-stat-sub\">+14 transacciones</p></div></div>",
+      "css": ".ds-stat-card { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; border-radius: 16px; border: 1px solid #e2e8f0; background: #ffffff; padding: 16px; box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.04); } .ds-stat-icon { width: fit-content; border-radius: 12px; padding: 10px; background: #ecfdf5; color: #059669; } .ds-stat-label { font-family: 'JetBrains Mono', monospace; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin: 0; } .ds-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #0c0e12; margin: 4px 0 0; } .ds-stat-sub { font-family: 'Work Sans', sans-serif; font-size: 0.75rem; font-weight: 500; color: #64748b; margin: 4px 0 0; }"
+    },
+    {
+      "name": "Counter BottomNav",
+      "kind": "nav",
+      "refersTo": "card-surface",
+      "description": "Barra inferior móvil de acceso en 1 toque a los módulos principales.",
+      "html": "<nav class=\"ds-bottom-nav\"><button class=\"ds-nav-item ds-active\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\"/><line x1=\"8\" y1=\"6\" x2=\"16\" y2=\"6\"/></svg><span>Vender</span></button><button class=\"ds-nav-item\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"/></svg><span>Productos</span></button></nav>",
+      "css": ".ds-bottom-nav { display: grid; grid-template-columns: repeat(2, 1fr); height: 64px; background: #ffffff; border-top: 1px solid #e2e8f0; } .ds-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: none; color: #94a3b8; font-family: 'Work Sans', sans-serif; font-size: 0.6875rem; font-weight: 500; cursor: pointer; } .ds-nav-item.ds-active { color: #245feb; font-weight: 600; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "El Mostrador de Precisión",
+    "overview": "Tienda Barrio Pro rechaza tanto la estética fría y sobrecargada de los sistemas contables tradicionales como el AI Slop de plantillas SaaS llenas de gradientes violetas, tarjetas anidadas sin propósito y tipografías genéricas (Inter). Nuestra interfaz se comporta como un instrumento financiero de mostrador: táctil, inmediata, de alto contraste y construida alrededor de la legibilidad instantánea del dinero, el inventario y el tiempo.",
+    "keyCharacteristics": [
+      "Bicombinación Tipográfica Estructural: Work Sans para interfaz humana + JetBrains Mono para precios, saldos, códigos y atajos.",
+      "Semántica Financiera Inequívoca: Cada color de acento responde a un estado del dinero o de la operación.",
+      "Tactilidad Física: Compresión active:scale-95, bordes nítidos de 1px y skeletons estructurales.",
+      "Cero Ornamento Vacío: Sin eyebrows decorativos, sin tarjetas anidadas y sin gradientes en texto."
+    ],
+    "rules": [
+      {
+        "name": "The Money-Color Rule",
+        "body": "El verde esmeralda (#10b981), el ámbar (#f59e0b) y el rojo (#dc2626) están reservados exclusivamente para comunicar flujos de dinero, niveles de inventario o estados de seguridad.",
+        "section": "colors"
+      },
+      {
+        "name": "The 10% Accent Rule",
+        "body": "En cualquier vista operativa (Operate), el color primario (#245feb) no debe cubrir más del 10% del viewport; su escasez garantiza que el botón de cobro o acción principal sea identificable en menos de 200ms.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Money Rule",
+        "body": "Todo monto en pesos, cantidad de inventario, porcentaje, fecha corta o PIN debe renderizarse con font-variant-numeric: tabular-nums (preferiblemente en JetBrains Mono).",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Eyebrow Rule",
+        "body": "Prohibido colocar kickers o etiquetas en mayúscula encima de un título de sección solo por costumbre decorativa.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Nested-Card Rule",
+        "body": "Una tarjeta jamás vive dentro de otra tarjeta con borde y sombra.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do usar Work Sans para toda la interfaz y JetBrains Mono con tabular-nums para cada precio, saldo, peso, PIN y código.",
+      "Do diseñar cada pantalla móvil pensando primero en el alcance del pulgar en un viewport de 360px–430px y verificar que ningún texto o cifra se desborde con montos en millones de pesos ($ 12.450.000).",
+      "Do tematizar las superficies nativas del navegador (::selection con tinte primario, caret-color: #245feb, focus-visible nítido y scrollbars discretos).",
+      "Do implementar siempre los 4 estados obligatorios de toda vista conectada a datos: Loading (Skeleton estructural), Empty (BaseEmptyState con acción clara), Error (mensaje accionable sin silenciar el fallo) y Success/Data."
+    ],
+    "donts": [
+      "Don't usar la fuente Inter, gradientes violeta-azul, texto con gradiente o fondos crema genéricos.",
+      "Don't anidar tarjetas con borde/sombra dentro de otras tarjetas ni construir páginas enteras como una grilla monótona de tarjetas idénticas de ícono + título + párrafo.",
+      "Don't realizar cálculos de totales, saldos o stock en componentes .vue o stores de Pinia; la UI solo formatea y presenta la verdad calculada por Supabase.",
+      "Don't usar modales de confirmación para acciones triviales o reversibles; resérvalos para cobros finales, cierres de caja, autorizaciones por PIN o eliminaciones críticas."
+    ]
+  }
+}
