@@ -59,6 +59,8 @@ documentation/
 ├── DSD_014_AUDITORIA_VENTAS.md         # DSD: Auditoría de ventas y ajustes
 ├── DSD_019_CUENTAS_POR_PAGAR.md        # DSD: Cuentas por pagar (Facturas)
 ├── DSD_020_CAJA_MULTICANAL.md          # DSD: Caja multicanal por método de pago
+├── DSD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md    # DSD: Consentimiento legal versionado (🧪 Docker)
+├── DSD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md # DSD: Derechos ARCO y archivo contable (🧪 Docker)
 ├── RLS_POLICIES.md                     # Políticas de Seguridad Row Level Security
 ├── supabase-schema-v2.sql              # ⚠️ Script Maestro (Core) - Pendiente sincronizar con DSDs
 ├── migrations/                         # Scripts SQL de migraciones de Work Orders
@@ -126,7 +128,7 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 |---------|-------|
 | Total FRDs Catalogados | 48 |
 | Cobertura de SDDs | 100% (48/48 FRDs cubiertos) |
-| DSDs Individuales en `02_architecture/` | 10 documentos |
+| DSDs Individuales en `02_architecture/` | 12 documentos (incl. `DSD_029`, `DSD_030`) |
 | Documentos de diseño UX/UI (`03_ui_ux_design/`) | 17 |
 | Diccionarios de Datos (`02_architecture/`) | Centralizados (Core) + Modulares |
 | Documentos en `archive/` | 22 archivos (históricos + legacy + 3 SDDs derogados) |
@@ -151,8 +153,8 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | **Gestión Sesiones** | FRD-013 (v2.1) / SDD-013 (v3.1.0) | 🟢 Validado (PAC-SDD Bloques 0-5 Verificado — Listo para Implementación DSD/UXD) |
 | **Ciclo Contable y Caja** | FRD-017 / SDD-017 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
 | **Cuentas por Pagar (Proveedores)** | FRD-019 / SDD-019 | 🟢 Validado |
-| **Consentimiento Legal Versionado** | FRD-029 / SDD-029 | 🟠 Aprobado con Deuda (`D-LEG-01` a `D-LEG-07` — PAC-SDD completo) |
-| **Derechos del Titular y Eliminación Contable** | FRD-030 / SDD-030 | 🟠 Aprobado con Deuda (`D-ARCO-01` a `D-ARCO-06` — PAC-SDD completo) |
+| **Consentimiento Legal Versionado** | FRD-029 / SDD-029 / DSD-029 | 🧪 SQL Verificado en Docker (`20261111172500`) — Pendiente Cloud & Frontend |
+| **Derechos del Titular y Eliminación Contable** | FRD-030 / SDD-030 / DSD-030 | 🧪 SQL Verificado en Docker (`20261111173000`) — Pendiente Cloud & Frontend |
 
 > Para el desglose completo de tareas de frontend asociadas a estos módulos, consultar los correspondientes `WO` (Work Orders) en `04_dev_orchestration/`.
 

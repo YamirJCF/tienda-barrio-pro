@@ -276,6 +276,8 @@
 | FRD-030 | [FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md](FRD/FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md) | FRD | 🟢 | ✅ SDD_030 | Validado contra `ARQ-002` (`POL-PRIV-02`, `POL-PRIV-01`, `POL-AUD-01`, `POL-AUD-02`, `POL-SEG-03`). |
 | SDD-029 | [SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md](SDD/SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md) | SDD | 🟠 Aprobado con Deuda | — | Protocolo PAC-SDD v2.0 completo (Bloques 0–7). Deudas D-LEG-01 a D-LEG-07 registradas para migración DSD. |
 | SDD-030 | [SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md](SDD/SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md) | SDD | 🟠 Aprobado con Deuda | — | Protocolo PAC-SDD v2.0 completo (Bloques 0–7). Deudas D-ARCO-01 a D-ARCO-06 registradas para migración DSD. |
+| DSD-029 | [DSD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md](../02_architecture/DSD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md) | DSD | 🧪 Verificado en Docker | — | Migración [`20261111172500_sdd_029_legal_consent_versioning.sql`](../../supabase/migrations/20261111172500_sdd_029_legal_consent_versioning.sql). Verificado en `supabase_db_prueba`; pendiente promoción a Cloud y capa Frontend. |
+| DSD-030 | [DSD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md](../02_architecture/DSD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md) | DSD | 🧪 Verificado en Docker | — | Migración [`20261111173000_sdd_030_client_lifecycle_and_hardening.sql`](../../supabase/migrations/20261111173000_sdd_030_client_lifecycle_and_hardening.sql). Verificado en `supabase_db_prueba`; pendiente promoción a Cloud y capa Frontend. |
 
 ---
 
@@ -296,7 +298,7 @@
 | FRDs con SDD Saneados | 48 | 🟢 Sin violaciones de forma |
 | SDDs Creados / Ampliados (Fase 3) | 13 | 🟢 Completados |
 | SDDs Corregidos (Fase 2C) | 4 | 🟢 Completados |
-| DSD de Migración Creado | 1 (`DSD_007_01_v3_MIGRATION.md`) | 🟢 Creado |
+| DSD de Migración / Arquitectura Creados (Catálogo) | 3 (`DSD_007_01_v3_MIGRATION.md`, `DSD_029`, `DSD_030`) | 🧪 `029`/`030` en Docker |
 | SPEC Técnica Creada | 1 (`SPEC_001_AUTORIDAD_DEL_SERVIDOR.md`) | 🟢 Creado |
 | FRDs Deprecated | 2 (`FRD_004_1`, `FRD_015_COSTO_VENTAS` sustituido por `FRD_016`) | 🚫 Marcados |
 | SDDs Derogados y Archivados | 3 (`SDD_012_DEROGADO`, `SDD_013_DEROGADO`, `SDD_017_DEROGADO`) | 📦 En `archive/` |
@@ -317,6 +319,7 @@
 | 2.5 | 2026-11-10 | Incorporación y validación formal de `FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md` bajo `POL-PRIV-02`. |
 | 2.6 | 2026-11-11 | Redacción formal de `SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md` bajo PAC-SDD v2.0 (Bloques 0–7, estado 🟠 con deudas D-LEG-01 a D-LEG-07). |
 | 2.7 | 2026-11-11 | Redacción formal de `SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md` bajo PAC-SDD v2.0 (Bloques 0–7, estado 🟠 con deudas D-ARCO-01 a D-ARCO-06). Cobertura SDD 48/48 (100%). |
+| 2.8 | 2026-11-11 | Creación y verificación en Docker (`supabase_db_prueba`) de `DSD_029` (`20261111172500`) y `DSD_030` (`20261111173000`); pendiente promoción a Supabase Cloud y capa Frontend (`Opción A`). |
 
 ---
 
