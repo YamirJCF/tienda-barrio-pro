@@ -1,7 +1,7 @@
 # 📋 Catálogo Maestro de Documentos — Tienda Barrio Pro
 
-> **Versión:** 2.5  
-> **Fecha:** 2026-11-10  
+> **Versión:** 2.7  
+> **Fecha:** 2026-11-11  
 > **Propósito:** Mapa oficial y único de todos los documentos del proyecto. Sirve como hoja de ruta de implementación y registro de trazabilidad documental.  
 > **Norma:** Todo documento nuevo debe registrarse aquí antes de ser aprobado.
 
@@ -272,8 +272,10 @@
 
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
-| FRD-029 | [FRD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md](FRD/FRD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md) | FRD | 🟢 | 🔴 SIN SDD | Validado contra `ARQ-002` (`POL-PRIV-01`, `POL-AUD-01`, `POL-AUD-02`, `POL-SEG-03`). Pendiente SDD/UXD (Gate 2). |
-| FRD-030 | [FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md](FRD/FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md) | FRD | 🟢 | 🔴 SIN SDD | Validado contra `ARQ-002` (`POL-PRIV-02`, `POL-PRIV-01`, `POL-AUD-01`, `POL-AUD-02`, `POL-SEG-03`). Pendiente SDD/UXD (Gate 2). |
+| FRD-029 | [FRD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md](FRD/FRD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md) | FRD | 🟢 | ✅ SDD_029 | Validado contra `ARQ-002` (`POL-PRIV-01`, `POL-AUD-01`, `POL-AUD-02`, `POL-SEG-03`). |
+| FRD-030 | [FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md](FRD/FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md) | FRD | 🟢 | ✅ SDD_030 | Validado contra `ARQ-002` (`POL-PRIV-02`, `POL-PRIV-01`, `POL-AUD-01`, `POL-AUD-02`, `POL-SEG-03`). |
+| SDD-029 | [SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md](SDD/SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md) | SDD | 🟠 Aprobado con Deuda | — | Protocolo PAC-SDD v2.0 completo (Bloques 0–7). Deudas D-LEG-01 a D-LEG-07 registradas para migración DSD. |
+| SDD-030 | [SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md](SDD/SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md) | SDD | 🟠 Aprobado con Deuda | — | Protocolo PAC-SDD v2.0 completo (Bloques 0–7). Deudas D-ARCO-01 a D-ARCO-06 registradas para migración DSD. |
 
 ---
 
@@ -290,8 +292,8 @@
 | Métrica | Valor | Estado |
 |---------|-------|--------|
 | Total FRDs Catalogados | 48 | 🟢 Alineados |
-| Cobertura de SDDs | 95.8% | 🟡 46/48 Cubiertos (`FRD-029` y `FRD-030` pendientes SDD) |
-| FRDs con SDD Saneados | 46 | 🟢 Sin violaciones de forma |
+| Cobertura de SDDs | 100% | 🟢 48/48 Cubiertos |
+| FRDs con SDD Saneados | 48 | 🟢 Sin violaciones de forma |
 | SDDs Creados / Ampliados (Fase 3) | 13 | 🟢 Completados |
 | SDDs Corregidos (Fase 2C) | 4 | 🟢 Completados |
 | DSD de Migración Creado | 1 (`DSD_007_01_v3_MIGRATION.md`) | 🟢 Creado |
@@ -313,6 +315,8 @@
 | 2.3 | 2026-10-29 | Registro de interfaces UXD_005 y UXD_006 (Filtros Opción A+C para Inventario e Historial). Actualización de cobertura SDD_005 y SDD_021. Registro de Órdenes de Trabajo WO_010 y WO_011. |
 | 2.4 | 2026-11-08 | Incorporación y validación formal de `FRD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md` bajo `POL-PRIV-01`. |
 | 2.5 | 2026-11-10 | Incorporación y validación formal de `FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md` bajo `POL-PRIV-02`. |
+| 2.6 | 2026-11-11 | Redacción formal de `SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md` bajo PAC-SDD v2.0 (Bloques 0–7, estado 🟠 con deudas D-LEG-01 a D-LEG-07). |
+| 2.7 | 2026-11-11 | Redacción formal de `SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md` bajo PAC-SDD v2.0 (Bloques 0–7, estado 🟠 con deudas D-ARCO-01 a D-ARCO-06). Cobertura SDD 48/48 (100%). |
 
 ---
 

@@ -1,6 +1,6 @@
-# 🗺️ Mapa de Lógica Global (v3.4)
+# 🗺️ Mapa de Lógica Global (v3.6)
 
-> **Módulos documentados:** 48 FRDs (46 con SDD) — Incorporados `FRD-029` y `FRD-030` validados contra `ARQ-002` (`POL-PRIV-01` y `POL-PRIV-02`)
+> **Módulos documentados:** 48 FRDs (48 con SDD — 100% cobertura) — `SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO` y `SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE` aprobados con deuda (`🟠`)
 
 ---
 
@@ -125,7 +125,7 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | Métrica | Valor |
 |---------|-------|
 | Total FRDs Catalogados | 48 |
-| Cobertura de SDDs | 95.8% (46/48 — `FRD-029` y `FRD-030` en Gate 2) |
+| Cobertura de SDDs | 100% (48/48 FRDs cubiertos) |
 | DSDs Individuales en `02_architecture/` | 10 documentos |
 | Documentos de diseño UX/UI (`03_ui_ux_design/`) | 17 |
 | Diccionarios de Datos (`02_architecture/`) | Centralizados (Core) + Modulares |
@@ -151,8 +151,8 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | **Gestión Sesiones** | FRD-013 (v2.1) / SDD-013 (v3.1.0) | 🟢 Validado (PAC-SDD Bloques 0-5 Verificado — Listo para Implementación DSD/UXD) |
 | **Ciclo Contable y Caja** | FRD-017 / SDD-017 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
 | **Cuentas por Pagar (Proveedores)** | FRD-019 / SDD-019 | 🟢 Validado |
-| **Consentimiento Legal Versionado** | FRD-029 | 🟡 SPEC (FRD Validado `POL-PRIV-01` — Pendiente SDD/UXD) |
-| **Derechos del Titular y Eliminación Contable** | FRD-030 | 🟡 SPEC (FRD Validado `POL-PRIV-02` — Pendiente SDD/UXD) |
+| **Consentimiento Legal Versionado** | FRD-029 / SDD-029 | 🟠 Aprobado con Deuda (`D-LEG-01` a `D-LEG-07` — PAC-SDD completo) |
+| **Derechos del Titular y Eliminación Contable** | FRD-030 / SDD-030 | 🟠 Aprobado con Deuda (`D-ARCO-01` a `D-ARCO-06` — PAC-SDD completo) |
 
 > Para el desglose completo de tareas de frontend asociadas a estos módulos, consultar los correspondientes `WO` (Work Orders) en `04_dev_orchestration/`.
 
