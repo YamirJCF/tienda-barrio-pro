@@ -1,7 +1,7 @@
 # 📋 Catálogo Maestro de Documentos — Tienda Barrio Pro
 
-> **Versión:** 2.3  
-> **Fecha:** 2026-10-29  
+> **Versión:** 2.5  
+> **Fecha:** 2026-11-10  
 > **Propósito:** Mapa oficial y único de todos los documentos del proyecto. Sirve como hoja de ruta de implementación y registro de trazabilidad documental.  
 > **Norma:** Todo documento nuevo debe registrarse aquí antes de ser aprobado.
 
@@ -268,6 +268,15 @@
 
 ---
 
+## Módulo 029 — Consentimiento Legal Versionado y Derechos del Titular
+
+| # | Documento | Tipo | Estado | SDD Cobertura | Notas |
+|---|-----------|------|--------|---------------|-------|
+| FRD-029 | [FRD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md](FRD/FRD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md) | FRD | 🟢 | 🔴 SIN SDD | Validado contra `ARQ-002` (`POL-PRIV-01`, `POL-AUD-01`, `POL-AUD-02`, `POL-SEG-03`). Pendiente SDD/UXD (Gate 2). |
+| FRD-030 | [FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md](FRD/FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md) | FRD | 🟢 | 🔴 SIN SDD | Validado contra `ARQ-002` (`POL-PRIV-02`, `POL-PRIV-01`, `POL-AUD-01`, `POL-AUD-02`, `POL-SEG-03`). Pendiente SDD/UXD (Gate 2). |
+
+---
+
 ## Documentos Especiales / Principios Transversales
 
 | # | Documento | Tipo | Estado | Notas |
@@ -280,8 +289,8 @@
 
 | Métrica | Valor | Estado |
 |---------|-------|--------|
-| Total FRDs Catalogados | 46 | 🟢 Alineados |
-| Cobertura de SDDs | 100% | 🟢 46/46 Cubiertos |
+| Total FRDs Catalogados | 48 | 🟢 Alineados |
+| Cobertura de SDDs | 95.8% | 🟡 46/48 Cubiertos (`FRD-029` y `FRD-030` pendientes SDD) |
 | FRDs con SDD Saneados | 46 | 🟢 Sin violaciones de forma |
 | SDDs Creados / Ampliados (Fase 3) | 13 | 🟢 Completados |
 | SDDs Corregidos (Fase 2C) | 4 | 🟢 Completados |
@@ -302,6 +311,8 @@
 | 2.0 | 2026-08-07 | Consolidación total de Fases 1, 2A, 2B, 2C y 3. Cobertura 100% SDD/SPEC completada. |
 | 2.1 | 2026-10-24 | Re-especificación v3.0.0 de SDD_012, SDD_013 y SDD_017 bajo PAC-SDD y PAC-UXD. Registro de documentos derogados en `archive/` y reportes en `VERIFICACION/` y `TECHNICAL_REPORTS/`. |
 | 2.3 | 2026-10-29 | Registro de interfaces UXD_005 y UXD_006 (Filtros Opción A+C para Inventario e Historial). Actualización de cobertura SDD_005 y SDD_021. Registro de Órdenes de Trabajo WO_010 y WO_011. |
+| 2.4 | 2026-11-08 | Incorporación y validación formal de `FRD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md` bajo `POL-PRIV-01`. |
+| 2.5 | 2026-11-10 | Incorporación y validación formal de `FRD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md` bajo `POL-PRIV-02`. |
 
 ---
 

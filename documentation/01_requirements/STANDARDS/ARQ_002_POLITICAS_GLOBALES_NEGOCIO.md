@@ -1,7 +1,7 @@
 # 📐 Estándar ARQ-002: Políticas Globales de Negocio y Parámetros del Sistema
 
-**Versión:** 1.0  
-**Fecha:** 2026-07-31  
+**Versión:** 1.3  
+**Fecha:** 2026-11-10  
 **Autor:** Arquitecto de Producto  
 **Estado:** ✅ Activo
 
@@ -233,6 +233,35 @@ Una Política es una directiva estratégica del negocio que permanece estable au
 
 ---
 
+## Dominio de Privacidad y Cumplimiento Legal
+
+### POL-PRIV-01: Política de Trazabilidad de Consentimiento y Alta de Datos Personales
+
+- **Objetivo:** Garantizar que todo ingreso de datos personales al sistema deje una prueba inmutable en el servidor, adaptando el mecanismo de captura según quién opera la pantalla para no entorpecer la operación de la tienda.
+- **Declaración:**
+  1. **Autoregistro (Dueño de Tienda ante el SaaS):** Requiere aceptación explícita mediante casillas desmarcadas por defecto, vinculadas a la versión vigente de los documentos legales y selladas con la fecha y hora del servidor.
+  2. **Alta en Mostrador (Cliente de Cartera de Fiados):** La acción de presionar el botón de guardado constituye la confirmación del registro (conducta inequívoca al solicitar el crédito), sin exigir casillas ni leyendas adicionales, y estampa automáticamente un registro inmutable con el nombre e identificador del usuario que creó al cliente y la fecha y hora del servidor.
+  3. **Ventas de Contado (Consumidor Final RST):** Están exentas de cualquier captura o traza de datos personales.
+- **Reglas que gobierna:**
+  - FRD-029, Reglas 1 a 16: Consentimiento legal versionado y confirmación de alta en cartera
+  - FRD-030, Regla 5: Confirmación en re-alta de cliente
+- **Consecuencia de violación:** Cuentas de tiendas o registros de clientes creados sin rastro verificable de quién, cuándo y bajo qué versión o acción se incorporaron al sistema.
+
+---
+
+### POL-PRIV-02: Política de Eliminación Protegida y Resguardo Contable Interno
+
+- **Objetivo:** Permitir la eliminación de clientes a solicitud del titular o del Administrador sin permitir jamás la evasión de deudas activas, sin destruir soportes contables históricos y sin exponer complejidad técnica innecesaria en la interfaz.
+- **Declaración:**
+  1. **Protección de Deuda Activa:** Queda estrictamente prohibido eliminar cualquier cliente cuyo saldo pendiente sea mayor a cero (`$0`).
+  2. **Abstracción y Resguardo Silencioso en el Servidor:** Frente al usuario existe una única acción de eliminación y solo se informa la confirmación o negación necesaria. Internamente, si el cliente eliminado tiene movimientos históricos, el servidor conserva en silencio su nombre, cédula y transacciones pasadas como soporte contable obligatorio (limpiando su teléfono y cupo y ocultándolo de toda lista activa); si nunca tuvo movimientos, lo borra definitivamente.
+  3. **Re-alta sin Duplicidad:** Si una cédula archivada contablemente vuelve a registrarse en el futuro, el servidor reutiliza y reactiva en silencio ese mismo tercero único sin exponer su estado interno previo.
+- **Reglas que gobierna:**
+  - FRD-030, Reglas 1 a 8: Eliminación protegida, resguardo contable silencioso y re-alta sin duplicados
+- **Consecuencia de violación:** Evasión de cartera pendiente, pérdida de soportes de ingresos de caja ante auditorías fiscales o creación de terceros duplicados con la misma cédula.
+
+---
+
 # Documentos Complementarios
 
 Las siguientes secciones han sido extraídas a documentos independientes para mantener la separación de responsabilidades:
@@ -270,6 +299,8 @@ Las siguientes secciones han sido extraídas a documentos independientes para ma
 |---------|-------|-------|--------|
 | 1.0 | 2026-07-31 | Arquitecto de Producto | Creación inicial. Extracción de 15 Políticas desde 11 FRDs. |
 | 1.1 | 2026-07-31 | Arquitecto de Producto | POL-FIN-05 renombrada a "Tipo de Transacción". Secciones II y III migradas a ARQ-003 y ARQ-004 respectivamente. |
+| 1.2 | 2026-11-08 | Arquitecto de Producto | Incorporación de POL-PRIV-01 (Trazabilidad de Consentimiento y Alta de Datos Personales) tras validación de FRD-029. |
+| 1.3 | 2026-11-10 | Arquitecto de Producto | Incorporación de POL-PRIV-02 (Eliminación Protegida y Resguardo Contable Interno) tras validación de FRD-030. |
 
 ---
 

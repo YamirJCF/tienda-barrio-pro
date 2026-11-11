@@ -1,6 +1,6 @@
-# 🗺️ Mapa de Lógica Global (v3.2)
+# 🗺️ Mapa de Lógica Global (v3.4)
 
-> **Módulos documentados:** 46 / 46 (100% FRD/SDD) — Triada Offline, Sesiones y Ciclo Contable Re-especificada v3.0.0 y Verificada PAC-SDD / PAC-UXD
+> **Módulos documentados:** 48 FRDs (46 con SDD) — Incorporados `FRD-029` y `FRD-030` validados contra `ARQ-002` (`POL-PRIV-01` y `POL-PRIV-02`)
 
 ---
 
@@ -124,8 +124,8 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 
 | Métrica | Valor |
 |---------|-------|
-| Total FRDs Catalogados | 46 |
-| Cobertura de SDDs | 100% |
+| Total FRDs Catalogados | 48 |
+| Cobertura de SDDs | 95.8% (46/48 — `FRD-029` y `FRD-030` en Gate 2) |
 | DSDs Individuales en `02_architecture/` | 10 documentos |
 | Documentos de diseño UX/UI (`03_ui_ux_design/`) | 17 |
 | Diccionarios de Datos (`02_architecture/`) | Centralizados (Core) + Modulares |
@@ -151,6 +151,8 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | **Gestión Sesiones** | FRD-013 (v2.1) / SDD-013 (v3.1.0) | 🟢 Validado (PAC-SDD Bloques 0-5 Verificado — Listo para Implementación DSD/UXD) |
 | **Ciclo Contable y Caja** | FRD-017 / SDD-017 | 🟢 Validado (v3.0.0, PAC-SDD y PAC-UXD Verificado) |
 | **Cuentas por Pagar (Proveedores)** | FRD-019 / SDD-019 | 🟢 Validado |
+| **Consentimiento Legal Versionado** | FRD-029 | 🟡 SPEC (FRD Validado `POL-PRIV-01` — Pendiente SDD/UXD) |
+| **Derechos del Titular y Eliminación Contable** | FRD-030 | 🟡 SPEC (FRD Validado `POL-PRIV-02` — Pendiente SDD/UXD) |
 
 > Para el desglose completo de tareas de frontend asociadas a estos módulos, consultar los correspondientes `WO` (Work Orders) en `04_dev_orchestration/`.
 
