@@ -47,9 +47,16 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/legal/privacy',
+    alias: ['/legal/terms'],
     name: 'privacy-policy',
     component: () => import('../views/PrivacyPolicyView.vue'),
-    meta: { guest: true, requiresAuth: false },
+    meta: { requiresAuth: false },
+  },
+  {
+    path: '/platform/legal',
+    name: 'platform-legal',
+    component: () => import('../views/PlatformLegalAdminView.vue'),
+    meta: { requiresAuth: false },
   },
   {
     path: '/update-password',

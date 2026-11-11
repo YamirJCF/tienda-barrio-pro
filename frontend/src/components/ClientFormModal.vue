@@ -40,6 +40,7 @@ const formData = ref({
 });
 
 const isSubmitting = ref(false);
+const errorMessage = ref('');
 
 // Computed
 const isEdit = computed(() => !!props.clientId);
@@ -57,6 +58,7 @@ const resetForm = () => {
     phone: '',
     creditLimit: '',
   };
+  errorMessage.value = '';
 };
 
 const close = () => {
@@ -65,7 +67,20 @@ const close = () => {
 };
 
 const save = async () => {
-  if (!isValid.value) return;
+  if (!isValid.value || isSubmitting.value) return;
+  errorMessage.value = '';
+
+  if (formData.value.name.trim().length < 3) {
+    errorMessage.value = 'El nombre completo debe tener al menos 3 caracteres.';
+    showError(errorMessage.value);
+    return;
+  }
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    errorMessage.value = 'Sin conexión a internet. Registrar o editar clientes requiere conexión en línea.';
+    showError(errorMessage.value);
+    return;
+  }
 
   isSubmitting.value = true;
   try {
@@ -110,10 +125,13 @@ const save = async () => {
       emit('saved', client, isEdit.value ? 'update' : 'create');
       close();
     } else {
-      showError('Error al guardar el cliente');
+      errorMessage.value = 'No se recibió confirmación del servidor al guardar el cliente.';
+      showError(errorMessage.value);
     }
-  } catch (err) {
-    showError('Error inesperado al guardar');
+  } catch (err: any) {
+    const msg = err?.message || 'Error inesperado al guardar';
+    errorMessage.value = msg;
+    showError(msg);
   } finally {
     isSubmitting.value = false;
   }
@@ -272,6 +290,14 @@ watch(
                 </div>
               </div>
               <p class="text-xs text-gray-500 ml-1">Límite de crédito permitido para fiar.</p>
+            </div>
+
+            <div
+              v-if="errorMessage"
+              role="alert"
+              class="p-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-xs sm:text-sm text-red-700 dark:text-red-200 font-medium"
+            >
+              {{ errorMessage }}
             </div>
 
             <div class="h-4"></div>

@@ -3,6 +3,11 @@ import { ref, computed } from 'vue';
 import { logger } from '../utils/logger';
 import { getStorageKey } from '../utils/storage';
 import { authRepository, type RegisterResponse, type SessionVerificationResult } from '../data/repositories/authRepository';
+import {
+  legalRepository,
+  type ActiveLegalDocument,
+  type LegalComplianceStatus,
+} from '../data/repositories/legalRepository';
 import { useNotificationsStore } from './notificationsStore';
 import { requireSupabase } from '../data/supabaseClient';
 
@@ -154,6 +159,18 @@ export const useAuthStore = defineStore(
     const stores = ref<StoreAccount[]>([]);
     const currentUser = ref<CurrentUser | null>(null);
     const isAuthenticated = ref(false);
+    const lastLoginError = ref<string | null>(null);
+
+    // SDD-029: Estado de cumplimiento legal en RAM (siempre verificado con servidor, nunca persistido)
+    const legalComplianceStatus = ref<LegalComplianceStatus | null>(null);
+    const legalPendingMajorDocs = ref<ActiveLegalDocument[]>([]);
+    const legalPendingMinorNotices = ref<ActiveLegalDocument[]>([]);
+    const legalSupportChannel = ref<{ contact: string; message: string } | null>(null);
+    const legalHasCheckedThisSession = ref(false);
+    const legalCheckError = ref<string | null>(null);
+    const isCheckingLegal = ref(false);
+    const isAcceptingLegal = ref(false);
+    const minorNoticeDismissed = ref(false);
 
     // Crypto State (RAM ONLY - Never persisted to localStorage)
     const sessionCryptoKey = ref<CryptoKey | null>(null);
@@ -249,13 +266,21 @@ export const useAuthStore = defineStore(
       ownerName: string;
       email: string;
       password: string;
+      acceptedTermsVersionId: string;
+      acceptedPrivacyVersionId: string;
+      originChannel?: string;
+      clientUserAgent?: string;
     }): Promise<RegisterResponse> => {
 
       const response = await authRepository.registerStore({
         storeName: data.storeName,
         ownerName: data.ownerName,
         email: data.email,
-        password: data.password
+        password: data.password,
+        acceptedTermsVersionId: data.acceptedTermsVersionId,
+        acceptedPrivacyVersionId: data.acceptedPrivacyVersionId,
+        originChannel: data.originChannel,
+        clientUserAgent: data.clientUserAgent,
       });
 
       if (response.success && response.user) {
@@ -281,6 +306,7 @@ export const useAuthStore = defineStore(
     };
 
     const login = async (email: string, password: string): Promise<boolean> => {
+      lastLoginError.value = null;
       try {
         const response = await authRepository.loginStore(email, password);
 
@@ -311,11 +337,15 @@ export const useAuthStore = defineStore(
             }
           }
 
+          await checkLegalCompliance(response.employee.storeId);
+
           return true;
         }
+        lastLoginError.value = response.error || null;
         return false;
-      } catch (error) {
+      } catch (error: any) {
         console.error('Login Store Error', error);
+        lastLoginError.value = error?.message || null;
         return false;
       }
     };
@@ -375,6 +405,8 @@ export const useAuthStore = defineStore(
               stores.value.push(storeData);
             }
           }
+
+          await checkLegalCompliance(response.employee.storeId);
 
           logger.log('[Auth Store] ✅ Session initialized successfully');
           return true;
@@ -522,6 +554,7 @@ export const useAuthStore = defineStore(
       currentUser.value = null;
       isAuthenticated.value = false;
       clearCryptoKey();
+      resetLegalState();
 
       dailyAccessState.value = {
         status: 'expired',
@@ -699,6 +732,82 @@ export const useAuthStore = defineStore(
 
 
 
+    const resetLegalState = () => {
+      legalComplianceStatus.value = null;
+      legalPendingMajorDocs.value = [];
+      legalPendingMinorNotices.value = [];
+      legalSupportChannel.value = null;
+      legalHasCheckedThisSession.value = false;
+      legalCheckError.value = null;
+      isCheckingLegal.value = false;
+      isAcceptingLegal.value = false;
+      minorNoticeDismissed.value = false;
+    };
+
+    const isLegalBlocked = computed(() => {
+      return (
+        isAuthenticated.value &&
+        isAdmin.value &&
+        legalComplianceStatus.value === 'requires_major_acceptance'
+      );
+    });
+
+    const checkLegalCompliance = async (storeIdOverride?: string) => {
+      const targetStoreId = storeIdOverride || currentUser.value?.storeId;
+      if (!targetStoreId || !isAdmin.value) {
+        return null;
+      }
+
+      isCheckingLegal.value = true;
+      legalCheckError.value = null;
+      try {
+        const status = await legalRepository.checkStoreLegalStatus(targetStoreId);
+        legalComplianceStatus.value = status.compliance_status;
+        legalPendingMajorDocs.value = status.pending_major_documents || [];
+        legalPendingMinorNotices.value = status.pending_minor_notices || [];
+        legalSupportChannel.value = status.support_channel || null;
+        legalHasCheckedThisSession.value = true;
+        if (status.compliance_status !== 'minor_notice_available') {
+          minorNoticeDismissed.value = false;
+        }
+        return status;
+      } catch (err: any) {
+        logger.error('[Auth Store] Error verificando cumplimiento legal:', err);
+        legalCheckError.value =
+          err?.message || 'No se pudo verificar el estado de documentos legales en el servidor.';
+        return null;
+      } finally {
+        isCheckingLegal.value = false;
+      }
+    };
+
+    const acceptPendingLegalVersions = async (
+      versionIds: string[],
+      originChannel: string = 'web_login_gate'
+    ) => {
+      const targetStoreId = currentUser.value?.storeId;
+      if (!targetStoreId) {
+        throw new Error('No se identificó la tienda activa para registrar la aceptación.');
+      }
+
+      isAcceptingLegal.value = true;
+      try {
+        await legalRepository.acceptLegalVersions(targetStoreId, versionIds, originChannel);
+        return await checkLegalCompliance(targetStoreId);
+      } catch (err: any) {
+        if (err?.code === 'LEGAL_VERSION_SUPERSEDED') {
+          await checkLegalCompliance(targetStoreId);
+        }
+        throw err;
+      } finally {
+        isAcceptingLegal.value = false;
+      }
+    };
+
+    const dismissMinorNotice = () => {
+      minorNoticeDismissed.value = true;
+    };
+
     // Helper to manually set status (used by Login flows)
     const setDeviceStatus = (status: 'pending' | 'approved' | 'rejected' | 'expired') => {
       dailyAccessState.value.status = status;
@@ -712,6 +821,7 @@ export const useAuthStore = defineStore(
       currentUser.value = null;
       isAuthenticated.value = false;
       stores.value = [];
+      resetLegalState();
       localStorage.clear();
       logger.log('✅ System cleared (No Demo restored)');
     };
@@ -735,6 +845,7 @@ export const useAuthStore = defineStore(
       stores,
       currentUser,
       isAuthenticated,
+      lastLoginError,
       dailyAccessState, // Exposed for Persistence
       // Accessors
       dailyAccessStatus, // Replaces direct exposure of deviceApproved
@@ -784,6 +895,21 @@ export const useAuthStore = defineStore(
       verifySessionWithServer,
       requestDailyPass,
       setDeviceStatus,
+      // SDD-029: Legal Compliance
+      legalComplianceStatus,
+      legalPendingMajorDocs,
+      legalPendingMinorNotices,
+      legalSupportChannel,
+      legalHasCheckedThisSession,
+      legalCheckError,
+      isCheckingLegal,
+      isAcceptingLegal,
+      minorNoticeDismissed,
+      isLegalBlocked,
+      checkLegalCompliance,
+      acceptPendingLegalVersions,
+      dismissMinorNotice,
+      resetLegalState,
     };
   },
   {

@@ -80,13 +80,17 @@ function getTodayBogota(): string {
 
 export const authRepository = {
     /**
-     * Registra una nueva tienda (Admin) usando Supabase Auth Nativo
+     * Registra una nueva tienda (Admin) usando Supabase Auth Nativo con consentimiento legal versionado (SDD-029)
      */
     async registerStore(data: {
         storeName: string;
         ownerName: string;
         email: string;
         password: string;
+        acceptedTermsVersionId: string;
+        acceptedPrivacyVersionId: string;
+        originChannel?: string;
+        clientUserAgent?: string;
     }): Promise<RegisterResponse> {
         try {
             const { data: authData, error } = await supabase.auth.signUp({
@@ -96,6 +100,12 @@ export const authRepository = {
                     data: {
                         store_name: data.storeName,
                         owner_name: data.ownerName,
+                        accepted_terms_version_id: data.acceptedTermsVersionId,
+                        accepted_privacy_version_id: data.acceptedPrivacyVersionId,
+                        origin_channel: data.originChannel || 'web_register',
+                        client_user_agent:
+                            data.clientUserAgent ??
+                            (typeof navigator !== 'undefined' ? navigator.userAgent : undefined),
                     },
                     emailRedirectTo: `${SITE_URL}/` // Redirect to root so Hash Router picks up #access_token
                 }
@@ -103,9 +113,16 @@ export const authRepository = {
 
             if (error) {
                 logger.error('[AuthRepository] Signup Error:', error);
+                const msg = error.message || '';
+                let mappedCode = error.code;
+                if (msg.includes('LEGAL_VERSION_SUPERSEDED')) {
+                    mappedCode = 'LEGAL_VERSION_SUPERSEDED';
+                } else if (msg.includes('LEGAL_ACCEPTANCE_REQUIRED')) {
+                    mappedCode = 'LEGAL_ACCEPTANCE_REQUIRED';
+                }
                 return {
                     success: false,
-                    error_code: error.code, // e.g. 'user_already_exists'
+                    error_code: mappedCode,
                     error: error.message
                 };
             }

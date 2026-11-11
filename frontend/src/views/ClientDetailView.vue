@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useClientsStore } from '../stores/clients';
 import { useAuthStore } from '../stores/auth';
 import { type ClientTransaction } from '../types';
+import type { ClientStatement, ClientStatementMovement } from '../data/repositories/clientRepository';
 import { Decimal } from 'decimal.js';
 import BaseModal from '../components/ui/BaseModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
@@ -20,7 +21,9 @@ import {
   ChevronLeft,
   Pencil,
   Smartphone,
-  CreditCard
+  CreditCard,
+  Download,
+  RefreshCw
 } from 'lucide-vue-next';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
@@ -31,7 +34,7 @@ const clientsStore = useClientsStore();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.isAdmin);
 const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
-const { showWarning, showSuccess } = useNotifications();
+const { showWarning, showSuccess, showError } = useNotifications();
 
 // State
 const paymentAmount = ref('');
@@ -41,17 +44,42 @@ const showOptionsMenu = ref(false);
 const showDeleteConfirm = ref(false);
 const showDebtAlert = ref(false);
 const showEditModal = ref(false);
+const isDeleting = ref(false);
+const isLoadingStatement = ref(false);
+const statementError = ref('');
+const statementData = ref<ClientStatement | null>(null);
 
 // Get client ID from route
 const clientId = computed(() => String(route.params.id));
 
 const client = computed(() => clientsStore.getClientById(clientId.value));
 
-const transactions = ref<ClientTransaction[]>([]);
+const transactions = ref<(ClientTransaction | ClientStatementMovement)[]>([]);
+
+const loadStatement = async (id: string) => {
+  if (!id) return;
+  isLoadingStatement.value = true;
+  statementError.value = '';
+  try {
+    if (typeof clientsStore.getClientStatement === 'function') {
+      const stmt = await clientsStore.getClientStatement(id, 200, 0);
+      statementData.value = stmt;
+      transactions.value = stmt.movements;
+    } else {
+      statementData.value = null;
+      transactions.value = await clientsStore.getClientTransactions(id);
+    }
+  } catch (err: any) {
+    statementError.value =
+      err?.message || 'No se pudo consultar el estado de cuenta en el servidor.';
+  } finally {
+    isLoadingStatement.value = false;
+  }
+};
 
 watch(clientId, async (newId) => {
     if (newId) {
-        transactions.value = await clientsStore.getClientTransactions(newId);
+        await loadStatement(newId);
     }
 }, { immediate: true });
 
@@ -139,10 +167,72 @@ const confirmDelete = () => {
   showDeleteConfirm.value = true;
 };
 
-const deleteClient = () => {
-  clientsStore.deleteClient(clientId.value);
-  showDeleteConfirm.value = false;
-  router.push('/clients');
+const deleteClient = async () => {
+  if (isDeleting.value) return;
+  isDeleting.value = true;
+  try {
+    const result = await clientsStore.deleteClient(clientId.value);
+    if (!result?.success) {
+      showDeleteConfirm.value = false;
+      if (result?.code === 'CLIENT_HAS_DEBT' || result?.code === 'DEBT_PENDING') {
+        showDebtAlert.value = true;
+      } else {
+        showError(result?.error || 'No se pudo eliminar el cliente.');
+      }
+      return;
+    }
+    showDeleteConfirm.value = false;
+    showSuccess('Cliente eliminado correctamente');
+    router.push('/clients');
+  } catch (err: any) {
+    showDeleteConfirm.value = false;
+    showError(err?.message || 'Error inesperado al eliminar el cliente.');
+  } finally {
+    isDeleting.value = false;
+  }
+};
+
+const exportStatementCsv = () => {
+  if (!client.value) return;
+  const activeClient = statementData.value?.client || client.value;
+  const rows = filteredTransactions.value;
+  const escapeCsv = (val: string | number) => `"${String(val).replace(/"/g, '""')}"`;
+
+  const lines: string[] = [
+    ['Estado de Cuenta - Cliente Fiado', activeClient.name].map(escapeCsv).join(','),
+    ['Documento / C.C.', activeClient.cc].map(escapeCsv).join(','),
+    ['Saldo Pendiente', activeClient.totalDebt.toString()].map(escapeCsv).join(','),
+    ['Cupo Autorizado', (activeClient.creditLimit || new Decimal(0)).toString()].map(escapeCsv).join(','),
+    ['Generado (Servidor)', statementData.value?.generatedAt || new Date().toISOString()].map(escapeCsv).join(','),
+    '',
+    ['Fecha', 'Tipo', 'Detalle', 'Monto', 'Saldo Anterior', 'Saldo Nuevo'].map(escapeCsv).join(','),
+  ];
+
+  for (const tx of rows as any[]) {
+    lines.push(
+      [
+        tx.date,
+        tx.type === 'payment' ? 'Pago / Ajuste' : 'Compra Fiada',
+        tx.description,
+        tx.amount instanceof Decimal ? tx.amount.toString() : String(tx.amount),
+        tx.previousBalance instanceof Decimal ? tx.previousBalance.toString() : '',
+        tx.newBalance instanceof Decimal ? tx.newBalance.toString() : '',
+      ]
+        .map(escapeCsv)
+        .join(',')
+    );
+  }
+
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `estado-cuenta-${activeClient.cc}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  showSuccess('Estado de cuenta exportado');
 };
 
 const registerPayment = async () => {
@@ -168,6 +258,7 @@ const registerPayment = async () => {
     paymentAmount.value = '';
     paymentMethod.value = 'efectivo';
     showPaymentModal.value = false;
+    await loadStatement(clientId.value);
   } catch (err: any) {
     showWarning(err.message || 'Error al registrar el abono');
   }
@@ -285,12 +376,47 @@ const registerPayment = async () => {
 
     <!-- Main Content: Transaction History -->
     <main class="relative z-0 px-4 pt-6 pb-32 flex flex-col gap-4">
-      <div class="flex items-center justify-between px-2">
+      <div class="flex items-center justify-between px-2 gap-2">
         <h3 class="text-slate-800 dark:text-white text-lg font-bold">Historial de Transacciones</h3>
+        <button
+          v-if="client"
+          type="button"
+          @click="exportStatementCsv"
+          :disabled="isLoadingStatement"
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
+        >
+          <Download :size="14" />
+          Exportar CSV
+        </button>
+      </div>
+
+      <!-- Loading Skeleton -->
+      <div v-if="isLoadingStatement" class="space-y-3 px-2 animate-pulse">
+        <div class="h-16 rounded-xl bg-slate-200 dark:bg-slate-800"></div>
+        <div class="h-16 rounded-xl bg-slate-200 dark:bg-slate-800"></div>
+      </div>
+
+      <!-- Statement Error (No Silent Fallback) -->
+      <div
+        v-else-if="statementError"
+        role="alert"
+        class="mx-2 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 space-y-2.5"
+      >
+        <p class="text-xs sm:text-sm text-red-700 dark:text-red-200 font-medium">
+          {{ statementError }}
+        </p>
+        <button
+          type="button"
+          @click="loadStatement(clientId)"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 active:scale-95"
+        >
+          <RefreshCw :size="13" />
+          Reintentar
+        </button>
       </div>
 
       <!-- Filters -->
-      <div class="flex gap-2 px-2 overflow-x-auto no-scrollbar">
+      <div v-else class="flex gap-2 px-2 overflow-x-auto no-scrollbar">
         <button
           v-for="preset in [
             { label: 'Todos', value: 'all' },
@@ -310,7 +436,7 @@ const registerPayment = async () => {
       </div>
 
       <!-- Empty State -->
-      <div v-if="filteredTransactions.length === 0" class="flex flex-col items-center py-12 text-center">
+      <div v-if="!isLoadingStatement && !statementError && filteredTransactions.length === 0" class="flex flex-col items-center py-12 text-center">
         <div
           class="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mb-4"
         >
@@ -320,7 +446,7 @@ const registerPayment = async () => {
       </div>
 
       <!-- Transaction List -->
-      <div v-else class="flex flex-col gap-3">
+      <div v-else-if="!isLoadingStatement && !statementError" class="flex flex-col gap-3">
         <article
           v-for="tx in filteredTransactions"
           :key="tx.id"
@@ -456,7 +582,7 @@ const registerPayment = async () => {
               <AlertTriangle :size="28" class="text-red-600" />
             </div>
             <p class="text-slate-500 dark:text-slate-400 text-sm mb-2">
-              Esta acción eliminará al cliente y todo su historial de transacciones.
+              Esta acción retirará al cliente de la cartera activa de tu tienda.
             </p>
             <p class="text-red-500 font-bold text-sm">No se puede deshacer.</p>
         </div>
@@ -467,6 +593,7 @@ const registerPayment = async () => {
                     @click="showDeleteConfirm = false"
                     variant="secondary"
                     class="flex-1"
+                    :disabled="isDeleting"
                 >
                     Cancelar
                 </BaseButton>
@@ -474,9 +601,11 @@ const registerPayment = async () => {
                     @click="deleteClient"
                     variant="danger"
                     class="flex-1"
+                    :loading="isDeleting"
+                    :disabled="isDeleting"
                 >
                     <Trash2 :size="20" class="mr-2" />
-                    Eliminar
+                    {{ isDeleting ? 'Eliminando...' : 'Eliminar' }}
                 </BaseButton>
             </div>
         </template>

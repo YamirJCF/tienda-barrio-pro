@@ -179,6 +179,8 @@ describe('ClientDetailView.vue', () => {
       storeId: 'store-uuid-1'
     });
     
+    mockDeleteClient.mockResolvedValue({ success: true });
+
     const wrapper = createWrapper();
     
     const optionsBtn = wrapper.find('button[aria-label="Opciones"]');
@@ -193,6 +195,8 @@ describe('ClientDetailView.vue', () => {
     // Click confirm delete
     const confirmBtn = wrapper.findAll('button').find(b => b.text().includes('Eliminar'));
     await confirmBtn!.trigger('click');
+    await vi.dynamicImportSettled();
+    await wrapper.vm.$nextTick();
     
     expect(mockDeleteClient).toHaveBeenCalledWith('cli-001');
     expect(mockPush).toHaveBeenCalledWith('/clients');

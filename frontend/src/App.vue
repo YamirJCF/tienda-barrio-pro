@@ -13,6 +13,7 @@ import { useCriticalAlerts } from './composables/useCriticalAlerts';
 import OfflineBanner from './components/common/OfflineBanner.vue';
 import GlobalNetworkHandler from './components/common/GlobalNetworkHandler.vue';
 import PinUnlockModal from './components/PinUnlockModal.vue';
+import LegalComplianceGate from './components/legal/LegalComplianceGate.vue';
 
 
 // ============================================
@@ -80,9 +81,12 @@ const handleAdminResync = () => {
 onMounted(() => {
   window.addEventListener('sync:auth_required', handleSyncAuthRequired);
 
-  // Subscribe admin to daily_passes Realtime channel
+  // Subscribe admin to daily_passes Realtime channel and verify legal status at startup
   if (authStore.isAdmin && authStore.currentStore?.id) {
     devicesStore.subscribeToDailyPasses(authStore.currentStore.id);
+    if (!authStore.legalHasCheckedThisSession) {
+      authStore.checkLegalCompliance(authStore.currentStore.id);
+    }
   }
 
   // Re-sync when tab regains visibility or network comes back online
@@ -180,6 +184,9 @@ const resetApp = () => {
     <!-- Global Network Handler - Always active -->
     <GlobalNetworkHandler />
     <OfflineBanner />
+
+    <!-- SDD-029: Cumplimiento Legal Versionado (Gate mayor o aviso menor no bloqueante) -->
+    <LegalComplianceGate />
 
     <!-- OT-6: Blocking access request modal — only active for admins -->
     <GlobalAccessRequestModal v-if="authStore.isAdmin" />

@@ -1,20 +1,29 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { logger } from '../utils/logger';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
-import { 
-  ArrowLeft, 
-  CheckCircle2, 
-  CircleSlash, 
-  Mail, 
-  Lock, 
-  Store, 
-  User, 
-  Eye, 
-  EyeOff
+import BaseModal from '@/components/ui/BaseModal.vue';
+import {
+  legalRepository,
+  type ActiveLegalCatalog,
+  type ActiveLegalDocument,
+} from '../data/repositories/legalRepository';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CircleSlash,
+  Mail,
+  Lock,
+  Store,
+  User,
+  Eye,
+  EyeOff,
+  FileText,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -31,7 +40,32 @@ const confirmPassword = ref('');
 // SPEC-006: PIN eliminado del registro, se configura en AdminHub
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
-const acceptedTerms = ref(false); // Compliance Ley 1581
+
+// SDD-029: Doble aceptación separada, siempre desmarcada por defecto (RN-01, RN-02)
+const acceptedTerms = ref(false);
+const acceptedPrivacy = ref(false);
+const legalCatalog = ref<ActiveLegalCatalog | null>(null);
+const isLoadingLegal = ref(true);
+const legalLoadError = ref('');
+const previewDoc = ref<ActiveLegalDocument | null>(null);
+
+const loadLegalDocuments = async () => {
+  isLoadingLegal.value = true;
+  legalLoadError.value = '';
+  try {
+    legalCatalog.value = await legalRepository.getActiveDocuments();
+  } catch (err: any) {
+    legalCatalog.value = null;
+    legalLoadError.value =
+      err?.message || 'No se pudieron cargar los documentos legales vigentes.';
+  } finally {
+    isLoadingLegal.value = false;
+  }
+};
+
+onMounted(() => {
+  loadLegalDocuments();
+});
 
 // ============================================
 // UI STATE
@@ -93,17 +127,20 @@ const isConfirmPasswordValid = computed(
   () => confirmPassword.value.length >= 6 && confirmPassword.value === password.value,
 );
 // SPEC-006: PIN ya no se valida en registro
-const isTermsAccepted = computed(() => acceptedTerms.value === true);
+const isLegalAccepted = computed(
+  () => acceptedTerms.value === true && acceptedPrivacy.value === true && legalCatalog.value !== null
+);
 
-// Botón habilitado solo si todo es válido y no está cargando
+// Botón habilitado solo si todo es válido, ambas casillas marcadas y no está cargando
 const canSubmit = computed(() => {
   return (
     isStoreNameValid.value &&
     isOwnerNameValid.value &&
     isEmailValid.value &&
     isPasswordValid.value &&
-    isConfirmPasswordValid.value && // T-004: Agregado
-    isTermsAccepted.value && // Compliance Ley 1581
+    isConfirmPasswordValid.value &&
+    isLegalAccepted.value &&
+    !isLoadingLegal.value &&
     !isLoading.value
   );
 });
@@ -146,67 +183,83 @@ const handleSubmit = async () => {
   errorMessage.value = '';
 
   await executeRegister(async () => {
-    // Espera artificial para:
-    // 1. Dar feedback visual (spinner/loading state)
-    // 2. Asegurar que localStorage complete la escritura antes de navegar
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    try {
+      if (!legalCatalog.value) {
+        throw new Error('Los documentos legales vigentes aún no han cargado.');
+      }
 
-    // Intentar registro en el store
-    // Intentar registro en el store
-    const result = await authStore.registerStore({
-      storeName: storeName.value.trim(),
-      ownerName: ownerName.value.trim(),
-      email: email.value.trim().toLowerCase(),
-      password: password.value,
-    });
+      const result = await authStore.registerStore({
+        storeName: storeName.value.trim(),
+        ownerName: ownerName.value.trim(),
+        email: email.value.trim().toLowerCase(),
+        password: password.value,
+        acceptedTermsVersionId: legalCatalog.value.terms_of_service.version_id,
+        acceptedPrivacyVersionId: legalCatalog.value.privacy_policy.version_id,
+        originChannel: 'web_register',
+        clientUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+      });
 
-    const cleanEmail = email.value.trim().toLowerCase();
+      const cleanEmail = email.value.trim().toLowerCase();
 
-    if (!result.success) {
-       // Mensajes amigables traducidos según Regla 2.2 de UX
-       if (result.error?.includes('already registered') || result.error_code === 'user_already_exists') {
-         throw new Error('Este correo ya está registrado. Por favor, inicia sesión.');
-       }
-       if (result.error?.includes('rate limit') || result.error_code === 'over_email_send_rate_limit') {
-         throw new Error('Límite de envíos alcanzado por seguridad. Por favor, espera unos minutos antes de intentar de nuevo.');
-       }
-       if (result.error?.includes('invalid') || result.error_code === 'email_address_invalid') {
-         throw new Error('La dirección de correo electrónico ingresada no es válida.');
-       }
-       // Error general devuelto por Supabase/Repo
-       throw new Error(result.error || 'Autenticación fallida.');
+      if (!result.success) {
+        if (
+          result.error_code === 'LEGAL_VERSION_SUPERSEDED' ||
+          result.error_code === 'LEGAL_ACCEPTANCE_REQUIRED'
+        ) {
+          acceptedTerms.value = false;
+          acceptedPrivacy.value = false;
+          await loadLegalDocuments();
+          throw new Error(
+            'La versión vigente de los documentos legales fue actualizada. Revísala nuevamente y vuelve a marcar tus aceptaciones.'
+          );
+        }
+        // Mensajes amigables traducidos según Regla 2.2 de UX
+        if (result.error?.includes('already registered') || result.error_code === 'user_already_exists') {
+          throw new Error('Este correo ya está registrado. Por favor, inicia sesión.');
+        }
+        if (result.error?.includes('rate limit') || result.error_code === 'over_email_send_rate_limit') {
+          throw new Error('Límite de envíos alcanzado por seguridad. Por favor, espera unos minutos antes de intentar de nuevo.');
+        }
+        if (result.error?.includes('invalid') || result.error_code === 'email_address_invalid') {
+          throw new Error('La dirección de correo electrónico ingresada no es válida.');
+        }
+        // Error general devuelto por Supabase/Repo
+        throw new Error(result.error || 'No fue posible registrar la cuenta.');
+      }
+
+      // Flujo Obligatorio: Toda cuenta nueva debe confirmar correo y pasar por la Sala de Espera
+      logger.log('✅ Tienda registrada exitosamente (Esperando confirmación obligatoria)');
+      sessionStorage.setItem('pending_verification_email', cleanEmail);
+      // Redirección a sala de espera WO-008 pasando el email
+      router.push({
+        path: '/auth/waiting-verification',
+        query: { email: cleanEmail }
+      });
+    } catch (err: any) {
+      errorMessage.value = err?.message || 'Error al registrar la cuenta.';
+      throw err;
     }
-
-    // Flujo Obligatorio: Toda cuenta nueva debe confirmar correo y pasar por la Sala de Espera
-    logger.log('✅ Tienda registrada exitosamente (Esperando confirmación obligatoria)');
-    sessionStorage.setItem('pending_verification_email', cleanEmail);
-    // Redirección a sala de espera WO-008 pasando el email
-    router.push({
-      path: '/auth/waiting-verification',
-      query: { email: cleanEmail }
-    });
-
   }, {
     errorMessage: 'Error del sistema. Por favor, intenta nuevamente.',
     successMessage: 'Tienda registrada correctamente',
-    checkConnectivity: true // Registration needs syncing ideally, or at least feedback
+    checkConnectivity: true
   });
 };
 </script>
 
 <template>
   <div
-    class="bg-[#f8fcfb] dark:bg-[#0f231d] min-h-screen text-[#0d1c17] dark:text-white font-display"
+    class="bg-background-light dark:bg-background-dark min-h-screen text-slate-900 dark:text-white font-display"
   >
     <!-- Header -->
     <header
-      class="sticky top-0 z-50 bg-[#f8fcfb]/95 dark:bg-[#0f231d]/95 backdrop-blur-sm border-b border-[#cee9e0]/30"
+      class="sticky top-0 z-50 bg-surface-light/95 dark:bg-surface-dark/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700"
     >
       <div class="flex items-center px-4 h-16 max-w-lg mx-auto">
         <button
           @click="goBack"
           aria-label="Volver"
-          class="flex items-center justify-center w-10 h-10 -ml-2 rounded-full active:bg-gray-100 dark:active:bg-white/10 text-[#0d1c17] dark:text-white transition-colors"
+          class="flex items-center justify-center w-10 h-10 -ml-2 rounded-full active:bg-slate-100 dark:active:bg-white/10 text-slate-900 dark:text-white transition-colors"
         >
           <ArrowLeft :size="24" :stroke-width="1.5" />
         </button>
@@ -403,29 +456,101 @@ const handleSubmit = async () => {
         </div>
       </section>
 
-      <!-- Legal Compliance Section -->
-      <section class="px-5 mt-4">
-          <div class="flex items-start gap-3 p-3 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg border border-emerald-100 dark:border-white/5">
-              <div class="flex items-center h-5">
-                <input
-                  id="terms"
-                  v-model="acceptedTerms"
-                  type="checkbox"
-                  class="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 bg-white"
-                />
-              </div>
-              <div class="ml-1 text-sm">
-                <label for="terms" class="font-medium text-gray-700 dark:text-gray-300">
-                  Acepto la <router-link to="/legal/privacy" target="_blank" class="text-emerald-600 hover:underline">Política de Datos</router-link>
-                </label>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012.
-                </p>
-              </div>
+      <!-- Legal Compliance Section (SDD-029: Doble casilla separada sin premarcado) -->
+      <section class="px-5 mt-6 space-y-3" aria-label="Autorizaciones legales obligatorias">
+        <!-- Skeleton mientras carga catálogo -->
+        <div
+          v-if="isLoadingLegal"
+          class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark space-y-3 animate-pulse"
+        >
+          <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+          <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-2/3"></div>
+        </div>
+
+        <!-- Error de carga legal (bloqueante, sin fallo silencioso) -->
+        <div
+          v-else-if="legalLoadError"
+          role="alert"
+          class="p-4 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 space-y-2.5"
+        >
+          <div class="flex items-start gap-2.5 text-sm text-red-800 dark:text-red-200">
+            <AlertCircle :size="18" class="shrink-0 mt-0.5" />
+            <span>{{ legalLoadError }}</span>
           </div>
+          <button
+            type="button"
+            @click="loadLegalDocuments"
+            class="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold active:scale-95 transition-all"
+          >
+            <RefreshCw :size="14" />
+            Reintentar carga legal
+          </button>
+        </div>
+
+        <!-- Casillas obligatorias v1/vN -->
+        <div v-else-if="legalCatalog" class="space-y-2.5">
+          <!-- Casilla 1: Términos y Condiciones -->
+          <div class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark">
+            <input
+              id="accept-terms"
+              v-model="acceptedTerms"
+              type="checkbox"
+              class="mt-0.5 w-5 h-5 text-primary border-slate-300 rounded focus:ring-primary bg-white shrink-0"
+            />
+            <div class="flex-1 text-sm leading-snug">
+              <label for="accept-terms" class="font-medium text-slate-800 dark:text-slate-100 cursor-pointer">
+                Acepto los
+                <button
+                  type="button"
+                  @click="previewDoc = legalCatalog.terms_of_service"
+                  class="text-primary font-semibold underline hover:text-primary-dark ml-0.5"
+                >
+                  Términos y Condiciones
+                </button>
+                <span class="tabular-money text-xs text-slate-500 dark:text-slate-400 ml-1.5">
+                  (v{{ legalCatalog.terms_of_service.version_code }})
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Casilla 2: Política de Datos Personales -->
+          <div class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark">
+            <input
+              id="accept-privacy"
+              v-model="acceptedPrivacy"
+              type="checkbox"
+              class="mt-0.5 w-5 h-5 text-primary border-slate-300 rounded focus:ring-primary bg-white shrink-0"
+            />
+            <div class="flex-1 text-sm leading-snug">
+              <label for="accept-privacy" class="font-medium text-slate-800 dark:text-slate-100 cursor-pointer">
+                Autorizo la
+                <button
+                  type="button"
+                  @click="previewDoc = legalCatalog.privacy_policy"
+                  class="text-primary font-semibold underline hover:text-primary-dark ml-0.5"
+                >
+                  Política de Tratamiento de Datos Personales
+                </button>
+                <span class="tabular-money text-xs text-slate-500 dark:text-slate-400 ml-1.5">
+                  (v{{ legalCatalog.privacy_policy.version_code }})
+                </span>
+              </label>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Autorización libre, previa y expresa conforme a la Ley 1581 de 2012.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <!-- SPEC-006: Sección de PIN eliminada - se configura en AdminHub después del registro -->
+      <!-- Inline error banner (Regla 3: nunca fallos silenciosos) -->
+      <div v-if="errorMessage" role="alert" class="px-5 mt-4">
+        <div class="p-3.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-200 flex items-start gap-2">
+          <AlertCircle :size="18" class="shrink-0 mt-0.5" />
+          <span>{{ errorMessage }}</span>
+        </div>
+      </div>
 
       <!-- Submit Button -->
       <div class="w-full p-4 mt-4 max-w-lg mx-auto">
@@ -435,17 +560,43 @@ const handleSubmit = async () => {
           :loading="isLoading"
           size="lg"
           variant="primary"
-          class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30"
+          class="w-full h-14 bg-primary hover:bg-primary-dark text-white"
         >
           <span>Abrir mi Tienda</span>
           <Store :size="20" class="ml-2" />
         </BaseButton>
-        <p class="text-xs text-center text-[#489d82] mt-3">
-          Al crear la cuenta aceptas los
-          <a class="underline hover:text-emerald-600" href="#">términos de servicio</a>.
-        </p>
       </div>
     </main>
+
+    <!-- Lector completo sin salir del formulario (RN-03) -->
+    <BaseModal
+      :modelValue="Boolean(previewDoc)"
+      :title="previewDoc?.document_type === 'terms_of_service' ? 'Términos y Condiciones' : 'Política de Tratamiento de Datos'"
+      :showCloseButton="true"
+      @update:modelValue="(v) => { if (!v) previewDoc = null; }"
+    >
+      <div v-if="previewDoc" class="p-5 space-y-3">
+        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <span class="tabular-money font-semibold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 inline-flex items-center gap-1">
+            <FileText :size="13" />
+            Versión {{ previewDoc.version_code }}
+          </span>
+          <span class="tabular-money">
+            {{ new Date(previewDoc.published_at).toLocaleDateString('es-CO') }}
+          </span>
+        </div>
+        <div class="text-sm leading-relaxed text-slate-700 dark:text-slate-200 whitespace-pre-line border-t border-slate-200 dark:border-slate-700 pt-3">
+          {{ previewDoc.content }}
+        </div>
+      </div>
+      <template #footer>
+        <div class="p-4 pt-2 border-t border-slate-100 dark:border-slate-700">
+          <BaseButton variant="primary" class="w-full" @click="previewDoc = null">
+            Entendido
+          </BaseButton>
+        </div>
+      </template>
+    </BaseModal>
   </div>
 </template>
 

@@ -200,7 +200,8 @@ const confirmTransaction = () => {
     const finalTotalPaid = payments.value.reduce((sum, p) => sum.plus(p.amount), new Decimal(0));
     
     if (finalTotalPaid.gte(props.total)) {
-        emit('complete', payments.value, finalTotalPaid, selectedFiadoClient.value?.id);
+        // FRD-029 RN-16: Ventas de contado / no fiadas nunca asocian client_id
+        emit('complete', payments.value, finalTotalPaid, isFiado.value ? selectedFiadoClient.value?.id : undefined);
     } else {
         showWarning('El monto es insuficiente');
     }

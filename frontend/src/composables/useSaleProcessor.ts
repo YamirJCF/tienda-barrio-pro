@@ -141,6 +141,8 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
 
         const currentTicket = config.getTicketLabel();
         const primaryMethod = derivePrimaryMethod(payments);
+        // FRD-029 RN-16: Sanitizar client_id fuera de ventas fiadas
+        const effectiveClientId = primaryMethod === 'fiado' ? clientId : undefined;
 
         // Calculate total cash received for change calculation
         const cashPayment = payments.find(p => p.method === 'cash');
@@ -164,7 +166,7 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
                 payments: payments,
                 amountReceived,
                 change: undefined,
-                clientId: clientId,
+                clientId: effectiveClientId,
                 employeeId: authStore.currentUser?.employeeId || authStore.currentUser?.id,
             });
 
@@ -189,7 +191,7 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
             // ============================================
             if (cartStore.hasForcedItems && authStore.isAdmin && navigator.onLine) {
                 forceSaleItems.value = buildForceSaleItems();
-                pendingSaleData.value = { payments, totalPaid, clientId };
+                pendingSaleData.value = { payments, totalPaid, clientId: effectiveClientId };
                 showForceSaleModal.value = true;
                 return; // Don't clear cart — user decides via ForceSaleModal
             }

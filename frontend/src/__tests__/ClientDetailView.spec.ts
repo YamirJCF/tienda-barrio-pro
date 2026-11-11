@@ -46,11 +46,12 @@ vi.mock('../stores/auth', () => ({
 
 const mockShowWarning = vi.fn();
 const mockShowSuccess = vi.fn();
+const mockShowError = vi.fn();
 vi.mock('@/composables/useNotifications', () => ({
   useNotifications: () => ({
     showWarning: mockShowWarning,
     showSuccess: mockShowSuccess,
-    showError: vi.fn(),
+    showError: mockShowError,
     showInfo: vi.fn()
   })
 }));
@@ -197,6 +198,8 @@ describe('ClientDetailView.vue', () => {
       storeId: 'store-uuid-123'
     });
 
+    mockDeleteClient.mockResolvedValue({ success: true });
+
     const wrapper = createWrapper();
     await vi.dynamicImportSettled();
 
@@ -213,10 +216,46 @@ describe('ClientDetailView.vue', () => {
     // Click confirm delete button
     const confirmBtn = wrapper.findAll('button').find(b => b.text().includes('Eliminar'));
     await confirmBtn?.trigger('click');
+    await vi.dynamicImportSettled();
+    await wrapper.vm.$nextTick();
 
     // Verify deleteClient was called and redirected
     expect(mockDeleteClient).toHaveBeenCalledWith('cli-123');
     expect(mockPush).toHaveBeenCalledWith('/clients');
+  });
+
+  it('does NOT redirect if server delete fails (no silent failure)', async () => {
+    mockIsAdmin = true;
+    mockGetClientById.mockReturnValue({
+      id: 'cli-123',
+      name: 'John Doe',
+      cc: '1020304050',
+      phone: '3001234567',
+      creditLimit: new Decimal(500000),
+      totalDebt: new Decimal(0),
+      storeId: 'store-uuid-123'
+    });
+    mockDeleteClient.mockResolvedValue({
+      success: false,
+      code: 'UNAUTHORIZED',
+      error: 'No tienes permisos autorizados'
+    });
+
+    const wrapper = createWrapper();
+    await vi.dynamicImportSettled();
+
+    await wrapper.find('button[aria-label="Opciones"]').trigger('click');
+    const deleteBtn = wrapper.findAll('button').find(b => b.text().includes('Eliminar cliente'));
+    await deleteBtn?.trigger('click');
+
+    const confirmBtn = wrapper.findAll('button').find(b => b.text().includes('Eliminar'));
+    await confirmBtn?.trigger('click');
+    await vi.dynamicImportSettled();
+    await wrapper.vm.$nextTick();
+
+    expect(mockDeleteClient).toHaveBeenCalledWith('cli-123');
+    expect(mockPush).not.toHaveBeenCalledWith('/clients');
+    expect(mockShowError).toHaveBeenCalledWith('No tienes permisos autorizados');
   });
 
   it('prevents registering a payment that exceeds the outstanding debt', async () => {

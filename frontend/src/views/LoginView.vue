@@ -126,6 +126,10 @@ const handleLogin = async () => {
             return;
           }
           recordFailedAttempt();
+          const serverErr = authStore.lastLoginError;
+          if (serverErr && !serverErr.toLowerCase().includes('invalid login credentials')) {
+            throw new Error(serverErr);
+          }
           throw new Error(`Correo o contraseña incorrectos`);
         } else {
           // =============================================

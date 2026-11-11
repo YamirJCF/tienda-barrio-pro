@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { type Client, type ClientTransaction } from '../types';
-import { clientRepository } from '../data/repositories/clientRepository';
+import { clientRepository, type ClientStatement } from '../data/repositories/clientRepository';
 import { generateUUID } from '../utils/uuid';
 import { logger } from '../utils/logger';
 import { clientsSerializer } from '../data/serializers/clientsSerializer';
@@ -80,7 +80,12 @@ export const useClientsStore = defineStore(
       try {
         const created = await clientRepository.create(newClient);
         if (created) {
-          clients.value.push(created);
+          const existingIndex = clients.value.findIndex((c) => c.id === created.id);
+          if (existingIndex !== -1) {
+            clients.value[existingIndex] = created;
+          } else {
+            clients.value.push(created);
+          }
           systemCacheManager.invalidate(`clients:${data.storeId}`);
           return created;
         }
@@ -119,20 +124,37 @@ export const useClientsStore = defineStore(
       return null;
     };
 
-    const deleteClient = async (id: string) => {
+    const deleteClient = async (id: string): Promise<{ success: boolean; error?: string; code?: string }> => {
       const client = getClientById(id);
       if (client && client.totalDebt.gt(0)) {
-        return { success: false, error: 'DEBT_PENDING' };
+        return {
+          success: false,
+          code: 'CLIENT_HAS_DEBT',
+          error: 'No se puede eliminar al cliente porque mantiene un saldo pendiente de pago.',
+        };
       }
       try {
-        await clientRepository.delete(id);
+        const deleted = await clientRepository.delete(id);
+        if (!deleted) {
+          return { success: false, code: 'DELETE_FAILED', error: 'No se pudo eliminar al cliente.' };
+        }
         const index = clients.value.findIndex((c) => c.id === id);
         if (index !== -1) {
+          const storeId = clients.value[index].storeId;
           clients.value.splice(index, 1);
+          if (storeId) {
+            systemCacheManager.invalidate(`clients:${storeId}`);
+          }
         }
+        transactions.value = transactions.value.filter((t) => t.clientId !== id);
         return { success: true };
-      } catch (e) {
-        return { success: false, error: 'DELETE_FAILED' };
+      } catch (e: any) {
+        logger.error('[ClientsStore] Delete client failed:', e);
+        return {
+          success: false,
+          code: e?.code || 'DELETE_FAILED',
+          error: e?.message || 'Error al eliminar el cliente en el servidor.',
+        };
       }
     };
 
@@ -253,16 +275,28 @@ export const useClientsStore = defineStore(
     };
 
     const getClientTransactions = async (clientId: string) => {
-      // Fetch from Repo for source of truth
-      try {
-        const remoteTxs = await clientRepository.getTransactions(clientId);
-        return remoteTxs as ClientTransaction[];
-      } catch (e) {
-        // Fallback to local
-        return transactions.value
-          .filter(t => t.clientId === clientId)
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const remoteTxs = await clientRepository.getTransactions(clientId);
+      return remoteTxs as ClientTransaction[];
+    };
+
+    const getClientStatement = async (
+      clientId: string,
+      limit: number = 200,
+      offset: number = 0
+    ): Promise<ClientStatement> => {
+      const statement = await clientRepository.getStatement(clientId, limit, offset);
+      const idx = clients.value.findIndex((c) => c.id === clientId);
+      if (idx !== -1) {
+        clients.value[idx] = {
+          ...clients.value[idx],
+          name: statement.client.name,
+          cc: statement.client.cc,
+          phone: statement.client.phone,
+          creditLimit: statement.client.creditLimit,
+          totalDebt: statement.client.totalDebt,
+        };
       }
+      return statement;
     };
 
     const getAvailableCredit = (clientId: string) => {
@@ -288,6 +322,7 @@ export const useClientsStore = defineStore(
       addPurchaseDebt,
       registerPayment,
       getClientTransactions,
+      getClientStatement,
       getAvailableCredit,
     };
   },

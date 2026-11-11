@@ -1617,7 +1617,6 @@ export type Database = {
       rpc_admin_get_clients: {
         Args: {
           p_filter_debt?: string
-          p_include_deleted?: boolean
           p_limit?: number
           p_offset?: number
           p_order_by?: string
