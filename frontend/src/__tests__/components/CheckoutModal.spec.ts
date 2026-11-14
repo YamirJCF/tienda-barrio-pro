@@ -8,6 +8,13 @@ import { useAuthStore } from '../../stores/auth';
 import { Decimal } from 'decimal.js';
 import type { Client } from '../../types';
 
+const mockPush = vi.fn();
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+}));
+
 describe('CheckoutModal - Inline Compact Fiado Client Selector & Progressive Loading', () => {
   const storeId = 'b63adadd-8679-4abc-af6c-d72ac3aa49e1';
 
@@ -291,5 +298,37 @@ describe('CheckoutModal - Inline Compact Fiado Client Selector & Progressive Loa
     await wrapper.setProps({ modelValue: true });
     await wrapper.vm.$nextTick();
     expect(initSpy).toHaveBeenCalledWith(storeId);
+  });
+
+  it('navigates to client detail only when clicking selected client name link, and opens directly on fiado when initialMethod="fiado"', async () => {
+    setupStores();
+    const wrapper = mountModal();
+
+    await switchToFiadoTab(wrapper);
+
+    // Before selecting a client: name link does not exist and clicking card does not navigate
+    expect(wrapper.find('[data-testid="selected-client-name-link"]').exists()).toBe(false);
+    await wrapper.findAll('[data-testid="fiado-client-card"]')[0].trigger('click');
+    expect(mockPush).not.toHaveBeenCalled();
+
+    // After selecting a client: name link appears and clicking it closes modal + navigates to detail
+    const nameLink = wrapper.find('[data-testid="selected-client-name-link"]');
+    expect(nameLink.exists()).toBe(true);
+    expect(nameLink.text()).toContain('MARIA');
+    await nameLink.trigger('click');
+
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([false]);
+    expect(mockPush).toHaveBeenCalledWith({
+      path: '/clients/c-1',
+      query: { from: 'pos' },
+    });
+
+    // When reopening via initialMethod="fiado" + selectedClient, opens directly on Fiado tab with client card ready
+    const restoredWrapper = mountModal({
+      selectedClient: mockClients[0],
+      initialMethod: 'fiado',
+    });
+    expect(restoredWrapper.find('[data-testid="selected-client-name-link"]').exists()).toBe(true);
+    expect(restoredWrapper.text()).toContain('Cliente Seleccionado');
   });
 });

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
 import type { Client } from '../../types';
 import Decimal from 'decimal.js';
@@ -17,7 +18,8 @@ import {
   AlertTriangle,
   Loader2,
   UserX,
-  ChevronDown
+  ChevronDown,
+  ExternalLink
 } from 'lucide-vue-next';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
 import { useNotifications } from '../../composables/useNotifications';
@@ -29,6 +31,7 @@ interface Props {
   modelValue: boolean;
   total: Decimal;
   selectedClient?: Client | null;
+  initialMethod?: string;
 }
 
 type ClientFilterType = 'all' | 'with_debt' | 'up_to_date';
@@ -45,6 +48,7 @@ const emit = defineEmits<{
   'complete': [payments: PaymentTransaction[], totalPaid: Decimal, clientId?: string];
 }>();
 
+const router = useRouter();
 const { formatCurrency } = useCurrencyFormat();
 const { showWarning } = useNotifications();
 const clientsStore = useClientsStore();
@@ -258,6 +262,12 @@ const close = () => {
   emit('update:modelValue', false);
 };
 
+const goToClientDetail = (clientId: string) => {
+  if (!clientId) return;
+  close();
+  router?.push({ path: `/clients/${clientId}`, query: { from: 'pos' } });
+};
+
 // Watchers
 watch([clientSearch, activeClientFilter], () => {
   visibleClientsCount.value = INITIAL_VISIBLE_CLIENTS;
@@ -266,7 +276,9 @@ watch([clientSearch, activeClientFilter], () => {
 watch(() => props.modelValue, async (val) => {
   if (val) {
     payments.value = [];
-    currentMethod.value = activeMethods.value.length > 0 ? activeMethods.value[0].code : 'cash';
+    const defaultCode = activeMethods.value.length > 0 ? activeMethods.value[0].code : 'cash';
+    const hasRequestedMethod = props.initialMethod && activeMethods.value.some((m) => m.code === props.initialMethod);
+    currentMethod.value = hasRequestedMethod ? props.initialMethod! : defaultCode;
     inputAmount.value = '';
     reference.value = '';
     clientSearch.value = '';
@@ -482,9 +494,16 @@ watch(currentMethod, (newMethod) => {
                                 {{ selectedFiadoClient.name.substring(0, 2).toUpperCase() }}
                             </div>
                             <div class="min-w-0 flex-1">
-                                <div class="font-bold text-gray-900 dark:text-white text-sm truncate leading-tight">
-                                    {{ selectedFiadoClient.name }}
-                                </div>
+                                <button
+                                    type="button"
+                                    data-testid="selected-client-name-link"
+                                    @click="goToClientDetail(selectedFiadoClient.id)"
+                                    title="Ver detalle y estado de cuenta del cliente"
+                                    class="font-bold text-indigo-700 dark:text-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-200 hover:underline text-sm truncate leading-tight flex items-center gap-1 max-w-full text-left cursor-pointer group/name transition-colors"
+                                >
+                                    <span class="truncate">{{ selectedFiadoClient.name }}</span>
+                                    <ExternalLink :size="13" class="shrink-0 opacity-75 group-hover/name:opacity-100 group-hover/name:translate-x-0.5 transition-all" />
+                                </button>
                                 <div class="text-[11px] text-gray-500 dark:text-gray-400 truncate leading-tight mt-0.5">
                                     <span v-if="selectedFiadoClient.cc">CC: {{ selectedFiadoClient.cc }}</span>
                                     <span v-if="selectedFiadoClient.phone"> • Tel: {{ selectedFiadoClient.phone }}</span>

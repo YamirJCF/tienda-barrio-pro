@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useCartStore } from '../stores/cart';
 import { useInventoryStore } from '../stores/inventory';
-import type { Product } from '../types';
+import type { Product, Client } from '../types';
 import { useSalesStore } from '../stores/sales';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
@@ -41,6 +41,7 @@ import {
 } from 'lucide-vue-next';
 
 const router = useRouter();
+const route = useRoute();
 const cartStore = useCartStore();
 const inventoryStore = useInventoryStore();
 const salesStore = useSalesStore();
@@ -100,6 +101,13 @@ const showSearch = ref(false);
 const showNote = ref(false);
 const showWeightCalculator = ref(false);
 const selectedWeighableProduct = ref<Product | null>(null);
+const preselectedClient = ref<Client | null>(null);
+
+watch(showCheckout, (isOpen) => {
+  if (!isOpen) {
+    preselectedClient.value = null;
+  }
+});
 
 // Composable: Sale Processor (completeSale, forceSale, state)
 const {
@@ -226,9 +234,32 @@ onMounted(() => {
 
   // FIX: Force sync of Cash Register status.
   const storeId = authStore.currentStore?.id || authStore.currentUser?.storeId;
+  const restoreClientId = route?.query?.checkoutClientId ? String(route.query.checkoutClientId) : '';
+
+  const applyCheckoutRestore = () => {
+    if (!restoreClientId) return;
+    const found = clientsStore.getClientById(restoreClientId);
+    if (found) {
+      preselectedClient.value = found;
+      if (cartStore.items.length > 0) {
+        showCheckout.value = true;
+      }
+    }
+    router.replace({ path: '/pos' });
+  };
+
   if (storeId) {
     cashRegisterStore.syncFromBackend(storeId);
-    clientsStore.initialize(storeId);
+    const clientsInit = clientsStore.initialize(storeId);
+    if (restoreClientId) {
+      if (clientsStore.clients.length > 0) {
+        applyCheckoutRestore();
+      } else {
+        clientsInit.then(applyCheckoutRestore);
+      }
+    }
+  } else if (restoreClientId) {
+    applyCheckoutRestore();
   }
 });
 
@@ -454,7 +485,13 @@ onUnmounted(() => {
     </section>
 
     <!-- Modals -->
-    <CheckoutModal v-model="showCheckout" :total="cartStore.total" @complete="completeSale" />
+    <CheckoutModal
+      v-model="showCheckout"
+      :total="cartStore.total"
+      :selected-client="preselectedClient"
+      :initial-method="preselectedClient ? 'fiado' : undefined"
+      @complete="completeSale"
+    />
 
     <ProductSearchModal v-model="showSearch" @select="addProductFromSearch" />
 

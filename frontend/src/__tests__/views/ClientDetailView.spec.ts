@@ -7,8 +7,9 @@ import { ref } from 'vue';
 
 // Mock Router
 const mockPush = vi.fn();
-const mockRoute = {
-  params: { id: 'cli-001' }
+const mockRoute: { params: { id: string }; query: Record<string, string> } = {
+  params: { id: 'cli-001' },
+  query: {},
 };
 
 vi.mock('vue-router', () => ({
@@ -59,6 +60,7 @@ describe('ClientDetailView.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+    mockRoute.query = {};
     mockIsAdmin.value = true;
     
     // Default mock data
@@ -138,6 +140,18 @@ describe('ClientDetailView.vue', () => {
     await backBtn.trigger('click');
     
     expect(mockPush).toHaveBeenCalledWith('/clients');
+  });
+
+  it('navigates back to POS with checkoutClientId when opened from POS (query.from === "pos")', async () => {
+    mockRoute.query = { from: 'pos' };
+    const wrapper = createWrapper();
+    const backBtn = wrapper.find('button[aria-label="Volver"]');
+    await backBtn.trigger('click');
+
+    expect(mockPush).toHaveBeenCalledWith({
+      path: '/pos',
+      query: { checkoutClientId: 'cli-001' },
+    });
   });
 
   it('only shows options menu button if user is admin', async () => {

@@ -145,6 +145,10 @@ const formatDate = (dateStr: string) => {
 };
 
 const goBack = () => {
+  if (route.query?.from === 'pos') {
+    router.push({ path: '/pos', query: { checkoutClientId: clientId.value } });
+    return;
+  }
   router.push('/clients');
 };
 
