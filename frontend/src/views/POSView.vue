@@ -8,6 +8,7 @@ import { useSalesStore } from '../stores/sales';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth';
 import { useClientsStore } from '../stores/clients';
+import { clientRepository } from '../data/repositories/clientRepository';
 import { useNotifications } from '../composables/useNotifications';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useQuantityFormat } from '../composables/useQuantityFormat';
@@ -226,7 +227,7 @@ const handlePOSKeydown = (e: KeyboardEvent) => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', handlePOSKeydown);
   
   // Ensure inventory is loaded
@@ -234,11 +235,24 @@ onMounted(() => {
 
   // FIX: Force sync of Cash Register status.
   const storeId = authStore.currentStore?.id || authStore.currentUser?.storeId;
-  const restoreClientId = route?.query?.checkoutClientId ? String(route.query.checkoutClientId) : '';
+  if (storeId) {
+    cashRegisterStore.syncFromBackend(storeId);
+  }
 
-  const applyCheckoutRestore = () => {
-    if (!restoreClientId) return;
-    const found = clientsStore.getClientById(restoreClientId);
+  // Restauración puntual de cliente si regresa desde ClientDetailView (?checkoutClientId=...), sin cargar toda la cartera
+  const restoreClientId = route?.query?.checkoutClientId ? String(route.query.checkoutClientId) : '';
+  if (restoreClientId) {
+    let found = clientsStore.getClientById(restoreClientId) || null;
+    if (!found) {
+      try {
+        found = await clientRepository.getById(restoreClientId);
+        if (found && !clientsStore.clients.some((c) => c.id === found!.id)) {
+          clientsStore.clients.push(found);
+        }
+      } catch (err) {
+        logger.warn('[POSView] No se pudo recuperar el cliente puntual al volver:', err);
+      }
+    }
     if (found) {
       preselectedClient.value = found;
       if (cartStore.items.length > 0) {
@@ -246,20 +260,6 @@ onMounted(() => {
       }
     }
     router.replace({ path: '/pos' });
-  };
-
-  if (storeId) {
-    cashRegisterStore.syncFromBackend(storeId);
-    const clientsInit = clientsStore.initialize(storeId);
-    if (restoreClientId) {
-      if (clientsStore.clients.length > 0) {
-        applyCheckoutRestore();
-      } else {
-        clientsInit.then(applyCheckoutRestore);
-      }
-    }
-  } else if (restoreClientId) {
-    applyCheckoutRestore();
   }
 });
 

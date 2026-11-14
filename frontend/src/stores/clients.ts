@@ -2,7 +2,12 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { Decimal } from 'decimal.js';
 import { type Client, type ClientTransaction } from '../types';
-import { clientRepository, type ClientStatement } from '../data/repositories/clientRepository';
+import {
+  clientRepository,
+  type ClientStatement,
+  type ClientPageParams,
+  type PaginatedClientsResult,
+} from '../data/repositories/clientRepository';
 import { generateUUID } from '../utils/uuid';
 import { logger } from '../utils/logger';
 import { clientsSerializer } from '../data/serializers/clientsSerializer';
@@ -60,6 +65,26 @@ export const useClientsStore = defineStore(
       } finally {
         isLoading.value = false;
       }
+    };
+
+    const fetchClientsPage = async (params: ClientPageParams): Promise<PaginatedClientsResult> => {
+      const limit = params.limit ?? 5;
+      const offset = params.offset ?? 0;
+      const result = await clientRepository.getPaginated({
+        ...params,
+        limit,
+        offset,
+      });
+      // Sincronizar en memoria únicamente los clientes recibidos en esta página (sin cargar toda la tabla)
+      for (const client of result.data) {
+        const idx = clients.value.findIndex((c) => c.id === client.id);
+        if (idx !== -1) {
+          clients.value[idx] = client;
+        } else {
+          clients.value.push(client);
+        }
+      }
+      return result;
     };
 
     const addClient = async (data: { name: string; cc: string; phone?: string; creditLimit?: Decimal; storeId: string }) => {
@@ -313,6 +338,7 @@ export const useClientsStore = defineStore(
       totalDebt,
       clientsWithDebt,
       initialize,
+      fetchClientsPage,
       addClient,
       updateClient,
       deleteClient,

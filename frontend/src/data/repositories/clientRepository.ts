@@ -187,7 +187,23 @@ export const clientMapper: RepositoryMappers<ClientDB, Client> = {
     },
 };
 
+export type ClientDebtFilter = 'all' | 'with_debt' | 'up_to_date';
+
+export interface ClientPageParams {
+    storeId: string;
+    limit?: number;
+    offset?: number;
+    search?: string;
+    debtFilter?: ClientDebtFilter;
+}
+
+export interface PaginatedClientsResult {
+    data: Client[];
+    count: number;
+}
+
 export interface ClientRepository extends EntityRepository<Client> {
+    getPaginated(params: ClientPageParams): Promise<PaginatedClientsResult>;
     getByCedula(cedula: string, storeId?: string): Promise<Client | null>;
     searchByName(query: string, storeId?: string): Promise<Client[]>;
     updateDebt(id: string, amount: number): Promise<boolean>;
@@ -221,6 +237,81 @@ function mapMovementDescription(txType: string, ticketNumber?: number | null): s
 
 export const clientRepository: ClientRepository = {
     ...baseRepository,
+
+    async getPaginated(params: ClientPageParams): Promise<PaginatedClientsResult> {
+        const limit = Math.max(1, params.limit ?? 5);
+        const offset = Math.max(0, params.offset ?? 0);
+        const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+
+        if (isSupabaseConfigured() && isOnline) {
+            const supabase = getSupabaseClient();
+            if (!supabase) {
+                throw new ClientRepositoryError(
+                    'No hay conexión activa con el servidor.',
+                    'SUPABASE_UNAVAILABLE'
+                );
+            }
+
+            let query = supabase
+                .from(TABLE_NAME)
+                .select('*', { count: 'exact' })
+                .eq('store_id', params.storeId)
+                .eq('is_deleted', false);
+
+            const cleanSearch = (params.search || '').trim().replace(/[%_,()]/g, '');
+            if (cleanSearch) {
+                query = query.or(
+                    `name.ilike.%${cleanSearch}%,id_number.ilike.%${cleanSearch}%,phone.ilike.%${cleanSearch}%`
+                );
+            }
+
+            if (params.debtFilter === 'with_debt') {
+                query = query.gt('balance', 0);
+            } else if (params.debtFilter === 'up_to_date') {
+                query = query.lte('balance', 0);
+            }
+
+            const { data, error, count } = await query
+                .order('name', { ascending: true })
+                .range(offset, offset + limit - 1);
+
+            if (error) {
+                throw mapClientRpcError(error, 'Error al cargar la lista paginada de clientes.');
+            }
+
+            const rows = (data || []) as ClientDB[];
+            rows.forEach((r) => upsertCachedClientRow(r));
+            const mapped = rows.map((r) => clientMapper.toDomain(r));
+            return {
+                data: mapped,
+                count: typeof count === 'number' ? count : mapped.length,
+            };
+        }
+
+        // Offline / local fallback: filter localStorage cache without scanning network
+        const cached = (localStorageAdapter.get<ClientDB[]>(STORAGE_KEY) || []).filter(
+            (c) => c.store_id === params.storeId && !c.is_deleted
+        );
+        const q = (params.search || '').trim().toLowerCase();
+        const filtered = cached
+            .filter((c) => {
+                if (q) {
+                    const matchName = (c.name || '').toLowerCase().includes(q);
+                    const matchCc = (c.id_number || '').toLowerCase().includes(q);
+                    const matchPhone = (c.phone || '').toLowerCase().includes(q);
+                    if (!matchName && !matchCc && !matchPhone) return false;
+                }
+                if (params.debtFilter === 'with_debt') return Number(c.balance || 0) > 0;
+                if (params.debtFilter === 'up_to_date') return Number(c.balance || 0) <= 0;
+                return true;
+            })
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        return {
+            data: filtered.slice(offset, offset + limit).map(clientMapper.toDomain),
+            count: filtered.length,
+        };
+    },
 
     async create(data: Omit<Client, 'id'>): Promise<Client | null> {
         if (!isSupabaseConfigured()) {

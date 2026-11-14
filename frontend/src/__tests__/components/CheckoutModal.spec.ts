@@ -1,10 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import CheckoutModal from '../../components/sales/CheckoutModal.vue';
 import { useClientsStore } from '../../stores/clients';
 import { useConfigStore } from '../../stores/config';
 import { useAuthStore } from '../../stores/auth';
+import {
+  clientRepository,
+  type ClientPageParams,
+  type PaginatedClientsResult,
+} from '../../data/repositories/clientRepository';
 import { Decimal } from 'decimal.js';
 import type { Client } from '../../types';
 
@@ -15,10 +20,10 @@ vi.mock('vue-router', () => ({
   }),
 }));
 
-describe('CheckoutModal - Inline Compact Fiado Client Selector & Progressive Loading', () => {
+describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
   const storeId = 'b63adadd-8679-4abc-af6c-d72ac3aa49e1';
 
-  const mockClients: Client[] = [
+  const makeClientsCatalog = (): Client[] => [
     {
       id: 'c-1',
       name: 'MARIA',
@@ -37,50 +42,52 @@ describe('CheckoutModal - Inline Compact Fiado Client Selector & Progressive Loa
       creditLimit: new Decimal(100000),
       storeId,
     },
-    {
-      id: 'c-3',
-      name: 'Carlos Mendoza',
-      cc: '80112233',
-      phone: '3001112233',
-      totalDebt: new Decimal(25000),
-      creditLimit: new Decimal(80000),
-      storeId,
-    },
-    {
-      id: 'c-4',
-      name: 'Ana Lucía Gómez',
-      cc: '52998877',
-      phone: '3112223344',
-      totalDebt: new Decimal(0),
-      creditLimit: new Decimal(50000),
-      storeId,
-    },
-    {
-      id: 'c-5',
-      name: 'Pedro Ramírez',
-      cc: '79445566',
-      phone: '3159998877',
-      totalDebt: new Decimal(15000),
-      creditLimit: new Decimal(60000),
-      storeId,
-    },
-    {
-      id: 'c-6',
-      name: 'Laura Torres',
-      cc: '1012345678',
-      phone: '3204445566',
-      totalDebt: new Decimal(0),
-      creditLimit: new Decimal(120000),
-      storeId,
-    },
+    ...Array.from({ length: 10 }, (_, idx) => {
+      const n = idx + 3;
+      return {
+        id: `c-${n}`,
+        name: `Cliente ${String(n).padStart(2, '0')}`,
+        cc: `10000000${n}`,
+        phone: `30011122${String(n).padStart(2, '0')}`,
+        totalDebt: new Decimal(n % 2 === 0 ? n * 1000 : 0),
+        creditLimit: new Decimal(100000),
+        storeId,
+      };
+    }),
   ];
+
+  const filterAndSliceDataset = (
+    dataset: Client[],
+    params: ClientPageParams
+  ): PaginatedClientsResult => {
+    const q = (params.search || '').trim().toLowerCase();
+    const filtered = dataset.filter((c) => {
+      if (q) {
+        const hit =
+          c.name.toLowerCase().includes(q) ||
+          c.cc.toLowerCase().includes(q) ||
+          (c.phone || '').toLowerCase().includes(q);
+        if (!hit) return false;
+      }
+      if (params.debtFilter === 'with_debt') return c.totalDebt.gt(0);
+      if (params.debtFilter === 'up_to_date') return c.totalDebt.lte(0);
+      return true;
+    });
+    const limit = params.limit ?? 5;
+    const offset = params.offset ?? 0;
+    return {
+      data: filtered.slice(offset, offset + limit),
+      count: filtered.length,
+    };
+  };
 
   beforeEach(() => {
     setActivePinia(createPinia());
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
-  const setupStores = (clientsOverride?: Client[]) => {
+  const setupStores = (dataset: Client[] = makeClientsCatalog()) => {
     const clientsStore = useClientsStore();
     const configStore = useConfigStore();
     const authStore = useAuthStore();
@@ -98,8 +105,14 @@ describe('CheckoutModal - Inline Compact Fiado Client Selector & Progressive Loa
       { code: 'fiado', name: 'Fiado / Crédito', isActive: true, allowsChange: false, requiresReference: false, sortOrder: 2 },
     ];
 
-    clientsStore.clients = clientsOverride ? [...clientsOverride] : [...mockClients.slice(0, 2)];
-    return { clientsStore, configStore, authStore };
+    clientsStore.clients = [];
+    const paginatedSpy = vi
+      .spyOn(clientRepository, 'getPaginated')
+      .mockImplementation(async (params) => filterAndSliceDataset(dataset, params));
+    const initSpy = vi.spyOn(clientsStore, 'initialize').mockResolvedValue(undefined as any);
+    const fetchPageSpy = vi.spyOn(clientsStore, 'fetchClientsPage');
+
+    return { clientsStore, configStore, authStore, paginatedSpy, initSpy, fetchPageSpy, dataset };
   };
 
   const mountModal = (propsOverride: Record<string, any> = {}) => {
@@ -121,214 +134,246 @@ describe('CheckoutModal - Inline Compact Fiado Client Selector & Progressive Loa
     const fiadoTab = wrapper.findAll('button').find((b) => b.text().includes('Fiado'));
     expect(fiadoTab).toBeDefined();
     await fiadoTab!.trigger('click');
+    await flushPromises();
   };
 
-  it('renders inline search input, filters, and compact client cards immediately on Fiado tab (zero extra clicks)', async () => {
-    setupStores();
+  it('requests only 5 clients on Fiado tab without calling initialize/getAll and renders complete compact card details', async () => {
+    const { initSpy, fetchPageSpy, clientsStore } = setupStores();
     const wrapper = mountModal();
+
+    // Opening in Cash must not load any clients at all
+    expect(initSpy).not.toHaveBeenCalled();
+    expect(fetchPageSpy).not.toHaveBeenCalled();
 
     await switchToFiadoTab(wrapper);
 
-    // Inline search input must be directly present (no modal button to open search)
-    const searchInput = wrapper.find('input[aria-label*="Buscar cliente"]');
-    expect(searchInput.exists()).toBe(true);
-    expect(wrapper.text()).not.toContain('Seleccionar Cliente de Cartera');
+    expect(initSpy).not.toHaveBeenCalled();
+    expect(fetchPageSpy).toHaveBeenCalledTimes(1);
+    expect(fetchPageSpy).toHaveBeenCalledWith({
+      storeId,
+      limit: 5,
+      offset: 0,
+      search: '',
+      debtFilter: 'all',
+    });
 
-    // Filter chips visible
-    expect(wrapper.text()).toContain('Todos');
-    expect(wrapper.text()).toContain('Con Deuda');
-    expect(wrapper.text()).toContain('Al Día');
-
-    // Compact cards render all required info
+    // Only 5 clients in store & rendered out of 12 total
+    expect(clientsStore.clients.length).toBe(5);
     const cards = wrapper.findAll('[data-testid="fiado-client-card"]');
-    expect(cards.length).toBe(2);
+    expect(cards.length).toBe(5);
+    expect(wrapper.text()).toContain('5 de 12');
 
-    const mariaCardText = cards[0].text();
-    expect(mariaCardText).toContain('MA');
-    expect(mariaCardText).toContain('MARIA');
-    expect(mariaCardText).toContain('CC: 1067817999');
-    expect(mariaCardText).toContain('Tel: 3107272757');
-    expect(mariaCardText).toContain('Cupo: $100.000');
-    expect(mariaCardText).toContain('Deuda: $0');
+    // Compact cards render complete client info
+    const mariaText = cards[0].text();
+    expect(mariaText).toContain('MA');
+    expect(mariaText).toContain('MARIA');
+    expect(mariaText).toContain('CC: 1067817999');
+    expect(mariaText).toContain('Tel: 3107272757');
+    expect(mariaText).toContain('Cupo: $100.000');
+    expect(mariaText).toContain('Deuda: $0');
 
-    const pruebaCardText = cards[1].text();
-    expect(pruebaCardText).toContain('PR');
-    expect(pruebaCardText).toContain('prueba');
-    expect(pruebaCardText).toContain('CC: 10567817999');
-    expect(pruebaCardText).toContain('Tel: 3214380880');
-    expect(pruebaCardText).toContain('Cupo: $100.000');
-    expect(pruebaCardText).toContain('Deuda: $1.000');
+    const pruebaText = cards[1].text();
+    expect(pruebaText).toContain('PR');
+    expect(pruebaText).toContain('prueba');
+    expect(pruebaText).toContain('Deuda: $1.000');
   });
 
-  it('filters clients in real-time by search query and status filter chips', async () => {
-    setupStores(mockClients);
+  it('loads subsequent batches strictly 5 by 5 via load-more button and scroll', async () => {
+    const { fetchPageSpy, clientsStore } = setupStores(); // 12 total clients
     const wrapper = mountModal();
 
     await switchToFiadoTab(wrapper);
+    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(5);
+    expect(wrapper.text()).toContain('5 de 12');
 
-    // Search by phone / name / CC
-    const searchInput = wrapper.find('input[aria-label*="Buscar cliente"]');
-    await searchInput.setValue('Carlos');
-
-    let cards = wrapper.findAll('[data-testid="fiado-client-card"]');
-    expect(cards.length).toBe(1);
-    expect(cards[0].text()).toContain('Carlos Mendoza');
-
-    // Clear search button restores list
-    const clearBtn = wrapper.find('button[aria-label="Limpiar búsqueda"]');
-    expect(clearBtn.exists()).toBe(true);
-    await clearBtn.trigger('click');
-
-    // Filter by "Con Deuda" (clients c-2, c-3, c-5 -> 3 clients)
-    const debtFilterBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Con Deuda');
-    expect(debtFilterBtn).toBeDefined();
-    await debtFilterBtn!.trigger('click');
-
-    cards = wrapper.findAll('[data-testid="fiado-client-card"]');
-    expect(cards.length).toBe(3);
-    expect(cards.map((c) => c.text()).join(' ')).toContain('prueba');
-    expect(cards.map((c) => c.text()).join(' ')).toContain('Carlos Mendoza');
-    expect(cards.map((c) => c.text()).join(' ')).toContain('Pedro Ramírez');
-
-    // Filter by "Al Día" (clients c-1, c-4, c-6 -> 3 clients)
-    const upToDateBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Al Día');
-    await upToDateBtn!.trigger('click');
-
-    cards = wrapper.findAll('[data-testid="fiado-client-card"]');
-    expect(cards.length).toBe(3);
-    expect(cards.map((c) => c.text()).join(' ')).toContain('MARIA');
-    expect(cards.map((c) => c.text()).join(' ')).toContain('Ana Lucía Gómez');
-  });
-
-  it('progressively loads only 4 initial clients and loads remaining clients via button or scroll', async () => {
-    setupStores(mockClients); // 6 clients
-    const wrapper = mountModal();
-
-    await switchToFiadoTab(wrapper);
-
-    // Initially only 4 clients rendered to fit viewport cleanly
-    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(4);
-    expect(wrapper.text()).toContain('4 de 6');
-
+    // 2nd request via button -> offset 5, limit 5 (5 + 5 = 10 of 12)
     const loadMoreBtn = wrapper.find('[data-testid="load-more-clients-btn"]');
     expect(loadMoreBtn.exists()).toBe(true);
-    expect(loadMoreBtn.text()).toContain('Ver más clientes (2 restantes)');
-
-    // Clicking load more renders all 6 clients
+    expect(loadMoreBtn.text()).toContain('Cargar más clientes (7 restantes)');
     await loadMoreBtn.trigger('click');
-    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(6);
-    expect(wrapper.text()).toContain('6 de 6');
-    expect(wrapper.find('[data-testid="load-more-clients-btn"]').exists()).toBe(false);
+    await flushPromises();
 
-    // Reset filter/search resets back to 4 visible, then test scroll trigger
-    const searchInput = wrapper.find('input[aria-label*="Buscar cliente"]');
-    await searchInput.setValue('MARIA');
-    await searchInput.setValue('');
-    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(4);
+    expect(fetchPageSpy).toHaveBeenNthCalledWith(2, {
+      storeId,
+      limit: 5,
+      offset: 5,
+      search: '',
+      debtFilter: 'all',
+    });
+    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(10);
+    expect(clientsStore.clients.length).toBe(10);
+    expect(wrapper.text()).toContain('10 de 12');
 
+    // 3rd request via scroll near bottom -> offset 10, limit 5 (remaining 2 -> 12 of 12)
     const listEl = wrapper.find('[data-testid="fiado-client-list"]').element as HTMLElement;
-    Object.defineProperty(listEl, 'scrollTop', { value: 300, configurable: true });
+    Object.defineProperty(listEl, 'scrollHeight', { value: 600, configurable: true });
     Object.defineProperty(listEl, 'clientHeight', { value: 200, configurable: true });
-    Object.defineProperty(listEl, 'scrollHeight', { value: 500, configurable: true });
+    Object.defineProperty(listEl, 'scrollTop', { value: 390, configurable: true });
 
     await wrapper.find('[data-testid="fiado-client-list"]').trigger('scroll');
-    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(6);
+    await flushPromises();
+
+    expect(fetchPageSpy).toHaveBeenNthCalledWith(3, {
+      storeId,
+      limit: 5,
+      offset: 10,
+      search: '',
+      debtFilter: 'all',
+    });
+    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(12);
+    expect(wrapper.text()).toContain('12 de 12');
+    expect(wrapper.find('[data-testid="load-more-clients-btn"]').exists()).toBe(false);
   });
 
-  it('selects a client from inline list, allows switching back with Cambiar, and completes transaction', async () => {
-    setupStores();
-    const wrapper = mountModal({ total: new Decimal(120000) }); // Exceeds MARIA's creditLimit (100.000)
-
-    await switchToFiadoTab(wrapper);
-
-    // Select MARIA directly from inline list
-    const mariaCard = wrapper.findAll('[data-testid="fiado-client-card"]')[0];
-    await mariaCard.trigger('click');
-
-    // Summary card is shown with credit limit warning
-    expect(wrapper.text()).toContain('Cliente Seleccionado');
-    expect(wrapper.text()).toContain('MARIA');
-    expect(wrapper.text()).toContain('superará el cupo disponible');
-
-    // Clicking "Cambiar" immediately brings back the inline list
-    const changeBtn = wrapper.findAll('button').find((b) => b.text().includes('Cambiar'));
-    expect(changeBtn).toBeDefined();
-    await changeBtn!.trigger('click');
-    expect(wrapper.find('input[aria-label*="Buscar cliente"]').exists()).toBe(true);
-
-    // Select MARIA again and confirm sale
-    await wrapper.findAll('[data-testid="fiado-client-card"]')[0].trigger('click');
-
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text().includes('CONFIRMAR'));
-    expect(confirmBtn).toBeDefined();
-    await confirmBtn!.trigger('click');
-
-    expect(wrapper.emitted('complete')).toBeDefined();
-    const emitArgs = wrapper.emitted('complete')![0];
-    expect(emitArgs[2]).toBe(mockClients[0].id);
-  });
-
-  it('shows explicit loading and error states instead of silent empty fallback', async () => {
-    const { clientsStore } = setupStores([]);
-    vi.spyOn(clientsStore, 'initialize').mockResolvedValue(undefined as any);
-    clientsStore.isLoading = true;
-
-    const wrapper = mountModal();
-    await switchToFiadoTab(wrapper);
-    expect(wrapper.text()).toContain('Cargando clientes...');
-
-    // Simulate load failure with empty clients
-    clientsStore.isLoading = false;
-    clientsStore.error = 'Error al cargar clientes';
-    await wrapper.vm.$nextTick();
-
-    expect(wrapper.text()).toContain('Error al cargar clientes');
-    const retryBtn = wrapper.findAll('button').find((b) => b.text().includes('Reintentar'));
-    expect(retryBtn).toBeDefined();
-    await retryBtn!.trigger('click');
-    expect(clientsStore.initialize).toHaveBeenCalledWith(storeId, true);
-  });
-
-  it('triggers clientsStore.initialize when clients array is empty on modal open', async () => {
-    const { clientsStore } = setupStores([]);
-    const initSpy = vi.spyOn(clientsStore, 'initialize').mockResolvedValue(undefined as any);
-
-    const wrapper = mountModal({ modelValue: false });
-
-    await wrapper.setProps({ modelValue: true });
-    await wrapper.vm.$nextTick();
-    expect(initSpy).toHaveBeenCalledWith(storeId);
-  });
-
-  it('navigates to client detail only when clicking selected client name link, and opens directly on fiado when initialMethod="fiado"', async () => {
-    setupStores();
+  it('triggers a fresh offset=0 paginated query when searching or switching filter chips', async () => {
+    const { fetchPageSpy } = setupStores();
     const wrapper = mountModal();
 
     await switchToFiadoTab(wrapper);
+    fetchPageSpy.mockClear();
 
-    // Before selecting a client: name link does not exist and clicking card does not navigate
+    // Search by name
+    const searchInput = wrapper.find('input[aria-label*="Buscar cliente"]');
+    await searchInput.setValue('Cliente');
+    await flushPromises();
+
+    expect(fetchPageSpy).toHaveBeenLastCalledWith({
+      storeId,
+      limit: 5,
+      offset: 0,
+      search: 'Cliente',
+      debtFilter: 'all',
+    });
+    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(5);
+    expect(wrapper.text()).toContain('5 de 10');
+
+    // Clear search
+    await wrapper.find('button[aria-label="Limpiar búsqueda"]').trigger('click');
+    await flushPromises();
+
+    // Switch filter chip to "Con Deuda"
+    const debtFilterBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Con Deuda');
+    await debtFilterBtn!.trigger('click');
+    await flushPromises();
+
+    expect(fetchPageSpy).toHaveBeenLastCalledWith({
+      storeId,
+      limit: 5,
+      offset: 0,
+      search: '',
+      debtFilter: 'with_debt',
+    });
+    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(5);
+    expect(wrapper.text()).toContain('5 de 6');
+
+    // Switch filter chip to "Al Día"
+    const upToDateBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Al Día');
+    await upToDateBtn!.trigger('click');
+    await flushPromises();
+
+    expect(fetchPageSpy).toHaveBeenLastCalledWith({
+      storeId,
+      limit: 5,
+      offset: 0,
+      search: '',
+      debtFilter: 'up_to_date',
+    });
+    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(5);
+    expect(wrapper.text()).toContain('5 de 6');
+  });
+
+  it('selects client, navigates to detail on selected name click, allows Cambiar, and emits complete', async () => {
+    const dataset = makeClientsCatalog();
+    const { fetchPageSpy } = setupStores(dataset);
+    const wrapper = mountModal({ total: new Decimal(120000) }); // Exceeds MARIA's creditLimit
+
+    await switchToFiadoTab(wrapper);
+
+    // Before selecting client, no detail navigation link exists and clicking a card does not navigate
     expect(wrapper.find('[data-testid="selected-client-name-link"]').exists()).toBe(false);
     await wrapper.findAll('[data-testid="fiado-client-card"]')[0].trigger('click');
     expect(mockPush).not.toHaveBeenCalled();
 
-    // After selecting a client: name link appears and clicking it closes modal + navigates to detail
-    const nameLink = wrapper.find('[data-testid="selected-client-name-link"]');
-    expect(nameLink.exists()).toBe(true);
-    expect(nameLink.text()).toContain('MARIA');
-    await nameLink.trigger('click');
+    // Summary card shows selected client & credit limit warning
+    expect(wrapper.text()).toContain('Cliente Seleccionado');
+    expect(wrapper.text()).toContain('superará el cupo disponible');
 
+    // Clicking selected client name navigates to detail view
+    const nameLink = wrapper.find('[data-testid="selected-client-name-link"]');
+    await nameLink.trigger('click');
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([false]);
     expect(mockPush).toHaveBeenCalledWith({
       path: '/clients/c-1',
       query: { from: 'pos' },
     });
 
-    // When reopening via initialMethod="fiado" + selectedClient, opens directly on Fiado tab with client card ready
+    // Returning via Cambiar shows inline paginated list without re-fetching if already populated
+    const changeBtn = wrapper.findAll('button').find((b) => b.text().includes('Cambiar'));
+    await changeBtn!.trigger('click');
+    expect(wrapper.find('input[aria-label*="Buscar cliente"]').exists()).toBe(true);
+
+    // Re-select and confirm sale
+    await wrapper.findAll('[data-testid="fiado-client-card"]')[0].trigger('click');
+    const confirmBtn = wrapper.findAll('button').find((b) => b.text().includes('CONFIRMAR'));
+    await confirmBtn!.trigger('click');
+
+    expect(wrapper.emitted('complete')).toBeDefined();
+    expect(wrapper.emitted('complete')![0][2]).toBe('c-1');
+
+    // Opening directly on fiado with selectedClient doesn't fetch list until Cambiar is pressed
+    fetchPageSpy.mockClear();
     const restoredWrapper = mountModal({
-      selectedClient: mockClients[0],
+      selectedClient: dataset[0],
       initialMethod: 'fiado',
     });
+    await flushPromises();
+    expect(fetchPageSpy).not.toHaveBeenCalled();
     expect(restoredWrapper.find('[data-testid="selected-client-name-link"]').exists()).toBe(true);
-    expect(restoredWrapper.text()).toContain('Cliente Seleccionado');
+
+    const restoredChangeBtn = restoredWrapper.findAll('button').find((b) => b.text().includes('Cambiar'));
+    await restoredChangeBtn!.trigger('click');
+    await flushPromises();
+    expect(fetchPageSpy).toHaveBeenCalledWith({
+      storeId,
+      limit: 5,
+      offset: 0,
+      search: '',
+      debtFilter: 'all',
+    });
+  });
+
+  it('shows explicit loading and error states with Reintentar instead of silent empty fallback', async () => {
+    const { clientsStore } = setupStores([]);
+    let rejectFirst!: (err: Error) => void;
+    let attempt = 0;
+
+    vi.spyOn(clientsStore, 'fetchClientsPage').mockImplementation(async () => {
+      attempt++;
+      if (attempt === 1) {
+        return new Promise<PaginatedClientsResult>((_, reject) => {
+          rejectFirst = reject;
+        });
+      }
+      return { data: makeClientsCatalog().slice(0, 5), count: 5 };
+    });
+
+    const wrapper = mountModal();
+    const fiadoTab = wrapper.findAll('button').find((b) => b.text().includes('Fiado'));
+    await fiadoTab!.trigger('click');
+
+    // While pending, loading indicator renders explicitly
+    expect(wrapper.text()).toContain('Cargando clientes...');
+
+    // When request fails, error message and Reintentar render explicitly
+    rejectFirst(new Error('Error de red al consultar clientes'));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Error de red al consultar clientes');
+    const retryBtn = wrapper.findAll('button').find((b) => b.text().includes('Reintentar'));
+    expect(retryBtn).toBeDefined();
+
+    await retryBtn!.trigger('click');
+    await flushPromises();
+    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(5);
   });
 });

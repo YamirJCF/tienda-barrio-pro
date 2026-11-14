@@ -35,7 +35,7 @@ interface Props {
 }
 
 type ClientFilterType = 'all' | 'with_debt' | 'up_to_date';
-const INITIAL_VISIBLE_CLIENTS = 4;
+const CLIENTS_PAGE_SIZE = 5;
 const CLIENT_FILTER_OPTIONS: { value: ClientFilterType; label: string }[] = [
   { value: 'all', label: 'Todos' },
   { value: 'with_debt', label: 'Con Deuda' },
@@ -61,8 +61,14 @@ const inputAmount = ref<string>('');
 const reference = ref<string>('');
 const clientSearch = ref('');
 const activeClientFilter = ref<ClientFilterType>('all');
-const visibleClientsCount = ref<number>(INITIAL_VISIBLE_CLIENTS);
+const pagedClients = ref<Client[]>([]);
+const totalClientsCount = ref<number>(0);
+const isLoadingClientsPage = ref<boolean>(false);
+const isLoadingMoreClients = ref<boolean>(false);
+const clientsPageError = ref<string | null>(null);
 const selectedFiadoClient = ref<Client | null>(null);
+let activeFetchSeq = 0;
+let inFlightQueryKey = '';
 
 const isCreditLimitExceeded = computed(() => {
   if (!selectedFiadoClient.value || !selectedFiadoClient.value.creditLimit) return false;
@@ -116,45 +122,93 @@ const canComplete = computed(() => {
     return totalMoneyOnTable.value.gte(props.total);
 });
 
-const filteredClients = computed(() => {
-    const searched = clientsStore.searchClients(clientSearch.value);
-    if (activeClientFilter.value === 'with_debt') {
-        return searched.filter((c) => c.totalDebt && c.totalDebt.gt(0));
-    }
-    if (activeClientFilter.value === 'up_to_date') {
-        return searched.filter((c) => !c.totalDebt || c.totalDebt.lte(0));
-    }
-    return searched;
-});
-
 const displayedClients = computed(() => {
-    return filteredClients.value.slice(0, visibleClientsCount.value);
+    return pagedClients.value;
 });
 
 const remainingClientsCount = computed(() => {
-    return Math.max(0, filteredClients.value.length - visibleClientsCount.value);
+    return Math.max(0, totalClientsCount.value - pagedClients.value.length);
 });
 
-const loadMoreClients = () => {
-    if (remainingClientsCount.value > 0) {
-        visibleClientsCount.value += INITIAL_VISIBLE_CLIENTS;
+const loadClientsPage = async (reset: boolean = false) => {
+    const authStore = useAuthStore();
+    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+    if (!storeId) return;
+
+    if (!reset && (isLoadingClientsPage.value || isLoadingMoreClients.value || remainingClientsCount.value <= 0)) {
+        return;
     }
+
+    const nextOffset = reset ? 0 : pagedClients.value.length;
+    const queryKey = `${storeId}|${nextOffset}|${clientSearch.value}|${activeClientFilter.value}|${reset}`;
+    if ((isLoadingClientsPage.value || isLoadingMoreClients.value) && inFlightQueryKey === queryKey) {
+        return;
+    }
+
+    const seq = ++activeFetchSeq;
+    inFlightQueryKey = queryKey;
+
+    if (reset) {
+        isLoadingClientsPage.value = true;
+        clientsPageError.value = null;
+    } else {
+        isLoadingMoreClients.value = true;
+    }
+
+    try {
+        const result = await clientsStore.fetchClientsPage({
+            storeId,
+            limit: CLIENTS_PAGE_SIZE,
+            offset: nextOffset,
+            search: clientSearch.value,
+            debtFilter: activeClientFilter.value,
+        });
+
+        if (seq !== activeFetchSeq) return;
+
+        if (reset) {
+            pagedClients.value = result.data;
+        } else {
+            const existingIds = new Set(pagedClients.value.map((c) => c.id));
+            const newItems = result.data.filter((c) => !existingIds.has(c.id));
+            pagedClients.value = [...pagedClients.value, ...newItems];
+        }
+        totalClientsCount.value = result.count;
+    } catch (e: any) {
+        if (seq !== activeFetchSeq) return;
+        clientsPageError.value = e?.message || 'Error al cargar clientes';
+    } finally {
+        if (seq === activeFetchSeq) {
+            isLoadingClientsPage.value = false;
+            isLoadingMoreClients.value = false;
+            inFlightQueryKey = '';
+        }
+    }
+};
+
+const loadMoreClients = () => {
+    loadClientsPage(false);
 };
 
 const handleClientListScroll = (event: Event) => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
-    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 24) {
+    if (
+        target.scrollHeight > target.clientHeight &&
+        target.scrollTop + target.clientHeight >= target.scrollHeight - 24
+    ) {
         loadMoreClients();
     }
 };
 
 const retryLoadClients = () => {
-    const authStore = useAuthStore();
-    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-    if (storeId) {
-        clientsStore.error = null;
-        clientsStore.initialize(storeId, true);
+    loadClientsPage(true);
+};
+
+const clearSelectedFiadoClient = () => {
+    selectedFiadoClient.value = null;
+    if (pagedClients.value.length === 0) {
+        loadClientsPage(true);
     }
 };
 
@@ -270,10 +324,12 @@ const goToClientDetail = (clientId: string) => {
 
 // Watchers
 watch([clientSearch, activeClientFilter], () => {
-  visibleClientsCount.value = INITIAL_VISIBLE_CLIENTS;
+  if (props.modelValue && isFiado.value && !selectedFiadoClient.value) {
+    loadClientsPage(true);
+  }
 });
 
-watch(() => props.modelValue, async (val) => {
+watch(() => props.modelValue, (val) => {
   if (val) {
     payments.value = [];
     const defaultCode = activeMethods.value.length > 0 ? activeMethods.value[0].code : 'cash';
@@ -283,14 +339,13 @@ watch(() => props.modelValue, async (val) => {
     reference.value = '';
     clientSearch.value = '';
     activeClientFilter.value = 'all';
-    visibleClientsCount.value = INITIAL_VISIBLE_CLIENTS;
+    pagedClients.value = [];
+    totalClientsCount.value = 0;
+    clientsPageError.value = null;
     selectedFiadoClient.value = props.selectedClient || null;
 
-    // Carga bajo demanda no bloqueante de clientes para el flujo de Fiado/Crédito (SWR Nivel 2)
-    const authStore = useAuthStore();
-    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-    if (storeId && clientsStore.clients.length === 0) {
-      clientsStore.initialize(storeId);
+    if (currentMethod.value === 'fiado' && !selectedFiadoClient.value) {
+      loadClientsPage(true);
     }
   }
 }, { immediate: true });
@@ -312,6 +367,15 @@ watch(currentMethod, (newMethod) => {
         setExactAmount();
     } else if (methodObj && methodObj.allowsChange) {
         inputAmount.value = '';
+    }
+
+    if (
+        newMethod === 'fiado' &&
+        props.modelValue &&
+        !selectedFiadoClient.value &&
+        pagedClients.value.length === 0
+    ) {
+        loadClientsPage(true);
     }
 });
 </script>
@@ -471,7 +535,7 @@ watch(currentMethod, (newMethod) => {
                         <div class="flex items-center gap-2">
                             <button
                                 type="button"
-                                @click="selectedFiadoClient = null"
+                                @click="clearSelectedFiadoClient"
                                 class="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
                             >
                                 <Users :size="14" />
@@ -479,7 +543,7 @@ watch(currentMethod, (newMethod) => {
                             </button>
                             <button
                                 type="button"
-                                @click="selectedFiadoClient = null"
+                                @click="clearSelectedFiadoClient"
                                 class="text-gray-400 hover:text-red-500 p-1 rounded-lg transition-colors cursor-pointer"
                                 title="Quitar cliente"
                             >
@@ -574,11 +638,11 @@ watch(currentMethod, (newMethod) => {
                             </button>
                         </div>
                         <span class="text-[11px] font-semibold text-gray-400 dark:text-gray-500 shrink-0">
-                            {{ displayedClients.length }} de {{ filteredClients.length }}
+                            {{ displayedClients.length }} de {{ totalClientsCount }}
                         </span>
                     </div>
 
-                    <!-- Lista Scrollable con Carga Progresiva Adaptada a Pantalla -->
+                    <!-- Lista Scrollable con Carga Progresiva de 5 en 5 -->
                     <div
                         data-testid="fiado-client-list"
                         @scroll="handleClientListScroll"
@@ -586,7 +650,7 @@ watch(currentMethod, (newMethod) => {
                     >
                         <!-- Estado Loading -->
                         <div
-                            v-if="clientsStore.isLoading && clientsStore.clients.length === 0"
+                            v-if="isLoadingClientsPage && displayedClients.length === 0"
                             class="flex flex-col items-center justify-center py-6 text-gray-500 dark:text-gray-400 gap-2"
                         >
                             <Loader2 :size="22" class="animate-spin text-indigo-500" />
@@ -595,11 +659,11 @@ watch(currentMethod, (newMethod) => {
 
                         <!-- Estado Error explícito (Regla 3) -->
                         <div
-                            v-else-if="clientsStore.error && clientsStore.clients.length === 0"
+                            v-else-if="clientsPageError && displayedClients.length === 0"
                             class="flex flex-col items-center justify-center py-5 px-3 text-center gap-2 text-red-600 dark:text-red-400"
                         >
                             <AlertTriangle :size="22" />
-                            <span class="text-xs font-semibold">{{ clientsStore.error }}</span>
+                            <span class="text-xs font-semibold">{{ clientsPageError }}</span>
                             <button
                                 type="button"
                                 @click="retryLoadClients"
@@ -611,7 +675,7 @@ watch(currentMethod, (newMethod) => {
 
                         <!-- Estado Vacío -->
                         <div
-                            v-else-if="filteredClients.length === 0"
+                            v-else-if="displayedClients.length === 0"
                             class="flex flex-col items-center justify-center py-6 px-3 text-center text-gray-400 dark:text-gray-500 gap-1.5"
                         >
                             <UserX :size="22" />
@@ -660,16 +724,20 @@ watch(currentMethod, (newMethod) => {
                                 </div>
                             </button>
 
-                            <!-- Carga Progresiva de Restantes -->
+                            <!-- Carga Progresiva de Restantes (Petición de 5 en 5) -->
                             <button
                                 v-if="remainingClientsCount > 0"
                                 type="button"
                                 data-testid="load-more-clients-btn"
+                                :disabled="isLoadingMoreClients"
                                 @click="loadMoreClients"
-                                class="w-full py-1.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                                class="w-full py-1.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-60"
                             >
-                                <ChevronDown :size="14" />
-                                <span>Ver más clientes ({{ remainingClientsCount }} restantes)</span>
+                                <Loader2 v-if="isLoadingMoreClients" :size="14" class="animate-spin" />
+                                <ChevronDown v-else :size="14" />
+                                <span>
+                                    {{ isLoadingMoreClients ? 'Cargando 5 más...' : `Cargar más clientes (${remainingClientsCount} restantes)` }}
+                                </span>
                             </button>
                         </template>
                     </div>
