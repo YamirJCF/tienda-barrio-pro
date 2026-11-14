@@ -4,7 +4,12 @@ import { Decimal } from 'decimal.js';
 import { useNotificationsStore } from './notificationsStore';
 import { useAuthStore } from './auth';
 import type { Product } from '../types';
-import { productRepository, productMapper } from '../data/repositories/productRepository';
+import {
+  productRepository,
+  productMapper,
+  type POSProductPageParams,
+  type PaginatedPOSProductsResult,
+} from '../data/repositories/productRepository';
 import { logger } from '../utils/logger';
 import { getSupabaseClient, isSupabaseConfigured } from '../data/supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
@@ -556,6 +561,31 @@ export const useInventoryStore = defineStore(
       await initialize(storeId);
     };
 
+    const fetchProductsPage = async (
+      params: POSProductPageParams
+    ): Promise<PaginatedPOSProductsResult> => {
+      const limit = params.limit ?? 7;
+      const offset = params.offset ?? 0;
+      const result = await productRepository.getPaginatedPOS({
+        ...params,
+        limit,
+        offset,
+      });
+
+      // Sincronizar en memoria únicamente los productos recibidos para validar stock en carrito
+      for (const item of result.data) {
+        const normalized = ensureDecimals(item);
+        const idx = products.value.findIndex((p) => p.id === normalized.id);
+        if (idx !== -1) {
+          products.value[idx] = normalized;
+        } else {
+          products.value.push(normalized);
+        }
+      }
+
+      return result;
+    };
+
     return {
       products,
       isLoading,
@@ -566,6 +596,7 @@ export const useInventoryStore = defineStore(
       productsByCategory,
       initialize,
       fetchProducts,
+      fetchProductsPage,
       addProduct,
       updateProduct,
       deleteProduct,

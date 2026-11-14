@@ -17,11 +17,9 @@ import { usePOS } from '../composables/usePOS';
 import { useSaleProcessor } from '../composables/useSaleProcessor';
 import { useHeartbeat } from '../composables/useHeartbeat'; // Presence & Pause logic
 import { logger } from '../utils/logger';
-import { generateUUID } from '../utils/uuid';
 import { Decimal } from 'decimal.js';
 import CheckoutModal from '../components/sales/CheckoutModal.vue';
 import ProductSearchModal from '../components/ProductSearchModal.vue';
-import QuickNoteModal from '../components/QuickNoteModal.vue';
 import WeightCalculatorModal from '../components/WeightCalculatorModal.vue';
 import ForceSaleModal from '../components/ForceSaleModal.vue';
 import NoPermissionOverlay from '../components/ui/NoPermissionOverlay.vue';
@@ -35,7 +33,6 @@ import {
   XCircle, 
   ShoppingCart, 
   Search, 
-  StickyNote, 
   Banknote,
   Timer,
   Check,
@@ -101,7 +98,6 @@ const blockingState = computed(() => {
 // State
 const showCheckout = ref(false);
 const showSearch = ref(false);
-const showNote = ref(false);
 const showWeightCalculator = ref(false);
 const selectedWeighableProduct = ref<Product | null>(null);
 const preselectedClient = ref<Client | null>(null);
@@ -236,19 +232,6 @@ const formattedTotal = computed(() => cartStore.formattedTotal);
 const ticketNumber = computed(() => {
   return `#${salesStore.nextTicketNumber.toString().padStart(3, '0')}`;
 });
-
-const addNoteItem = async (item: { name: string; price: number }) => {
-  const quantity = pendingQuantity.value;
-  await cartStore.addItem({
-    id: generateUUID(),
-    name: item.name,
-    price: new Decimal(item.price),
-    quantity,
-    measurementUnit: 'un',
-    isWeighable: false,
-  });
-  resetModes();
-};
 
 // Handle weight calculator confirmation
 const handleWeightCalculatorConfirm = (data: {
@@ -494,28 +477,16 @@ onUnmounted(() => {
       <div class="px-3 pt-2 pb-3 flex flex-col gap-1.5">
         <div v-show="!isKeypadCollapsed" data-testid="pos-keypad-panel" class="flex flex-col gap-1.5">
           <!-- Extra Toolbar -->
-          <div class="grid grid-cols-2 gap-1.5">
-            <BaseButton
-              variant="secondary"
-              class="h-9 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
-              @click="showSearch = true"
-            >
-              <div class="flex items-center gap-2">
-                <Search :size="16" :stroke-width="1.5" />
-                Buscar
-              </div>
-            </BaseButton>
-            <BaseButton
-              variant="secondary"
-              class="h-9 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
-              @click="showNote = true"
-            >
-               <div class="flex items-center gap-2">
-                 <StickyNote :size="16" :stroke-width="1.5" />
-                 Nota
-               </div>
-            </BaseButton>
-          </div>
+          <BaseButton
+            variant="secondary"
+            class="w-full h-9 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
+            @click="showSearch = true"
+          >
+            <div class="flex items-center gap-2">
+              <Search :size="16" :stroke-width="1.5" />
+              Buscar
+            </div>
+          </BaseButton>
 
           <!-- Numpad Grid -->
           <POSNumpad 
@@ -572,8 +543,6 @@ onUnmounted(() => {
     />
 
     <ProductSearchModal v-model="showSearch" @select="addProductFromSearch" />
-
-    <QuickNoteModal v-model="showNote" @add="addNoteItem" />
 
     <WeightCalculatorModal v-model="showWeightCalculator" :product="selectedWeighableProduct"
       @confirm="handleWeightCalculatorConfirm" />

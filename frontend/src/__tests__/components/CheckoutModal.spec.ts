@@ -225,12 +225,18 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
     expect(wrapper.find('[data-testid="load-more-clients-btn"]').exists()).toBe(false);
   });
 
-  it('triggers a fresh offset=0 paginated query when searching or switching filter chips', async () => {
+  it('triggers a fresh offset=0 paginated query when searching and omits debt filter chips', async () => {
     const { fetchPageSpy } = setupStores();
     const wrapper = mountModal();
 
     await switchToFiadoTab(wrapper);
     fetchPageSpy.mockClear();
+
+    // Filter chips must not exist
+    const buttonTexts = wrapper.findAll('button').map((b) => b.text().trim());
+    expect(buttonTexts).not.toContain('Todos');
+    expect(buttonTexts).not.toContain('Con Deuda');
+    expect(buttonTexts).not.toContain('Al Día');
 
     // Search by name
     const searchInput = wrapper.find('input[aria-label*="Buscar cliente"]');
@@ -251,52 +257,36 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
     await wrapper.find('button[aria-label="Limpiar búsqueda"]').trigger('click');
     await flushPromises();
 
-    // Switch filter chip to "Con Deuda"
-    const debtFilterBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Con Deuda');
-    await debtFilterBtn!.trigger('click');
-    await flushPromises();
-
     expect(fetchPageSpy).toHaveBeenLastCalledWith({
       storeId,
       limit: 5,
       offset: 0,
       search: '',
-      debtFilter: 'with_debt',
+      debtFilter: 'all',
     });
     expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(5);
-    expect(wrapper.text()).toContain('5 de 6');
-
-    // Switch filter chip to "Al Día"
-    const upToDateBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Al Día');
-    await upToDateBtn!.trigger('click');
-    await flushPromises();
-
-    expect(fetchPageSpy).toHaveBeenLastCalledWith({
-      storeId,
-      limit: 5,
-      offset: 0,
-      search: '',
-      debtFilter: 'up_to_date',
-    });
-    expect(wrapper.findAll('[data-testid="fiado-client-card"]').length).toBe(5);
-    expect(wrapper.text()).toContain('5 de 6');
+    expect(wrapper.text()).toContain('5 de 12');
   });
 
-  it('selects client, navigates to detail on selected name click, allows Cambiar, and emits complete', async () => {
+  it('selects client, navigates to detail on selected name click, omits Nota de Fiado, allows Cambiar, and emits complete', async () => {
     const dataset = makeClientsCatalog();
     const { fetchPageSpy } = setupStores(dataset);
     const wrapper = mountModal({ total: new Decimal(120000) }); // Exceeds MARIA's creditLimit
 
     await switchToFiadoTab(wrapper);
 
-    // Before selecting client, no detail navigation link exists and clicking a card does not navigate
+    // Before selecting client, no detail navigation link nor Nota de Fiado box exists, and clicking a card does not navigate
     expect(wrapper.find('[data-testid="selected-client-name-link"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="fiado-note-field"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Nota de Fiado');
     await wrapper.findAll('[data-testid="fiado-client-card"]')[0].trigger('click');
     expect(mockPush).not.toHaveBeenCalled();
 
-    // Summary card shows selected client & credit limit warning
+    // Summary card shows selected client & credit limit warning without Nota de Fiado box
     expect(wrapper.text()).toContain('Cliente Seleccionado');
     expect(wrapper.text()).toContain('superará el cupo disponible');
+    expect(wrapper.find('[data-testid="fiado-note-field"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Nota de Fiado');
 
     // Clicking selected client name navigates to detail view
     const nameLink = wrapper.find('[data-testid="selected-client-name-link"]');
@@ -307,10 +297,11 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
       query: { from: 'pos' },
     });
 
-    // Returning via Cambiar shows inline paginated list without re-fetching if already populated
+    // Returning via Cambiar shows inline paginated list without Nota de Fiado
     const changeBtn = wrapper.findAll('button').find((b) => b.text().includes('Cambiar'));
     await changeBtn!.trigger('click');
     expect(wrapper.find('input[aria-label*="Buscar cliente"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="fiado-note-field"]').exists()).toBe(false);
 
     // Re-select and confirm sale
     await wrapper.findAll('[data-testid="fiado-client-card"]')[0].trigger('click');
@@ -318,6 +309,11 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
     await confirmBtn!.trigger('click');
 
     expect(wrapper.emitted('complete')).toBeDefined();
+    expect(wrapper.emitted('complete')![0][0]).toEqual([
+      expect.objectContaining({
+        method: 'fiado',
+      }),
+    ]);
     expect(wrapper.emitted('complete')![0][2]).toBe('c-1');
 
     // Opening directly on fiado with selectedClient doesn't fetch list until Cambiar is pressed

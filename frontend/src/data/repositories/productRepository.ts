@@ -143,8 +143,51 @@ export interface MovementHistoryFilters {
     limit?: number;
 }
 
+export interface POSProductPageParams {
+    storeId: string;
+    limit?: number;
+    offset?: number;
+    search?: string;
+}
+
+export interface PaginatedPOSProductsResult {
+    data: Product[];
+    count: number;
+    matchType?: string;
+}
+
+function normalizePosPrefix(value: string): string {
+    return value
+        .toLowerCase()
+        .replace(/á/g, 'a')
+        .replace(/é/g, 'e')
+        .replace(/í/g, 'i')
+        .replace(/ó/g, 'o')
+        .replace(/[úü]/g, 'u');
+}
+
+function mapRpcPosProduct(item: any, storeId: string): Product {
+    const unitRaw = item.measurement_unit;
+    return {
+        id: item.id,
+        name: item.name,
+        plu: item.plu || undefined,
+        price: new Decimal(item.price ?? 0),
+        cost: undefined,
+        stock: new Decimal(item.current_stock ?? 0),
+        minStock: Number(item.min_stock ?? 5),
+        brand: item.brand || undefined,
+        category: item.category || undefined,
+        isWeighable: Boolean(item.is_weighable),
+        measurementUnit: (unitRaw === 'unidad' ? 'un' : (unitRaw || 'un')) as Product['measurementUnit'],
+        storeId,
+        isActive: true,
+    };
+}
+
 export interface ProductRepository extends EntityRepository<Product> {
     getAll(storeId?: string, includeInactive?: boolean): Promise<Product[]>;
+    getPaginatedPOS(params: POSProductPageParams): Promise<PaginatedPOSProductsResult>;
     getByPlu(plu: string, storeId?: string): Promise<Product | null>;
     searchByName(query: string, storeId?: string): Promise<Product[]>;
     updateStock(id: string, quantity: number): Promise<boolean>;
@@ -230,6 +273,103 @@ export const productRepository: ProductRepository = {
             return results;
         }
         return results.filter(p => p.isActive !== false);
+    },
+
+    /**
+     * Búsqueda paginada POS (7 en 7) delegada al RPC buscar_producto_pos con fallback offline IDB
+     */
+    async getPaginatedPOS(params: POSProductPageParams): Promise<PaginatedPOSProductsResult> {
+        const limit = Math.max(1, params.limit ?? 7);
+        const offset = Math.max(0, params.offset ?? 0);
+        const cleanSearch = (params.search || '').trim();
+        const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+
+        if (isSupabaseConfigured() && isOnline) {
+            const supabase = getSupabaseClient();
+            if (!supabase) {
+                throw new Error('No hay conexión activa con el servidor.');
+            }
+
+            const { data, error } = await supabase.rpc('buscar_producto_pos', {
+                p_store_id: params.storeId,
+                p_term: cleanSearch,
+                p_limit: limit,
+                p_offset: offset,
+            });
+
+            if (error) {
+                logger.error('[ProductRepo] Error en buscar_producto_pos:', error);
+                throw new Error(error.message || 'Error al cargar productos del POS');
+            }
+
+            const res = data as any;
+            if (!res || !Array.isArray(res.data)) {
+                throw new Error('Respuesta inválida del servidor al buscar productos.');
+            }
+
+            const mapped = res.data.map((item: any) => mapRpcPosProduct(item, params.storeId));
+            return {
+                data: mapped,
+                count: typeof res.count === 'number' ? res.count : mapped.length,
+                matchType: res.match_type,
+            };
+        }
+
+        // Fallback offline: caché local IDB aplicando las mismas reglas de filtrado
+        let cached = await productCache.getByIndex('by_store', params.storeId);
+        if (cached.length === 0) {
+            const allCached = await productCache.getAll();
+            cached = allCached.filter((p) => p.storeId === params.storeId);
+        }
+
+        const activeProducts = cached
+            .filter((p) => p.isActive !== false)
+            .map((p) => ({
+                ...p,
+                price: p.price instanceof Decimal ? p.price : new Decimal(p.price ?? 0),
+                stock: p.stock instanceof Decimal ? p.stock : new Decimal(p.stock ?? 0),
+            }));
+
+        if (!cleanSearch) {
+            const filtered = activeProducts
+                .filter((p) => p.stock.gt(0))
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            return {
+                data: filtered.slice(offset, offset + limit),
+                count: filtered.length,
+                matchType: 'catalog_page',
+            };
+        }
+
+        if (/^[0-9]+$/.test(cleanSearch)) {
+            const hasExact = activeProducts.some((p) => p.plu === cleanSearch);
+            const filtered = activeProducts
+                .filter((p) => p.plu === cleanSearch || (Boolean(p.plu?.startsWith(cleanSearch)) && p.stock.gt(0)))
+                .sort((a, b) => {
+                    const aExact = a.plu === cleanSearch ? 0 : 1;
+                    const bExact = b.plu === cleanSearch ? 0 : 1;
+                    if (aExact !== bExact) return aExact - bExact;
+                    const pluCmp = (a.plu || '').localeCompare(b.plu || '');
+                    if (pluCmp !== 0) return pluCmp;
+                    return (a.name || '').localeCompare(b.name || '');
+                });
+            return {
+                data: filtered.slice(offset, offset + limit),
+                count: filtered.length,
+                matchType: filtered.length === 0 ? 'not_found' : hasExact ? 'exact_plu' : 'prefix_plu',
+            };
+        }
+
+        const normPrefix = normalizePosPrefix(cleanSearch);
+        const filtered = activeProducts
+            .filter((p) => p.stock.gt(0) && normalizePosPrefix(p.name || '').startsWith(normPrefix))
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        return {
+            data: filtered.slice(offset, offset + limit),
+            count: filtered.length,
+            matchType: 'prefix_name',
+        };
     },
 
     /**

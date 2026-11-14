@@ -91,4 +91,30 @@ describe('Cart Store (Logic Verification)', () => {
         expect(cart.items.length).toBe(0);
         expect(cart.total.toNumber()).toBe(0);
     });
+
+    it('should reject items that do not exist in inventory (no phantom quick notes)', async () => {
+        const cart = useCartStore();
+        const unknownId = '99999999-9999-4999-8999-999999999999';
+
+        const regularResult = await cart.addItem({
+            id: unknownId,
+            name: 'Nota libre',
+            price: new Decimal(500),
+            quantity: 1,
+        });
+        expect(regularResult.success).toBe(false);
+        expect(regularResult.stockError).toBe('Producto no encontrado en el inventario');
+
+        const weighableResult = cart.addWeighableItem({
+            id: unknownId,
+            name: 'Peso libre',
+            price: new Decimal(1000),
+            quantity: new Decimal(0.5),
+            unit: 'kg',
+            subtotal: new Decimal(500),
+        });
+        expect(weighableResult.success).toBe(false);
+        expect(weighableResult.stockError).toBe('Producto no encontrado en el inventario');
+        expect(cart.items.length).toBe(0);
+    });
 });

@@ -19,7 +19,7 @@ export type AddItemResult = {
 };
 
 type StockCheckResult = {
-  status: 'ok' | 'blocked' | 'force_allowed';
+  status: 'ok' | 'blocked' | 'force_allowed' | 'not_found';
   availableStock?: string; // Formatted for UI display
   unit?: string;
 };
@@ -82,11 +82,10 @@ export const useCartStore = defineStore(
       }
     };
 
-    // Helper: Validar stock disponible (IGUALITARIO — sin bypass de rol)
+    // Helper: Validar stock disponible (IGUALITARIO — sin bypass de rol ni ítems sin catálogo)
     const checkStockAvailability = (productId: string, quantityToAdd: Decimal | number): StockCheckResult => {
       const product = inventoryStore.products.find(p => p.id === productId);
-      // Items sin inventario (notas rápidas con UUID generado) → siempre OK
-      if (!product) return { status: 'ok' };
+      if (!product) return { status: 'not_found' };
 
       const currentInCart = items.value.find(i => i.id === productId);
       const cartQty = currentInCart
@@ -110,6 +109,19 @@ export const useCartStore = defineStore(
 
       // Bloqueado (1er intento para todos, o empleado siempre)
       return { status: 'blocked', availableStock: availableFormatted, unit };
+    };
+
+    const resolveBlockingStockError = (productId: string, check: StockCheckResult): string | null => {
+      if (check.status === 'not_found') {
+        return 'Producto no encontrado en el inventario';
+      }
+      if (check.status === 'blocked') {
+        if (authStore.isAdmin && navigator.onLine) {
+          forcedProducts.value.add(productId);
+        }
+        return `Stock insuficiente. Disponible: ${check.availableStock} ${check.unit || ''}`.trim();
+      }
+      return null;
     };
 
     // Add regular item (integer quantity) with defensive validation
@@ -138,16 +150,13 @@ export const useCartStore = defineStore(
         return { success: false, stockError: 'No admite decimales' };
       }
       const check = checkStockAvailability(product.id, qty);
+      const blockingError = resolveBlockingStockError(product.id, check);
 
-      if (check.status === 'blocked') {
-        // Register attempt for admin double-intent tracking
-        if (authStore.isAdmin && navigator.onLine) {
-          forcedProducts.value.add(product.id);
-        }
-        console.warn('[Cart] ⚠️ addItem rejected: Insufficient stock');
+      if (blockingError) {
+        console.warn(`[Cart] ⚠️ addItem rejected: ${blockingError}`);
         return {
           success: false,
-          stockError: `Stock insuficiente. Disponible: ${check.availableStock} ${check.unit || ''}`.trim()
+          stockError: blockingError,
         };
       }
 
@@ -252,15 +261,13 @@ export const useCartStore = defineStore(
 
       // 🛑 Validar Stock (IGUALITARIO)
       const check = checkStockAvailability(item.id, item.quantity);
+      const blockingError = resolveBlockingStockError(item.id, check);
 
-      if (check.status === 'blocked') {
-        if (authStore.isAdmin && navigator.onLine) {
-          forcedProducts.value.add(item.id);
-        }
-        console.warn('[Cart] ⚠️ addWeighableItem rejected: Insufficient stock');
+      if (blockingError) {
+        console.warn(`[Cart] ⚠️ addWeighableItem rejected: ${blockingError}`);
         return {
           success: false,
-          stockError: `Stock insuficiente. Disponible: ${check.availableStock} ${check.unit || ''}`.trim()
+          stockError: blockingError,
         };
       }
 

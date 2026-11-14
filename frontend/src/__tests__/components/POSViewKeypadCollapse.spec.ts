@@ -109,7 +109,6 @@ describe('POSView - Tarjetas Compactas y Teclado Plegable (Opción C)', () => {
           teleport: true,
           CheckoutModal: true,
           ProductSearchModal: true,
-          QuickNoteModal: true,
           WeightCalculatorModal: true,
           ForceSaleModal: true,
           SyncIndicator: true,
@@ -220,5 +219,17 @@ describe('POSView - Tarjetas Compactas y Teclado Plegable (Opción C)', () => {
 
     expect(handle.attributes('aria-expanded')).toBe('false');
     expect((panel.element as HTMLElement).style.display).toBe('none');
+  });
+
+  it('muestra únicamente el botón Buscar a ancho completo y elimina el botón Nota', () => {
+    const { wrapper } = mountPOSView();
+    const panel = wrapper.find('[data-testid="pos-keypad-panel"]');
+    const buttons = panel.findAll('button');
+    const searchBtn = buttons.find((btn) => btn.text().includes('Buscar'));
+    const noteBtn = buttons.find((btn) => btn.text().includes('Nota'));
+
+    expect(searchBtn?.exists()).toBe(true);
+    expect(searchBtn?.classes()).toContain('w-full');
+    expect(noteBtn).toBeUndefined();
   });
 });

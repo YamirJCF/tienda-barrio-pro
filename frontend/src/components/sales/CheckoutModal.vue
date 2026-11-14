@@ -33,13 +33,7 @@ interface Props {
   initialMethod?: string;
 }
 
-type ClientFilterType = 'all' | 'with_debt' | 'up_to_date';
 const CLIENTS_PAGE_SIZE = 5;
-const CLIENT_FILTER_OPTIONS: { value: ClientFilterType; label: string }[] = [
-  { value: 'all', label: 'Todos' },
-  { value: 'with_debt', label: 'Con Deuda' },
-  { value: 'up_to_date', label: 'Al Día' },
-];
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
@@ -59,7 +53,6 @@ const currentMethod = ref<string>('cash'); // Default start, updated via watcher
 const inputAmount = ref<string>('');
 const reference = ref<string>('');
 const clientSearch = ref('');
-const activeClientFilter = ref<ClientFilterType>('all');
 const pagedClients = ref<Client[]>([]);
 const totalClientsCount = ref<number>(0);
 const isLoadingClientsPage = ref<boolean>(false);
@@ -138,7 +131,7 @@ const loadClientsPage = async (reset: boolean = false) => {
     }
 
     const nextOffset = reset ? 0 : pagedClients.value.length;
-    const queryKey = `${storeId}|${nextOffset}|${clientSearch.value}|${activeClientFilter.value}|${reset}`;
+    const queryKey = `${storeId}|${nextOffset}|${clientSearch.value}|${reset}`;
     if ((isLoadingClientsPage.value || isLoadingMoreClients.value) && inFlightQueryKey === queryKey) {
         return;
     }
@@ -159,7 +152,7 @@ const loadClientsPage = async (reset: boolean = false) => {
             limit: CLIENTS_PAGE_SIZE,
             offset: nextOffset,
             search: clientSearch.value,
-            debtFilter: activeClientFilter.value,
+            debtFilter: 'all',
         });
 
         if (seq !== activeFetchSeq) return;
@@ -270,7 +263,6 @@ const confirmTransaction = () => {
         payments.value = [{
             method: 'fiado',
             amount: amountToCredit,
-            reference: reference.value || undefined
         }];
 
         const finalTotalPaid = amountToCredit;
@@ -320,7 +312,7 @@ const goToClientDetail = (clientId: string) => {
 };
 
 // Watchers
-watch([clientSearch, activeClientFilter], () => {
+watch(clientSearch, () => {
   if (props.modelValue && isFiado.value && !selectedFiadoClient.value) {
     loadClientsPage(true);
   }
@@ -335,7 +327,6 @@ watch(() => props.modelValue, (val) => {
     inputAmount.value = '';
     reference.value = '';
     clientSearch.value = '';
-    activeClientFilter.value = 'all';
     pagedClients.value = [];
     totalClientsCount.value = 0;
     clientsPageError.value = null;
@@ -596,7 +587,7 @@ watch(currentMethod, (newMethod) => {
                 </div>
 
                 <!-- 1B. Selector Inline Directo (Cero clics adicionales) -->
-                <div v-else class="flex flex-col gap-2 bg-gray-50/70 dark:bg-gray-800/40 p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700/80 flex-1 min-h-[220px]">
+                <div v-else class="flex flex-col gap-2 bg-gray-50/70 dark:bg-gray-800/40 p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700/80 flex-1 min-h-0">
                     <!-- Buscador Inline -->
                     <div class="relative shrink-0">
                         <Search :size="16" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -618,22 +609,8 @@ watch(currentMethod, (newMethod) => {
                         </button>
                     </div>
 
-                    <!-- Filtros rápidos + Contador visible -->
-                    <div class="flex items-center justify-between gap-2 shrink-0">
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <button
-                                v-for="opt in CLIENT_FILTER_OPTIONS"
-                                :key="opt.value"
-                                type="button"
-                                @click="activeClientFilter = opt.value"
-                                class="px-2.5 py-1 rounded-full text-[11px] font-bold transition-all duration-150 cursor-pointer"
-                                :class="activeClientFilter === opt.value
-                                    ? 'bg-indigo-600 text-white shadow-sm'
-                                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-indigo-300'"
-                            >
-                                {{ opt.label }}
-                            </button>
-                        </div>
+                    <!-- Contador visible -->
+                    <div class="flex items-center justify-end shrink-0">
                         <span class="text-[11px] font-semibold text-gray-400 dark:text-gray-500 shrink-0">
                             {{ displayedClients.length }} de {{ totalClientsCount }}
                         </span>
@@ -643,7 +620,7 @@ watch(currentMethod, (newMethod) => {
                     <div
                         data-testid="fiado-client-list"
                         @scroll="handleClientListScroll"
-                        class="flex-1 min-h-[140px] max-h-[210px] overflow-y-auto space-y-1.5 pr-1"
+                        class="flex-1 min-h-[140px] overflow-y-auto space-y-1.5 pr-1"
                     >
                         <!-- Estado Loading -->
                         <div
@@ -738,19 +715,6 @@ watch(currentMethod, (newMethod) => {
                             </button>
                         </template>
                     </div>
-                </div>
-
-                <!-- 2. Nota de Fiado / Referencia (Compacta) -->
-                <div class="space-y-1 shrink-0">
-                    <label class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block">
-                        Nota de Fiado (Opcional)
-                    </label>
-                    <input
-                        v-model="reference"
-                        type="text"
-                        placeholder="Ej: Paga quincena, autorizado por dueño..."
-                        class="w-full py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-medium"
-                    />
                 </div>
             </div>
 
