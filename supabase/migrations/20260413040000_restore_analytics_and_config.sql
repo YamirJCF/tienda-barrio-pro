@@ -29,13 +29,12 @@ CREATE POLICY "admin_manage_methods" ON public.payment_methods
         auth.jwt() ->> 'role' = 'service_role'
     );
 
--- SEED DATA (Backward Compatibility)
+-- SEED DATA (Backward Compatibility - FRD-007 / DICT-004)
 INSERT INTO public.payment_methods (code, name, allows_change, requires_reference, sort_order)
 VALUES 
     ('cash', 'Efectivo', true, false, 10),
     ('nequi', 'Nequi / Daviplata', false, true, 20),
-    ('fiado', 'Fiado / Crédito', false, false, 30),
-    ('card', 'Tarjeta Débito/Crédito', false, true, 40)
+    ('fiado', 'Fiado / Crédito', false, false, 30)
 ON CONFLICT (code) DO NOTHING;
 
 

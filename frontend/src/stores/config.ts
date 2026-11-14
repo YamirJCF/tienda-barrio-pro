@@ -3,6 +3,15 @@ import { ref, computed } from 'vue';
 import { getSupabaseClient } from '../data/supabaseClient';
 import { logger } from '../utils/logger';
 
+export const ALLOWED_POS_PAYMENT_CODES = new Set([
+    'cash',
+    'efectivo',
+    'nequi',
+    'daviplata',
+    'fiado',
+    'bre'
+]);
+
 export interface PaymentMethod {
     id: string;
     code: string;
@@ -36,7 +45,9 @@ export const useConfigStore = defineStore('config', () => {
 
     // Getters
     const activePaymentMethods = computed(() => {
-        return paymentMethods.value.filter(pm => pm.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
+        return paymentMethods.value
+            .filter(pm => pm.isActive && ALLOWED_POS_PAYMENT_CODES.has(pm.code))
+            .sort((a, b) => a.sortOrder - b.sortOrder);
     });
 
     const getMethodByCode = (code: string) => {
@@ -60,15 +71,17 @@ export const useConfigStore = defineStore('config', () => {
             if (rpcError) throw rpcError;
 
             if (data) {
-                // Map snake_case from DB to camelCase for Frontend
-                paymentMethods.value = (data.payment_methods || []).map((pm: any) => ({
-                    code: pm.code,
-                    name: pm.name,
-                    isActive: pm.is_active !== false, // Default true if undefined
-                    requiresReference: pm.requires_reference,
-                    allowsChange: pm.allows_change,
-                    sortOrder: pm.sort_order || 0
-                }));
+                // Map snake_case from DB to camelCase for Frontend, enforcing FRD-007 / DICT-004 allowlist
+                paymentMethods.value = (data.payment_methods || [])
+                    .filter((pm: any) => ALLOWED_POS_PAYMENT_CODES.has(pm.code))
+                    .map((pm: any) => ({
+                        code: pm.code,
+                        name: pm.name,
+                        isActive: pm.is_active !== false, // Default true if undefined
+                        requiresReference: pm.requires_reference,
+                        allowsChange: pm.allows_change,
+                        sortOrder: pm.sort_order || 0
+                    }));
 
                 transactionTypes.value = (data.transaction_types || []).map((tt: any) => ({
                     code: tt.code,

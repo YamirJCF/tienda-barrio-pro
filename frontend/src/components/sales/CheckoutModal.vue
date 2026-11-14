@@ -7,7 +7,6 @@ import Decimal from 'decimal.js';
 import UIBaseModal from '@/components/ui/BaseModal.vue';
 import {
   Banknote,
-  CreditCard,
   User,
   Delete,
   X,
@@ -85,7 +84,6 @@ const currentPaymentMethod = computed(() => {
 
 // Capabilities
 const allowsChange = computed(() => currentPaymentMethod.value?.allowsChange ?? false);
-const requiresReference = computed(() => currentPaymentMethod.value?.requiresReference ?? false);
 const isFiado = computed(() => currentMethod.value === 'fiado'); // Special Business Logic
 const isNequi = computed(() => currentMethod.value === 'nequi'); // Special UI Logic (QR)
 
@@ -218,7 +216,6 @@ const getIconForMethod = (code: string) => {
         case 'cash': return Banknote;
         case 'nequi': return Smartphone;
         case 'fiado': return User;
-        case 'card': return CreditCard;
         default: return Banknote;
     }
 };
@@ -753,28 +750,6 @@ watch(currentMethod, (newMethod) => {
                         type="text"
                         placeholder="Ej: Paga quincena, autorizado por dueño..."
                         class="w-full py-2.5 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-medium"
-                    />
-                </div>
-            </div>
-
-            <!-- Scenario D: Generic (Card, etc) -->
-            <div v-else class="flex flex-col items-center justify-center gap-4 h-full py-8 text-center">
-                <component :is="getIconForMethod(currentMethod)" :size="64" class="text-gray-300 dark:text-gray-600 mb-2" />
-                <p class="text-gray-500 dark:text-gray-400">Procesar pago por {{ currentPaymentMethod?.name }}</p>
-                <div class="w-full max-w-xs mt-4 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                    <div class="text-xs uppercase text-gray-400 font-bold mb-1">Monto Exacto</div>
-                    <div class="text-2xl font-black text-gray-900 dark:text-white">
-                        $ {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : totalMoneyOnTable) }}
-                    </div>
-                </div>
-                <!-- Reference for cards -->
-                <div v-if="requiresReference" class="w-full max-w-xs">
-                    <label class="text-xs font-bold text-gray-400 uppercase mb-1 block text-left">Referencia (Opcional)</label>
-                    <input 
-                        v-model="reference"
-                        type="text"
-                        placeholder="Últimos 4 dígitos"
-                        class="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     />
                 </div>
             </div>
