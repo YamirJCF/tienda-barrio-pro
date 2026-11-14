@@ -38,7 +38,9 @@ import {
   StickyNote, 
   Banknote,
   Timer,
-  Check
+  Check,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -103,6 +105,55 @@ const showNote = ref(false);
 const showWeightCalculator = ref(false);
 const selectedWeighableProduct = ref<Product | null>(null);
 const preselectedClient = ref<Client | null>(null);
+const isKeypadCollapsed = ref(false);
+const swipeStartY = ref<number | null>(null);
+const didSwipeGesture = ref(false);
+
+const onHandleTouchStart = (e: TouchEvent) => {
+  swipeStartY.value = e.touches[0]?.clientY ?? null;
+  didSwipeGesture.value = false;
+};
+
+const onHandleTouchEnd = (e: TouchEvent) => {
+  if (swipeStartY.value === null) return;
+  const endY = e.changedTouches[0]?.clientY ?? swipeStartY.value;
+  const deltaY = endY - swipeStartY.value;
+  if (deltaY > 25 && !isKeypadCollapsed.value) {
+    isKeypadCollapsed.value = true;
+    didSwipeGesture.value = true;
+  } else if (deltaY < -25 && isKeypadCollapsed.value) {
+    isKeypadCollapsed.value = false;
+    didSwipeGesture.value = true;
+  }
+  swipeStartY.value = null;
+};
+
+const onHandlePointerDown = (e: PointerEvent) => {
+  if (e.pointerType === 'touch') return;
+  swipeStartY.value = e.clientY;
+  didSwipeGesture.value = false;
+};
+
+const onHandlePointerUp = (e: PointerEvent) => {
+  if (e.pointerType === 'touch' || swipeStartY.value === null) return;
+  const deltaY = e.clientY - swipeStartY.value;
+  if (deltaY > 25 && !isKeypadCollapsed.value) {
+    isKeypadCollapsed.value = true;
+    didSwipeGesture.value = true;
+  } else if (deltaY < -25 && isKeypadCollapsed.value) {
+    isKeypadCollapsed.value = false;
+    didSwipeGesture.value = true;
+  }
+  swipeStartY.value = null;
+};
+
+const toggleKeypad = () => {
+  if (didSwipeGesture.value) {
+    didSwipeGesture.value = false;
+    return;
+  }
+  isKeypadCollapsed.value = !isKeypadCollapsed.value;
+};
 
 watch(showCheckout, (isOpen) => {
   if (!isOpen) {
@@ -350,29 +401,31 @@ onUnmounted(() => {
       </div>
 
       <!-- Ticket List (Scrollable) -->
-      <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700 bg-background-light dark:bg-background-dark px-2 pb-20">
+      <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-gray-700 bg-background-light dark:bg-background-dark px-2.5 py-2">
         <!-- Cart Items -->
         <div v-for="item in cartStore.items" :key="item.id"
-          class="flex items-center gap-3 bg-white dark:bg-gray-800 p-3 rounded-lg mb-2 shadow-sm border border-gray-100 dark:border-gray-700 animate-fade-in">
-          <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded h-8 min-w-8 px-1 shrink-0">
-            <span class="text-xs font-bold text-gray-600 dark:text-gray-300">x{{ formatStock(item.quantity, item.measurementUnit) }}</span>
+          data-testid="pos-cart-item"
+          class="flex items-center gap-2 bg-white dark:bg-gray-800 px-2.5 py-1.5 rounded-lg mb-1.5 shadow-sm border border-gray-100 dark:border-gray-700 animate-fade-in cursor-pointer"
+          @click="isKeypadCollapsed = true">
+          <div class="flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded h-6 min-w-6 px-1.5 shrink-0">
+            <span class="text-[11px] font-bold text-gray-600 dark:text-gray-300">x{{ formatStock(item.quantity, item.measurementUnit) }}</span>
           </div>
           <div class="flex-1 min-w-0">
-            <p class="text-gray-900 dark:text-white text-sm font-medium leading-tight truncate">
+            <p class="text-gray-900 dark:text-white text-xs font-semibold leading-tight truncate">
               {{ item.name }}
             </p>
-            <p class="text-gray-500 dark:text-gray-400 text-xs">
+            <p class="text-gray-500 dark:text-gray-400 text-[11px] leading-tight">
               {{ formatCurrency(item.price) }} {{ item.measurementUnit }}.
             </p>
           </div>
-          <div class="flex items-center gap-3">
-            <p class="text-gray-900 dark:text-white font-bold text-base">
+          <div class="flex items-center gap-1.5 shrink-0">
+            <p class="text-gray-900 dark:text-white font-bold text-sm tabular-nums">
               {{ formatCurrency(item.subtotal || item.price.times(item.quantity)) }}
             </p>
             <button aria-label="Remove item"
-              class="text-gray-400 hover:text-red-500 p-2 -mr-2 rounded-full active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
-              @click="cartStore.removeItem(item.id)">
-              <XCircle :size="20" :stroke-width="1.5" />
+              class="text-gray-400 hover:text-red-500 p-1 -mr-1 rounded-full active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
+              @click.stop="cartStore.removeItem(item.id)">
+              <XCircle :size="17" :stroke-width="1.5" />
             </button>
           </div>
         </div>
@@ -384,79 +437,99 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Sticky Total Summary (Floating in Top Zone) -->
+      <!-- Total Summary Bar (Flow Layout - No Overlap) -->
       <div
-        class="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 flex flex-col items-end">
-        <span class="text-gray-500 dark:text-gray-400 text-xs font-bold tracking-widest uppercase mb-1">Total a
-          Pagar</span>
-        <div class="text-4xl font-black text-blue-900 dark:text-accent-green tracking-tight">
+        data-testid="pos-total-bar"
+        class="shrink-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 px-4 py-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 flex items-center justify-between">
+        <span class="text-gray-500 dark:text-gray-400 text-xs font-bold tracking-widest uppercase">Total a Pagar</span>
+        <div class="text-2xl font-black text-blue-900 dark:text-accent-green tracking-tight tabular-nums">
           {{ formattedTotal }}
         </div>
       </div>
     </section>
 
-    <!-- ZONA INFERIOR: COMANDOS (Fixed Height) -->
+    <!-- ZONA INFERIOR: COMANDOS (Collapsible Keypad) -->
     <section
-      class="bg-surface-light dark:bg-gray-900 shadow-[0_-5px_15px_rgba(0,0,0,0.08)] z-20 rounded-t-3xl relative pb-safe">
-      <!-- PLU Display (Input Feedback) -->
-      <div
-        class="w-full bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-1.5 flex justify-center items-center rounded-t-3xl gap-3">
-        <!-- Flow A Badge: Quantity mode (amber) -->
-        <span v-if="isQuantityMode"
-          class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-xs font-bold">
-          {{ pendingQuantity }}×
-        </span>
-        <!-- Flow B Badge: Product mode (blue/green) -->
-        <span v-if="isProductMode && pendingProduct"
-          class="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-bold">
-          {{ pendingProduct.plu || pendingProduct.name?.slice(0, 8) }}
-        </span>
-        <p class="text-gray-600 dark:text-gray-300 text-xs font-mono font-medium tracking-wide">
-          <!-- Different label based on mode -->
-          <span v-if="isProductMode">CANT:</span>
-          <span v-else>PLU:</span>
-          <span class="text-blue-600 dark:text-accent-green font-bold">{{ pluInput || '___' }}</span><span
-            class="animate-pulse">|</span>
-        </p>
-      </div>
-
-      <div class="px-3 pt-3 pb-4 flex flex-col gap-2">
-        <!-- Extra Toolbar -->
-        <div class="grid grid-cols-2 gap-2 mb-1">
-          <BaseButton
-            variant="secondary"
-            class="h-10 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
-            @click="showSearch = true"
-          >
-            <div class="flex items-center gap-2">
-              <Search :size="18" :stroke-width="1.5" />
-              Buscar
-            </div>
-          </BaseButton>
-          <BaseButton
-            variant="secondary"
-            class="h-10 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
-            @click="showNote = true"
-          >
-             <div class="flex items-center gap-2">
-               <StickyNote :size="18" :stroke-width="1.5" />
-               Nota
-             </div>
-          </BaseButton>
+      class="bg-surface-light dark:bg-gray-900 shadow-[0_-5px_15px_rgba(0,0,0,0.08)] z-20 rounded-t-3xl relative pb-safe shrink-0">
+      <!-- Interactive Handle / PLU Display -->
+      <button
+        type="button"
+        data-testid="pos-keypad-handle"
+        :aria-expanded="!isKeypadCollapsed"
+        :aria-label="isKeypadCollapsed ? 'Mostrar teclado numérico' : 'Ocultar teclado numérico'"
+        class="w-full bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 pt-1.5 pb-1.5 flex flex-col items-center rounded-t-3xl select-none cursor-pointer touch-pan-y active:bg-gray-200/70 dark:active:bg-gray-700/70 transition-colors"
+        @click="toggleKeypad"
+        @touchstart.passive="onHandleTouchStart"
+        @touchend="onHandleTouchEnd"
+        @pointerdown="onHandlePointerDown"
+        @pointerup="onHandlePointerUp"
+      >
+        <div class="w-8 h-1 rounded-full bg-gray-300 dark:bg-gray-600 mb-1"></div>
+        <div class="w-full flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <!-- Flow A Badge: Quantity mode (amber) -->
+            <span v-if="isQuantityMode"
+              class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-xs font-bold">
+              {{ pendingQuantity }}×
+            </span>
+            <!-- Flow B Badge: Product mode (blue/green) -->
+            <span v-if="isProductMode && pendingProduct"
+              class="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-bold">
+              {{ pendingProduct.plu || pendingProduct.name?.slice(0, 8) }}
+            </span>
+            <p class="text-gray-600 dark:text-gray-300 text-xs font-mono font-medium tracking-wide">
+              <span v-if="isProductMode">CANT:</span>
+              <span v-else>PLU:</span>
+              <span class="text-blue-600 dark:text-accent-green font-bold">{{ pluInput || '___' }}</span><span
+                class="animate-pulse">|</span>
+            </p>
+          </div>
+          <span class="inline-flex items-center text-gray-500 dark:text-gray-400 shrink-0">
+            <ChevronUp v-if="isKeypadCollapsed" :size="16" />
+            <ChevronDown v-else :size="16" />
+          </span>
         </div>
+      </button>
 
-        <!-- Numpad Grid -->
-        <POSNumpad 
-          :is-quantity-mode="isQuantityMode"
-          @click="onNumpadClick"
-          @backspace="onNumpadClick('backspace')"
-          @quantity="handleQuantity"
-          @add="addProductByPLU"
-        />
+      <div class="px-3 pt-2 pb-3 flex flex-col gap-1.5">
+        <div v-show="!isKeypadCollapsed" data-testid="pos-keypad-panel" class="flex flex-col gap-1.5">
+          <!-- Extra Toolbar -->
+          <div class="grid grid-cols-2 gap-1.5">
+            <BaseButton
+              variant="secondary"
+              class="h-9 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
+              @click="showSearch = true"
+            >
+              <div class="flex items-center gap-2">
+                <Search :size="16" :stroke-width="1.5" />
+                Buscar
+              </div>
+            </BaseButton>
+            <BaseButton
+              variant="secondary"
+              class="h-9 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
+              @click="showNote = true"
+            >
+               <div class="flex items-center gap-2">
+                 <StickyNote :size="16" :stroke-width="1.5" />
+                 Nota
+               </div>
+            </BaseButton>
+          </div>
+
+          <!-- Numpad Grid -->
+          <POSNumpad 
+            :is-quantity-mode="isQuantityMode"
+            @click="onNumpadClick"
+            @backspace="onNumpadClick('backspace')"
+            @quantity="handleQuantity"
+            @add="addProductByPLU"
+          />
+        </div>
 
         <!-- Master Action Button (COBRAR) -->
         <BaseButton
-          class="w-full h-14 mt-2 text-xl font-black rounded-xl shadow-lg border-b-4 disabled:opacity-50 transition-all duration-300"
+          class="w-full h-12 mt-1 text-lg font-black rounded-xl shadow-lg border-b-4 disabled:opacity-50 transition-all duration-300"
           :class="[
              isProcessing ? 'cursor-not-allowed scale-[0.98] brightness-95' : '',
              isSuccess ? '!bg-emerald-600 !border-emerald-700 !shadow-none scale-95' : ''
@@ -468,11 +541,11 @@ onUnmounted(() => {
         >
              <div class="flex items-center justify-center gap-3 transition-all duration-300" :class="{ 'opacity-0 absolute': isProcessing }">
                  <template v-if="!isSuccess">
-                     <Banknote :size="24" :stroke-width="1.5" />
+                     <Banknote :size="22" :stroke-width="1.5" />
                      COBRAR {{ formattedTotal }}
                  </template>
                  <template v-else>
-                     <Check :size="28" :stroke-width="3" class="animate-bounce" />
+                     <Check :size="26" :stroke-width="3" class="animate-bounce" />
                      <span class="tracking-widest">¡LISTO!</span>
                  </template>
              </div>
