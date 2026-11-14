@@ -163,6 +163,11 @@ const goToDashboard = () => {
 
 // Add product from search modal
 const addProductFromSearch = async (product: Product) => {
+  if (product.isWeighable) {
+    openWeightCalculator(product);
+    resetModes();
+    return;
+  }
   const quantity = pendingQuantity.value;
   const result = await cartStore.addItem({ ...product, quantity });
   if (!result.success) {
@@ -362,7 +367,7 @@ onUnmounted(() => {
           </div>
           <div class="flex items-center gap-3">
             <p class="text-gray-900 dark:text-white font-bold text-base">
-              {{ formatCurrency(item.price.times(item.quantity)) }}
+              {{ formatCurrency(item.subtotal || item.price.times(item.quantity)) }}
             </p>
             <button aria-label="Remove item"
               class="text-gray-400 hover:text-red-500 p-2 -mr-2 rounded-full active:bg-gray-100 dark:active:bg-gray-700 transition-colors"

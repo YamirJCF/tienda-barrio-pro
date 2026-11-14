@@ -44,15 +44,17 @@ const inputMode = ref<'weight' | 'value'>('value');
 const inputValue = ref('');
 const sellUnit = ref<MeasurementUnit>('lb'); // Default sell unit
 
-// Initialize sell unit from product when it changes
+// Initialize mode, sell unit and input when modal opens or product changes
 watch(
-  () => props.product,
-  (product) => {
-    if (product) {
+  [() => props.modelValue, () => props.product],
+  ([isOpen, product]) => {
+    if (isOpen && product) {
       sellUnit.value = product.measurementUnit;
+      inputMode.value = 'value';
       inputValue.value = '';
     }
   },
+  { immediate: true },
 );
 
 // Convert between units
@@ -86,23 +88,9 @@ const pricePerSellUnit = computed(() => {
   return basePrice.div(baseToGrams).times(sellToGrams);
 });
 
-// Calculated weight in sell unit
-const calculatedWeight = computed(() => {
-  if (!props.product || !inputValue.value) return new Decimal(0);
-  const value = new Decimal(inputValue.value || 0);
-
-  if (inputMode.value === 'value') {
-    // peso = valor / precio_por_unidad_de_venta
-    if (pricePerSellUnit.value.isZero()) return new Decimal(0);
-    return value.div(pricePerSellUnit.value);
-  } else {
-    return value;
-  }
-});
-
 // Calculated value (redondeado a múltiplos de $50)
 const calculatedValue = computed(() => {
-  if (!props.product || !inputValue.value) return new Decimal(0);
+  if (!props.product || !inputValue.value || inputValue.value === '.') return new Decimal(0);
   const value = new Decimal(inputValue.value || 0);
 
   if (inputMode.value === 'weight') {
@@ -112,16 +100,33 @@ const calculatedValue = computed(() => {
   }
 });
 
+// Calculated weight in sell unit
+const calculatedWeight = computed(() => {
+  if (!props.product || !inputValue.value || inputValue.value === '.') return new Decimal(0);
+  const value = new Decimal(inputValue.value || 0);
+
+  if (inputMode.value === 'value') {
+    // peso = valor_redondeado / precio_por_unidad_de_venta
+    if (pricePerSellUnit.value.isZero() || calculatedValue.value.lte(0)) return new Decimal(0);
+    return calculatedValue.value.div(pricePerSellUnit.value);
+  } else {
+    return value;
+  }
+});
+
 // Quantity in product's base unit (for stock update)
 const quantityInBaseUnit = computed(() => {
   if (!props.product) return new Decimal(0);
-  return convertUnits(calculatedWeight.value, sellUnit.value, props.product.measurementUnit);
+  const raw = convertUnits(calculatedWeight.value, sellUnit.value, props.product.measurementUnit);
+  if (props.product.measurementUnit === 'g') {
+    return raw.toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+  }
+  return raw;
 });
 
 const isValid = computed(() => {
-  if (!inputValue.value) return false;
-  const val = new Decimal(inputValue.value || 0);
-  return val.gt(0);
+  if (!inputValue.value || inputValue.value === '.') return false;
+  return calculatedValue.value.gte(50) && quantityInBaseUnit.value.gt(0);
 });
 
 const formattedPrice = computed(() => {
@@ -134,7 +139,11 @@ const sellUnitLabel = computed(() => {
 
 const formattedResult = computed(() => {
   if (inputMode.value === 'value') {
-    return `= ${calculatedWeight.value.toFixed(3)} ${sellUnit.value}`;
+    const formattedWeight =
+      sellUnit.value === 'g'
+        ? calculatedWeight.value.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toString()
+        : calculatedWeight.value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2);
+    return `= ${formattedWeight} ${sellUnit.value}`;
   } else {
     return `= ${formatCurrency(calculatedValue.value)}`;
   }
@@ -169,8 +178,8 @@ const handleNumpad = (value: string) => {
   if (value === 'backspace') {
     inputValue.value = inputValue.value.slice(0, -1);
   } else if (value === '.') {
-    // Block decimals in 'value' mode (COP is integer)
-    if (inputMode.value === 'value') return;
+    // Block decimals in 'value' mode (COP is integer) and for integer grams unit (SPEC-011)
+    if (inputMode.value === 'value' || sellUnit.value === 'g') return;
     // Prevent double dot in 'weight' mode
     if (inputValue.value.includes('.')) return;
     inputValue.value += value;
@@ -207,29 +216,6 @@ const clear = () => {
         </div>
     </template>
 
-          <!-- Sell Unit Selector -->
-          <div
-            class="p-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900"
-          >
-            <div
-              class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 text-center"
-            >
-              Vender en:
-            </div>
-            <div class="flex gap-2">
-              <BaseButton
-                v-for="unit in ['kg', 'lb', 'g']" 
-                :key="unit"
-                :variant="sellUnit === unit ? 'primary' : 'outline'"
-                size="sm"
-                class="flex-1"
-                @click="sellUnit = unit as any; clear();"
-              >
-                {{ unit === 'lb' ? 'Libras' : unit === 'g' ? 'Gramos' : 'kg' }}
-              </BaseButton>
-            </div>
-          </div>
-
           <!-- Mode Toggle -->
           <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
             <div class="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex h-9">
@@ -259,12 +245,37 @@ const clear = () => {
                 "
                 @click="
                   inputMode = 'value';
+                  if (product) sellUnit = product.measurementUnit;
                   clear();
                 "
               >
                 <Banknote :size="14" />
                 Por Valor
               </button>
+            </div>
+          </div>
+
+          <!-- Sell Unit Selector (solo visible en modo Por Peso - Opción A) -->
+          <div
+            v-if="inputMode === 'weight'"
+            class="p-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900"
+          >
+            <div
+              class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 text-center"
+            >
+              Vender en:
+            </div>
+            <div class="flex gap-2">
+              <BaseButton
+                v-for="unit in (['kg', 'lb', 'g'] as const)"
+                :key="unit"
+                :variant="sellUnit === unit ? 'primary' : 'outline'"
+                size="sm"
+                class="flex-1"
+                @click="sellUnit = unit; clear();"
+              >
+                {{ unit === 'lb' ? 'Libras' : unit === 'g' ? 'Gramos' : 'kg' }}
+              </BaseButton>
             </div>
           </div>
 
@@ -290,10 +301,10 @@ const clear = () => {
               v-for="num in ['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00']"
               :key="num"
               @click="handleNumpad(num)"
-              :disabled="num === '.' && inputMode === 'value'"
+              :disabled="num === '.' && (inputMode === 'value' || sellUnit === 'g')"
               variant="secondary"
               class="h-11 text-lg font-bold bg-white dark:bg-gray-800"
-              :class="{ 'opacity-30 cursor-not-allowed': num === '.' && inputMode === 'value' }"
+              :class="{ 'opacity-30 cursor-not-allowed': num === '.' && (inputMode === 'value' || sellUnit === 'g') }"
             >
               {{ num }}
             </BaseButton>
