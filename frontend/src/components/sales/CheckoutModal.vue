@@ -388,11 +388,11 @@ watch(currentMethod, (newMethod) => {
     <div class="flex flex-col h-[85vh] md:h-[75vh] max-h-[800px] overflow-hidden">
         
         <!-- 1. HEADER (Total Summary) -->
-        <header class="flex flex-col items-center justify-center py-4 bg-gray-50 dark:bg-background-dark border-b border-gray-100 dark:border-gray-800 shrink-0">
-            <h3 class="text-gray-500 dark:text-gray-400 text-sm font-semibold tracking-wide uppercase mb-1">Total a Pagar</h3>
+        <header class="flex flex-col items-center justify-center py-2.5 bg-gray-50 dark:bg-background-dark border-b border-gray-100 dark:border-gray-800 shrink-0">
+            <h3 class="text-gray-500 dark:text-gray-400 text-xs font-semibold tracking-wide uppercase mb-0.5">Total a Pagar</h3>
             <div class="flex items-baseline gap-1">
-                <span class="text-3xl font-bold text-gray-800 dark:text-white">$</span>
-                <span class="text-4xl font-black text-gray-900 dark:text-primary tracking-tight">{{ formatCurrency(total) }}</span>
+                <span class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">$</span>
+                <span class="text-3xl md:text-4xl font-black text-gray-900 dark:text-primary tracking-tight">{{ formatCurrency(total) }}</span>
             </div>
         </header>
 
@@ -403,14 +403,14 @@ watch(currentMethod, (newMethod) => {
                 v-for="method in activeMethods" 
                 :key="method.code"
                 @click="currentMethod = method.code"
-                class="relative flex flex-col items-center justify-center py-3 gap-1 group transition-opacity"
+                class="relative flex flex-col items-center justify-center py-2 gap-1 group transition-opacity"
                 :class="currentMethod === method.code 
                     ? '' 
                     : 'opacity-60 hover:opacity-100'"
             >
                 <component 
                     :is="getIconForMethod(method.code)" 
-                    :size="28"
+                    :size="22"
                     :class="currentMethod === method.code 
                         ? 'text-emerald-600 dark:text-primary' 
                         : 'text-gray-400 dark:text-gray-500'" 
@@ -428,18 +428,18 @@ watch(currentMethod, (newMethod) => {
         </div>
 
         <!-- 3. Dynamic Body Content -->
-        <main class="flex-1 overflow-y-auto p-4 flex flex-col">
+        <main class="flex-1 overflow-y-auto p-3 min-h-0 flex flex-col">
             
             <!-- Scenario A: Efectivo (Cash-Like) -->
-            <div v-if="allowsChange" class="flex flex-1 flex-col gap-4 h-full">
-                <div class="flex flex-col md:grid md:grid-cols-12 gap-4 flex-1 h-full">
+            <div v-if="allowsChange" class="flex flex-1 flex-col gap-3 min-h-0">
+                <div class="flex flex-col md:grid md:grid-cols-12 gap-3 flex-1 min-h-0">
                     
                     <!-- Left Column: Input & Feedback (Mobile: Row 1 Side-by-Side | Desktop: Col 1 Stacked) -->
-                    <div class="w-full md:col-span-5 flex flex-row md:flex-col gap-3 md:justify-center items-start bg-white dark:bg-transparent rounded-xl md:rounded-none p-1 md:p-0">
+                    <div class="w-full md:col-span-5 flex flex-row md:flex-col gap-2.5 md:justify-center items-start bg-white dark:bg-transparent rounded-xl md:rounded-none shrink-0">
                         <!-- Input Display Box -->
                         <div class="flex-1 w-full">
-                            <span class="text-gray-500 dark:text-gray-400 text-[10px] md:text-sm font-bold mb-1.5 block ml-1 uppercase tracking-wide truncate">Dinero Recibido</span>
-                            <div class="relative flex items-center w-full h-14 md:h-16 px-3 bg-white dark:bg-background-dark border-[3px] border-sky-500 rounded-xl shadow-sm ring-2 md:ring-4 ring-sky-100 dark:ring-sky-900/20 transition-all">
+                            <span class="text-gray-500 dark:text-gray-400 text-[10px] md:text-sm font-bold mb-1 block ml-1 uppercase tracking-wide truncate">Dinero Recibido</span>
+                            <div class="relative flex items-center w-full h-[52px] md:h-14 px-3 bg-white dark:bg-background-dark border-[3px] border-sky-500 rounded-xl shadow-sm ring-2 md:ring-4 ring-sky-100 dark:ring-sky-900/20 transition-all">
                                 <span class="text-gray-400 text-lg md:text-xl font-bold mr-1">$</span>
                                 <span v-if="!inputAmount && payments.length === 0" class="text-xl md:text-2xl font-bold text-gray-300 truncate">0</span>
                                 <span v-else class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white truncate">{{ formatCurrency(totalMoneyOnTable) }}</span>
@@ -449,8 +449,8 @@ watch(currentMethod, (newMethod) => {
 
                         <!-- Feedback Box (Calculated Change) -->
                         <div class="flex-1 w-full flex flex-col">
-                            <span class="text-emerald-600 dark:text-emerald-400 text-[10px] md:text-sm font-bold mb-1.5 block ml-1 uppercase tracking-wide truncate">Vueltos a dar</span>
-                            <div class="h-14 md:h-16 w-full bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 flex items-center shadow-sm">
+                            <span class="text-emerald-600 dark:text-emerald-400 text-[10px] md:text-sm font-bold mb-1 block ml-1 uppercase tracking-wide truncate">Vueltos a dar</span>
+                            <div class="h-[52px] md:h-14 w-full bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 flex items-center shadow-sm">
                                 <span class="text-emerald-700/50 dark:text-emerald-500/50 text-lg md:text-xl font-bold mr-2">$</span>
                                 <span class="text-xl md:text-2xl font-black text-emerald-800 dark:text-emerald-300 truncate">{{ formatCurrency(change) }}</span>
                             </div>
@@ -463,24 +463,24 @@ watch(currentMethod, (newMethod) => {
                     </div>
 
                     <!-- Right Column: Numpad (Mobile: Row 2 Full Width | Desktop: Col 2) -->
-                    <div class="w-full md:col-span-7 md:pl-2 flex flex-col justify-end md:justify-center">
-                        <div class="grid grid-cols-3 gap-3 md:gap-2.5 h-auto md:h-full md:max-h-[320px]">
+                    <div class="w-full md:col-span-7 md:pl-2 flex flex-col flex-1 min-h-0 md:justify-center">
+                        <div class="grid grid-cols-3 grid-rows-4 gap-2.5 flex-1 min-h-0 md:max-h-[320px]">
                             <!-- Row 1-3 -->
                             <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click="handleNum(n.toString())"
-                                class="flex items-center justify-center rounded-xl md:rounded-lg bg-white md:bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-3xl md:text-xl font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-16 md:h-auto">
+                                class="flex items-center justify-center rounded-xl md:rounded-lg bg-white md:bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-2xl md:text-xl font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-full min-h-[42px]">
                                 {{ n }}
                             </button>
                             <!-- Row 4 -->
-                            <button @click="handleNum('000')" class="flex items-center justify-center rounded-xl md:rounded-lg bg-gray-50 md:bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-xl md:text-lg font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation tracking-tighter h-16 md:h-auto">000</button>
-                            <button @click="handleNum('0')" class="flex items-center justify-center rounded-xl md:rounded-lg bg-white md:bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white dark:text-gray-100 text-3xl md:text-xl font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-16 md:h-auto">0</button>
-                            <button @click="handleBackspace" class="flex items-center justify-center rounded-xl md:rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xl font-bold shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-16 md:h-auto">
-                                <Delete :size="28" />
+                            <button @click="handleNum('000')" class="flex items-center justify-center rounded-xl md:rounded-lg bg-gray-50 md:bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-xl font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation tracking-tighter h-full min-h-[42px]">000</button>
+                            <button @click="handleNum('0')" class="flex items-center justify-center rounded-xl md:rounded-lg bg-white md:bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white dark:text-gray-100 text-2xl md:text-xl font-black shadow-sm border border-gray-100 md:border-transparent active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-full min-h-[42px]">0</button>
+                            <button @click="handleBackspace" class="flex items-center justify-center rounded-xl md:rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-xl font-black shadow-sm active:translate-y-0.5 active:shadow-none transition-all touch-manipulation h-full min-h-[42px]">
+                                <Delete :size="24" />
                             </button>
                         </div>
                     </div>
 
                     <!-- MOBILE ONLY: Quick Action for exact cash (Row 3) -->
-                    <button @click="setExactAmount" class="md:hidden w-full py-3.5 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-wide active:bg-gray-50 dark:active:bg-gray-800 transition-colors">
+                    <button @click="setExactAmount" class="md:hidden w-full py-2.5 shrink-0 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wide active:bg-gray-50 dark:active:bg-gray-800 transition-colors">
                         Usar monto exacto
                     </button>
 
@@ -757,11 +757,11 @@ watch(currentMethod, (newMethod) => {
         </main>
 
         <!-- 4. Footer (Action) -->
-        <footer class="p-4 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800 shrink-0">
+        <footer class="px-4 py-3 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800 shrink-0">
             <button 
                 @click="confirmTransaction"
                 :disabled="!canComplete && !isFiado"
-                class="w-full h-14 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:dark:bg-gray-800 disabled:dark:text-gray-600 rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none flex flex-col items-center justify-center transition-all duration-200"
+                class="w-full h-[52px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:dark:bg-gray-800 disabled:dark:text-gray-600 rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none flex flex-col items-center justify-center transition-all duration-200"
             >
                 <div class="flex flex-col items-center leading-none">
                     <span class="text-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-0.5">Completar Venta</span>
