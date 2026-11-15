@@ -47,11 +47,12 @@ vi.mock('../../stores/auth', () => ({
 
 const mockShowWarning = vi.fn();
 const mockShowSuccess = vi.fn();
+const mockShowError = vi.fn();
 vi.mock('@/composables/useNotifications', () => ({
   useNotifications: () => ({
     showWarning: mockShowWarning,
     showSuccess: mockShowSuccess,
-    showError: vi.fn(),
+    showError: mockShowError,
     showInfo: vi.fn()
   })
 }));
@@ -214,6 +215,51 @@ describe('ClientDetailView.vue', () => {
     
     expect(mockDeleteClient).toHaveBeenCalledWith('cli-001');
     expect(mockPush).toHaveBeenCalledWith('/clients');
+  });
+
+  it('renders recent transactions list', async () => {
+    const wrapper = createWrapper();
+    await vi.dynamicImportSettled();
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.text()).toContain('Historial de Transacciones');
+    expect(wrapper.text()).toContain('Venta #1001');
+    expect(wrapper.text()).toContain('+20.000');
+  });
+
+  it('does NOT redirect if server delete fails (no silent failure)', async () => {
+    mockIsAdmin.value = true;
+    mockGetClientById.mockReturnValue({
+      id: 'cli-001',
+      name: 'Maria Perez',
+      cc: '10203040',
+      phone: '3001234567',
+      creditLimit: new Decimal(100000),
+      totalDebt: new Decimal(0),
+      storeId: 'store-uuid-1'
+    });
+    mockDeleteClient.mockResolvedValue({
+      success: false,
+      code: 'UNAUTHORIZED',
+      error: 'No tienes permisos autorizados'
+    });
+
+    const wrapper = createWrapper();
+    await vi.dynamicImportSettled();
+
+    await wrapper.find('button[aria-label="Opciones"]').trigger('click');
+    const deleteBtn = wrapper.findAll('button').find(b => b.text().includes('Eliminar cliente'));
+    await deleteBtn?.trigger('click');
+
+    const confirmBtn = wrapper.findAll('button').find(b => b.text().includes('Eliminar'));
+    await confirmBtn?.trigger('click');
+    await vi.dynamicImportSettled();
+    await wrapper.vm.$nextTick();
+
+    expect(mockDeleteClient).toHaveBeenCalledWith('cli-001');
+    expect(mockPush).not.toHaveBeenCalledWith('/clients');
+    expect(mockShowError).toHaveBeenCalledWith('No tienes permisos autorizados');
   });
 
   it('validates payment registration and registers payment', async () => {

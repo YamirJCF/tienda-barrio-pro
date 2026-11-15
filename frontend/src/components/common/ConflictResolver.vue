@@ -102,9 +102,10 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue';
 import { useDataSource } from '../../composables/useDataSource';
-import syncQueue, { QueueItem } from '../../data/syncQueue';
+import syncQueue, { QueueItem, processSyncQueue } from '../../data/syncQueue';
 import ForceSaleModal from '../ForceSaleModal.vue';
 import { useAuthStore } from '../../stores/auth';
+import { useSalesStore } from '../../stores/sales';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -178,7 +179,6 @@ const retryItem = async (id: string) => {
         await loadItems();
         
         // Trigger generic sync attempt if online
-        const { processSyncQueue } = await import('../../data/syncQueue');
         processSyncQueue(); 
         
         emit('resolved');
@@ -225,7 +225,6 @@ const handleForceSaleConfirm = async (justification: string) => {
   if (!pendingDLQItem.value) return;
 
   try {
-    const { useSalesStore } = await import('../../stores/sales');
     const salesStore = useSalesStore();
     
     const salePayload = pendingDLQItem.value.payload;

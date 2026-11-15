@@ -16,6 +16,9 @@ import { createSupabaseRepository, EntityRepository, RepositoryMappers } from '.
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { logger } from '../../utils/logger';
 import { addToSyncQueue } from '../syncQueue';
+import { useInventoryStore } from '../../stores/inventory';
+import { useClientsStore } from '../../stores/clients';
+import { useQuantityFormat } from '../../composables/useQuantityFormat';
 
 // Constants
 const TABLE_NAME = 'sales';
@@ -106,6 +109,7 @@ export interface SaleRepository extends EntityRepository<Sale> {
     getByDateRange(startDate: string, endDate: string, storeId?: string): Promise<Sale[]>;
     getLastTicketNumber(storeId: string): Promise<number>;
     voidSale(saleId: string, reason: string): Promise<{ success: boolean; error?: string }>;
+    getSaleDetail(saleId: string): Promise<any>;
 }
 
 // Create base repository with Mappers
@@ -209,7 +213,6 @@ export const saleRepository: SaleRepository = {
         // FRD-012-R: Validate locally BEFORE queueing to prevent invalid sales
         try {
             // 2.1 Validate Stock Local (RN-R01)
-            const { useInventoryStore } = await import('../../stores/inventory');
             const inventoryStore = useInventoryStore();
 
             for (const item of saleData.items) {
@@ -223,7 +226,7 @@ export const saleRepository: SaleRepository = {
                 const qty = new Decimal(item.quantity);
                 if (product.stock.lt(qty)) {
                     // SPEC-011: Format decimal stock for UX consistency
-                    const { formatStock } = (await import('../../composables/useQuantityFormat')).useQuantityFormat();
+                    const { formatStock } = useQuantityFormat();
                     const available = formatStock(product.stock, product.measurementUnit);
 
                     return {
@@ -235,7 +238,6 @@ export const saleRepository: SaleRepository = {
 
             // 2.2 Validate Credit Limit for Fiado (RN-R02)
             if (saleData.paymentMethod === 'fiado' && saleData.clientId) {
-                const { useClientsStore } = await import('../../stores/clients');
                 const clientsStore = useClientsStore();
                 const availableCredit = clientsStore.getAvailableCredit(saleData.clientId);
                 const saleTotal = new Decimal(saleData.total);
@@ -473,6 +475,16 @@ export const saleRepository: SaleRepository = {
             }
         }
         return 0;
+    },
+
+    async getSaleDetail(saleId: string): Promise<any> {
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Sin conexión');
+        const { data, error } = await supabase.rpc('get_sale_detail' as any, {
+            p_sale_id: saleId
+        });
+        if (error) throw error;
+        return data;
     }
 };
 

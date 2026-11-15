@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { auditRepository } from '../data/repositories/auditRepository';
+import { expenseRepository } from '../data/repositories/expenseRepository';
 import { getSupabaseClient } from '../data/supabaseClient';
 import { logger } from '../utils/logger';
 import { formatCurrency } from '../utils/currency';
@@ -571,7 +572,6 @@ export function useHistory() {
     // =============================================
     const fetchExpenseLogs = async (storeId: string) => {
         const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
-        const { expenseRepository } = await import('../data/repositories/expenseRepository');
         const expenses = await expenseRepository.getTodayExpenses(storeId);
         const filtered = expenses.filter(exp => isDateWithinRange(exp.created_at, start, end));
 

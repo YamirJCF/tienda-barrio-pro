@@ -11,6 +11,8 @@
  */
 
 import { logger } from './logger';
+import { requireSupabase } from '../data/supabaseClient';
+import { authRepository } from '../data/repositories/authRepository';
 
 export interface InterceptResult {
     intercepted: boolean;
@@ -107,8 +109,6 @@ export async function interceptAuthTokens(): Promise<InterceptResult> {
 
         logger.log(`[AuthInterceptor] Processing ${type} callback with token ${safeTokenLog(accessToken)}`);
 
-        // Dynamically import supabase client to avoid circular deps
-        const { requireSupabase } = await import('../data/supabaseClient');
         const supabase = requireSupabase();
 
         // Establish the Supabase session
@@ -136,7 +136,6 @@ export async function interceptAuthTokens(): Promise<InterceptResult> {
         // For signup confirmations: fetch admin profile and store for Pinia init
         if (type === 'signup') {
             try {
-                const { authRepository } = await import('../data/repositories/authRepository');
                 const profileResponse = await authRepository.getAdminProfile(userId);
 
                 if (profileResponse.success) {

@@ -7,7 +7,12 @@ import { generateUUID } from '../utils/uuid';
 import type { Sale } from '../types';
 import { useCashRegisterStore } from './cashRegister';
 import { useAuthStore } from './auth';
+import { useInventoryStore } from './inventory';
+import { useClientsStore } from './clients';
+import { useNotificationsStore } from './notificationsStore';
+import { useNotifications } from '../composables/useNotifications';
 import { saleRepository } from '../data/repositories/saleRepository';
+import { getPendingSales } from '../data/syncQueue';
 
 export interface DailyStats {
   date: string;
@@ -185,7 +190,6 @@ export const useSalesStore = defineStore(
 
       // 3. Load Pending Sales
       try {
-        const { getPendingSales } = await import('../data/syncQueue');
         const pendingPayloads = await getPendingSales();
         // ... (existing pending logic) ... 
         if (pendingPayloads.length > 0) {
@@ -315,7 +319,6 @@ export const useSalesStore = defineStore(
 
 
       // 3. Update Inventory (Local Optimistic)
-      const { useInventoryStore } = await import('./inventory');
       const inventoryStore = useInventoryStore();
 
       newSale.items.forEach(item => {
@@ -327,7 +330,6 @@ export const useSalesStore = defineStore(
       // FRD-011: Error handling - show warning if transaction record fails but don't block sale
       if (newSale.paymentMethod === 'fiado' && newSale.clientId) {
         try {
-          const { useClientsStore } = await import('./clients');
           const clientsStore = useClientsStore();
 
           // Add debt to client
@@ -340,7 +342,6 @@ export const useSalesStore = defineStore(
 
           // 📢 Notification Center: Venta a Crédito (notifications.md L65)
           try {
-            const { useNotificationsStore } = await import('./notificationsStore');
             const notifStore = useNotificationsStore();
             const totalStr = newSale.total instanceof Decimal ? newSale.total.toFixed(0) : String(newSale.total);
             notifStore.addNotification({
@@ -357,7 +358,6 @@ export const useSalesStore = defineStore(
           console.warn('[SalesStore] Error registering client debt transaction:', debtError);
           // FRD-011: Show comprehensible message to user
           // The sale was processed, debt was updated, but transaction history may be incomplete
-          const { useNotifications } = await import('../composables/useNotifications');
           const { showWarning } = useNotifications();
           showWarning('Deuda registrada. El historial se sincronizará cuando haya conexión.');
           // Don't throw - the sale itself was successful
@@ -407,6 +407,7 @@ export const useSalesStore = defineStore(
     return {
       sales,
       nextTicketNumber, // WO-001: Renamed from nextId
+      loadedStoreId,
       isStoreOpen,
       openingCash,
       currentCash,

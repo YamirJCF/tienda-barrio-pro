@@ -8,7 +8,7 @@
  * - Manejador unificado de errores 400 / P0001 (STORE_ACCESS_DENIED)
  */
 
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, getCurrentInstance } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useNotificationsStore } from '../stores/notificationsStore';
@@ -172,43 +172,45 @@ export function useSessionGuard() {
     verifyAndReact();
   };
 
-  onMounted(() => {
-    // 1. Verificación inicial si el store reporta autenticado
-    if (authStore.isAuthenticated) {
-      verifyAndReact();
-    }
-
-    // 2. Intervalo periódico de 5 minutos (P_INTERVALO_VERIFICACION_SESION)
-    intervalId = setInterval(verifyAndReact, 5 * 60 * 1000);
-
-    // 3. Eventos de entorno (Foco y Conectividad)
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('online', onOnline);
-
-    // 4. Sincronización multiventana (RN-013-13)
-    if (typeof BroadcastChannel !== 'undefined') {
-      try {
-        broadcastChannel = new BroadcastChannel('tienda-auth-sync');
-        broadcastChannel.onmessage = (event) => {
-          if (event.data?.type === 'SESSION_STATE_CHANGED') {
-            handleSessionStatusTransition(event.data.status, router, event.data.reason);
-          }
-        };
-      } catch (e) {
-        logger.warn('[SessionGuard] Fallo al iniciar BroadcastChannel:', e);
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      // 1. Verificación inicial si el store reporta autenticado
+      if (authStore.isAuthenticated) {
+        verifyAndReact();
       }
-    }
-  });
 
-  onUnmounted(() => {
-    if (intervalId) clearInterval(intervalId);
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    window.removeEventListener('online', onOnline);
-    if (broadcastChannel) {
-      broadcastChannel.close();
-      broadcastChannel = null;
-    }
-  });
+      // 2. Intervalo periódico de 5 minutos (P_INTERVALO_VERIFICACION_SESION)
+      intervalId = setInterval(verifyAndReact, 5 * 60 * 1000);
+
+      // 3. Eventos de entorno (Foco y Conectividad)
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      window.addEventListener('online', onOnline);
+
+      // 4. Sincronización multiventana (RN-013-13)
+      if (typeof BroadcastChannel !== 'undefined') {
+        try {
+          broadcastChannel = new BroadcastChannel('tienda-auth-sync');
+          broadcastChannel.onmessage = (event) => {
+            if (event.data?.type === 'SESSION_STATE_CHANGED') {
+              handleSessionStatusTransition(event.data.status, router, event.data.reason);
+            }
+          };
+        } catch (e) {
+          logger.warn('[SessionGuard] Fallo al iniciar BroadcastChannel:', e);
+        }
+      }
+    });
+
+    onUnmounted(() => {
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onOnline);
+      if (broadcastChannel) {
+        broadcastChannel.close();
+        broadcastChannel = null;
+      }
+    });
+  }
 
   return {
     verifySessionDeduped,

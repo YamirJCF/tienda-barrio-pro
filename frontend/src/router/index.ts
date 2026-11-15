@@ -1,17 +1,14 @@
 import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useCashRegisterStore } from '../stores/cashRegister';
+import { verifySessionDeduped } from '../composables/useSessionGuard';
 import { logger } from '../utils/logger';
 import { supabase } from '../lib/supabase'; // Import supabase client
 import LoginView from '../views/LoginView.vue';
 import DashboardView from '../views/DashboardView.vue';
-// OFFLINE-CRITICAL: Eager imports for offline functionality
-import POSView from '../views/POSView.vue';
-import InventoryView from '../views/InventoryView.vue';
-import ClientListView from '../views/ClientListView.vue';
-import CashControlView from '../views/CashControlView.vue';
-import AdminHubView from '../views/AdminHubView.vue';
-import EmployeeManagerView from '../views/EmployeeManagerView.vue';
 // ⚠️ SystemAuditView se importa dinámicamente solo en DEV (ver abajo)
+
+let verifiedAdminUserId: string | null = null;
 
 const routes: RouteRecordRaw[] = [
   {
@@ -82,7 +79,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin',
     name: 'admin',
-    component: AdminHubView,
+    component: () => import('../views/AdminHubView.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -94,19 +91,19 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/pos',
     name: 'pos',
-    component: POSView,
+    component: () => import('../views/POSView.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/inventory',
     name: 'inventory',
-    component: InventoryView,
+    component: () => import('../views/InventoryView.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/clients',
     name: 'clients',
-    component: ClientListView,
+    component: () => import('../views/ClientListView.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -118,7 +115,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/employees',
     name: 'employees',
-    component: EmployeeManagerView,
+    component: () => import('../views/EmployeeManagerView.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -130,7 +127,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/cash-control',
     name: 'cash-control',
-    component: CashControlView,
+    component: () => import('../views/CashControlView.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -204,7 +201,10 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
   const isAuthenticated = authStore.isAuthenticated;
-  const hasStore = authStore.hasStores;
+
+  if (!isAuthenticated) {
+    verifiedAdminUserId = null;
+  }
 
   // 1. Caso: Intenta entrar a ruta protegida sin auth
   if (to.meta.requiresAuth && !isAuthenticated) {
@@ -230,16 +230,20 @@ router.beforeEach(async (to, from, next) => {
   if (isAuthenticated && to.meta.requiresAuth && to.name !== 'check-email' && to.name !== 'waiting-verification') {
     // Only check for Admins (Owner accounts)
     if (authStore.isAdmin) {
-      // We need to check the real session status
-      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = authStore.currentUser?.id ?? null;
+      if (currentUserId && verifiedAdminUserId !== currentUserId) {
+        // We need to check the real session status
+        const { data: { session } } = await supabase.auth.getSession();
 
-      // If session exists but email is not confirmed
-      if (session?.user && !session.user.email_confirmed_at && session.user.identities && session.user.identities[0].identity_data?.email_verified !== true) {
-        logger.warn('🔒 [Router] Unverified email detected. Redirecting to check-email.');
-        return next({
-          name: 'waiting-verification',
-          query: { email: session.user.email }
-        });
+        // If session exists but email is not confirmed
+        if (session?.user && !session.user.email_confirmed_at && session.user.identities && session.user.identities[0]?.identity_data?.email_verified !== true) {
+          logger.warn('🔒 [Router] Unverified email detected. Redirecting to check-email.');
+          return next({
+            name: 'waiting-verification',
+            query: { email: session.user.email }
+          });
+        }
+        verifiedAdminUserId = currentUserId;
       }
     }
   }
@@ -250,7 +254,6 @@ router.beforeEach(async (to, from, next) => {
   if (isAuthenticated && to.meta.requiresAuth && to.name !== 'check-email' && to.name !== 'waiting-verification' && to.name !== 'update-password') {
     if (!from.name) {
       try {
-        const { verifySessionDeduped } = await import('../composables/useSessionGuard');
         const verification = await verifySessionDeduped();
         if (verification.status === 'requires_login' || verification.status === 'revoked_or_disabled') {
           logger.warn('🔒 [Router] Servidor requiere inicio de sesión. Redirigiendo a login.');
@@ -298,7 +301,6 @@ router.beforeEach(async (to, from, next) => {
   // FRD-004/FRD-015: Stale Shift Guard
   // If a cash session from a previous day is still open, block everything except cash-control
   if (isAuthenticated && to.meta.requiresAuth && to.name !== 'cash-control' && to.name !== 'login') {
-    const { useCashRegisterStore } = await import('../stores/cashRegister');
     const cashRegisterStore = useCashRegisterStore();
     if (cashRegisterStore.isStaleSession) {
       logger.log('🔒 [Router] Stale shift detected. Redirecting to cash-control for mandatory closure.');
@@ -347,23 +349,6 @@ router.beforeEach(async (to, from, next) => {
   // 5. Payables: Admin only
   if (to.name === 'payables' && !authStore.isAdmin) {
     return next({ name: 'dashboard' });
-  }
-
-  // =============================================
-  // SPEC-005: Guard para POS - Tienda Abierta
-  // =============================================
-  // Empleados no pueden acceder al POS si la tienda está cerrada
-  if (to.name === 'pos' && isAuthenticated) {
-    const isAdmin = authStore.isAdmin;
-    // SPEC-005 Update: La validación de 'tienda abierta' se delega al componente POS o lógica de caja
-    // ya que authStore no mantiene el estado global de apertura.
-
-    /* BLOQUE ELIMINADO POR REFACTORIZACION IAM
-    if (!isAdmin && !storeIsOpen) {
-       console.warn('[Router] POS bloqueado: tienda cerrada');
-       return next({ name: 'dashboard' });
-    }
-    */
   }
 
   next();

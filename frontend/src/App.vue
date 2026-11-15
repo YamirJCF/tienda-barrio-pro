@@ -14,6 +14,7 @@ import OfflineBanner from './components/common/OfflineBanner.vue';
 import GlobalNetworkHandler from './components/common/GlobalNetworkHandler.vue';
 import PinUnlockModal from './components/PinUnlockModal.vue';
 import LegalComplianceGate from './components/legal/LegalComplianceGate.vue';
+import { logger } from './utils/logger';
 
 
 // ============================================
@@ -39,10 +40,6 @@ useHeartbeat();
 import { useSessionGuard } from './composables/useSessionGuard';
 useSessionGuard();
 
-// Security: Revocation Guard (Checks for ban/revocation)
-import { useRevocationGuard } from './composables/useRevocationGuard';
-useRevocationGuard();
-
 const errorDetected = ref(false);
 const router = useRouter();
 const authStore = useAuthStore(); // Initialize Auth Store
@@ -59,7 +56,7 @@ const handleSyncAuthRequired = () => {
   // If user is already on login page, silently ignore - this is expected
   const currentPath = router.currentRoute.value.path;
   if (currentPath === '/login' || currentPath === '/' || currentPath.includes('login')) {
-    console.log('[App] sync:auth_required ignored - user already on login page');
+    logger.log('[App] sync:auth_required ignored - user already on login page');
     return;
   }
   
@@ -78,6 +75,10 @@ const handleAdminResync = () => {
   devicesStore.fetchConnectedDevices();
 };
 
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') handleAdminResync();
+};
+
 onMounted(() => {
   window.addEventListener('sync:auth_required', handleSyncAuthRequired);
 
@@ -90,16 +91,14 @@ onMounted(() => {
   }
 
   // Re-sync when tab regains visibility or network comes back online
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') handleAdminResync();
-  });
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   window.addEventListener('online', handleAdminResync);
 });
 
 onUnmounted(() => {
   window.removeEventListener('sync:auth_required', handleSyncAuthRequired);
   devicesStore.unsubscribeFromDailyPasses();
-  document.removeEventListener('visibilitychange', handleAdminResync as any);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
   window.removeEventListener('online', handleAdminResync);
 });
 

@@ -1,24 +1,24 @@
-import { onMounted, onUnmounted, ref } from 'vue';
+import { getCurrentInstance, onMounted, onUnmounted, ref } from 'vue';
 import { usePresenceStore } from '../stores/presence';
 import { useAuthStore } from '../stores/auth';
 import HeartbeatWorker from '../workers/heartbeat.worker?worker'; // Vite worker import
 
+const STORAGE_KEY_PAUSED = 'heartbeat_is_paused';
+const STORAGE_KEY_PAUSE_START = 'heartbeat_pause_start';
+const MAX_PAUSE_DURATION = 30 * 60 * 1000;
+
+let worker: Worker | null = null;
+let activeMounts = 0;
+let listenersAttached = false;
+
+const getStoredPause = () =>
+    typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY_PAUSED) === 'true';
+
+const isPaused = ref(getStoredPause());
+
 export function useHeartbeat() {
     const presenceStore = usePresenceStore();
     const authStore = useAuthStore();
-
-    let worker: Worker | null = null;
-
-    // Persistence for Pause State
-    const STORAGE_KEY_PAUSED = 'heartbeat_is_paused';
-    const STORAGE_KEY_PAUSE_START = 'heartbeat_pause_start';
-
-    // Initialize state from storage
-    const getStoredPause = () => localStorage.getItem(STORAGE_KEY_PAUSED) === 'true';
-    const isPaused = ref(getStoredPause());
-
-    // Pause Timeout Confirmation (30 min)
-    const MAX_PAUSE_DURATION = 30 * 60 * 1000;
 
     const checkPauseTimeout = (): boolean => {
         if (!isPaused.value) return false;
@@ -28,7 +28,6 @@ export function useHeartbeat() {
             const startTime = parseInt(startStr, 10);
             const now = Date.now();
             if (now - startTime > MAX_PAUSE_DURATION) {
-                // Timeout exceeded
                 return true;
             }
         }
@@ -38,19 +37,24 @@ export function useHeartbeat() {
     const sendPulse = () => {
         if (!authStore.isAuthenticated) return;
 
-        // Check if pause exceeded limit
         if (isPaused.value && checkPauseTimeout()) {
-            // If timeout exceeded, we STOP sending pulses.
-            // This will cause the backend logic (or presence store) to mark as 'offline' eventually.
-
             return;
         }
 
         const status = isPaused.value ? 'paused' : 'online';
         presenceStore.reportHeartbeat(status);
 
-        // Also sync storage in case it changed in another tab (though component state is local)
         localStorage.setItem(STORAGE_KEY_PAUSED, isPaused.value.toString());
+    };
+
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            sendPulse();
+        }
+    };
+
+    const handleUnload = () => {
+        // Optional: Send beacon
     };
 
     const startHeartbeat = () => {
@@ -64,9 +68,11 @@ export function useHeartbeat() {
             worker.postMessage({ cmd: 'start' });
         }
 
-        // Event listeners for OS-level activity
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        window.addEventListener('beforeunload', handleUnload);
+        if (!listenersAttached) {
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('beforeunload', handleUnload);
+            listenersAttached = true;
+        }
     };
 
     const stopHeartbeat = () => {
@@ -75,18 +81,11 @@ export function useHeartbeat() {
             worker.terminate();
             worker = null;
         }
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('beforeunload', handleUnload);
-    };
-
-    const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-            sendPulse(); // Immediate pulse on wake
+        if (listenersAttached) {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('beforeunload', handleUnload);
+            listenersAttached = false;
         }
-    };
-
-    const handleUnload = () => {
-        // Optional: Send beacon
     };
 
     const setPause = (value: boolean) => {
@@ -99,22 +98,25 @@ export function useHeartbeat() {
             localStorage.removeItem(STORAGE_KEY_PAUSE_START);
         }
 
-        sendPulse(); // Immediate update
+        sendPulse();
     };
 
-    onMounted(() => {
-        if (authStore.isAuthenticated && authStore.currentUser?.storeId) {
-            // Conectar al canal de la tienda
-            presenceStore.initPresence(authStore.currentUser.storeId);
-            startHeartbeat();
-        }
-    });
+    if (getCurrentInstance()) {
+        onMounted(() => {
+            activeMounts++;
+            if (authStore.isAuthenticated && authStore.currentUser?.storeId) {
+                presenceStore.initPresence(authStore.currentUser.storeId);
+                startHeartbeat();
+            }
+        });
 
-    onUnmounted(() => {
-        stopHeartbeat();
-        // Opcional: Desconectar presence si es deseable liberar recursos inmediatamente
-        // presenceStore.cleanupPresence(); 
-    });
+        onUnmounted(() => {
+            activeMounts = Math.max(0, activeMounts - 1);
+            if (activeMounts === 0) {
+                stopHeartbeat();
+            }
+        });
+    }
 
     return {
         isPaused,

@@ -18,6 +18,7 @@ import { logger } from '../../utils/logger';
 import { createIndexedDBDataSource } from '../sources/IndexedDBDataSource';
 import type { LocalDataSource } from '../interfaces/DataSource';
 import { systemCacheManager, CacheLevel } from '../../services/systemCacheManager';
+import { getPendingMovements } from '../syncQueue';
 
 // IDB Cache Layer — replaces localStorage for product data
 const productCache: LocalDataSource<Product> = createIndexedDBDataSource<Product>('products');
@@ -522,7 +523,6 @@ export const productRepository: ProductRepository = {
 
                 // Fetch Local Pending Movements (Offline / Audit Mode)
                 try {
-                    const { getPendingMovements } = await import('../syncQueue');
                     const pending = await getPendingMovements(productId);
 
                     // Transform pending to match InventoryMovementHistory if not already

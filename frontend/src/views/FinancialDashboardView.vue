@@ -45,36 +45,6 @@ function retry() {
   store.setPeriod(store.activePeriod);
 }
 
-function stockStatusColor(status: string): string {
-  switch (status) {
-    case 'out': return 'text-red-500';
-    case 'critical': return 'text-orange-500';
-    case 'low': return 'text-yellow-500';
-    default: return 'text-green-500';
-  }
-}
-
-function stockStatusLabel(status: string): string {
-  switch (status) {
-    case 'out': return 'Agotado';
-    case 'critical': return 'Crítico';
-    case 'low': return 'Bajo';
-    default: return 'OK';
-  }
-}
-
-function intensityWidth(index: number, total: number): string {
-  if (total <= 1) return '100%';
-  const pct = Math.max(20, 100 - ((index / (total - 1)) * 80));
-  return `${pct}%`;
-}
-
-function intensityColor(index: number): string {
-  if (index < 3) return 'bg-rose-500';
-  if (index < 6) return 'bg-amber-400';
-  return 'bg-slate-300 dark:bg-slate-600';
-}
-
 onMounted(() => {
   store.loadSnapshots();
   store.setPeriod('today');

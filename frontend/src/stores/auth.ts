@@ -9,7 +9,21 @@ import {
   type LegalComplianceStatus,
 } from '../data/repositories/legalRepository';
 import { useNotificationsStore } from './notificationsStore';
+import { useInventoryStore } from './inventory';
+import { useSalesStore } from './sales';
+import { useClientsStore } from './clients';
+import { useCashRegisterStore } from './cashRegister';
+import { useSuppliersStore } from './suppliers';
+import { useEmployeesStore } from './employees';
+import { useFinancialStore } from './financial';
+import { usePayablesStore } from './payables';
+import { useCartStore } from './cart';
+import { getDB } from '../data/sources/IndexedDBDataSource';
+import { systemCacheManager } from '../services/systemCacheManager';
+import { deriveKeyFromPin } from '../utils/crypto';
+import { getQueueSize } from '../data/syncQueue';
 import { requireSupabase } from '../data/supabaseClient';
+import { useDeviceFingerprint } from '../composables/useDeviceFingerprint';
 
 export type UserType = 'admin' | 'employee';
 
@@ -57,12 +71,13 @@ export async function destroyAllLocalData() {
 
   // 1. Vaciar estado en memoria RAM viva de los Stores activos de Pinia
   try {
-    const { useInventoryStore } = await import('./inventory');
-    useInventoryStore().products = [];
+    const invStore = useInventoryStore();
+    invStore.products = [];
+    invStore.initialized = false;
+    invStore.loadedStoreId = null;
   } catch (e) {}
 
   try {
-    const { useSalesStore } = await import('./sales');
     const salesStore = useSalesStore();
     salesStore.sales = [];
     salesStore.nextTicketNumber = 1;
@@ -70,36 +85,26 @@ export async function destroyAllLocalData() {
   } catch (e) {}
 
   try {
-    const { useClientsStore } = await import('./clients');
     const clientsStore = useClientsStore();
     clientsStore.clients = [];
     clientsStore.transactions = [];
   } catch (e) {}
 
   try {
-    const { useCashRegisterStore } = await import('./cashRegister');
     const cashStore = useCashRegisterStore();
     cashStore.currentSession = null;
     cashStore.sessionHistory = [];
   } catch (e) {}
 
   try {
-    const { useExpensesStore } = await import('./expenses');
-    useExpensesStore().expenses = [];
-  } catch (e) {}
-
-  try {
-    const { useSuppliersStore } = await import('./suppliers');
     useSuppliersStore().suppliers = [];
   } catch (e) {}
 
   try {
-    const { useEmployeesStore } = await import('./employees');
     useEmployeesStore().employees = [];
   } catch (e) {}
 
   try {
-    const { useFinancialStore } = await import('./financial');
     const finStore = useFinancialStore();
     finStore.summary = null;
     finStore.inventoryHealth = null;
@@ -109,29 +114,27 @@ export async function destroyAllLocalData() {
   } catch (e) {}
 
   try {
-    const { usePayablesStore } = await import('./payables');
     usePayablesStore().invoices = [];
   } catch (e) {}
 
   try {
-    const { useCartStore } = await import('./cart');
     useCartStore().clearCart();
   } catch (e) {}
 
   // 2. Limpiar colecciones locales en IndexedDB
-  try {
-    const { getDB } = await import('../data/sources/IndexedDBDataSource');
-    const db = await getDB();
-    await db.clear('products');
-    await db.clear('clients');
-    await db.clear('sales');
-  } catch (e) {
-    logger.warn('[Auth Store] Advertencia limpiando caché IndexedDB:', e);
+  if (typeof indexedDB !== 'undefined') {
+    try {
+      const db = await getDB();
+      await db.clear('products');
+      await db.clear('clients');
+      await db.clear('sales');
+    } catch (e) {
+      logger.warn('[Auth Store] Advertencia limpiando caché IndexedDB:', e);
+    }
   }
 
   // 3. Resetear Gestor de Caché SWR
   try {
-    const { systemCacheManager } = await import('../services/systemCacheManager');
     systemCacheManager.reset();
   } catch (e) {
     logger.warn('[Auth Store] Advertencia reseteando systemCacheManager:', e);
@@ -189,19 +192,6 @@ export const useAuthStore = defineStore(
       return stores.value.find((s) => s.id === currentUser.value!.storeId);
     });
 
-    const isEmailConfirmed = computed(() => {
-      if (!currentUser.value) return false;
-      // Employees (Zero-Auth) don't need email confirmation usually, but Admins do.
-      if (currentUser.value.type === 'admin') {
-        // We can't easily check 'email_confirmed_at' from here because 'CurrentUser' doesn't have it.
-        // We need to fetch it or store it.
-        // For now, let's assume if they are logged in via Supabase and we have a session, 
-        // we should check the actual Supabase session user.
-        return true; // Placeholder until we integrate with supabase.auth.getUser()
-      }
-      return true;
-    });
-
     // Permission helpers - admins have all permissions, employees check their assigned permissions
     const canSell = computed(() => {
       if (!currentUser.value) return false;
@@ -257,10 +247,6 @@ export const useAuthStore = defineStore(
     });
 
     // Methods
-    const generateId = () => {
-      return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    };
-
     const registerStore = async (data: {
       storeName: string;
       ownerName: string;
@@ -288,21 +274,6 @@ export const useAuthStore = defineStore(
       }
 
       return response;
-    };
-
-    const loginAsAdmin = (store: StoreAccount) => {
-      currentUser.value = {
-        id: store.id,
-        name: store.ownerName,
-        email: store.email,
-        type: 'admin',
-        storeId: store.id,
-      };
-      isAuthenticated.value = true;
-
-      // FIX: Auto-aprobar Daily Pass para Admin (evita redirect a waiting room)
-      dailyAccessState.value.status = 'approved';
-      dailyAccessState.value.lastApprovedAt = new Date().toISOString();
     };
 
     const login = async (email: string, password: string): Promise<boolean> => {
@@ -511,7 +482,6 @@ export const useAuthStore = defineStore(
 
     const setupCryptoKey = async (pin: string): Promise<boolean> => {
       try {
-        const { deriveKeyFromPin } = await import('../utils/crypto');
         const salt = await fetchStoreSalt();
         sessionCryptoKey.value = await deriveKeyFromPin(pin, salt);
         logger.log('[Auth Store] CryptoKey setup successfully in RAM');
@@ -535,7 +505,6 @@ export const useAuthStore = defineStore(
       }
 
       try {
-        const { getQueueSize } = await import('../data/syncQueue');
         const pendingCount = await getQueueSize();
         if (pendingCount > 0) {
           logger.warn(`[Auth Store] 🔒 Cierre de sesión bloqueado: Hay ${pendingCount} transacciones pendientes por sincronizar.`);
@@ -608,11 +577,6 @@ export const useAuthStore = defineStore(
       return dailyAccessState.value.status;
     });
 
-    // Utilidad: Fingerprinting simplificado (Local)
-    const getDeviceFingerprint = () => {
-      return btoa(`${navigator.userAgent}-${window.screen.width}x${window.screen.height}-${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
-    };
-
     /**
      * SDD-013 v3.1.0: Consulta al Backend la verdad de la sesión (Supabase Auth + Daily Passes + Roles)
      * Resuelve inconsistencias cuando el cliente tiene token expirado o pase vencido.
@@ -641,7 +605,6 @@ export const useAuthStore = defineStore(
           dailyAccessState.value.status = 'expired';
           // Descartar carrito en curso (RN-013-12)
           try {
-            const { useCartStore } = await import('./cart');
             useCartStore().clearCart();
           } catch (e) {
             // Cart store might not be ready yet
@@ -650,7 +613,6 @@ export const useAuthStore = defineStore(
           // Token expirado o revocado en servidor: invocar autodestrucción total
           await logout();
           try {
-            const { useCartStore } = await import('./cart');
             useCartStore().clearCart();
           } catch (e) {
             // Cart store might not be ready yet
@@ -691,7 +653,7 @@ export const useAuthStore = defineStore(
 
       // Auto-recover fingerprint if lost (Critical for page refresh)
       if (!dailyAccessState.value.fingerprint) {
-        dailyAccessState.value.fingerprint = getDeviceFingerprint();
+        dailyAccessState.value.fingerprint = await useDeviceFingerprint().getFingerprint();
       }
 
       const result = await authRepository.checkDailyPassStatus(currentUser.value.id, dailyAccessState.value.fingerprint);
@@ -711,7 +673,7 @@ export const useAuthStore = defineStore(
       // FIX: Removed 'username' check as CurrentUser interface uses 'email' for employees/admins
       if (!currentUser.value) return { success: false, error: 'No user session' };
 
-      const fingerprint = getDeviceFingerprint(); // Sync
+      const fingerprint = await useDeviceFingerprint().getFingerprint();
       const result = await authRepository.requestDailyPass(currentUser.value.id, fingerprint);
 
       if (result.success) {
@@ -816,24 +778,6 @@ export const useAuthStore = defineStore(
       }
     };
 
-    // Helper functions restored
-    const resetToDemo = () => {
-      currentUser.value = null;
-      isAuthenticated.value = false;
-      stores.value = [];
-      resetLegalState();
-      localStorage.clear();
-      logger.log('✅ System cleared (No Demo restored)');
-    };
-
-    const getStoreById = (id: string) => {
-      return stores.value.find((s) => s.id === id);
-    };
-
-    const getFirstStore = () => {
-      return stores.value.length > 0 ? stores.value[0] : null;
-    };
-
     const hasStores = computed(() => stores.value.length > 0);
 
     // Accessors
@@ -881,15 +825,10 @@ export const useAuthStore = defineStore(
       registerStore,
       login,
       initializeFromSession,
-      loginAsAdmin,
       loginAsEmployee,
       recoverPassword,
       changePassword,
       logout,
-      getStoreById,
-      getFirstStore,
-      generateId,
-      resetToDemo,
       // SPEC-005: IAM Methods
       checkDailyApproval,
       verifySessionWithServer,

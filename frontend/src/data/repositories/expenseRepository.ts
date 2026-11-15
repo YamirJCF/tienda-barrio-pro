@@ -8,6 +8,7 @@
 
 import { createSupabaseRepository, EntityRepository, RepositoryMappers } from './supabaseAdapter';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
+import { cashRepository } from './cashRepository';
 import { logger } from '../../utils/logger';
 import { Database } from '../../types/database.types';
 
@@ -48,6 +49,7 @@ const expenseMapper: RepositoryMappers<CashMovementDB, Expense> = {
     toPersistence: (entity: Expense): CashMovementDB => {
         return {
             id: entity.id,
+            actor_id: entity.created_by ?? null,
             amount: entity.amount,
             description: `[${entity.category || 'General'}] ${entity.description}`,
             category: entity.category || 'General',
@@ -161,7 +163,6 @@ export const expenseRepository: ExpenseRepository = {
         let sessionId = '';
 
         try {
-            const { cashRepository } = await import('./cashRepository');
             const status = await cashRepository.getStoreStatus(expense.store_id);
             if (status.isOpen && status.sessionId) {
                 sessionId = status.sessionId;
@@ -173,29 +174,6 @@ export const expenseRepository: ExpenseRepository = {
             logger.error('Error fetching session for expense', e);
             return null;
         }
-
-        const payload = {
-            ...expense,
-            created_at: new Date().toISOString()
-        } as Expense;
-
-        // Custom Create logic to include Session ID in persistence mapping
-        // baseRepository.create uses mapper.toPersistence. 
-        // mapper.toPersistence(entity) doesn't know sessionId unless entity has it?
-        // Expense Domain doesn't have sessionId.
-        // We might need to extend Expense or handle creation manually here.
-
-        // Manual Create using Adapter internal logic? No access.
-        // We can create a fake Expense with sessionId injected? No type support.
-        // Better: Query Supabase or Adapter directly.
-
-        // Logic:
-        // 1. Map to DB
-        // 2. Inject Session ID
-        // 3. Insert via Supabase or Local
-
-        const dbRow = expenseMapper.toPersistence(payload);
-        dbRow.session_id = sessionId;
 
         const isOnline = navigator.onLine && isSupabaseConfigured();
         if (isOnline) {

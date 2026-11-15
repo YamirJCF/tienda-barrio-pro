@@ -24,7 +24,7 @@ const {
   recordSuccess,
 } = useRateLimiter();
 
-const username = ref(authStore.currentUser?.username || localStorage.getItem('tienda_last_username') || '');
+const username = ref(authStore.currentUser?.email || localStorage.getItem('tienda_last_username') || '');
 const password = ref('');
 const showPassword = ref(false);
 const errorMessage = ref('');

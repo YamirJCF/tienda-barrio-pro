@@ -7,7 +7,6 @@
 import { ref, watch } from 'vue';
 import BaseModal from '../ui/BaseModal.vue';
 import BaseButton from '../ui/BaseButton.vue';
-import { getSupabaseClient } from '../../data/supabaseClient';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
 import { useNotifications } from '../../composables/useNotifications';
 import { useAuthStore } from '../../stores/auth';
@@ -99,16 +98,7 @@ watch(() => props.modelValue, async (open) => {
     detail.value = null;
 
     try {
-      const supabase = getSupabaseClient();
-      if (!supabase) throw new Error('Sin conexión');
-
-      const { data, error } = await supabase.rpc('get_sale_detail' as any, {
-        p_sale_id: props.saleId
-      });
-
-      if (error) throw error;
-
-      const payload = data as any;
+      const payload = await saleRepository.getSaleDetail(props.saleId);
       if (!payload?.success) {
         fetchError.value = payload?.error || 'Error al cargar detalle';
         return;

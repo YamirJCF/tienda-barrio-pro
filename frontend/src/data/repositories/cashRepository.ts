@@ -12,7 +12,7 @@
 import { Decimal } from 'decimal.js';
 import type { CashTransaction } from '../../types';
 
-import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
+import { getSupabaseClient, isSupabaseConfigured, requireSupabase } from '../supabaseClient';
 import { logger } from '../../utils/logger';
 
 // Interface adapted to what the UI Store expects, but mapped to DB
@@ -34,6 +34,8 @@ export interface CashRepository {
     registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string }>;
     getSessionTransactions(sessionId: string): Promise<CashTransaction[]>;
     addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; error?: string }>;
+    getPendingForcedSessions(): Promise<{ id: string; openedAt: string; channels: string[] }[]>;
+    reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number): Promise<void>;
 }
 
 export const cashRepository: CashRepository = {
@@ -306,6 +308,37 @@ export const cashRepository: CashRepository = {
         } catch (e: any) {
             return { success: false, error: e.message };
         }
+    },
+
+    async getPendingForcedSessions(): Promise<{ id: string; openedAt: string; channels: string[] }[]> {
+        const supabase = requireSupabase();
+        const { data: sessions, error } = await supabase
+            .from('cash_sessions')
+            .select('id, opened_at')
+            .eq('status', 'closed')
+            .eq('forced_close', true)
+            .is('actual_balance', null)
+            .order('opened_at', { ascending: true });
+
+        if (error) throw error;
+
+        return (sessions ?? []).map((s: any) => ({
+            id: s.id,
+            openedAt: s.opened_at,
+            channels: ['efectivo'],
+        }));
+    },
+
+    async reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number): Promise<void> {
+        const supabase = requireSupabase();
+        const { data, error } = await supabase.rpc('rpc_reconciliar_cierre_forzado', {
+            p_session_id: sessionId,
+            p_employee_id: employeeId,
+            p_actual_balance: actualBalance,
+        });
+
+        if (error) throw error;
+        if (!(data as any)?.success) throw new Error('RECONCILIATION_FAILED');
     }
 };
 

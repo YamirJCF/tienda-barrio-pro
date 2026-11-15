@@ -81,7 +81,6 @@ export interface EmployeeRepository extends EntityRepository<Employee> {
     // Custom create signature that matches RPC needs (plain PIN)
     // Overrides base create to be safer
     create(data: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Promise<Employee | null>;
-    validatePin(username: string, pin: string): Promise<Employee | null>;
     updatePin(employeeId: string, newPin: string): Promise<{ success: boolean; error?: string }>;
     toggleActiveSecure(employeeId: string, newStatus: boolean): Promise<{ success: boolean; error?: string }>;
 }
@@ -243,38 +242,6 @@ export const employeeRepository: EmployeeRepository = {
             }
         }
         return { success: false, error: 'Cambio de estado requiere conexión a internet.' };
-    },
-
-    /**
-     * Validate PIN via RPC
-     */
-    async validatePin(username: string, pin: string): Promise<Employee | null> {
-        // ... (existing validate pin) ...
-        if (isSupabaseConfigured() && navigator.onLine) {
-            const supabase = getSupabaseClient()!;
-            const { data, error } = await supabase.rpc('validar_pin_empleado', {
-                p_username: username,
-                p_pin: pin
-            });
-
-            if (error || !data || !data.success) {
-                return null;
-            }
-
-            const raw = data.employee;
-            return {
-                id: raw.id,
-                storeId: raw.store_id,
-                name: raw.name,
-                username: raw.username,
-                pin: '***',
-                permissions: raw.permissions,
-                isActive: true,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            } as Employee;
-        }
-        return null;
     }
 };
 

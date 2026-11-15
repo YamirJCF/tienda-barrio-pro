@@ -206,20 +206,6 @@ export const useEmployeesStore = defineStore(
       return employees.value.find((e) => e.username.toLowerCase() === username.toLowerCase());
     };
 
-    /**
-     * Validate PIN (Async + RPC)
-     */
-    const validatePin = async (username: string, pin: string) => {
-      try {
-        // Use Repo RPC
-        const validEmployee = await employeeRepository.validatePin(username, pin);
-        return validEmployee;
-      } catch (e) {
-        console.error('PIN Validation failed', e);
-        return null;
-      }
-    };
-
     return {
       employees,
       activeEmployees,
@@ -234,7 +220,6 @@ export const useEmployeesStore = defineStore(
       updatePin,
       getEmployeeById,
       getEmployeeByUsername,
-      validatePin,
     };
   },
   {

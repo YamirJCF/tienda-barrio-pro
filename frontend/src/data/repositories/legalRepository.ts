@@ -240,6 +240,34 @@ export const legalRepository = {
 
         return payload.data;
     },
+
+    async getPlatformSessionEmail(): Promise<string | null> {
+        const supabase = getSupabaseClient();
+        if (!supabase) return null;
+        const { data } = await supabase.auth.getUser();
+        return data.user?.email || null;
+    },
+
+    async signInPlatformAdmin(email: string, password: string): Promise<string | null> {
+        const supabase = ensureOnlineSupabase();
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: email.trim().toLowerCase(),
+            password,
+        });
+        if (error || !data.user) {
+            throw new LegalRepositoryError(
+                error?.message || 'Credenciales inválidas.',
+                'PLATFORM_AUTH_FAILED'
+            );
+        }
+        return data.user.email || null;
+    },
+
+    async signOutPlatformAdmin(): Promise<void> {
+        const supabase = getSupabaseClient();
+        if (!supabase) return;
+        await supabase.auth.signOut();
+    },
 };
 
 export default legalRepository;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSalesStore } from '../stores/sales';
 import { useInventoryStore } from '../stores/inventory';
@@ -40,13 +40,12 @@ const reportsStore = useReportsStore();
 const { formatWithSign } = useCurrencyFormat();
 
 // State
-let pollInterval: ReturnType<typeof setInterval> | null = null;
 const profileSidebarOpen = ref(false);
 
 onMounted(async () => {
   salesStore.initialize();
   inventoryStore.initialize();
-  reportsStore.fetchDailySummary().catch(() => {});
+  reportsStore.fetchDailySummary();
   
   // FIX: Admin users might not have storeId in currentUser, but have selected currentStore
   const activeStoreId = authStore.currentStore?.id || authStore.currentUser?.storeId;
@@ -58,19 +57,8 @@ onMounted(async () => {
       console.warn('⚠️ [Dashboard] No active store ID found for sync');
   }
 
-  // ACCESS REQUEST POLLING (replaces deleted AccessRequestsWidget)
   if (authStore.isAdmin) {
     devicesStore.fetchPendingRequests(); // [UPDATED]
-    pollInterval = setInterval(() => {
-      devicesStore.fetchPendingRequests(); // [UPDATED]
-    }, 30_000); // Every 30 seconds
-  }
-});
-
-onUnmounted(() => {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
   }
 });
 
@@ -81,22 +69,25 @@ const isStoreOpen = computed(() => salesStore.isStoreOpen);
 
 // Formatted values using composable (Backend Authority: get_daily_summary)
 const formattedCash = computed(() => {
+  if (reportsStore.isLoading && !reportsStore.summary) return '...';
   if (reportsStore.summary?.money_breakdown?.cash !== undefined) {
     return formatWithSign(reportsStore.summary.money_breakdown.cash);
   }
-  return formatWithSign(salesStore.currentCash);
+  return '—';
 });
 const formattedTodayTotal = computed(() => {
+  if (reportsStore.isLoading && !reportsStore.summary) return '...';
   if (reportsStore.summary?.hero_number !== undefined) {
     return formatWithSign(reportsStore.summary.hero_number);
   }
-  return formatWithSign(salesStore.todayTotal);
+  return '—';
 });
 const formattedTodayFiado = computed(() => {
+  if (reportsStore.isLoading && !reportsStore.summary) return '...';
   if (reportsStore.summary?.money_breakdown?.credit !== undefined) {
     return formatWithSign(reportsStore.summary.money_breakdown.credit);
   }
-  return formatWithSign(salesStore.todayFiado);
+  return '—';
 });
 
 const totalProducts = computed(() => inventoryStore.totalProducts);
@@ -252,6 +243,19 @@ const navigateToNotifications = () => {
       </div>
 
       <!-- Quick Stats Grid -->
+      <div
+        v-if="reportsStore.error"
+        class="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-300"
+      >
+        <span>No se pudo sincronizar el resumen financiero del servidor ({{ reportsStore.error }}).</span>
+        <button
+          type="button"
+          class="font-bold underline shrink-0"
+          @click="reportsStore.fetchDailySummary()"
+        >
+          Reintentar
+        </button>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <StatCard icon="payments" icon-color="green" title="Caja Real" :value="formattedCash" />
         <StatCard

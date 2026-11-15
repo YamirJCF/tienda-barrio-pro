@@ -2,6 +2,7 @@
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import CashControlView from '../../views/CashControlView.vue';
+import { cashRepository } from '../../data/repositories/cashRepository';
 
 /**
  * RegresiÃ³n: flujo de apertura con cierre forzado pendiente (SDD_017 RN-017-03).
@@ -38,12 +39,16 @@ vi.mock('../../stores/cashRegister', () => ({
     syncFromBackend: mockSyncFromBackend,
     openRegister: mockOpenRegister,
     closeRegister: vi.fn(),
+    fetchPendingForcedSessions: () => cashRepository.getPendingForcedSessions(),
+    reconcileForcedClose: (sessionId: string, employeeId: string, actualBalance: number) =>
+      cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance),
   }),
 }));
 
 vi.mock('../../stores/auth', () => ({
   useAuthStore: () => ({
     isAdmin: true, // bypass PIN: el flujo llega directo a handlePinSuccess
+    canOpenCloseCash: true,
     currentStore: { id: 'store-1' },
     currentUser: { id: 'user-1', employeeId: 'emp-1', permissions: {} },
   }),

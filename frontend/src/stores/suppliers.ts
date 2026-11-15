@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/utils/logger';
+import { useAuthStore } from './auth';
 import type { Database } from '@/types/database.types';
 
 type Supplier = Database['public']['Tables']['suppliers']['Row'];
@@ -122,7 +123,7 @@ export const useSuppliersStore = defineStore(
             }
 
             try {
-                const authStore = (await import('./auth')).useAuthStore();
+                const authStore = useAuthStore();
                 const storeId = authStore.currentStore?.id || authStore.currentUser?.storeId;
                 if (!storeId) throw new Error('No hay sesión de tienda activa');
 

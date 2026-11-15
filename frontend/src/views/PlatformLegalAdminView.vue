@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ShieldCheck, FilePlus2, ArrowLeft, LogOut, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-vue-next';
-import { getSupabaseClient } from '../data/supabaseClient';
 import {
   legalRepository,
   type LegalChangeLevel,
@@ -11,7 +10,6 @@ import {
 } from '../data/repositories/legalRepository';
 
 const router = useRouter();
-const supabase = getSupabaseClient();
 
 const sessionEmail = ref<string | null>(null);
 const loginEmail = ref('');
@@ -33,9 +31,7 @@ const publishError = ref('');
 const publishSuccess = ref('');
 
 const syncAuthState = async () => {
-  if (!supabase) return;
-  const { data } = await supabase.auth.getUser();
-  sessionEmail.value = data.user?.email || null;
+  sessionEmail.value = await legalRepository.getPlatformSessionEmail();
 };
 
 const loadVersions = async () => {
@@ -56,19 +52,10 @@ onMounted(async () => {
 });
 
 const handlePlatformLogin = async () => {
-  if (!supabase) return;
   authError.value = '';
   isAuthenticating.value = true;
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: loginEmail.value.trim().toLowerCase(),
-      password: loginPassword.value,
-    });
-    if (error || !data.user) {
-      authError.value = error?.message || 'Credenciales inválidas.';
-      return;
-    }
-    sessionEmail.value = data.user.email || null;
+    sessionEmail.value = await legalRepository.signInPlatformAdmin(loginEmail.value, loginPassword.value);
     loginPassword.value = '';
     await loadVersions();
   } catch (err: any) {
@@ -79,8 +66,7 @@ const handlePlatformLogin = async () => {
 };
 
 const handlePlatformLogout = async () => {
-  if (!supabase) return;
-  await supabase.auth.signOut();
+  await legalRepository.signOutPlatformAdmin();
   sessionEmail.value = null;
   publishError.value = '';
   publishSuccess.value = '';

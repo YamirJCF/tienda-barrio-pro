@@ -13,6 +13,8 @@ import App from './App.vue';
 import router from './router';
 import Toast from 'vue-toastification';
 import 'vue-toastification/dist/index.css';
+import { logger } from './utils/logger';
+import { useAuthStore } from './stores/auth';
 
 // =============================================
 // Bootstrap: Async IIFE wraps the app initialization
@@ -43,10 +45,9 @@ import 'vue-toastification/dist/index.css';
     // This bridges the gap between Supabase session and Pinia state.
     // Without this, the router guard sees isAuthenticated=false and redirects to /login.
     if (interceptResult?.intercepted && interceptResult.type !== 'recovery') {
-        const { useAuthStore } = await import('./stores/auth');
         const authStore = useAuthStore(pinia);
         const initialized = await authStore.initializeFromSession();
-        console.log('[Main] Auth callback initialized:', initialized);
+        logger.log('[Main] Auth callback initialized:', initialized);
     }
 
     app.use(router);

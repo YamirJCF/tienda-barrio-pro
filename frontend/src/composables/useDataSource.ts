@@ -13,6 +13,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { isSupabaseConfigured, checkSupabaseConnection, type DataSource } from '../data/supabaseClient';
 import { logger } from '../utils/logger';
+import { processSyncQueue } from '../data/syncQueue';
 
 const currentSource = ref<DataSource>('localStorage');
 const isOnline = ref(navigator.onLine);
@@ -97,14 +98,12 @@ export function useDataSource() {
      * Handle online event
      */
     const handleOnline = async () => {
-        console.log('🟢 [DataSource] Network came online - handleOnline fired!');
-        logger.log('[DataSource] Network came online');
+        logger.log('🟢 [DataSource] Network came online - handleOnline fired!');
         isOnline.value = true;
         await checkConnection();
 
         // Trigger sync queue processing for offline transactions
-        console.log('🔄 [DataSource] Importing and calling processSyncQueue...');
-        const { processSyncQueue } = await import('../data/syncQueue');
+        logger.log('🔄 [DataSource] Calling processSyncQueue...');
         processSyncQueue(); // Fire and forget
 
         // Trigger sync event
@@ -147,11 +146,11 @@ export function useDataSource() {
 
     // Setup event listeners on mount
     onMounted(() => {
-        console.log('🎯 [DataSource] useDataSource composable MOUNTED - registering event listeners');
+        logger.log('🎯 [DataSource] useDataSource composable MOUNTED - registering event listeners');
         isOnline.value = navigator.onLine;
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
-        console.log('✅ [DataSource] Event listeners registered. Current navigator.onLine:', navigator.onLine);
+        logger.log('✅ [DataSource] Event listeners registered. Current navigator.onLine:', navigator.onLine);
         startConnectionMonitoring();
     });
 

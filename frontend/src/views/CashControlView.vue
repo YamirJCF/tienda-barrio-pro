@@ -11,7 +11,7 @@ import Decimal from 'decimal.js';
 
 import { useAuthStore } from '../stores/auth';
 import BaseButton from '@/components/ui/BaseButton.vue';
-import { requireSupabase } from '../data/supabaseClient';
+import { logger } from '../utils/logger';
 import {
   ArrowLeft,
   LockOpen,
@@ -43,29 +43,7 @@ const showAuditModal = computed(() => pendingForcedSessions.value.length > 0);
 const fetchPendingForcedSessions = async () => {
     fetchForcedSessionsError.value = false;
     try {
-        const supabase = requireSupabase();
-        
-        // Arqueo Ciego (POL-SEG-01): el saldo esperado NO viaja al cliente.
-        // Solo se piden id y fecha de apertura; el servidor calcula la diferencia al reconciliar.
-        const { data: sessions, error } = await supabase
-            .from('cash_sessions')
-            .select('id, opened_at')
-            .eq('status', 'closed')
-            .eq('forced_close', true)
-            .is('actual_balance', null)
-            .order('opened_at', { ascending: true });
-
-        if (error) throw error;
-
-        // La reconciliación de cierre forzado es solo en efectivo: el backend vivo
-        // (cerrar_caja / rpc_check_and_force_close_shifts / rpc_reconciliar_cierre_forzado)
-        // calcula expected_balance únicamente con cash_movements.payment_method = 'efectivo'.
-        // cash_session_balances no existe en producción (Ola 4 diferida, RVC L20).
-        pendingForcedSessions.value = (sessions ?? []).map(s => ({
-            id:       s.id,
-            openedAt: s.opened_at,
-            channels: ['efectivo']
-        }));
+        pendingForcedSessions.value = await cashRegisterStore.fetchPendingForcedSessions();
     } catch (e) {
         console.error('🚫 [CashControl] Failed to fetch pending forced sessions:', e);
         fetchForcedSessionsError.value = true;
@@ -80,15 +58,7 @@ const handleAuditConfirm = async (sessionId: string, actualBalance: number) => {
     }
 
     try {
-        const supabase = requireSupabase();
-        const { data, error } = await supabase.rpc('rpc_reconciliar_cierre_forzado', {
-            p_session_id:     sessionId,
-            p_employee_id:    employeeId,
-            p_actual_balance: actualBalance,
-        });
-
-        if (error) throw error;
-        if (!data?.success) throw new Error('RECONCILIATION_FAILED');
+        await cashRegisterStore.reconcileForcedClose(sessionId, employeeId, actualBalance);
 
         // Eliminar la sesión conciliada de la cola
         pendingForcedSessions.value = pendingForcedSessions.value.filter(s => s.id !== sessionId);
@@ -129,9 +99,9 @@ onMounted(async () => {
             return;
         }
 
-        console.log('🔍 [CashControl] Syncing Status for Store:', authStore.currentStore.id);
+        logger.log('🔍 [CashControl] Syncing Status for Store:', authStore.currentStore.id);
         const result = await cashRegisterStore.syncFromBackend(authStore.currentStore.id);
-        console.log('✅ [CashControl] Sync Result:', {
+        logger.log('✅ [CashControl] Sync Result:', {
             isOpen: cashRegisterStore.isOpen,
             result,
             session: cashRegisterStore.currentSession
@@ -161,13 +131,8 @@ const buttonText = computed(() => {
     return isOpening.value ? 'ABRIR TURNO' : 'CERRAR TURNO';
 });
 
-// Permiso preventivo canOpenCloseCash
-const canOpenCloseCash = computed(() => {
-    if (authStore.isAdmin) return true;
-    const permissions = authStore.currentUser?.permissions as Record<string, any> | undefined;
-    if (!permissions) return true;
-    return permissions.canOpenCloseCash !== false;
-});
+// Permiso preventivo canOpenCloseCash (Fail-Closed: delega a authStore.canOpenCloseCash)
+const canOpenCloseCash = computed(() => authStore.canOpenCloseCash);
 
 // Form State
 const amount = ref(0);

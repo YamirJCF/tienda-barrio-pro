@@ -7,7 +7,7 @@ describe('Persistence Layer Factory', () => {
         expect(employeeRepository).toBeDefined();
         // Check for essential methods
         expect(employeeRepository.create).toBeDefined();
-        expect(employeeRepository.validatePin).toBeDefined();
+        expect(employeeRepository.toggleActiveSecure).toBeDefined();
     });
 
     it('should successfully instantiate clientRepository', () => {

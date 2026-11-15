@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useHistory, type HistoryType, type DatePreset } from '../composables/useHistory';
 import { useAuthStore } from '../stores/auth';
+import { useEmployeesStore } from '../stores/employees';
 import HistoryItemCard from '../components/history/HistoryItemCard.vue';
 import SaleDetailModal from '../components/history/SaleDetailModal.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
@@ -21,6 +22,7 @@ const props = defineProps<{
 
 const router = useRouter();
 const authStore = useAuthStore();
+const employeesStore = useEmployeesStore();
 const {
   items,
   filteredItems,
@@ -46,20 +48,13 @@ const {
 const employees = ref<{ id: string; name: string }[]>([]);
 
 const loadEmployees = async () => {
-  if (employees.value.length > 0) return;
+  if (employees.value.length > 0 || !authStore.currentStore) return;
   try {
-    const { getSupabaseClient } = await import('../data/supabaseClient');
-    const supabase = getSupabaseClient();
-    if (!supabase || !authStore.currentStore) return;
-    
-    const { data } = await supabase
-      .from('employees')
-      .select('id, name')
-      .eq('store_id', authStore.currentStore.id)
-      .eq('is_active', true)
-      .order('name');
-
-    if (data) employees.value = data;
+    await employeesStore.initialize(authStore.currentStore.id);
+    employees.value = employeesStore.activeOperationalEmployees.map((e) => ({
+      id: e.id,
+      name: e.name,
+    }));
   } catch (e) {
     console.error('[HistoryView] Failed to load employees', e);
   }

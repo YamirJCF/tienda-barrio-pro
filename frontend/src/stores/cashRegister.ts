@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import Decimal from 'decimal.js';
+import { logger } from '../utils/logger';
+import { cashRepository } from '../data/repositories/cashRepository';
+import { isSupabaseConfigured, requireSupabase } from '../data/supabaseClient';
+import { useNotificationsStore } from './notificationsStore';
 
 import type { CashTransaction, CashSession } from '../types';
 
@@ -93,14 +97,11 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
         // If we have a session and are offline, don't even try to sync
         if (!navigator.onLine && hasExistingSession) {
-            console.log('⚠️ [CashRegisterStore] Offline detected - preserving local session');
+            logger.log('⚠️ [CashRegisterStore] Offline detected - preserving local session');
             return true;
         }
 
         try {
-            const { cashRepository } = await import('../data/repositories/cashRepository');
-            const { isSupabaseConfigured, requireSupabase } = await import('../data/supabaseClient');
-
             // If Supabase not configured, preserve existing state
             if (!isSupabaseConfigured()) {
                 console.warn('⚠️ [CashRegisterStore] Supabase not configured - preserving local session');
@@ -112,7 +113,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                 try {
                     const supabase = requireSupabase();
                     await supabase.rpc('rpc_check_and_force_close_shifts');
-                    console.log('🔄 [CashRegisterStore] Stale session detected. Force close RPC executed.');
+                    logger.log('🔄 [CashRegisterStore] Stale session detected. Force close RPC executed.');
                 } catch (rpcError) {
                     console.error('🚫 [CashRegisterStore] Failed to execute forced close RPC:', rpcError);
                 }
@@ -157,7 +158,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             console.error('🚫 [CashRegisterStore] Sync failed:', e);
             // FRD-012: ALWAYS preserve existing session on error
             if (hasExistingSession) {
-                console.log('✅ [CashRegisterStore] Network error - preserving existing session');
+                logger.log('✅ [CashRegisterStore] Network error - preserving existing session');
                 return true;
             }
             return false;
@@ -187,7 +188,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
         // ===== REPOSITORY INTEGRATION (Aduana Obligatoria) =====
         try {
-            const { cashRepository } = await import('../data/repositories/cashRepository');
             const result = await cashRepository.registerEvent({
                 id: newSession.id,
                 store_id: storeId,
@@ -214,7 +214,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             // Without this, cerrar_caja will fail with "Sesión no encontrada"
             if (result.data?.session_id) {
                 newSession.id = result.data.session_id;
-                console.log('✅ [CashRegisterStore] Session ID synced from backend:', newSession.id);
+                logger.log('✅ [CashRegisterStore] Session ID synced from backend:', newSession.id);
             }
 
         } catch (e: any) {
@@ -234,7 +234,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
         // 📢 Notification Center: Jornada Iniciada (notifications.md L66)
         try {
-            const { useNotificationsStore } = await import('./notificationsStore');
             const notifStore = useNotificationsStore();
             notifStore.addNotification({
                 type: 'general',
@@ -263,7 +262,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
         // ===== REPOSITORY INTEGRATION (Aduana Obligatoria) =====
         try {
-            const { cashRepository } = await import('../data/repositories/cashRepository');
             const result = await cashRepository.registerEvent({
                 id: session.id, // Use existing session ID for closing
                 store_id: session.storeId,
@@ -291,7 +289,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
         // 📢 Notification Center: Cierre de Caja (notifications.md L64)
         try {
-            const { useNotificationsStore } = await import('./notificationsStore');
             const notifStore = useNotificationsStore();
             notifStore.addNotification({
                 type: 'finance',
@@ -321,7 +318,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         };
 
         // Persist to Backend (Obligatory)
-        const { cashRepository } = await import('../data/repositories/cashRepository');
         const result = await cashRepository.addMovement(transaction, currentSession.value.id);
 
         if (!result.success) {
@@ -350,7 +346,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         // The backend source of truth is the trigger.
         // Only persist if NOT a sale (Trigger handles sales)
         if (!saleId) {
-            const { cashRepository } = await import('../data/repositories/cashRepository');
             const result = await cashRepository.addMovement(transaction, currentSession.value.id);
             if (!result.success) {
                 console.error('🚫 [CashRegisterStore] Failed to persist income:', result.error);
@@ -359,6 +354,14 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         }
 
         currentSession.value.transactions.push(transaction);
+    };
+
+    const fetchPendingForcedSessions = async () => {
+        return await cashRepository.getPendingForcedSessions();
+    };
+
+    const reconcileForcedClose = async (sessionId: string, employeeId: string, actualBalance: number) => {
+        await cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance);
     };
 
     return {
@@ -375,7 +378,9 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         closeRegister,
         registerExpense,
         addIncome,
-        syncFromBackend
+        syncFromBackend,
+        fetchPendingForcedSessions,
+        reconcileForcedClose
     };
 }, {
     persist: {

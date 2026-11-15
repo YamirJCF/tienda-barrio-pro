@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia';
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted, getCurrentInstance } from 'vue';
 import { Decimal } from 'decimal.js';
 import { useNotificationsStore } from './notificationsStore';
 import { useAuthStore } from './auth';
+import { useBatchStore } from './batches';
 import type { Product } from '../types';
 import {
   productRepository,
@@ -488,7 +489,6 @@ export const useInventoryStore = defineStore(
 
       if (!isSupabaseConfigured() && movement.type === 'entrada' && movement.unitCost !== undefined) {
         try {
-          const { useBatchStore } = await import('./batches');
           const batchStore = useBatchStore();
 
           batchStore.addLocalBatch({
@@ -528,9 +528,11 @@ export const useInventoryStore = defineStore(
       return { success: true, product };
     };
 
-    onUnmounted(() => {
-      unsubscribeRealtime();
-    });
+    if (getCurrentInstance()) {
+      onUnmounted(() => {
+        unsubscribeRealtime();
+      });
+    }
 
     const adjustStockLocal = (productId: string, delta: number | Decimal) => {
       const product = products.value.find((p) => p.id === productId);
@@ -591,6 +593,7 @@ export const useInventoryStore = defineStore(
       isLoading,
       error,
       initialized,
+      loadedStoreId,
       totalProducts,
       lowStockProducts,
       productsByCategory,

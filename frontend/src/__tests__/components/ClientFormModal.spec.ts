@@ -150,7 +150,8 @@ describe('ClientFormModal.vue', () => {
   });
 
   it('calls addClient with active storeId in create mode', async () => {
-    mockAddClient.mockResolvedValue({ id: 'new-cli-123' });
+    const mockCreatedClient = { id: 'new-cli-123', name: 'Nico Gomez' };
+    mockAddClient.mockResolvedValue(mockCreatedClient);
     const wrapper = createWrapper();
     
     // Fill fields
@@ -170,6 +171,10 @@ describe('ClientFormModal.vue', () => {
       creditLimit: new Decimal(100000),
       storeId: 'store-uuid-1'
     });
+
+    expect(mockShowSuccess).toHaveBeenCalledWith('Cliente creado exitosamente');
+    expect(wrapper.emitted('saved')).toBeTruthy();
+    expect(wrapper.emitted('saved')?.[0]).toEqual([mockCreatedClient, 'create']);
   });
 
   it('shows error notification when active storeId cannot be resolved in create mode', async () => {
@@ -191,7 +196,8 @@ describe('ClientFormModal.vue', () => {
   });
 
   it('calls updateClient in edit mode', async () => {
-    mockUpdateClient.mockResolvedValue({ id: 'cli-001' });
+    const mockUpdatedClient = { id: 'cli-001', name: 'Juan Perez Editado' };
+    mockUpdateClient.mockResolvedValue(mockUpdatedClient);
     const wrapper = createWrapper({ clientId: 'cli-001' });
     
     // Modify name and limit
@@ -208,5 +214,9 @@ describe('ClientFormModal.vue', () => {
       phone: '3001234567',
       creditLimit: new Decimal(60000)
     });
+
+    expect(mockShowSuccess).toHaveBeenCalledWith('Cambios guardados');
+    expect(wrapper.emitted('saved')).toBeTruthy();
+    expect(wrapper.emitted('saved')?.[0]).toEqual([mockUpdatedClient, 'update']);
   });
 });

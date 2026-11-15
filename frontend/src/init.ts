@@ -1,4 +1,5 @@
 import { initAuditMode, toggleAuditMode } from './utils/audit';
+import { logger } from './utils/logger';
 
 // Initialize Audit Mode before app starts
 initAuditMode();
@@ -10,13 +11,11 @@ initAuditMode();
     status: () => localStorage.getItem('app_audit_mode_enabled') === 'true' ? '🔒 AUDIT MODE ACTIVE' : '☁️ PRODUCTION MODE',
     help: () => {
         console.group('🛡️ Audit Mode Commands');
-        console.log('Audit.on()    -> Activate Simulator Mode');
-        console.log('Audit.off()   -> Deactivate / Return to Production');
-        console.log('Audit.status() -> Check current status');
+        logger.log('Audit.on()    -> Activate Simulator Mode');
+        logger.log('Audit.off()   -> Deactivate / Return to Production');
+        logger.log('Audit.status() -> Check current status');
         console.groupEnd();
     }
 };
 
-if (import.meta.env.DEV) {
-    console.log('🛡️ Audit Controls Loaded. Type "Audit.help()" for instructions.');
-}
+logger.log('🛡️ Audit Controls Loaded. Type "Audit.help()" for instructions.');

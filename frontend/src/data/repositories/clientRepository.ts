@@ -12,6 +12,7 @@ import { Decimal } from 'decimal.js';
 import { createSupabaseRepository, EntityRepository, RepositoryMappers } from './supabaseAdapter';
 import { getSupabaseClient, isSupabaseConfigured } from '../supabaseClient';
 import { localStorageAdapter } from './localStorageAdapter';
+import { logger } from '../../utils/logger';
 
 const TABLE_NAME = 'clients';
 const STORAGE_KEY = 'tienda-clients-db-cache';
@@ -567,7 +568,7 @@ export const clientRepository: ClientRepository = {
     },
 
     async updatePendingTransactionSaleId(description: string, saleId: string): Promise<boolean> {
-        console.log('[ClientRepo] updatePendingTransactionSaleId is a no-op (view-based reconciliation).', {
+        logger.log('[ClientRepo] updatePendingTransactionSaleId is a no-op (view-based reconciliation).', {
             description,
             saleId,
         });

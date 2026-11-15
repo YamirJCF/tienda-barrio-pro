@@ -16,6 +16,8 @@ import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { logger } from '../utils/logger';
 import { getSupabaseClient } from './supabaseClient';
 import { detectSchemaDrift, sanitizeCamelToSnake, getTableFromTransactionType } from '../services/schemaValidator';
+import { useAuthStore } from '../stores/auth';
+import { encryptData, decryptData } from '../utils/crypto';
 
 const DB_NAME = 'tienda-sync-db';
 const DB_VERSION = 2; // Incremented for corrupted_items store
@@ -141,10 +143,8 @@ export const addToSyncQueue = async (type: TransactionType, payload: any): Promi
     // Attempt payload encryption if CryptoKey is ready in RAM
     let payloadToStore = sanitizedPayload;
     try {
-        const { useAuthStore } = await import('../stores/auth');
         const authStore = useAuthStore();
         if (authStore.isCryptoKeyReady && authStore.sessionCryptoKey) {
-            const { encryptData } = await import('../utils/crypto');
             const { cipherText, iv } = await encryptData(sanitizedPayload, authStore.sessionCryptoKey);
             payloadToStore = {
                 __encrypted: true,
@@ -280,14 +280,12 @@ export const processSyncQueue = async (): Promise<void> => {
         let rawPayload = item.payload;
         if (rawPayload && rawPayload.__encrypted) {
             try {
-                const { useAuthStore } = await import('../stores/auth');
                 const authStore = useAuthStore();
                 if (!authStore.isCryptoKeyReady || !authStore.sessionCryptoKey) {
                     logger.warn(`[SyncQueue] 🔒 CryptoKey missing for encrypted item ${item.id} — requesting PIN unlock`);
                     window.dispatchEvent(new CustomEvent('sync:pin_required', { detail: { itemId: item.id } }));
                     return; // Pause queue processing until user unlocks PIN
                 }
-                const { decryptData } = await import('../utils/crypto');
                 const cipherBuffer = new Uint8Array(rawPayload.cipherText).buffer;
                 const ivArray = new Uint8Array(rawPayload.iv);
                 rawPayload = await decryptData(cipherBuffer, ivArray, authStore.sessionCryptoKey);
@@ -485,6 +483,7 @@ async function addToDLQ(item: QueueItem, error: string): Promise<void> {
  * Get pending count
  */
 export const getQueueSize = async (): Promise<number> => {
+    if (typeof indexedDB === 'undefined') return 0;
     const db = await getDB();
     return db.count(QUEUE_STORE);
 };

@@ -49,7 +49,7 @@ const emit = defineEmits<{
   success: [];
 }>();
 const authStore = useAuthStore();
-const { getShortFingerprint } = useDeviceFingerprint();
+const { getFingerprint } = useDeviceFingerprint();
 
 const error = ref<string | null>(null);
 const loading = ref(false);
@@ -67,12 +67,6 @@ const subtitle = computed(() =>
     : 'Ingresa TU PIN de Empleado para cerrar el turno:'
 );
 
-const formatTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
-
 const handlePinComplete = async (pin: string) => {
   loading.value = true;
   error.value = null;
@@ -86,7 +80,7 @@ const handlePinComplete = async (pin: string) => {
 
     // We can re-use requestEmployeeAccess logic or a new verifyPin endpoint.
     // Re-using requestEmployeeAccess is standard for "sudo" mode.
-    const fingerprint = await getShortFingerprint(); // Does not need exact match, just value
+    const fingerprint = await getFingerprint();
     
     // We send the ALIAS (which is mapped to email/username in store)
     // If it's an employee, email is the alias. If admin, it's the email. 
