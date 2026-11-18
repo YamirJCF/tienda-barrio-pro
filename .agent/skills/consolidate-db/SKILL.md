@@ -5,6 +5,16 @@ description: Protocolo estricto de seguridad para consolidar migraciones de Supa
 
 # Workflow: Consolidación Segura de BD
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 2 — Mantenimiento Excepcional de Base de Datos (Fuera de ruta habitual)
+- **Rama permitida:** `chore/*` (nacida desde `master`; **PROHIBIDO** ejecutar en `master`).
+- **Entrada requerida (Gate In):** Orden explícita del usuario para consolidar migraciones en un ambiente limpio (invocado desde `data`).
+- **Límite estricto:** Nunca se ejecuta en automático dentro de una feature normal. Exige snapshot previo (`pre_*`), diff exacto (`post_*`) y tag de respaldo en Git.
+- **🛑 Freno de Emergencia (Hard Stop):** Si `Compare-Object` muestra cualquier diferencia entre el snapshot previo y posterior → ABORTAR inmediatamente y ejecutar `git checkout -- supabase/migrations/`.
+- **➡️ Siguiente eslabón:** `verification-before-completion` ➔ `commit`.
+
+---
+
 Este proceso debe seguirse RIGUROSAMENTE antes de borrar cualquier migración `.sql` antigua para consolidarlas en un único `init.sql`.
 
 ## Fase 1: Snapshot del Estado Actual (ANTES)

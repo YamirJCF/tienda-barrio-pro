@@ -8,6 +8,18 @@ date_added: "2026-02-27"
 
 # Verification Before Completion
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 4 — Compuerta Obligatoria de Evidencia antes de Guardar (Rutas B y C)
+- **Rama permitida:** `feat/*`, `fix/*`, `refactor/*`, `chore/*`, `docs/*`
+- **Entrada requerida (Gate In):** Implementación + `test-expert` + `code-reviewer` (y `pac-uxd` si aplica) completados.
+- **Límite estricto:** Exige evidencia real de ejecución en consola (Regla 5 de `AGENTS.md`) y conteo mecánico de hallazgos (Regla 9); **PROHIBIDO** marcar `✅` con frases como "debería funcionar" o "el código se ve bien".
+- **🛑 Freno de Emergencia (Hard Stop):** Si un comando de verificación (`npm run test`, `npm run build`, consulta SQL) falla o no se ejecutó en este turno → Prohibido avanzar a `commit`.
+- **➡️ Siguiente eslabón:** `commit` ➔ `push-sync`
+  - **En Modo AUTO:** Con la evidencia real impresa y en verde (`✅`), ejecuta `commit` de inmediato sin preguntar.
+  - **En Modo PAUSADO:** Presenta el resumen de evidencias reales ejecutadas, indica *"Siguiente paso en la ruta: `commit`"* y espera confirmación.
+
+---
+
 ## Overview
 
 Claiming work is complete without verification is dishonesty, not efficiency.

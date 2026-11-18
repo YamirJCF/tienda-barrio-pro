@@ -5,6 +5,18 @@ description: Pre-Auditoría Contextual para Interfaz de Usuario (PAC-UXD) - Cart
 
 # 🎨 Workflow: PAC-UXD — Pre-Auditoría Contextual para Interfaz de Usuario
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 4 — Auditoría de Conformidad UI vs. Contrato SDD (Ruta B)
+- **Rama permitida:** `feat/*`, `fix/*`, `refactor/*`, `audit/*`
+- **Entrada requerida (Gate In):** Componentes Vue implementados/modificados + SDD de referencia + revisión previa de `code-reviewer`.
+- **Límite estricto:** Cartografía discrepancias entre los componentes `.vue` y la Sección 5 del SDD con conteo mecánico exacto (Regla 9 de `AGENTS.md`); **PROHIBIDO** ocultar hallazgos negativos detrás de hallazgos positivos.
+- **🛑 Freno de Emergencia (Hard Stop):** Si el reporte arroja discrepancias críticas contra el contrato del SDD → Reportar hallazgos para subsanación antes de autorizar el cierre.
+- **➡️ Siguiente eslabón:** `verification-before-completion`
+  - **En Modo AUTO:** Si el dictamen es 0 discrepancias bloqueantes, avanza a `verification-before-completion` de inmediato.
+  - **En Modo PAUSADO:** Entrega el archivo `PAC_UXD_SDD_[NUMERO].md`, indica *"Siguiente paso en la ruta: `verification-before-completion`"* y espera confirmación.
+
+---
+
 > **Norma Metodológica:** Este workflow implementa y ejecuta directamente la metodología oficial especificada en [`documentation/01_requirements/METODOLOGIA/PAC_UXD_protocolo.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/METODOLOGIA/PAC_UXD_protocolo.md).
 > 
 > **Rol:** Cartógrafo, no muro. Este protocolo **encuentra y reporta** discrepancias — nunca detiene la ejecución por sí mismo. Solo el protocolo de ejecución (`PEA-N` o `/orchestrator`) tiene autoridad para declarar un Halt en el momento de planificar/construir, nunca durante el mapeo.

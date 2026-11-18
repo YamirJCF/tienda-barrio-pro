@@ -5,6 +5,22 @@ description: Genera tests unitarios robustos para Vue 3 y TypeScript usando Vite
 
 # Instrucciones para el Experto en Testing
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 4 — Pruebas Unitarias, de Regresión y de Caracterización (Rutas B, C y E)
+- **Rama permitida:** `feat/*`, `fix/*`, `refactor/*` (**PROHIBIDO** en `master`).
+- **Entrada requerida (Gate In):**
+  - En Rutas B/C: Código implementado o corregido en stores, repositorios, composables o componentes Vue.
+  - En Ruta E (`refactor` — Fase 1): Código existente *antes* de ser refactorizado para tomar la "Foto Antes" (Prueba de Caracterización).
+- **Límite estricto:** Crea y ejecuta tests con Vitest (`cd frontend && npm run test`); **PROHIBIDO** deshabilitar, saltar (`.skip`) o debilitar un test existente para hacerlo pasar, prohibido editar `.spec.ts` durante la Fase 2 de `refactor`, y prohibido comparar dinero contra strings formateados en vez de `Decimal`.
+- **🛑 Freno de Emergencia (Hard Stop):** Si un test revela un bug en la lógica de negocio o un fallo en el contrato RPC → DETENERSE y regresar a `systematic-debugging` / `data`.
+- **➡️ Siguiente eslabón:**
+  - En Rutas B y C (o Fase 3 de `refactor`): `code-reviewer`
+  - En Ruta E (`refactor` — Fase 1 Foto Antes): Retorna a `refactor` (Fase 2: Cirugía con `.spec.ts` congelados).
+  - **En Modo AUTO:** Con todos los tests en verde (`✅`), ejecuta el siguiente eslabón de inmediato sin preguntar.
+  - **En Modo PAUSADO:** Muestra el output real de Vitest en consola, indica el siguiente eslabón y espera confirmación.
+
+---
+
 Cuando el usuario solicite crear o arreglar tests, sigue estrictamente estas reglas basadas en la arquitectura del proyecto.
 
 ## Stack Tecnológico

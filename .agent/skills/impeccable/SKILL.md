@@ -8,6 +8,16 @@ allowed-tools:
   - Bash(.agent/skills/impeccable/scripts/impeccable *)
 ---
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 2 y 4 — Motor de Sistema de Diseño y Auditoría Visual (Co-ejecutado con `ux`)
+- **Rama permitida:** `feat/*`, `fix/*`, `refactor/*` (**PROHIBIDO** en `master`).
+- **Entrada requerida (Gate In):** Invocación desde `ux` o solicitud de diseño/auditoría UI + lectura de `PRODUCT.md`, `DESIGN.md` y `.impeccable/design.json`.
+- **Límite estricto:** Gobierna jerarquía visual, tipografía, color, estados y anti-patrones de UI; **PROHIBIDO** tocar SQL, RPCs o mover lógica financiera al frontend.
+- **🛑 Freno de Emergencia (Hard Stop):** Si `.agent\skills\impeccable\scripts\impeccable.cmd detect` arroja violaciones → Corregir antes de avanzar a `test-expert`.
+- **➡️ Siguiente eslabón:** Retorna a `ux` ➔ `test-expert`.
+
+---
+
 This skill gives you the tools and permission to make design that earns the name out-of-distribution craft. Work as an award-winning design director would: production-grade code, a clear POV, a deep grasp of what the client and its users need, and exceptional craft.
 
 Core principles:

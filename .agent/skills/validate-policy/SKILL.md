@@ -5,9 +5,21 @@ description: Validar un FRD nuevo contra las Políticas Globales (ARQ-002) y sin
 
 # Workflow: Validación y Sincronización de Políticas (/validate-policy)
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 1 — Peaje de Salida de Requisitos (Gate 1 → Gate 2 en Ruta A)
+- **Rama permitida:** `draft/*`, `docs/*`
+- **Entrada requerida (Gate In):** FRD redactado en `documentation/01_requirements/FRD/` y registrado con `add-doc`.
+- **Límite estricto:** Audita el FRD contra `ARQ-002` y sincroniza `ARQ-003` y `ARQ-004`; **PROHIBIDO** autorizar el paso a Diseño Técnico (Nivel 2) si hay contradicciones.
+- **🛑 Freno de Emergencia (Hard Stop):** Si el FRD contradice `ARQ-002` (Veredicto ❌ NO CONFORME) → ABORTAR paso a Nivel 2 y reportar al usuario para corregir el FRD o enmendar la política.
+- **➡️ Siguiente eslabón:** `pac-sdd` (si pasa a redacción de SDD) o `data` / `ux` (inicio de Nivel 2).
+  - **En Modo AUTO:** Si el veredicto es `✅ CONFORME`, avanza automáticamente a `pac-sdd`.
+  - **En Modo PAUSADO:** Presenta el reporte de conformidad y espera confirmación para iniciar `pac-sdd`.
+
+---
+
 > [!CAUTION]
-> **OBLIGATORIO:** Este workflow debe ejecutarse SIEMPRE que se redacte o modifique un documento FRD en `01_REQUIREMENTS/FRD/`.
-> Debe ejecutarse ANTES de hacer commit del FRD. Si el FRD viola una Política existente, el commit DEBE ser abortado.
+> **OBLIGATORIO:** Este workflow debe ejecutarse SIEMPRE que se redacte o modifique un documento FRD en `documentation/01_requirements/FRD/`.
+> Debe ejecutarse ANTES de formalizar el FRD. Si el FRD viola una Política existente, el avance DEBE ser abortado.
 
 ---
 

@@ -5,6 +5,16 @@ description: Consultar el estándar de documentación para validar FRD, DSD, UXD
 
 # 📜 Estándar de Documentación
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 1 y 2 — Estándar Transversal de Documentación (Ruta A)
+- **Rama permitida:** `draft/*`, `docs/*`
+- **Entrada requerida (Gate In):** Solicitud de crear o auditar un documento FRD, DSD, UXD o QAR.
+- **Límite estricto:** Define estructura y reglas formales de documentación; **PROHIBIDO** modificar código de producción.
+- **🛑 Freno de Emergencia (Hard Stop):** Si un documento incumple su checklist (ej. un FRD incluye SQL o rutas `.vue`) → Rechazar el documento antes de avanzar.
+- **➡️ Siguiente eslabón:** Retorna al rol autor (`architect`, `data`, `ux` o `qa`) o pasa a `add-doc`.
+
+---
+
 Este workflow te guía para aplicar el estándar de documentación del proyecto.
 
 ## Instrucción Principal
@@ -12,7 +22,7 @@ Este workflow te guía para aplicar el estándar de documentación del proyecto.
 **ANTES de redactar o revisar cualquier documento**, lee el estándar completo:
 
 ```
-01_REQUIREMENTS/DOCUMENTATION_STANDARD.md
+documentation/01_requirements/DOCUMENTATION_STANDARD.md
 ```
 
 ---

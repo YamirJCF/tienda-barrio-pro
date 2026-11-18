@@ -5,6 +5,17 @@ description: Sincronización remota con GitHub tras validación formal
 
 # Workflow: Push Sync (Sincronización Remota Deliberada)
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 5 — Sincronización Remota de Desarrollo (Cierre de Rutas B y C)
+- **Rama permitida:** `feat/*`, `fix/*`, `docs/*`, `chore/*`, `refactor/*`, `audit/*` (**PROHIBIDO** en `master` y en `draft/*`).
+- **Entrada requerida (Gate In):** Commit local limpio (`commit`) + protocolo de validación aprobado (`validate-policy`, `pac-uxd` o tests/build en verde).
+- **Límite estricto:** Sube únicamente la rama de trabajo actual a `origin`; **PROHIBIDO** hacer push o merge directo a `master`.
+- **🛑 Freno de Emergencia (Hard Stop):** Si la rama es `master` o `draft/*`, o si `npm run build` falla → ABORTAR push y reportar al usuario.
+- **➡️ Siguiente eslabón:** Fin de las Rutas B/C (para pasar a producción en `master`, el usuario debe solicitar explícitamente la Ruta D: `deploy` / `release`).
+  - **En Modo AUTO y PAUSADO:** Al confirmar el push remoto, entrega el resumen final y detiene el flujo (nunca dispara `deploy` por cuenta propia).
+
+---
+
 Este workflow envía cambios validados a GitHub de forma explícita y deliberada.
 
 > [!IMPORTANT]
@@ -20,7 +31,7 @@ Este workflow envía cambios validados a GitHub de forma explícita y deliberada
 | C04 | ⚠️ Build exitoso | Si estás en `frontend/` (o código fuente), verificar que compile sin errores |
 
 > [!CAUTION]
-> **NUNCA** hacer push directo a `main` o `master`. Siempre usar ramas de funcionalidad o documentación validada.
+> **NUNCA** hacer push directo a `master` (rama oficial de producción) ni subir ramas `draft/*`. Siempre usar ramas de funcionalidad o documentación validada.
 
 ---
 
@@ -38,8 +49,8 @@ git status
 git branch --show-current
 ```
 
-3. **VALIDACIÓN DE RAMA**: Verificar que la rama NO sea `main`, `master` ni `production`.
-   - Si es `main` o `master`: **ABORTAR** y notificar al usuario.
+3. **VALIDACIÓN DE RAMA**: Verificar que la rama NO sea `master` (ni `main`/`production`) ni empiece por `draft/`.
+   - Si es `master` o `draft/*`: **ABORTAR** y notificar al usuario.
    - Si es una rama de funcionalidad/documentación válida: Continuar.
 
 // turbo
