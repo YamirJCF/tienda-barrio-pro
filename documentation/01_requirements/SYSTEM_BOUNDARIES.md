@@ -27,7 +27,7 @@ Este documento define explícitamente qué funcionalidades **ESTÁN FUERA** del 
 | **Usuario** | Tendero colombiano con confianza en dispositivos móviles |
 | **Negocio** | Tienda de barrio pequeña (régimen simplificado o informal) |
 | **Dispositivo** | Smartphone Android (81% del mercado según estudio) |
-| **Operación** | Una sola tienda, operada por dueño y/o empleados de confianza |
+| **Operación** | Una sola tienda, operada por dueño (control total, clientes, proveedores y reportes) y empleados de confianza identificados individualmente por cuenta/dispositivo con 4 permisos delegables y firma inmutable por sección |
 
 ---
 

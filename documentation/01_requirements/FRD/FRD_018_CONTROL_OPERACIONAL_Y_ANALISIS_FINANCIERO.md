@@ -40,12 +40,15 @@ Mide la rentabilidad real del negocio en un periodo seleccionado (Hoy, Semana, M
 $$\text{Ingresos Netos} = \text{Ventas Brutas} - \text{Devoluciones/Anulaciones}$$
 $$\text{Costo de Ventas (COGS)} = \sum (\text{Cantidad Vendida} \times \text{Costo FIFO Histórico del Lote})$$
 $$\text{Margen Bruto} = \text{Ingresos Netos} - \text{COGS}$$
-$$\text{Gastos Operativos (OPEX)} = \text{Gastos Fijos} + \text{Gastos Variables} + \text{Nómina/Retiros} + \text{Mermas}$$
+$$\text{Gastos y Costos Operativos (OPEX)} = \text{Gastos Fijos/Variables} + \text{Nómina} + \text{Mermas} + \text{Consumo del Negocio} + \text{Consumo/Retiro Personal}$$
 $$\mathbf{\text{Ganancia Neta Real}} = \text{Margen Bruto} - \text{OPEX}$$
 
 #### Requisitos de Datos:
 - Registro del costo unitario en cada línea de venta consumiendo lotes FIFO (ver FRD_016 y FRD_010).
-- Categorización de gastos en tipos de OPEX: Servicios, Arriendo, Nómina/Personal, Transporte/Fletes, Mantenimiento, Merma/Deterioro.
+- Categorización de gastos en tipos de OPEX: Servicios, Arriendo, Nómina/Personal, Transporte/Fletes, Mantenimiento, y registro separado (valorizado al **costo de adquisición**, con impacto **$0 en la Caja Dedicada POS**) de:
+  - **Mermas:** pérdidas por rotura, daño o vencimiento, incluyendo reembolsos marcados con la etiqueta única **`"merma"`** (`FRD-006-02`).
+  - **Consumo del Negocio:** mercancía utilizada para la operación interna de la tienda.
+  - **Consumo / Retiro Personal:** retiros operados como venta en el POS asignados al perfil propio del empleado (o a otra persona si lo selecciona el Administrador), consultables **por perfil individual y en consolidado** (conservando tanto el costo de adquisición como el precio de venta de referencia).
 
 ---
 

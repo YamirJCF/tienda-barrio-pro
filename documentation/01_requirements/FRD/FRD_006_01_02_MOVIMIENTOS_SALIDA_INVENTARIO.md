@@ -1,33 +1,42 @@
-# FRD-006-01-02: Prohibición de Salidas Manuales y Delegación al POS
+# FRD-006-01-02: Salidas Logísticas, Consumos (Negocio vs. Personal) y Ajustes de Conteo Físico
 
-### El POS como Embudo Único de Egresos
+### Separación Contable y Logística con Firma Individual (`POL-LOG-03`, `POL-FIN-05`, `FRD-003-01`)
 
 #### Descripción
-Este documento erradica la subfunción de "Salidas Manuales" (Mermas, Consumos, Devoluciones) del módulo de Inventario. Históricamente, permitir que el inventario descuente productos de forma aislada creaba un "agujero negro contable", donde la mercancía desaparecía sin dejar rastro financiero en la jornada laboral. Para garantizar una auditoría estricta, **toda salida de mercancía que implique una pérdida o movimiento de activos DEBE canalizarse obligatoriamente a través de la caja registradora (POS)**.
+Este documento regula las reducciones y correcciones no comerciales de inventario (**Mermas, Consumo del Negocio, Consumo/Retiro Personal, Devolución Física a Proveedor y Ajustes por Conteo Físico**). Elimina la antigua prohibición que bloqueaba las salidas en Inventario y obligaba a simular todas las bajas en el POS con caja abierta. Separa claramente la **Logística** (unidades físicas en estante), la **Contabilidad de Caja Dedicada POS** (impacto **$0** en el cajón del turno) y la **Rentabilidad del Negocio (`P&L` en `FRD-018`)** (valoración al **costo de adquisición**), exigiendo siempre **firma individual inmutable** y motivo obligatorio.
 
 ---
 
 ## Reglas de Negocio
 
-1. **Prohibición de Egresos Ciegos:** El módulo de Inventario TIENE PROHIBIDO ofrecer interfaces o botones para registrar salidas de mercancía (Pérdidas, Mermas, Consumo Interno, Devolución a Proveedor). El módulo de inventario queda restringido exclusivamente a **Entradas** (recibir mercancía) y **Ajustes de Cuadre** (Inventario físico anual/mensual por el Admin).
-2. **El POS como Motor Único de Salida:** Toda reducción de stock operativo DEBE procesarse escaneando el producto en la interfaz del Punto de Venta (POS). Para el sistema, una botella rota es una "transacción" tan importante como una venta exitosa.
-3. **Clasificación del Gasto en POS:** En la pantalla de cobro del POS, el sistema habilitará métodos de "Cierre Alternativo" que no involucran dinero del cliente. En lugar de cobrar en Efectivo, el cajero cerrará el carrito usando opciones como:
-   - *Baja por Merma*
-   - *Consumo Interno*
-   - *Devolución a Proveedor*
-4. **Anclaje Inquebrantable al Turno de Caja:** Al canalizar las salidas por el POS, el valor monetario (a costo o precio de venta) de la mercancía destruida o consumida queda **anclado permanentemente al turno activo del cajero**. Esto permite que el Arqueo de Caja (Reporte Z) audite exactamente cuánta mercancía se "perdió" bajo la guardia de un empleado específico.
-5. **Aislamiento de la Utilidad:** Las transacciones cerradas como Merma o Consumo Interno NO SUMAN al "Total de Ventas" (ingresos) del turno, pero sí se totalizan en una sección separada del reporte llamada "Pérdidas / Bajas del Turno".
+1. **Impacto $0 en la Caja Dedicada POS e Independencia de Turno para Bodega (`POL-FIN-01`, `POL-LOG-01`):**
+   - Ninguna merma, consumo del negocio, consumo/retiro personal, devolución física a proveedor ni ajuste de conteo suma o resta dinero de la **Caja Dedicada POS** (su efecto en el arqueo de efectivo y canales digitales es **$0**).
+   - Las salidas de bodega/estante (**Merma, Consumo del negocio, Devolución física a proveedor y Ajuste por conteo físico**) NO requieren que la Caja Dedicada POS esté abierta (si existe un turno abierto, se asocia únicamente como referencia informativa).
 
----
+2. **Mermas y Consumo Operativo del Negocio (Abiertos a Cualquier Usuario Activo, `POL-LOG-03`):**
+   - **Cualquier usuario activo** (Administrador o empleado con Pase Diario, sin requerir el permiso `Inventario completo`) puede registrar:
+     - **Merma:** producto roto, dañado o vencido.
+     - **Consumo del Negocio:** insumos o productos del estante usados para la operación propia de la tienda (aseo, atención, bolsas).
+   - Ambos descuentan stock de inmediato, exigen **motivo obligatorio** y **firma individual**, no muestran el costo unitario si el empleado no posee `Inventario completo`, y se contabilizan internamente al **costo de adquisición** en el Estado de Resultados (`FRD-018`).
 
-## Casos de Uso
+3. **Consumo / Retiro Personal (Separado del Consumo del Negocio y Operado como Venta en POS, `POL-FIN-05`):**
+   - El **Consumo/Retiro Personal** (productos tomados para consumo propio por un empleado o el dueño) se separa explícitamente del Consumo del Negocio.
+   - Se opera **literalmente como una venta en el POS** (mostrando sus precios e información normal):
+     - Si lo registra un **Empleado**, queda asignado automáticamente a **su propio perfil** (un empleado tiene prohibido seleccionar el perfil de otro compañero).
+     - **Solo el Administrador** puede seleccionar el perfil de otra persona al registrar un Consumo/Retiro Personal.
+   - Descuenta stock de inmediato, registra **$0 en la Caja Dedicada POS** y se guarda con firma individual para que el Administrador pueda consultar el **historial por perfil y consolidado** (valorado al costo de adquisición y conservando el precio de venta como referencia en `FRD-018`).
 
-> [!NOTE]
-> **Alcance Diferido:** Los casos de uso exactos (flujo de interacción del usuario) para registrar Mermas, Devoluciones y Consumo Interno quedan intencionalmente omitidos en este documento. Su definición técnica y visual queda sujeta al rediseño de la interfaz del Punto de Venta (POS). No se documentarán flujos ficticios hasta que no se defina cómo el POS absorberá esta responsabilidad nativamente.
+4. **Ajustes por Conteo Físico y Devolución Física a Proveedor (Bajo Permiso `Inventario completo`, `FRD-003-01`):**
+   - Cualquier usuario con el permiso **`Inventario completo`** (o el Administrador) puede ejecutar:
+     - **Ajuste por Conteo Físico:** corrección positiva o negativa al detectar diferencias entre el conteo físico de estantería y el stock del sistema, exigiendo motivo obligatorio, firma individual y generando una **alerta de auditoría para el Administrador**.
+     - **Devolución Física a Proveedor:** salida logística de unidades devueltas físicamente al repartidor/proveedor, con motivo obligatorio y firma individual. Esta operación tiene impacto **$0 en Caja POS** y **NO altera automáticamente Cuentas por Pagar** (`POL-LOG-01`, `FRD-019` — cualquier ajuste en facturas por pagar es exclusivo del Administrador).
+
+5. **Inmutabilidad de Registros (`POL-AUD-01`):**
+   - Ningún registro de merma, consumo (del negocio o personal), devolución física o ajuste por conteo físico puede borrarse ni editarse una vez confirmado. Cualquier error de digitación se corrige exclusivamente mediante un contra-movimiento o ajuste auditable con firma individual.
 
 ---
 
 ## Criterios de Aceptación
-- [ ] **CA-FRD-006-01-02-01:** La interfaz visual del módulo de Inventario (`/inventory`) DEBE carecer por completo de pestañas, botones o formularios etiquetados como "Salida", "Devolución a Proveedor" o "Merma".
-- [ ] **CA-FRD-006-01-02-02:** El módulo del POS DEBE absorber la responsabilidad de procesar salidas no monetarias, mediante un mecanismo de UX/UI que será definido posteriormente (Documentación Pendiente).
-- [ ] **CA-FRD-006-01-02-03:** El Reporte de Turno de Caja (FRD-027-01) DEBE listar las transacciones de salidas (Mermas, Consumo, etc.) vinculadas al `session_id` del turno, separadas del efectivo real.
+- [ ] **CA-FRD-006-01-02-01:** Cualquier usuario activo puede registrar **Mermas** y **Consumo del Negocio** con motivo obligatorio y firma individual, sin exigir caja abierta ni alterar el saldo de la Caja Dedicada POS ($0).
+- [ ] **CA-FRD-006-01-02-02:** El **Consumo/Retiro Personal** está separado del Consumo del Negocio, se opera literalmente como una venta en el POS ($0 en Caja POS) asignada al propio perfil del empleado (solo el Admin puede elegir a otros), y es consultable por el Administrador en historial **por perfil y consolidado** (`FRD-018`).
+- [ ] **CA-FRD-006-01-02-03:** Los **Ajustes por Conteo Físico** y la **Devolución Física a Proveedor** (sin tocar Cuentas por Pagar) están habilitados para el Administrador y empleados con permiso `Inventario completo`, dejando firma individual, alerta administrativa y registro inmutable (corrección solo por contra-movimiento).
