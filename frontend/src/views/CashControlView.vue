@@ -282,7 +282,13 @@ const goBack = () => {
                 <ArrowLeft :size="24" :stroke-width="1.5" />
             </button>
             <h1 class="text-lg font-bold text-gray-800 dark:text-gray-100">{{ title }}</h1>
-            <div class="w-10"></div> <!-- Spacer -->
+            <button
+                type="button"
+                @click="router.push('/my-shift-movements')"
+                class="text-xs font-semibold text-primary hover:underline px-2 py-1 rounded-lg"
+            >
+                Mis movimientos
+            </button>
         </div>
 
         <div class="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6">

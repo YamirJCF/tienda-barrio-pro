@@ -5,6 +5,7 @@ import { logger } from '../utils/logger';
 import { cashRepository } from '../data/repositories/cashRepository';
 import { isSupabaseConfigured, requireSupabase } from '../data/supabaseClient';
 import { useNotificationsStore } from './notificationsStore';
+import { useAuthStore } from './auth';
 
 import type { CashTransaction, CashSession } from '../types';
 
@@ -166,10 +167,31 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     notes: ''
                 };
 
-                // Fetch transactions from DB (Source of Truth) to populate history
-                const transactions = await cashRepository.getSessionTransactions(status.sessionId!);
-                if (transactions.length > 0) {
-                    currentSession.value.transactions = transactions;
+                // Fetch transactions from DB (Source of Truth):
+                // Admin consulta cash_movements completo; Empleado consulta únicamente sus movimientos propios vía RPC acotado (SDD-003-01 §6.2)
+                const authStore = useAuthStore();
+                if (authStore.isAdmin) {
+                    const transactions = await cashRepository.getSessionTransactions(status.sessionId!);
+                    if (transactions.length > 0) {
+                        currentSession.value.transactions = transactions;
+                    }
+                } else {
+                    const ownRes = await cashRepository.getOwnShiftMovements(storeId, 'all', 200, 0);
+                    currentSession.value.transactions = ownRes.data
+                        .filter((m) => m.source === 'expense' || m.source === 'payment' || m.source === 'refund')
+                        .map((m) => ({
+                            id: m.id,
+                            type: m.source === 'payment' ? 'income' : 'expense',
+                            movementType: m.source === 'expense' ? 'gasto' : (m.source === 'payment' ? 'pago_proveedor' : 'gasto'),
+                            amount: new Decimal(m.amount),
+                            description: m.description,
+                            timestamp: m.created_at,
+                            paymentMethod: (m.payment_method as 'efectivo' | 'nequi' | 'llave_bre') || 'efectivo',
+                            category: m.category || 'General',
+                            voucherRef: m.voucher_ref ?? null,
+                            actorName: m.actor_name,
+                            actorRole: m.actor_role,
+                        }));
                 }
 
                 return true;
@@ -435,6 +457,15 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         await cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance);
     };
 
+    const fetchOwnShiftMovements = async (
+        storeId: string,
+        paymentMethod: 'all' | 'efectivo' | 'digitales' | 'nequi' | 'llave_bre' | 'fiado' | 'consumo_personal' = 'all',
+        limit = 50,
+        offset = 0
+    ) => {
+        return await cashRepository.getOwnShiftMovements(storeId, paymentMethod, limit, offset);
+    };
+
     return {
         currentSession,
         sessionHistory,
@@ -454,7 +485,8 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         addIncome,
         syncFromBackend,
         fetchPendingForcedSessions,
-        reconcileForcedClose
+        reconcileForcedClose,
+        fetchOwnShiftMovements
     };
 }, {
     persist: {

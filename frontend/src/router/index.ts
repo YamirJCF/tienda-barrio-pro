@@ -131,6 +131,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/my-shift-movements',
+    name: 'my-shift-movements',
+    component: () => import('../views/MyShiftMovementsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/expenses',
     name: 'expenses',
     component: () => import('../views/ExpensesView.vue'),

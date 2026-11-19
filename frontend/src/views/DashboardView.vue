@@ -20,7 +20,8 @@ import {
   Settings,
   Users,
   Calculator,
-  Package
+  Package,
+  ClipboardList
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
@@ -48,7 +49,11 @@ const profileSidebarOpen = ref(false);
 onMounted(async () => {
   salesStore.initialize();
   inventoryStore.initialize();
-  reportsStore.fetchDailySummary();
+  if (authStore.isAdmin) {
+    reportsStore.fetchDailySummary();
+  } else {
+    reportsStore.clear();
+  }
   
   // FIX: Admin users might not have storeId in currentUser, but have selected currentStore
   const activeStoreId = authStore.currentStore?.id || authStore.currentUser?.storeId;
@@ -224,9 +229,9 @@ const navigateToNotifications = () => {
         </div>
       </div>
 
-      <!-- Info Banner -->
+      <!-- Info Banner (Solo Administrador / Inventario) -->
       <div
-        v-if="!isStoreOpen && totalProducts === 0"
+        v-if="isAdmin && !isStoreOpen && totalProducts === 0"
         class="relative overflow-hidden rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4 shadow-sm"
       >
         <div class="flex flex-col gap-3">
@@ -249,49 +254,76 @@ const navigateToNotifications = () => {
         </div>
       </div>
 
-      <!-- Quick Stats Grid -->
-      <div
-        v-if="reportsStore.error"
-        class="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-300"
+      <!-- Quick Stats Grid (Admin-only financial KPIs - SDD-008 CHK-307) -->
+      <template v-if="isAdmin">
+        <div
+          v-if="reportsStore.error"
+          class="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-300"
+        >
+          <span>No se pudo sincronizar el resumen financiero del servidor ({{ reportsStore.error }}).</span>
+          <button
+            type="button"
+            class="font-bold underline shrink-0"
+            @click="reportsStore.fetchDailySummary()"
+          >
+            Reintentar
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-3" data-test="admin-kpi-grid">
+          <StatCard icon="payments" icon-color="green" title="Caja Real" :value="formattedCash" />
+          <StatCard
+            icon="show_chart"
+            icon-color="blue"
+            title="Ventas Hoy"
+            :value="formattedTodayTotal"
+            :subtitle="`${salesStore.todayCount} ventas`"
+          />
+          <StatCard
+            icon="person"
+            icon-color="orange"
+            title="Por Cobrar"
+            :value="formattedTodayFiado"
+            :subtitle="`${salesStore.todayFiadoCount} fiados`"
+          />
+          <StatCard
+            icon="inventory_2"
+            icon-color="purple"
+            title="Inventario"
+            :value="`${totalProducts} Prod.`"
+            :subtitle="
+              inventoryStore.lowStockProducts.length > 0
+                ? `${inventoryStore.lowStockProducts.length} con stock bajo`
+                : undefined
+            "
+            :subtitle-color="inventoryStore.lowStockProducts.length > 0 ? 'red' : undefined"
+          />
+        </div>
+      </template>
+
+      <!-- Vista Operativa Acotada para Colaborador (CHK-307 / CHK-308) -->
+      <section
+        v-else
+        data-test="employee-shift-card"
+        class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-dark p-4 shadow-sm flex items-center justify-between gap-3"
       >
-        <span>No se pudo sincronizar el resumen financiero del servidor ({{ reportsStore.error }}).</span>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Mi Turno Actual
+          </p>
+          <p class="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+            Consulta tus ventas, gastos y retiros del turno
+          </p>
+        </div>
         <button
           type="button"
-          class="font-bold underline shrink-0"
-          @click="reportsStore.fetchDailySummary()"
+          data-test="btn-my-shift-movements"
+          @click="navigateTo('/my-shift-movements')"
+          class="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 transition-colors flex items-center gap-1"
         >
-          Reintentar
+          <ClipboardList :size="15" />
+          Ver Movimientos
         </button>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <StatCard icon="payments" icon-color="green" title="Caja Real" :value="formattedCash" />
-        <StatCard
-          icon="show_chart"
-          icon-color="blue"
-          title="Ventas Hoy"
-          :value="formattedTodayTotal"
-          :subtitle="`${salesStore.todayCount} ventas`"
-        />
-        <StatCard
-          icon="person"
-          icon-color="orange"
-          title="Por Cobrar"
-          :value="formattedTodayFiado"
-          :subtitle="`${salesStore.todayFiadoCount} fiados`"
-        />
-        <StatCard
-          icon="inventory_2"
-          icon-color="purple"
-          title="Inventario"
-          :value="`${totalProducts} Prod.`"
-          :subtitle="
-            inventoryStore.lowStockProducts.length > 0
-              ? `${inventoryStore.lowStockProducts.length} con stock bajo`
-              : undefined
-          "
-          :subtitle-color="inventoryStore.lowStockProducts.length > 0 ? 'red' : undefined"
-        />
-      </div>
+      </section>
 
       <!-- Quick Actions - Admin Only -->
       <section v-if="isAdmin">
@@ -363,8 +395,27 @@ const navigateToNotifications = () => {
             <ChevronRight :size="20" class="text-slate-400" />
           </button>
 
-          <!-- Productos -->
+          <!-- Mis Movimientos del Turno Actual (CHK-308) -->
           <button
+            @click="navigateTo('/my-shift-movements')"
+            class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+              >
+                <ClipboardList :size="20" />
+              </div>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
+                >Mis Movimientos del Turno</span
+              >
+            </div>
+            <ChevronRight :size="20" class="text-slate-400" />
+          </button>
+
+          <!-- Productos (Solo si tiene canManageInventory) -->
+          <button
+            v-if="authStore.canManageInventory"
             @click="navigateTo('/inventory')"
             class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
           >
@@ -381,8 +432,9 @@ const navigateToNotifications = () => {
             <ChevronRight :size="20" class="text-slate-400" />
           </button>
              
-          <!-- Clientes -->
+          <!-- Clientes (Solo si tiene canFiar) -->
           <button
+            v-if="authStore.canFiar"
             @click="navigateTo('/clients')"
             class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
           >

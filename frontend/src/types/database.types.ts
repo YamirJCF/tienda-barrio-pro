@@ -1754,6 +1754,10 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_get_comprehensive_shift_report: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
       rpc_get_system_config: { Args: never; Returns: Json }
       rpc_log_security_event: {
         Args: { p_event_type: string; p_metadata?: Json; p_store_id?: string }
@@ -1761,6 +1765,19 @@ export type Database = {
       }
       rpc_marcar_auditoria_revisada: {
         Args: { p_audit_id: string; p_notes?: string }
+        Returns: Json
+      }
+      rpc_obtener_auditoria_evidence_hub: {
+        Args: {
+          p_domain?: string
+          p_end_date?: string
+          p_event_type?: string
+          p_limit?: number
+          p_offset?: number
+          p_severity?: string
+          p_start_date?: string
+          p_store_id: string
+        }
         Returns: Json
       }
       rpc_obtener_empleados: {
@@ -1780,6 +1797,27 @@ export type Database = {
           updated_at: string
           username: string
         }[]
+      }
+      rpc_obtener_historial_caja_multicanal: {
+        Args: {
+          p_end_date?: string
+          p_limit?: number
+          p_offset?: number
+          p_payment_method?: string
+          p_session_id?: string
+          p_start_date?: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
+      rpc_obtener_mis_movimientos_turno: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_payment_method?: string
+          p_store_id: string
+        }
+        Returns: Json
       }
       rpc_pay_supplier_invoice: {
         Args: {
