@@ -1,24 +1,25 @@
 # SDD-005: Sistema de Auditoría, Evidence Hub e Inmutabilidad (Inviolabilidad Contable y Trazabilidad Forense)
 
 > **Asociado a:** [FRD-005](../FRD/FRD_005_AUDITORIA_TRAZABILIDAD.md) y [FRD-005 (Inviolable)](../FRD/FRD_005_AUDITORIA_INVIOLABLE.md)  
-> **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Ítem 3)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-16  
+> **Contrato Marco Vinculante:** [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) (`ARQ-002` v1.4)  
+> **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Alineación Post-`SDD-003-01`)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Incluye `B-04`, `B-05` para Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Alcance y Restricciones Aplicables (PEA-N)
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política ID | Dominio | Impacto Concreto en este SDD |
 | :--- | :--- | :--- |
-| **POL-AUTH-01** | Multi-tenant | Aislamiento multi-tenant estricto. Invocación mandatoria de `assert_store_access(p_store_id)` como instrucción número uno incondicional en los RPCs de consulta del Evidence Hub (`rpc_obtener_auditoria_evidence_hub`), y aislamiento en base de datos mediante políticas RLS gobernadas por `get_current_store_id()` en todas las tablas de auditoría. |
-| **POL-AUD-01** | Auditoría | Inviolabilidad Histórica e Inmutabilidad Contable. Prohibición taxativa de operaciones `UPDATE` o `DELETE` sobre registros financieros, libros mayores, kardex y tablas de auditoría. La base de datos aplica una política de Default-Deny en RLS para mutaciones destructivas. Toda corrección de errores se efectúa exclusivamente mediante movimientos de contrapeso (asientos inversos) con referencia foránea obligatoria al registro original. |
-| **POL-AUD-02** | Auditoría | Evidence Hub Centralizado y Trazabilidad Completa. Centro unificado de inteligencia y auditoría federada multi-dominio (`caja`, `ventas`, `inventario`, `seguridad`, `precios`, `creditos`). Soporta filtrado temporal con atajos rápidos (Hoy, Ayer, 7 días, 30 días), ventana por defecto de 7 días, paginación canónica `{ data, count }` y expansión de metadatos forenses estructurados. |
-| **POL-AUD-03** | Auditoría | Registro de Descuadres, Excepciones y Ruido Operativo. Toda anomalía de cuadre de caja (`CASH_DISCREPANCY`), venta forzada bajo excepción (`FORCE_SALE`), anulación de ticket o intento de sobregiro rechazado se asienta automáticamente con nivel de severidad `warning` en la bitácora forense. |
-| **POL-FIN-01** | Finanzas | Fidelidad Contable y Separación de Flujos de Liquidez. Distinción inquebrantable entre el flujo de caja líquido y el devengo contable operacional. Las transacciones de contrapeso o anulaciones de cartera no distorsionan la liquidez física de caja cuando no medió egreso monetario real. |
-| **POL-SEC-01** | Seguridad | Seguridad RBAC por Niveles y Ceguera de Costos. El Nivel 1 (Seguridad y Auditoría Forense) está restringido de forma exclusiva a usuarios con rol en `admin_profiles` (`admin` u `owner`). En los Niveles 2 y 3 (Operativo y Contextual), los cajeros y empleados sin privilegios de administración sufren redacción de costos a nivel de servidor (`null`), protegiendo la confidencialidad de márgenes comerciales y precios de compra. |
+| **POL-AUTH-01** | Multi-tenant y Admin-Only | Aislamiento multi-tenant estricto con `assert_store_access(p_store_id)` y restricción total mediante `assert_store_admin(p_store_id)` en `rpc_obtener_auditoria_evidence_hub` y en las políticas RLS `SELECT` de todas las tablas de auditoría (`admin_profiles.role IN ('owner', 'manager')`). |
+| **POL-AUD-01** | Auditoría y Snapshot Inmutable | Inviolabilidad append-only (cero `UPDATE`/`DELETE`) + **fotografía histórica inmutable (`actor_name`, `actor_role`)** capturada vía `resolve_actor_snapshot()` en `audit_logs`, `audit_caja`, `audit_ventas`, `audit_precios`, `audit_seguridad`, `inventory_movements` y `client_ledger`. Toda corrección se efectúa exclusivamente mediante contra-movimiento vinculado al registro original. |
+| **POL-AUD-02** | Evidence Hub Admin-Only | Centro unificado y 100% exclusivo del Administrador (`owner`/`manager`) sobre todos los dominios (`caja`, `ventas`, `inventario`, `seguridad`, `precios`, `creditos`), con ventana default de 7 días y paginación `{ data, count }`. |
+| **POL-AUD-03** | Eventos Críticos y Alertas Automáticas | Registra obligatoriamente: `CASH_DISCREPANCY` / `CASH_DISCREPANCY_ALERT` (al 3.er intento fallido en Cierre Asistido, con notificación al Admin), `UNAUTHORIZED_SHIFT_CLOSE` (intento bloqueado de cierre de turno ajeno), `INVENTORY_COUNT_ADJUSTMENT` (ajuste físico `+/-`), `BUSINESS_CONSUMPTION` vs. `PERSONAL_WITHDRAWAL`, `REFUND_MERMA` (reembolso dañado directo a merma), `FORCE_SALE`, anulaciones e intentos de sobregiro o acceso denegado. |
+| **POL-FIN-01** | Finanzas | Fidelidad al flujo líquido vs. devengo contable; mermas, consumo del negocio y retiro personal impactan `$0` en Caja Dedicada POS. |
+| **POL-SEC-01** | Auditoría 100% Admin-Only | **Eliminado el acceso por niveles de empleados al Evidence Hub.** Todo reporte, bitácora forense y el Evidence Hub completo (los 6 dominios) son **100% exclusivos del Administrador (`owner`/`manager`)**. El empleado únicamente consulta **sus propios movimientos del turno abierto actual** (`rpc_obtener_mis_movimientos_turno`), y los costos de catálogo/Kardex se restringen a `canManageInventory` o Admin. |
 | **SPEC-010 / SPEC-011** | Estándar Financiero | Moneda legal entera COP sin decimales. Cero operaciones matemáticas o agregaciones financieras en el cliente frontend. Backend Authority absoluto en cómputo de saldos acumulados, neutralizaciones y paginación. |
 
 ---
@@ -27,13 +28,13 @@
 
 | SDD Origen | Restricción Inyectada | Impacto Técnico en el Sistema de Auditoría |
 | :--- | :--- | :--- |
-| **SDD_004 / SDD_020 / SDD_027_01 (Caja)** | Cierres inmutables de turnos (`status = 'closed'`). Triggers `trg_audit_cash_opened` y `trg_audit_cash_closed` asientan instantáneas irreversibles en `audit_caja`. | El Evidence Hub consulta `audit_caja` para el dominio de caja y captura anomalías de arqueo (`CASH_DISCREPANCY`) registradas en `audit_logs`. |
-| **SDD_007 / SDD_007_02 (Ventas y POS)** | Comprobantes de venta append-only. Las anulaciones no eliminan filas físicas sino que marcan `is_voided = true` y disparan `trg_audit_sale_voided` hacia `audit_ventas`. | El dominio de ventas en el Evidence Hub audita creaciones y anulaciones sin pérdida de comprobantes históricos, garantizando el rastro fiscal. |
-| **SDD_006 / SDD_010_016 (Inventario y Kardex)** | Movimientos de inventario append-only en `inventory_movements`. Despiece FIFO en `sale_item_batches` con congelamiento inmutable de `unit_cost`. | El Evidence Hub expone el Kardex cronológico inmutable. Las salidas por merma, avería o devolución se auditan como movimientos de inventario sin generar ventas ficticias. |
-| **SDD_010 (Historial de Precios)** | Registro de fluctuaciones de costo y precio de venta en `audit_precios` y `product_price_history`. | El Evidence Hub audita variaciones de margen comercial aplicando ceguera de costos (`cost = null`) cuando la consulta es realizada por personal de mostrador. |
-| **SDD_009 / SDD_024 (Clientes y Fiados)** | Libro mayor append-only en `client_ledger` con saldo calculado acumulativo (`new_balance GENERATED ALWAYS`). | La anulación de fiados se asienta como contrapartida (`anulacion_fiado`) con `reference_id` al ID de venta original y $0 egreso de caja física. |
-| **SDD_014 (Venta Forzada y Excepciones)** | Autorización excepcional de ventas sin inventario suficiente asentada en `audit_logs` con `event_type = 'FORCE_SALE'`. | El Evidence Hub expone estos incidentes con severidad `warning` y justificación de negocio obligatoria para el monitoreo del propietario. |
-| **SDD_018 (Control Operacional)** | Conciliación de libros auxiliares y pureza de balance general frente a P&L. | El Evidence Hub proporciona la infraestructura federada de evidencias para soportar la conciliación de flujos de capital de trabajo y utilidades devengadas. |
+| **SDD_003_01 (Contrato Marco RBAC)** | 4 permisos, capacidades base, 1 dispositivo/cuenta y snapshot `(actor_name, actor_role)`. | Impone la regla 100% Admin-only en Evidence Hub, la vista personal acotada `rpc_obtener_mis_movimientos_turno` y las columnas de snapshot inmutable en todas las bitácoras. |
+| **SDD_004 / SDD_020 / SDD_027_01 (Caja)** | Propiedad estricta del turno, Cierre Asistido (3 intentos) y cierre forzoso `+24h`. | Al 3.er intento con descuadre emite `CASH_DISCREPANCY_ALERT` + notificación Admin; ante cierre por tercero emite `UNAUTHORIZED_SHIFT_CLOSE`; canales válidos únicamente `efectivo`, `nequi`, `llave_bre`. |
+| **SDD_007_01 (Ventas y POS)** | Comprobantes append-only, anulaciones Admin-only y Retiro Personal `$0`. | Registra `CREACION`, `ANULACION` y eventos de `PERSONAL_WITHDRAWAL` en carrito POS con snapshot `(actor_name, actor_role)`. |
+| **SDD_006 / SDD_006_01_02 / SDD_006_02 (Inventario y Reembolsos)** | Kardex append-only, ajustes `+/-`, mermas, consumo negocio y reembolso `"merma"`. | Registra `INVENTORY_COUNT_ADJUSTMENT`, `BUSINESS_CONSUMPTION`, `MERMA` y `REFUND_MERMA` (dañado directo a merma sin pasar por stock vendible) con `actor_name`/`actor_role`. |
+| **SDD_010 (Historial de Precios)** | Fluctuaciones de costo y precio en `audit_precios` y `product_price_history`. | Auditoría de precios accesible exclusivamente al Administrador vía Evidence Hub (`admin_profiles`), con snapshot de quien aplicó el cambio. |
+| **SDD_009 / SDD_024 / SDD_030 (Clientes y Fiados)** | `client_ledger` append-only + `client_lifecycle_audit` con `actor_name`/`actor_role`. | Exige `canFiar` o Admin para operar cartera; `client_lifecycle_audit` sirve como patrón físico ya verificado (`20261111173000` L20–21) para los snapshots del resto de tablas. |
+| **SDD_014 / SDD_018 (Excepciones y P&L)** | `FORCE_SALE` y P&L operacional Admin-only. | Evidence Hub expone `FORCE_SALE`, mermas y consumos (negocio/personal) para conciliación ejecutiva exclusiva del Administrador. |
 
 ---
 
@@ -73,20 +74,24 @@
    - Se validó el estado en tiempo real con `has_table_privilege`: las 8 tablas de auditoría cuentan con privilegios de lectura y gestión plenamente verificados, erradicando errores 42501 (Permission Denied).
 
 5. **Reutilización de Funciones Centralizadas de Seguridad (Regla 4):**
-   - El Evidence Hub (`rpc_obtener_auditoria_evidence_hub`) implementa como instrucción número uno obligatoria:
-     `PERFORM public.assert_store_access(p_store_id);`
-   - Las políticas RLS de todas las tablas de auditoría reutilizan centralizadamente `get_current_store_id()` para delimitar el tenant, sin duplicar sentencias de pertenencia ad-hoc.
+   - El Evidence Hub (`rpc_obtener_auditoria_evidence_hub`) implementa como instrucciones obligatorias:
+     `PERFORM public.assert_store_access(p_store_id);` y `PERFORM public.assert_store_admin(p_store_id);`.
+   - Las políticas RLS de todas las tablas de auditoría reutilizan centralizadamente `get_current_store_id()` y restringen `SELECT` a `admin_profiles` (`'owner'`, `'manager'`).
+
+6. **Brecha de Fotografía Histórica Inmutable y Restricción Admin-Only (`SDD-003-01` `B-04` / `B-05`):**
+   - Actualmente solo `client_lifecycle_audit` (`20261111173000` L20–21) almacena físicamente `actor_name` y `actor_role`. Las tablas `audit_logs`, `audit_caja`, `audit_ventas`, `audit_precios`, `audit_seguridad`, `inventory_movements` y `client_ledger` almacenan solo UUID y dependen de JOIN en vivo a `employees`. En Fase 3 se añaden `(actor_name, actor_role)` en todas ellas.
+   - El acceso del Evidence Hub es **100% Admin-only** (`role IN ('owner', 'manager')`); el empleado únicamente consulta sus propios movimientos del turno abierto actual (`rpc_obtener_mis_movimientos_turno`).
 
 ---
 
 ## 1. Glosario Local
 
-- **Evidence Hub:** Repositorio y visualizador analítico unificado que agrega de forma federada los rastros de auditoría generados en los distintos dominios del sistema (`caja`, `ventas`, `inventario`, `seguridad`, `precios`, `creditos`).
+- **Evidence Hub:** Repositorio y visualizador analítico unificado 100% exclusivo del Administrador que agrega de forma federada los rastros de auditoría generados en los distintos dominios del sistema (`caja`, `ventas`, `inventario`, `seguridad`, `precios`, `creditos`).
 - **Inviolabilidad Contable (Append-Only):** Principio arquitectural según el cual los registros financieros u operativos nunca son mutados ni destruidos una vez insertados. La persistencia histórica es permanente y matemáticamente inalterable.
 - **Movimiento de Contrapeso (Asiento Inverso):** Transacción financiera u operativa que se crea expresamente para revertir o corregir los efectos cuantitativos de una transacción previa errónea. Posee signo o impacto opuesto y mantiene el registro original intacto.
 - **Trazabilidad Foránea Bidireccional:** Vínculo referencial obligatorio mediante el cual el movimiento de contrapeso almacena de manera explícita el identificador único (`UUID`) de la transacción original que subsana, permitiendo a los auditores reconstruir el hilo de vida de la operación en ambos sentidos.
-- **Dicotomía Operativo vs Forense:** Separación rigurosa de vistas y permisos según la cual el personal operativo consulta únicamente los datos contextuales indispensables para su tarea cotidiana, mientras que el administrador o propietario accede a la bitácora forense integral, incluyendo advertencias y ruido operativo.
-- **Ceguera de Costos (Cost Redaction):** Mecanismo de seguridad server-side que transforma a `null` cualquier campo relativo a precios de adquisición o costos mayoristas (`unit_cost`, `cost_price`, `old_cost`, `new_cost`) antes de emitir la respuesta JSON hacia clientes autenticados que carezcan de rol administrativo.
+- **Segregación Admin-Only vs. Movimientos Propios del Turno:** Principio estricto (`FRD-005` R3, `SDD-003-01`) según el cual **todo** el Evidence Hub y los reportes históricos son 100% exclusivos del Administrador (`owner`/`manager`); el empleado operativo solo puede consultar **sus propios movimientos del turno abierto actual** vía `rpc_obtener_mis_movimientos_turno`.
+- **Fotografía Histórica Inmutable (`actor_name`, `actor_role`):** Instantánea textual capturada en servidor al momento del evento (`resolve_actor_snapshot`) que preserva el nombre y el rol (`'owner'`, `'manager'` o `'employee'`) sin depender de JOINs mutables.
 - **Ruido Operativo:** Registro detallado de fricciones, excepciones controladas y transacciones fallidas (ej. intentos de sobregiro de caja bloqueados, ventas forzadas por stock negativo, rechazos de autenticación) que permiten al administrador evaluar la disciplina operativa de su negocio.
 
 ---
@@ -530,9 +535,9 @@ Función transaccional (`SECURITY DEFINER`) encargada de registrar incidentes de
 - **Inmutabilidad de Kardex y Libros Mayores:** `inventory_movements` y `client_ledger` operan en modo puramente acumulativo. En `client_ledger`, la columna `new_balance` es `GENERATED ALWAYS`, imposibilitando cualquier alteración artificial del saldo contable.
 - **Triggers de Bloqueo:** En tablas operativas como `cash_sessions`, las sesiones cerradas (`status = 'closed'`) quedan blindadas contra modificaciones póstumas (CA-FRD-027-01-02).
 
-### 6.3 Seguridad por Niveles (RBAC) y Ceguera de Costos (POL-SEC-01)
-- **Nivel 1 (Forense y Seguridad):** La consulta de `audit_logs`, `audit_seguridad` y de la vista consolidada `'todos'` del Evidence Hub está restringida exclusivamente a usuarios autenticados presentes en `admin_profiles` con rol `'admin'` u `'owner'`. Cualquier intento de invocación por empleados regulares lanza una excepción `UNAUTHORIZED_ROLE`.
-- **Nivel 2 y 3 (Operativo y Contextual):** Los empleados tienen acceso a vistas de auditoría contextual (Kardex de producto, movimientos de su turno activo, historial de fiados de un cliente), pero el backend redacta dinámicamente a `null` cualquier campo relativo a costos de adquisición o márgenes (`unit_cost`, `cost_price`, `old_cost`, `new_cost`).
+### 6.3 Exclusividad Administrativa Total (`POL-SEC-01` / `POL-AUD-02` / `SDD-003-01`)
+- **Evidence Hub 100% Admin-Only:** Todos los dominios de `rpc_obtener_auditoria_evidence_hub` (`todos`, `caja`, `ventas`, `inventario`, `seguridad`, `precios`, `creditos`) y todas las tablas de auditoría (`audit_logs`, `audit_caja`, `audit_ventas`, `audit_precios`, `audit_seguridad`, `client_lifecycle_audit`) están restringidos exclusivamente a `admin_profiles` (`role IN ('owner', 'manager')`) mediante `assert_store_admin(p_store_id)` y políticas RLS. Cualquier intento de consulta por empleados lanza `ADMIN_ONLY_ACTION`.
+- **Ámbito Operativo del Empleado:** El empleado no accede al Evidence Hub ni a costos; únicamente consulta sus propios movimientos del turno abierto actual mediante `rpc_obtener_mis_movimientos_turno` (y costos en inventario solo si posee `canManageInventory`).
 
 ### 6.4 Auditoría de Privilegios Base (Regla 8)
 - Todos los privilegios requeridos sobre las 8 tablas de auditoría fueron formalmente concedidos y verificados en base de datos (`GRANT SELECT TO anon, authenticated, service_role` y `GRANT ALL TO service_role`), erradicando cualquier potencial error 42501 en producción.

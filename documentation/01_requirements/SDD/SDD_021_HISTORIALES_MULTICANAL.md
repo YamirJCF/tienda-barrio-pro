@@ -1,24 +1,22 @@
 # SDD-021: Auditoría de Movimientos Multicanal (Filtros por Método de Pago en Historiales)
 
-> **Asociado a:** [FRD-021](../FRD/FRD_021_HISTORIALES_MULTICANAL.md)  
-> **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Ítem 2)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-16  
+> **Asociado a:** [FRD-021](../FRD/FRD_021_HISTORIALES_MULTICANAL.md), [FRD-027-01](../FRD/FRD_027_01_REPORTES_DE_CAJA.md) y Contrato Marco [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Fase del Plan:** Ola 4 — Reportes, Auditoría y Cuentas por Pagar (Alineación `ARQ-002` v1.4)  
+> **Estado:** 🟢 Alineado a Contrato Marco `SDD-003-01` (Pendiente migración Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Alcance y Restricciones Aplicables (PEA-N)
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (`ARQ-002` v1.4)
 
 | Política ID | Dominio | Impacto Concreto en este SDD |
 | :--- | :--- | :--- |
-| **POL-AUTH-01** | Multi-tenant | Aislamiento multi-tenant obligatorio. Invocación mandatoria de `assert_store_access(p_store_id)` como instrucción #1 incondicional en `rpc_obtener_historial_caja_multicanal`, y restricción de consulta mediante predicado `cs.store_id = p_store_id` y políticas RLS gobernadas por `get_current_store_id()`. |
-| **POL-AUD-01** | Auditoría | Inviolabilidad Histórica. Todo movimiento asentado en `cash_movements` es de solo lectura (READ-ONLY) y de naturaleza append-only inmutable. El módulo de historiales carece de facultades DML de edición (`UPDATE`) o borrado (`DELETE`). |
-| **POL-AUD-02** | Auditoría | Trazabilidad por Canal Monetario. La auditoría de caja debe permitir desglosar y filtrar transacciones según el medio de pago utilizado (`efectivo`, `nequi`, `daviplata`, `digitales`, `all`), garantizando la verificación independiente frente a extractos bancarios. |
-| **POL-FIN-01** | Finanzas | Fidelidad al Flujo de Liquidez. El historial de caja audita exclusivamente la liquidez real que ingresó o egresó de la caja. Las ventas a crédito (fiados) aportan $0 al flujo monetario y se omiten de los ingresos de caja hasta que se efectúe un abono. |
-| **POL-FIN-02** | Finanzas | Desacoplamiento de Flujo de Caja y P&L Devengado. Para preservar la pureza contable de `SDD_018`, las entradas por abono de cartera se etiquetan con `origin_type = 'abono'`, consolidándose visualmente como ingreso de liquidez en caja sin duplicar las ventas operacionales devengadas. |
-| **POL-SEC-01** | Seguridad | Control de Acceso RBAC y Blindaje de Arqueo Ciego. Los cajeros están restringidos estrictamente a consultar los movimientos atómicos de su propio turno activo abierto (`status = 'open'`), sin acceso a métricas globales ni totales esperados. Las consultas multi-turno o rangos históricos amplios son exclusivas de Administradores (`admin_profiles`). |
+| **POL-AUTH-01** | Multi-tenant | `assert_store_access(p_store_id)` en todo RPC de consulta, y `assert_store_admin(p_store_id)` obligatorio en historiales globales (`rpc_obtener_historial_caja_multicanal`). |
+| **POL-AUD-01 / 02** | Auditoría | Movimientos `append-only` con fotografía histórica inmutable (`actor_name`, `actor_role`) y trazabilidad sobre los 3 canales válidos: **`efectivo`**, **`nequi`** y **`llave_bre`** (eliminado `'daviplata'` y `'bre'`). |
+| **POL-FIN-01 / 02** | Finanzas | Solo liquidez real de la Caja Dedicada POS: excluye fiados no cobrados, `"pago externo / fuera de caja"` y bajas logísticas `$0`. Abonos etiquetados `origin_type = 'abono'`. |
+| **POL-SEC-01 / 03** | Seguridad | **Historiales globales 100% Admin-only (`owner`, `manager`).** El empleado no tiene permiso de reportes; únicamente puede consultar **sus propios movimientos del turno abierto actual** con toda su información vía `rpc_obtener_mis_movimientos_turno`, sin depender de si él abrió el turno y sin ver saldos esperados. |
 | **SPEC-010 / SPEC-011** | Estándar Financiero | Moneda entera legal COP sin decimales. Cero cálculos financieros en el cliente frontend. Formateo y redondeo certificado exclusivamente en backend. |
 
 ---

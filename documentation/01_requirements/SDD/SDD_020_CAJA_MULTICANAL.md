@@ -1,64 +1,45 @@
 # SDD-020: Control de Caja Multicanal (Físico y Digital)
 
-> **Asociado a:** [FRD-020](../FRD/FRD_020_CAJA_MULTICANAL.md) (Arqueo y Control de Turnos Multicanal; absorbe [FRD_004_CAJA_ESTRICTA_MULTICANAL.md](../FRD/FRD_004_CAJA_ESTRICTA_MULTICANAL.md) y deroga [FRD_004_1_GESTION_PIN_CAJA.md](../FRD/FRD_004_1_GESTION_PIN_CAJA.md))  
-> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (PAC-SDD Completo 2026-10-14)  
-> **Última Actualización:** 2026-10-17
+> **Asociado a:** [FRD-020](../FRD/FRD_020_CAJA_MULTICANAL.md), [FRD-004](../FRD/FRD_004_CONTROL_DE_CAJA.md) y Contrato Marco [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos (Alineación `ARQ-002` v1.4)  
+> **Estado:** 🟢 Alineado a Contrato Marco `SDD-003-01` (Pendiente migración Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (`ARQ-002` v1.4)
 | Política ID | Dominio | Impacto Concreto en este SDD |
 |-------------|---------|------------------------------|
-| **POL-FIN-01** | Financiero | **Solidez de Caja (Liquidez Real):** Cada canal responde exclusivamente por su liquidez real comprobada. El saldo esperado se calcula como: `Base Canal + Ingresos Canal − Egresos Canal`. No se permite compensación ficticia entre efectivo y cuentas digitales. |
-| **POL-FIN-02** | Financiero | **Segregación de Canales Monetarios:** Efectivo, Nequi y Llave BRE se inicializan, calculan y concilian de forma independiente. La base inicial de apertura se asigna 100% al Efectivo; los canales digitales inician estrictamente en $0 sin intervención del usuario. |
-| **POL-SEG-01** | Seguridad | **Arqueo Ciego Multicanal:** El sistema no expone el `expected_amount` de ningún canal al usuario antes de registrar los montos reales declarados en mano. Aplica tanto al cierre regular como al cierre forzado por caducidad de 24 horas. |
-| **POL-AUD-01** | Auditoría | **Inmutabilidad de Arqueos:** Los balances registrados al cierre son append-only e inmutables. Toda discrepancia queda asentada por canal en `cash_session_balances.difference`. |
-| **POL-AUTH-01** | Seguridad | **Autorización Centralizada y Erradicación de PIN (Decisión D-01):** Toda operación valida acceso mediante `assert_store_access` y resolución autoritativa del cajero con `get_employee_id_from_session()`. Queda erradicado el PIN de caja o tienda. |
-| **SPEC-010 / 011** | Financiero | **Conservación Numérica y Moneda Entera:** Cero redondeos de punto flotante. Todos los saldos y diferencias se manejan en pesos colombianos como enteros en tipo `NUMERIC`. |
+| **POL-FIN-01 / 02** | Financiero | **Caja Dedicada POS y 3 Canales:** Únicos canales válidos: **`efectivo`**, **`nequi`** y **`llave_bre`** (eliminado `'daviplata'` y `'bre'`). Base inicial 100% a `efectivo`; canales digitales inician en `$0`. Pagos fuera de cajón son **"pago externo / fuera de caja"** (`$0` en POS, Admin-only). |
+| **POL-SEG-01** | Seguridad | **Arqueo Ciego con Cierre Asistido (3 Intentos):** Prohibido revelar `expected_amount` o `difference` al cajero. Si no coincide, solo avisa que no coincide hasta 3 intentos; al 3.er intento sella y alerta al Admin (`notifications`). |
+| **POL-SEG-03** | Seguridad | **Propiedad Estricta del Turno:** Solo el abridor original (`opened_by`) o el Administrador pueden cerrar o conciliar el turno; bloqueado para otros empleados aunque tengan `canOpenCloseCash`. |
+| **POL-AUD-01 / 03** | Auditoría | **Inmutabilidad y Snapshot:** Balances y movimientos inmutables con firma histórica (`opened_by_name/role`, `closed_by_name/role`, `actor_name/role`) y alertas de discrepancia al 3.er intento. |
+| **SPEC-010 / 011** | Financiero | Enteros COP en `NUMERIC`, cero punto flotante. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 | SDD Origen | Restricción Inyectada | Impacto en Caja Multicanal |
-|------------|-----------------------|----------------------------|
-| **SDD_004 (Control de Caja)** | Unicidad de sesión activa y dualidad operativa. | La apertura y cierre multicanal operan sobre la única sesión `open` activa (`session_id`). Las operaciones escalares de SDD_004 (`abrir_caja`, `cerrar_caja`) actúan como capa de compatibilidad física hasta la migración total. |
-| **SDD_007 / SDD_007_01 (Ventas y POS)** | Obligatoriedad de canal en ventas. | Toda venta declara `payment_method` (`efectivo`, `nequi`, etc.) e inyecta automáticamente una contrapartida de tipo `'ingreso'` en `cash_movements` únicamente si involucra liquidez de canal (el fiado no toca caja). |
-| **SDD_009 (Clientes / Cartera)** | Abonos de deuda vinculados a caja activa. | Todo abono a crédito exige canal monetario, valida que la tienda tenga sesión de caja abierta e inyecta un ingreso en `cash_movements` imputado a la sesión actual (FRD-020 Regla 2). |
-| **SDD_022 / SDD_026 (Gastos OPEX)** | Prevención de sobregiro por canal. | Todo gasto operativo verifica fondos suficientes en su canal específico antes de autorizar el débito en `cash_movements`. |
-| **SDD_019 (Cuentas por Pagar)** | Pagos a proveedores en efectivo. | La operación `rpc_pay_supplier_invoice` asienta egresos en `cash_movements` con `movement_type = 'pago_proveedor'`, los cuales deben computarse obligatoriamente al calcular el saldo esperado de Efectivo. |
-| **SDD_021 (Historiales Multicanal)** | Consultas filtradas por canal. | Expone `rpc_obtener_historial_caja_multicanal` consumiendo `cash_movements` filtrado por `payment_method`. |
+|---|---|---|
+| **SDD_003_01 / SDD_004** | Propiedad Estricta, Cierre Asistido 3 intentos y snapshot de firma. | Ningún cierre ni respuesta hacia empleados devuelve `expected_amount` ni `difference`. |
+| **SDD_007_01 (POS)** | Ventas en `efectivo`, `nequi`, `llave_bre` vs `fiado`/`consumo_personal` (`$0` POS). | Solo ingresos líquidos en los 3 canales válidos alimentan `cash_movements`. |
+| **SDD_009 (Cartera)** | Abonos requieren `canFiar` (o Admin) y turno abierto `<24h`. | Imputa ingreso en `cash_movements` con `efectivo`, `nequi` o `llave_bre`. |
+| **SDD_022 / 026 (Gastos)** | Gastos menores abiertos a todo usuario activo; 5 categorías OPEX sin `'Reembolso'`. | Valida liquidez por canal (`INSUFFICIENT_CHANNEL_FUNDS`) y estampa `actor_id/name/role`. |
+| **SDD_019 (CxP)** | 100% Admin-only; `"pago externo / fuera de caja"` `$0` POS. | Solo pagos internos a proveedor debitan el canal seleccionado en caja. |
+| **SDD_021 (Historiales)** | Reportes globales Admin-only; empleado solo ve sus propios movimientos. | `rpc_obtener_historial_caja_multicanal` (Admin) y `rpc_obtener_mis_movimientos_turno` (empleado). |
 
-### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada bajo Regla 7)
-*Evidencia obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas a `information_schema` y `pg_proc`:*
-
-- **Tablas reales verificadas:**
-  - `cash_sessions`: `id`, `store_id`, `opened_by`, `closed_by`, `opening_balance`, `expected_balance`, `actual_balance`, `difference`, `status`, `opened_at`, `closed_at`, `forced_close`.
-  - `cash_movements`: `id`, `session_id`, `movement_type`, `amount`, `description` (NOT NULL), `sale_id`, `created_at`.
-  - `client_ledger`: `id`, `client_id`, `store_id`, `amount`, `previous_balance`, `new_balance`, `reference_id`, `transaction_type`, `created_at`, `created_by`.
-- **Ausencias físicas comprobadas en BD:**
-  - `cash_session_balances`: Inexistente en `pg_tables` (la base de datos opera actualmente con balances monolíticos en `cash_sessions`).
-  - `cash_movements`: Carece de la columna `payment_method` (solo 7 columnas existentes).
-  - `client_ledger`: Carece de las columnas `payment_method` y `session_id`.
-
-| # | Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off (Regla 7) | Condición de Revisión Futura |
-|---|-----------------------|-----------------------|------------------------------------------|------------------------------|
-| **H-1** | 🟠 **Consenso Arquitectónico Multicanal (`SDD_020` + `SDD_023`)** | En producción no existe `cash_session_balances` y `cash_sessions` posee 12 columnas escalares consumidas por 10 RPCs y 2 triggers de auditoría. | **Decisión Consensuada:** Preservar intactas las 12 columnas escalares de `cash_sessions` (no-regresión) y agregar `payment_method TEXT NOT NULL DEFAULT 'efectivo'` en `cash_movements` (H-2) para calcular y conciliar dinámicamente los saldos por canal al cierre. La creación de una tabla separada `cash_session_balances` se difiere hasta una futura versión mayor si el volumen requiere materialización. | Despliegue de migración DDL de `cash_movements.payment_method` en Ola 1/4. |
-| **H-2** | 🔴 **Ausencia de `payment_method` en `cash_movements`** | `cash_movements` solo tiene 7 columnas y carece de discriminación de canal. | **Decisión:** El diseño normativo exige `payment_method TEXT NOT NULL`. Transitoriamente, las ventas se auditan vía join con `sales.payment_method` y los gastos/abonos prefijan el canal en `description`. | Migración DDL: `ALTER TABLE public.cash_movements ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'efectivo'`. |
-| **H-3** | 🔴 **Desconexión de `registrar_abono` en BD real** | La función actual en BD (`registrar_abono`) no recibe método de pago, no valida caja abierta ni inserta en `cash_movements`. | **Decisión:** Declarar obsoleta la función física y exigir la adopción de `rpc_registrar_abono` (`SDD_009`), requiriendo `p_payment_method` y caja abierta activa. | Despliegue de la migración de `rpc_registrar_abono` en producción. |
-| **H-4** | 🔴 **Omisión de `pago_proveedor` en egresos** | Las funciones legacy (`cerrar_caja`, `get_history_caja`) solo filtran `movement_type = 'gasto'`, ignorando `pago_proveedor`. | **Decisión:** Armonizar la fórmula de egresos para sumar obligatoriamente `movement_type IN ('gasto', 'pago_proveedor')` en el canal efectivo. | Refactorización de las RPCs de cierre y reportes. |
-| **H-5** | 🟡 **Convención de signo invertida en BD** | `cerrar_caja` y `rpc_reconciliar_cierre_forzado` en BD calculan `difference := expected - actual`. | **Decisión:** Estandarizar al criterio contable universal `difference := actual - expected` (positivo = sobrante, negativo = faltante). | Despliegue de las nuevas versiones de RPCs de cierre. |
-| **H-6** | 🔴 **Trigger zombi `trg_expire_passes_on_cash_close`** | Existe activo en `cash_sessions` el trigger que ejecuta `expire_daily_passes()`, expirando pases al cerrar caja. | **Decisión:** Desacoplar formalmente el cierre de caja de los pases diarios (FRD-001 v3) y registrar el trigger físico como deuda técnica para remoción DDL. | Ejecución de `DROP TRIGGER IF EXISTS trg_expire_passes_on_cash_close ON public.cash_sessions;`. |
+### 0.3 Auditoría de BD contra Realidad (`SDD-003-01 §0.3`)
+- `cash_movements` en producción ya cuenta con `payment_method`, `category`, `voucher_ref` y `actor_id`, pero su `CHECK` usa `('efectivo', 'nequi', 'daviplata', 'bre')` en vez de `('efectivo', 'nequi', 'llave_bre')` (Brecha `B-02`), y carece de `actor_name`/`actor_role` (`B-05`).
+- `cash_session_balances` no existe en producción: el desglose por canal se calcula dinámicamente sobre `cash_movements.payment_method`.
+- `cash_sessions` requiere `closing_attempts`, `opened_by_name/role`, `closed_by_name/role` y `forced_close_without_count` (`B-03`, `B-05`).
 
 ---
 
 ## 1. Glosario Local
-
-- **Canal de Pago (`payment_method`):** Vía transaccional de liquidez (`efectivo`, `nequi`, `llave_bre` / `daviplata`).
-- **Balance por Canal (`cash_session_balances`):** Registro granular por sesión que almacena la base inicial, ingresos, egresos, saldo esperado, saldo real declarado y descuadre de un canal determinado.
-- **Arqueo Ciego Multicanal:** Protocolo de verificación independiente por canal ejecutado al cierre regular o al cierre forzado por caducidad de 24 horas, donde el usuario reporta los montos contados sin conocer previamente el cálculo del sistema.
-- **Turno Caducado (> 24 Horas):** Sesión que excedió 24 horas continuas sin cierre manual, cerrada automáticamente por el sistema con `forced_close = true` y pendiente de reconciliación multicanal por el Administrador.
-- **Reconciliación Multicanal:** Proceso administrativo mediante el cual el Dueño/Admin audita un turno caducado e ingresa los saldos reales verificados para cada canal, sellando las discrepancias definitivas.
+- **Canales Monetarios Válidos (`payment_method`):** Exclusivamente `'efectivo'`, `'nequi'` y `'llave_bre'`.
+- **Propiedad Estricta del Turno:** Solo quien abrió (`opened_by`) o el Administrador pueden cerrar la sesión.
+- **Cierre Asistido (3 Intentos):** Validación ciega multicanal hasta 3 intentos con aviso neutro y alerta automática al Admin al 3.er intento fallido.
+- **Turno Expirado/Bloqueado (`+24h`):** Resoluble únicamente por el abridor original (Cierre Asistido) o por el Administrador vía Cierre Forzoso (conteo físico opcional).
 
 ---
 

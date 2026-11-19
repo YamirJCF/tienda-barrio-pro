@@ -47,9 +47,10 @@
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
 | FRD-003 | [FRD_003_GESTION_EMPLEADOS.md](FRD/FRD_003_GESTION_EMPLEADOS.md) | FRD | 🟢 | ✅ SDD_003 | — |
-| FRD-003-01 | [FRD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md](FRD/FRD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) | FRD | 🟡 Validado | 🔴 SIN SDD | Matriz unificada de 5 permisos de empleado y acciones exclusivas Admin (`POL-LOG-03`, `POL-SEG-01`, `POL-SEG-03`). Pendiente Fase 3 |
+| FRD-003-01 | [FRD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md](FRD/FRD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) | FRD | 🟢 | ✅ SDD_003_01 | Matriz unificada de 4 permisos de empleado, capacidades base, propiedad del turno y firma histórica (`ARQ-002` v1.4) |
 | FRD-003-ILC | [FRD_003_INDEPENDENCIA_LOGISTICA_CONTABLE.md](FRD/FRD_003_INDEPENDENCIA_LOGISTICA_CONTABLE.md) | FRD | 🟢 | 🔴 SIN SDD | Coexiste con FRD_019 vía modelo cruce de tres vías. **Pendiente Fase 3-P1** |
-| SDD-003 | [SDD_003_GESTION_EMPLEADOS.md](SDD/SDD_003_GESTION_EMPLEADOS.md) | SDD | 🟡 Validado | — | — |
+| SDD-003 | [SDD_003_GESTION_EMPLEADOS.md](SDD/SDD_003_GESTION_EMPLEADOS.md) | SDD | 🟡 Validado | — | En alineación con `SDD_003_01` (4 permisos + snapshot histórico) |
+| SDD-003-01 | [SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md](SDD/SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) | SDD | 🟢 Aprobado PAC-SDD | — | Contrato marco de 4 permisos, capacidades base, propiedad estricta del turno, Cierre Asistido (3 intentos) y snapshot histórico |
 
 ---
 

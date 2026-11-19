@@ -1,66 +1,45 @@
 # SDD-022: Gastos Operativos Multicanal
 
-> **Asociado a:** [FRD-022](../FRD/FRD_022_GASTOS_MULTICANAL.md) (Gastos Operativos Multicanal y Pago a Proveedores)  
-> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (PAC-SDD Completo 2026-10-14)  
-> **Última Actualización:** 2026-10-14  
+> **Asociado a:** [FRD-022](../FRD/FRD_022_GASTOS_MULTICANAL.md), [FRD-026](../FRD/FRD_026_POLITICA_GASTOS_INMEDIATOS.md) y Contrato Marco [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos (Alineación `ARQ-002` v1.4)  
+> **Estado:** 🟢 Alineado a Contrato Marco `SDD-003-01` (Pendiente migración Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (`ARQ-002` v1.4)
 | Política ID | Dominio | Impacto Concreto en este SDD |
 |-------------|---------|------------------------------|
-| **POL-FIN-01** | Financiero | **Solidez de Caja y Prohibición de Sobregiros por Canal:** Toda salida monetaria por gasto del día o amortización de proveedor debe respaldarse con liquidez real disponible en el canal seleccionado (`payment_method`). Queda terminantemente prohibido el sobregiro contable en canales digitales o en efectivo físico (`INSUFFICIENT_FUNDS`). |
-| **POL-FIN-02** | Financiero | **Segregación Estricta de Canales Monetarios:** Efectivo, Nequi y Llave BRE / Daviplata operan como compartimentos estancos. Un egreso imputado a un canal digital debita exclusivamente el saldo esperado de dicho canal digital, manteniendo intacto el cuadre y arqueo del dinero físico en el cajón de la tienda. |
-| **POL-AUD-01** | Auditoría | **Trazabilidad e Inmutabilidad de Egresos:** Todos los movimientos de salida son estrictamente `append-only` en `cash_movements`. Queda prohibido el borrado (`DELETE`) o edición (`UPDATE`) de egresos. Cualquier ajuste debe procesarse como un nuevo movimiento auditable. |
-| **POL-AUTH-01** | Seguridad | **Autorización Centralizada y Erradicación de PIN (Decisión D-01):** Todo egreso se autoriza mediante `assert_store_access(v_store_id)` como primera instrucción. La identidad del autor se resuelve mediante `get_employee_id_from_session()`. Queda prohibido el uso de PINs locales o validaciones ad-hoc en capa frontend o SQL. |
-| **SPEC-010 / 011** | Financiero | **Conservación Numérica y Moneda Entera:** Manejo estricto de montos en Pesos Colombianos (COP) utilizando enteros en columnas de tipo `NUMERIC`. Cero tolerancia a desbordamientos o imprecisiones de punto flotante. |
+| **POL-FIN-01** | Financiero | **Caja Dedicada POS, No Sobregiro y `"pago externo / fuera de caja"`:** Todo gasto menor POS o pago interno a proveedor valida fondos reales en el canal seleccionado (`INSUFFICIENT_CHANNEL_FUNDS`). Todo pago realizado con fondos fuera del cajón POS se marca **"pago externo / fuera de caja"** (100% Admin-only) con impacto `$0` en caja. |
+| **POL-FIN-02** | Financiero | **Segregación de 3 Canales (`efectivo`, `nequi`, `llave_bre`):** Se elimina `'daviplata'` y el código legacy `'bre'`. Un egreso digital descuenta exclusivamente del canal digital elegido, manteniendo intacto el efectivo físico en gaveta. |
+| **POL-SEG-03** | Seguridad | **Separación de Roles:** Los **gastos menores de Caja Dedicada POS** están abiertos a **cualquier usuario activo** (Administrador o empleado con Pase Diario vigente) con caja abierta `< 24h`. Los **pagos a proveedores y `"pago externo / fuera de caja"`** son **100% exclusivos del Administrador (`admin_profiles`)**. |
+| **POL-AUD-01 / 02** | Auditoría | **Inmutabilidad y Fotografía Histórica (`actor_name`, `actor_role`):** Todo egreso es `append-only` y estampa la firma histórica inmutable del actor en `cash_movements` (`actor_id`, `actor_name`, `actor_role`). |
+| **SPEC-010 / 011** | Financiero | Enteros COP en `NUMERIC` sin coma flotante. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 | SDD Origen | Restricción Inyectada | Impacto en Gastos Multicanal |
-|------------|-----------------------|------------------------------|
-| **SDD_004 (Control de Caja)** | Exigencia de sesión `open` activa y turno < 24h. | Todo gasto o pago a proveedor exige una sesión de caja activa (`NO_OPEN_SESSION`) y rechaza si el turno tiene más de 24 horas (`SESSION_EXPIRED`). Además, la fórmula de cierre en `cerrar_caja` debe consolidar obligatoriamente la suma de egresos de tipo `'gasto'` y `'pago_proveedor'`. |
-| **SDD_020 (Caja Multicanal)** | Estructura multicanal de balances. | Los egresos disminuyen el `expected_balance` del canal monetario correspondiente. Al cerrar caja, el balance esperado de cada canal refleja la resta de sus egresos. |
-| **SDD_026 (Política de Gastos Inmediatos)** | Inmediatez absoluta y catálogo OPEX cerrado. | Los gastos del día son desembolsos inmediatos (cero pasivos). Deben pertenecer obligatoriamente a una de las 6 categorías OPEX autorizadas (`Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos`, `Reembolso`). |
-| **SDD_019 (Cuentas por Pagar)** | Pago de facturas a proveedores con origen de fondos. | La operación `rpc_pay_supplier_invoice` amortiza la deuda en `supplier_invoices.amount_paid` e inyecta un egreso multicanal en caja con `movement_type = 'pago_proveedor'`, cerrando la brecha histórica de aislamiento contable. |
-| **SDD_018 (Control Operacional y Análisis Financiero)** | Invariante de P&L y Estado de Resultados. | En `rpc_get_comprehensive_financial_report`, los gastos operativos solo computan `movement_type = 'gasto'`. Los egresos por `pago_proveedor` corresponden a extinción de pasivos por compra de inventario y NO deben sumarse a gastos operativos para evitar duplicidad con el Costo de Mercancía Vendida (COGS FIFO). |
-| **SDD_021 (Historiales Multicanal)** | Auditoría de movimientos desglosada por canal. | Expone consultas y filtros sobre `cash_movements` desglosando el método de pago (`payment_method`) y la categoría del gasto. |
+|---|---|---|
+| **SDD_003_01 (Contrato Marco)** | `assert_store_access`, `assert_store_admin`, `resolve_actor_snapshot`. | Gastos menores abiertos a todo usuario activo; `rpc_pay_supplier_invoice` exige `assert_store_admin`. |
+| **SDD_004 / SDD_020 (Caja)** | Turno `'open'` `< 24h` en Caja Dedicada POS. | Exige sesión abierta vigente para gastos menores y pagos internos (`NO_OPEN_SESSION` / `SHIFT_EXPIRED_24H`). |
+| **SDD_026 (Política OPEX)** | Catálogo cerrado de **5 categorías OPEX** (sin `'Reembolso'`). | Categorías válidas: `'Servicios'`, `'Nomina'`, `'Transporte'`, `'Mantenimiento'`, `'Insumos'`. |
+| **SDD_006_02 (Reembolsos POS)** | Reembolsos de clientes separados de gastos OPEX. | Los reembolsos usan el módulo POS (`canManageRefunds`), no `rpc_registrar_gasto_v2`. |
+| **SDD_019 (Cuentas por Pagar)** | 100% Admin-only y `"pago externo / fuera de caja"`. | Solo `admin_profiles` (`owner`/`manager`) amortiza facturas de proveedores; el pago externo no toca `cash_movements`. |
+| **SDD_018 / SDD_021 (P&L e Historial)** | Separación `'gasto'` (OPEX) vs `'pago_proveedor'` (pasivo). | `pago_proveedor` no suma al OPEX del P&L; empleados consultan solo sus gastos del turno actual (`rpc_obtener_mis_movimientos_turno`). |
 
-### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada bajo Regla 7)
-*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante verificación de esquema contra `information_schema` y `pg_proc`:*
-
-- **Tablas reales verificadas:**
-  - `cash_sessions`: `id`, `store_id`, `opened_by`, `closed_by`, `opening_balance`, `expected_balance`, `actual_balance`, `difference`, `status`, `opened_at`, `closed_at`, `forced_close`.
-  - `cash_movements`: `id`, `session_id`, `movement_type`, `amount`, `description` (NOT NULL), `sale_id`, `created_at`.
-  - `supplier_invoices`: `id`, `store_id`, `supplier_id`, `total_amount`, `amount_paid`, `due_date`, `created_at`, `invoice_number`.
-- **Restricciones verificadas:**
-  - `cash_movements_movement_type_check`: restricción `CHECK` que limita `movement_type` al conjunto `('ingreso', 'gasto', 'pago_proveedor')`.
-  - `cash_movements_amount_check`: restricción `CHECK (amount > 0)`.
-- **Ausencias físicas comprobadas:**
-  - Inexistencia física de las tablas `expenses`, `accounts_payable` y `cash_session_balances`.
-  - Ausencia de columnas dedicadas `category` y `payment_method` en `cash_movements`.
-  - Implementación histórica de `rpc_pay_supplier_invoice` en base de datos condicionada a registrar en `cash_movements` únicamente cuando el método es `'efectivo'` o `'cash'`.
-
-| # | Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off (Regla 7) | Condición de Revisión Futura |
-|---|-----------------------|-----------------------|------------------------------------------|------------------------------|
-| **H-1** | 🔴 **Inexistencia de tabla `expenses`** | En la base física de producción no existe la tabla `expenses` ni `accounts_payable`. Todos los movimientos de salida residen en `cash_movements` y las cuentas por pagar en `supplier_invoices`. | **Decisión:** Unificar el registro en `cash_movements` asignando `movement_type = 'gasto'` para OPEX y `movement_type = 'pago_proveedor'` para proveedores. Evita redundancia de tablas y previene desincronizaciones contables. | Modelo unificado consolidado en `cash_movements`. Mantener arquitectura. |
-| **H-2** | 🔴 **Ausencia de `category` y `payment_method` en `cash_movements`** | `cash_movements` solo tiene 7 columnas físicas. No existen columnas dedicadas para almacenar la categoría OPEX ni el canal de pago en el esquema físico actual. | **Decisión:** El contrato normativo exige ambos parámetros. En el interim, se persisten en `description` con formato obligatorio estructurado: `[CATEGORIA] [CANAL:metodo_pago] Motivo` (ej. `[Servicios] [CANAL:nequi] Pago recibo energía`). Esto garantiza trazabilidad y auditoría sin alterar el esquema físico antes de la migración DDL. | Ejecución de migración DDL: `ALTER TABLE cash_movements ADD COLUMN category TEXT, ADD COLUMN payment_method TEXT;` en Ola 4. |
-| **H-3** | 🔴 **Asimetría en `rpc_pay_supplier_invoice` de BD real** | En la función física actual de producción, solo se valida caja abierta e inserta en `cash_movements` si `p_payment_method IN ('efectivo', 'cash')`. Si el pago es digital, se amortiza la deuda pero se omite la caja, violando FRD-022 Reglas 1, 2 y 3. | **Decisión:** Formalizar el contrato objetivo exigiendo que TODO pago a proveedor requiera sesión abierta y asiente en caja con su canal. Se advierte que hasta la migración multicanal (`cash_session_balances`), insertar pagos digitales en `cash_movements` sin columna de canal contaminaría el arqueo físico en `rpc_check_and_force_close_shifts`. | Refactorización de `rpc_pay_supplier_invoice` sincronizada con la migración DDL multicanal. |
-| **H-4** | 🔴 **Desfase documental histórico de `SDD_019`** | La versión archivada de `SDD_019` (2026-08-07) y la Fila 25 de la Matriz RVC estipulaban un "aislamiento contable sin tocar caja". Esta regla fue formalmente revocada por `FRD-022`. | **Decisión:** Declarar la primacía arquitectónica de `FRD-022` y `SDD-022`. Registrar el desfase de `SDD-019` como deuda documental transitoria y agendar su actualización exhaustiva en la Ola 4. | Actualización y alineación formal de `SDD_019_CUENTAS_POR_PAGAR.md` en Ola 4. |
-| **H-5** | 🟡 **Segregación Contable en P&L (`SDD_018`)** | Los pagos a proveedores no deben computarse como gastos del período en el Estado de Resultados para no duplicar el costo con el COGS FIFO. | **Decisión:** Se impone el invariante de que `rpc_registrar_gasto_v2` inserte exclusivamente `'gasto'`, mientras que `rpc_pay_supplier_invoice` inserte estrictamente `'pago_proveedor'`. | Auditoría continua en los reportes financieros de `SDD_018`. |
-| **H-6** | 🔴 **Déficit de Grants a `service_role` (Regla 8)** | `cash_movements` y `cash_sessions` carecen de grants directos para el rol `service_role` en los esquemas de producción. | **Decisión:** Toda migración y diseño estipula explícitamente `GRANT ALL ON TABLE cash_movements, cash_sessions, supplier_invoices TO anon, authenticated, service_role;` previniendo errores 42501. | Inclusión en scripts DDL consolidados. |
+### 0.3 Auditoría de BD contra Realidad (`SDD-003-01 §0.3`)
+- En `database.types.ts` (L319–332), `cash_movements` ya dispone de `payment_method`, `category`, `voucher_ref` y `actor_id`.
+- Brechas pendientes para Fase 3: actualizar `chk_cash_movements_payment_method` a `('efectivo', 'nequi', 'llave_bre')` (retirando `'daviplata'`/`'bre'`), validar catálogo OPEX de 5 categorías (sin `'Reembolso'`), poblar `actor_id` + snapshot `actor_name`/`actor_role` en `rpc_registrar_gasto_v2`, y blindar `rpc_pay_supplier_invoice` con `assert_store_admin` + soporte explícito para `"pago externo / fuera de caja"`.
 
 ---
 
 ## 1. Glosario Local
-
-- **Gasto Operativo (OPEX):** Desembolso de liquidez inmediato destinado al sostenimiento cotidiano del local comercial (arriendo, servicios públicos, tintos, transporte, insumos de aseo). Se liquida al instante sin generar pasivos contables.
-- **Canal de Pago (`payment_method`):** Medio transaccional del cual se extraen los fondos. Valores autorizados: `'efectivo'`, `'nequi'`, `'llave_bre'` (o alias `'daviplata'`).
-- **Pago a Proveedor:** Extinción total o parcial de un pasivo comercial previamente adquirido por la compra de mercancía o inventario (`supplier_invoices`). No constituye gasto operativo.
-- **Categoría OPEX:** Clasificación contable obligatoria del gasto según el estándar de `SDD_026` (`'Servicios'`, `'Nomina'`, `'Transporte'`, `'Mantenimiento'`, `'Insumos'`, `'Reembolso'`).
-- **Sobregiro de Canal:** Condición anómala donde el monto a desembolsar por un canal supera la liquidez acumulada en la sesión activa para dicho canal. El sistema aborta la transacción con error `INSUFFICIENT_FUNDS`.
+- **Gasto Menor POS (OPEX):** Desembolso inmediato desde Caja Dedicada POS ejecutado por cualquier usuario activo en turno abierto `< 24h`.
+- **Canal de Pago (`payment_method`):** Exclusivamente `'efectivo'`, `'nequi'` o `'llave_bre'` (erradicado `'daviplata'`).
+- **Categoría OPEX (5 valores):** `'Servicios'`, `'Nomina'`, `'Transporte'`, `'Mantenimiento'`, `'Insumos'` *(eliminado `'Reembolso'`)*.
+- **Pago a Proveedor / `"pago externo / fuera de caja"`:** Operación **100% Admin-only**. Si usa fondos de caja debita el canal POS (`movement_type = 'pago_proveedor'`); si usa fondos propios del dueño se registra como `"pago externo / fuera de caja"` con `$0` impacto en Caja Dedicada POS.
+- **Snapshot de Firma (`actor_name`, `actor_role`):** Identidad histórica inmutable estampada en el movimiento.
 
 ---
 

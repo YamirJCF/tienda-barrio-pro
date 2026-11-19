@@ -1,34 +1,36 @@
 # SDD-006: Gestión de Inventario y Catálogo (Módulo Primario)
 
-> **Asociado a:** [FRD-006](../FRD/FRD_006_INVENTARIO.md) (Gestión de Inventario y Catálogo)  
-> **Fase del Plan:** Ola 2 — Inventario, Lotes y Proveedores  
-> **Estado:** 🟢 Aprobado con Adenda de Filtros y Gobernanza de Caché (PAC-SDD Completo 2026-10-26)  
-> **Última Actualización:** 2026-10-26  
+> **Asociado a:** [FRD-006](../FRD/FRD_006_INVENTARIO.md) (Gestión de Inventario y Catálogo) | [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) (Contrato Marco RBAC)  
+> **Fase del Plan:** Ola 2 — Inventario, Lotes y Proveedores (Alineación ARQ-002 v1.4)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Alineado a `SDD-003-01` v1.0, pendiente migración SQL/Frontend Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 | Política ID | Dominio | Impacto Concreto en este SDD |
 |-------------|---------|------------------------------|
 | **SPEC-010 / SPEC-011** | Financiero | **Redondeo e Inmutabilidad de Moneda:** Los precios de venta se redondean estrictamente al múltiplo de $50 más cercano, con regla de desempate hacia abajo (a favor del cliente). Los montos monetarios se almacenan como enteros sin decimales (`numeric`). Las cantidades unitarias y en gramos no admiten decimales; las pesables (kg, lb) admiten hasta 2 decimales. Los datos se almacenan ya redondeados, no solo a nivel de visualización. |
-| **POL-LOG-02** | Logística | **Prohibición Absoluta de Stock Negativo:** El servidor aborta con `STOCK_INSUFFICIENT` cualquier operación o movimiento que intente reducir `current_stock` por debajo de cero. El stock físico real no puede ser negativo bajo ninguna circunstancia (respaldado por constraint `products_current_stock_check`). |
-| **POL-AUD-02** | Auditoría | **Inviolabilidad del Kardex (Append-Only):** Todo movimiento de mercancía en `inventory_movements` es de solo inserción. Queda terminantemente prohibido ejecutar `UPDATE` o `DELETE` sobre el historial de movimientos de inventario. |
-| **POL-SEC-01** | Seguridad | **Protección de Costos y Separación de Roles:** Las columnas de costo (`cost_price`, `unit_cost`) están protegidas y restringidas exclusivamente a roles con privilegios de Administrador. Los empleados o cajeros sin permiso explícito (`canViewCosts`) no tienen acceso a ver márgenes ni costos en ninguna pantalla ni payload. |
-| **POL-AUTH-01** | Seguridad | **Autorización Centralizada y Multi-Tenant:** Toda consulta y mutación de inventario está aislada obligatoriamente por `store_id` mediante las funciones de seguridad centralizadas `assert_store_access(store_id)` y `get_current_store_id()`. Queda prohibida la autenticación ad-hoc por PINs de tienda o cajón. |
+| **POL-LOG-01 / POL-LOG-02** | Logística | **Independencia Logística y Prohibición de Stock Negativo:** Todo movimiento de inventario tiene impacto **$0** en la Caja Dedicada POS y **no altera automáticamente** Cuentas por Pagar (`supplier_invoices`). El servidor aborta con `STOCK_INSUFFICIENT` cualquier salida del stock vendible que intente reducir `current_stock` por debajo de cero (`products_current_stock_check`). |
+| **POL-LOG-03 / POL-SEG-03** | Logística / Seguridad | **Interruptor Único `canManageInventory` vs. Capacidades Base:** Se eliminan `canViewInventory` y `canViewCosts`. El permiso único **`canManageInventory`** (`Inventario completo`) unifica visualización de costos de adquisición (`cost_price`, `unit_cost`, `cost_unit`), creación/edición/baja lógica de productos, Kardex, entradas, ajustes positivos/negativos por conteo físico (con alerta al Admin) y devolución física a proveedor `$0` (sin CxP). Consultar el catálogo de productos eliminados (`is_active = false`) permanece **100% exclusivo del Admin**. Por otro lado, **Mermas** y **Consumo del Negocio** son capacidades base abiertas a **cualquier usuario activo** (sin caja abierta ni `canManageInventory`), ocultando costos unitarios a quien no posea `canManageInventory` ni sea Admin. |
+| **POL-LOG-04 / POL-AUD-01** | Auditoría | **Inmutabilidad por Contra-Movimiento y Snapshot de Firma:** Todo movimiento en `inventory_movements` es append-only; no se edita ni se elimina. Toda corrección se ejecuta mediante **contra-movimiento** (`reversed_movement_id`) y cada fila estampa el UUID y la fotografía histórica inmutable (`actor_name`, `actor_role`) vigentes al momento del evento. |
+| **POL-AUTH-01 / POL-AUD-03** | Seguridad / Alertas | **Autorización Centralizada y Alertas:** Todo acceso y mutación valida pertenencia con `assert_store_access(p_store_id)`, permisos con `assert_employee_permission(p_store_id, 'canManageInventory')` o `is_store_admin(p_store_id)`, y los ajustes por conteo físico emiten alerta automática en `notifications` (`INVENTORY_COUNT_ADJUSTMENT`) para el Administrador. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 | SDD Origen | Restricción Inyectada | Impacto en Inventario |
 |------------|-----------------------|-----------------------|
-| **SDD_010_016 (FIFO)** | Valuación por capas de lotes activos. | La columna `products.current_stock` es un acumulador de lectura sincronizado automáticamente por el trigger `sync_product_stock_from_batches` como la sumatoria de `quantity_remaining` de los lotes activos en `inventory_batches`. |
-| **SDD_007 / SDD_007_01 (Ventas y POS)** | Descuento atómico de existencias. | El motor de ventas (`rpc_procesar_venta_v2` / `rpc_procesar_venta_v3`) descuenta existencias mediante `consume_stock_fifo` e inserta la salida en `inventory_movements` con `movement_type = 'venta'`. En anulaciones (`rpc_anular_venta`), reingresa el stock al Kardex. |
-| **SDD_006_03 (Código de Producto)** | Búsqueda unificada en POS. | Expone el contrato de búsqueda rápida en POS por coincidencia exacta de PLU (`plu = term AND is_active = true`) o coincidencia parcial de nombre (mínimo 2 caracteres, limit 10). |
-| **SDD_006_01_01 (Movimientos de Entrada)** | Registro oficial de compras a proveedores. | Estandariza la firma oficial de 9 parámetros de `rpc_registrar_entrada`, normaliza proveedores (TRIM + formato título) y delega la creación del lote al trigger `bridge_movement_to_batch`. |
-| **SDD_006_02 (Gestor de Reembolsos)** | Reingreso de stock por devoluciones. | La operación `rpc_procesar_reembolso_item` valida el ítem vendido, reingresa existencias al inventario y debita el dinero de la caja del canal seleccionado con control de sobregiro. |
-| **SDD_005 (Auditoría y Trazabilidad)** | Trazabilidad forense del Kardex. | Exige registrar en `inventory_movements` el usuario responsable (`created_by`), la estampa temporal inmutable (`created_at`) y la justificación (`reason`), alimentando el Evidence Hub. |
-| **SDD_018 (Control Operacional)** | Extracción de P&L e inventario final. | Consume la valuación de inventario y existencias para determinar el Costo de Mercancía Vendida (COGS) y el Balance General. |
-| **SDD_028 (Gobernanza Global de Caché)** | Gestión unificada de estados en memoria RAM y concurrencia. | El catálogo de productos se almacena en memoria bajo estrategia SWR Nivel 2 (TTL 5 min, MaxStale 30 min) para permitir filtrado, ordenamiento y renderizado reactivo instantáneo (100% en cliente sin round-trips). El historial de Kardex se gestiona bajo Nivel 5 LRU Bounded (MAX_ENTRIES = 10, TTL 2 min) consultado vía PostgREST con ventana por defecto de 7 días. Toda edición de catálogo se blinda con Escudos 1 (cooldown) y 2 (vector snapshot de precios/nombre). |
+| **SDD_003_01 (Contrato Marco RBAC)** | Modelo cerrado de 4 permisos y snapshot de firma. | Gobierna el interruptor `canManageInventory`, las capacidades base (Merma / Consumo del Negocio), la exclusividad Admin en inactivos, y los helpers `assert_employee_permission()` y `resolve_actor_snapshot()`. |
+| **SDD_010_016 (FIFO)** | Valuación por capas de lotes activos. | La columna `products.current_stock` es un acumulador sincronizado automáticamente por `sync_product_stock_from_batches` como sumatoria de `quantity_remaining` en `inventory_batches`. |
+| **SDD_007 / SDD_007_01 (Ventas y POS)** | Descuento atómico y Consumo Personal en POS. | `rpc_procesar_venta_v3` descuenta FIFO (`movement_type = 'venta'`) y soporta **Consumo/Retiro Personal** (`$0` en caja POS, asignado al perfil propio o elegido por Admin). `rpc_anular_venta` reingresa stock en anulaciones. |
+| **SDD_006_03 (Código de Producto)** | Búsqueda unificada en POS. | Expone la búsqueda rápida en POS por PLU exacto o nombre parcial (excluyendo costos para cajeros sin `canManageInventory`). |
+| **SDD_006_01_01 (Movimientos de Entrada)** | Entradas estrictas por compra/reposición. | Restringe `rpc_registrar_entrada` a `Compra / Reposición de Proveedor` bajo `canManageInventory`/Admin, desacoplado de CxP. |
+| **SDD_006_01_02 (Movimientos de Salida)** | Salidas logísticas `$0`, consumos y ajustes `+/-`. | Reactivado para normar Mermas y Consumo del Negocio (todo usuario activo), Ajustes por Conteo Físico `+/-` y Devolución Física a Proveedor `$0` (`canManageInventory`/Admin), y contra-movimientos. |
+| **SDD_006_02 (Gestor de Reembolsos)** | Reembolsos desde POS con etiqueta `"merma"`. | Botón en POS junto al buscador (`canManageRefunds`). Sin etiqueta `"merma"` reingresa stock vendible; con `"merma"` evita el stock vendible (incluso con `stock = 0`) y ejecuta salida directa como merma al costo. |
+| **SDD_005 (Auditoría y Trazabilidad)** | Trazabilidad forense del Kardex. | Exige `created_by`, `actor_name`, `actor_role`, `reason` obligatorio y `reversed_movement_id` para el Evidence Hub (Admin-only). |
+| **SDD_018 (Control Operacional)** | P&L al costo de adquisición. | Consume valoración FIFO del stock y contabiliza al costo de adquisición Mermas (incluyendo reembolsos `"merma"`), Consumo del Negocio y Consumo/Retiro Personal. |
+| **SDD_028 (Gobernanza Global de Caché)** | Caché RAM y concurrencia. | Catálogo en SWR Nivel 2 (`inventoryStore.products`); Kardex en Nivel 5 LRU (`MAX_ENTRIES = 10`, TTL 2 min, ventana default 7 días). Edición blindada con Escudos 1 y 2. |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada)
 

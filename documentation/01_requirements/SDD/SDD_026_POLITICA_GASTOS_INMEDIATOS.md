@@ -1,68 +1,48 @@
 # SDD-026: Política de Gastos Generales (OPEX Inmediato)
 
-> **Asociado a:** [FRD-026](../FRD/FRD_026_POLITICA_GASTOS_INMEDIATOS.md) (Límite Contable y Ejecución Inmediata de Gastos)  
-> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (PAC-SDD Completo 2026-10-14)  
-> **Última Actualización:** 2026-10-14  
+> **Asociado a:** [FRD-026](../FRD/FRD_026_POLITICA_GASTOS_INMEDIATOS.md), [FRD-022](../FRD/FRD_022_GASTOS_MULTICANAL.md) y Contrato Marco [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos (Alineación `ARQ-002` v1.4)  
+> **Estado:** 🟢 Alineado a Contrato Marco `SDD-003-01` (Pendiente migración Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (`ARQ-002` v1.4)
 | Política ID | Dominio | Impacto Concreto en este SDD |
 |-------------|---------|------------------------------|
-| **POL-FIN-01** | Financiero | **Inmediatez Absoluta (Flujo de Caja Puro):** Queda terminantemente prohibido modelar gastos generales como pasivos acumulados o promesas de pago ("gastos pendientes" o "por pagar"). Un gasto existe financiera y contablemente única y exclusivamente en el instante exacto en que el dinero físico o digital abandona las arcas del establecimiento. El sistema carece por diseño de interfaces o tablas para almacenar recibos futuros (CA-FRD-026-01). |
-| **POL-FIN-02** | Financiero | **Afectación y Segregación Estricta de Canales:** Todo gasto operativo debe imputarse al canal monetario exacto de origen (`efectivo`, `nequi`, `llave_bre`) y debitar exclusivamente de la liquidez real disponible en dicho canal. Se prohíbe el sobregiro contable: si el saldo del canal resulta menor a la erogación, el servidor aborta la operación con `INSUFFICIENT_FUNDS` (CA-FRD-026-03). |
-| **POL-AUD-01** | Auditoría | **Trazabilidad e Inmutabilidad de Egresos:** Todo registro de gasto genera una transacción de egreso real e inmediata de tipo `append-only` en `cash_movements` con `movement_type = 'gasto'`. Queda estrictamente vetado el `UPDATE` o `DELETE` de movimientos asentados. Toda salida exige una descripción no vacía (mínimo 3 caracteres) y una categoría OPEX válida (CA-FRD-026-04). |
-| **POL-AUTH-01** | Seguridad | **Autorización Centralizada y Erradicación de PIN (Decisión D-01):** Todo egreso valida el acceso a la tienda del usuario mediante `assert_store_access(v_session.store_id)`. La identidad del cajero o autor se resuelve mediante `get_employee_id_from_session()` e `is_authorized_employee()`. Quedan erradicados los PINs locales de caja o tienda. |
-| **SPEC-010 / 011** | Financiero | **Conservación Numérica y Moneda Entera:** Manejo riguroso de montos en Pesos Colombianos (COP) utilizando valores enteros en columnas de tipo `NUMERIC`. Cero tolerancia a desbordamientos o imprecisiones de punto flotante en la suma y resta de saldos. |
+| **POL-FIN-01** | Financiero | **Inmediatez Absoluta y `"pago externo / fuera de caja"`:** Prohibido registrar gastos "por pagar". Todo desembolso fuera de Caja Dedicada POS se marca **"pago externo / fuera de caja"** (100% Admin-only) con `$0` impacto en caja. |
+| **POL-FIN-02** | Financiero | **Segregación Estricta (`efectivo`, `nequi`, `llave_bre`):** Se elimina `'daviplata'` y `'bre'`. **Todo gasto digital (Nequi o Llave BRE) descuenta únicamente de su respectivo canal digital y jamás afecta el efectivo físico en gaveta.** Prohibido el sobregiro (`INSUFFICIENT_CHANNEL_FUNDS`). |
+| **POL-SEG-03** | Seguridad | **Acceso Abierto a Gastos Menores POS:** Todo usuario activo (Administrador o empleado con Pase Diario vigente) puede registrar gastos menores de turno con caja abierta `< 24h`. |
+| **POL-AUD-01 / 02** | Auditoría | **Inmutabilidad y Fotografía de Firma (`actor_name`, `actor_role`):** Movimientos `append-only` en `cash_movements` con categoría OPEX cerrada (5 categorías, sin `'Reembolso'`), motivo obligatorio (`>= 3` chars) y firma histórica inmutable. |
+| **SPEC-010 / 011** | Financiero | Enteros COP en `NUMERIC` sin coma flotante. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
-| SDD Origen | Restricción Inyectada | Impacto en la Política de Gastos |
-|------------|-----------------------|----------------------------------|
-| **SDD_004 (Control de Caja)** | Exigencia de sesión `open` activa y turno < 24h. | Bloquea de inmediato el registro de gastos si la caja está cerrada (`NO_OPEN_SESSION`) o si el turno supera las 24 horas transcurridas (`SESSION_EXPIRED`). En `cerrar_caja`, los egresos de tipo `'gasto'` se suman obligatoriamente al total de salidas para deducir del saldo esperado de turno. |
-| **SDD_020 (Caja Multicanal)** | Estructura multicanal de balances y no-sobregiro. | El egreso reduce el `expected_balance` del canal seleccionado en `cash_session_balances`. El gasto digital (ej. Nequi) no altera el efectivo físico en cajón, protegiendo el arqueo ciego regular y forzado. |
-| **SDD_022 (Gastos Multicanal)** | Paridad de interfaz y segregación ontológica de egresos. | `SDD_022` y `SDD_026` comparten el mismo contrato de interfaz para `rpc_registrar_gasto_v2`. Se impone la distinción estricta: los gastos operativos de sostenimiento asientan con `movement_type = 'gasto'`; las cancelaciones de facturas a proveedores asientan con `movement_type = 'pago_proveedor'`. |
-| **SDD_018 (Control Operacional)** | P&L y Estado de Resultados (`Extracción de Reporte Financiero`). | En `rpc_get_comprehensive_financial_report`, los gastos operativos se consolidan sumando `movement_type = 'gasto'`. SDD-026 garantiza que los gastos generales se registren exclusivamente bajo `'gasto'`, protegiendo el Costo de Mercancía Vendida (COGS FIFO) y la Utilidad Neta de duplicaciones contables. |
-| **SDD_021 (Historiales Multicanal)** | Auditoría de movimientos desglosada por canal y concepto. | El historial consume `cash_movements` filtrando por `payment_method`. La adopción del formato transitorio estructurado en `description` permite exponer la categoría OPEX y el método de pago al frontend. |
+- **`SDD_003_01` / `SDD_004` / `SDD_020`:** Gasto menor es Capacidad Base de todo usuario activo en turno `'open'` `< 24h`.
+- **`SDD_022` / `SDD_019`:** Pagos a proveedores y `"pago externo / fuera de caja"` son 100% Admin-only (`movement_type = 'pago_proveedor'` o `$0` POS).
+- **`SDD_006_02`:** Los reembolsos a clientes ya no pertenecen al catálogo OPEX de gastos; se procesan en el POS bajo permiso `canManageRefunds`.
+- **`SDD_018` / `SDD_021`:** P&L computa `movement_type = 'gasto'` en OPEX; empleados consultan solo sus gastos propios del turno actual (`rpc_obtener_mis_movimientos_turno`).
 
-### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada bajo Regla 7)
-*Evidencia cruda obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas de verificación a `information_schema.columns`, `pg_constraint` y `pg_proc`:*
-
-- **Tablas físicas verificadas en producción:**
-  - `cash_sessions` (12 columnas existentes): `id`, `store_id`, `opened_by`, `closed_by`, `opening_balance`, `expected_balance`, `actual_balance`, `difference`, `status`, `opened_at`, `closed_at`, `forced_close`.
-  - `cash_movements` (7 columnas existentes): `id`, `session_id`, `movement_type`, `amount`, `description` (NOT NULL), `sale_id`, `created_at`.
-- **Ausencia física de tablas de pasivos de gasto comprobada:**
-  - Se confirmó en `information_schema.tables` la inexistencia de tablas como `expenses`, `cash_session_balances` o `accounts_payable` (resultado de consulta vacío).
-- **Restricciones y Check Constraints verificados:**
-  - `cash_movements_amount_check`: Restricción estricta `amount > 0` (monto positivo obligatorio).
-  - `cash_movements_movement_type_check`: Tipos de movimiento permitidos restringidos a `'ingreso'`, `'gasto'`, `'pago_proveedor'`.
-- **Estado de funciones en catálogo `pg_proc`:**
-  - Se confirmó que no existe la función `rpc_registrar_gasto_v2` ni ninguna otra función de gasto o egreso operativo (`%gasto%` o `%expense%`) en la base física de producción.
-
-| # | Hallazgo / Componente | Brecha Real Detectada | Solución Normativa y Trade-off (Regla 7) | Condición de Revisión Futura |
-|---|-----------------------|-----------------------|------------------------------------------|------------------------------|
-| **H-1** | 🔴 **Ausencia de columna `category` en `cash_movements`** | `cash_movements` solo tiene 7 columnas físicas. No existe una columna dedicada para la categoría OPEX en la base física de producción. | **Decisión:** Exigir en el contrato RPC `p_category` obligatorio dentro del catálogo de las 6 categorías autorizadas. Persistir transitoriamente en `description` con formato obligatorio estructurado: `[CATEGORIA] [CANAL:metodo_pago] Motivo` (ej. `[Servicios] [CANAL:nequi] Pago recibo energía`). Garantiza trazabilidad y auditoría sin alterar el esquema DDL actual. | Despliegue de migración DDL consolidada en Ola 4: `ALTER TABLE public.cash_movements ADD COLUMN category TEXT;`. |
-| **H-2** | 🔴 **Ausencia de columna `payment_method` en `cash_movements`** | `cash_movements` no cuenta con columna de canal nativa ni existe en producción la tabla `cash_session_balances`. | **Decisión:** Exigir `p_payment_method` obligatorio en el contrato RPC. El servidor calcula la liquidez disponible del canal y encapsula la etiqueta `[CANAL:metodo_pago]` en `description`. Previene la pérdida de trazabilidad del medio de pago en egresos de caja. | Aplicación de la migración multicanal `20260727000000_multichannel_schema.sql` en Ola 4. |
-| **H-3** | 🔴 **Inexistencia física de `rpc_registrar_gasto_v2` en `pg_proc`** | En la base de datos real de producción no existe ninguna función almacenada para el registro de gastos operativos. | **Decisión:** Formalizar exhaustivamente en SDD-026 el contrato normativo objetivo de `rpc_registrar_gasto_v2` en paridad total con `SDD_022` (firmas, validaciones centralizadas, catálogo de 8 errores y payload de 8 campos). Permite cerrar la especificación documental sin migraciones prematuras de código SQL. | Creación y despliegue del RPC `rpc_registrar_gasto_v2` en Supabase Producción durante la fase de implementación de backend. |
-| **H-4** | 🟡 **Agregación plana en P&L de `SDD_018`** | `rpc_get_comprehensive_financial_report` suma los gastos operativos de forma plana (`movement_type = 'gasto'`) sin exponer las categorías OPEX individualizadas en su JSON de salida. | **Decisión:** SDD-026 asienta estrictamente `movement_type = 'gasto'` para alimentar limpiamente la suma de `operational_expenses` sin distorsión. El catálogo cerrado de 6 categorías se estandariza como base taxonómica que alimentará la desagregación analítica futura. | Refactorización de la salida de `SDD_018` y vista contable en la Ola 4. |
+### 0.3 Auditoría de BD contra Realidad (`SDD-003-01 §0.3`)
+- En `database.types.ts` (L319–332), `cash_movements` ya dispone de `category`, `payment_method`, `voucher_ref` y `actor_id`.
+- Brechas pendientes Fase 3: retirar `'daviplata'`/`'bre'` dejando `('efectivo', 'nequi', 'llave_bre')`, restringir OPEX a **5 categorías** (retirando `'Reembolso'`) y añadir snapshot `actor_name`/`actor_role`.
 
 ---
 
 ## 1. Glosario Local
 
-- **Gasto General (OPEX Inmediato):** Desembolso de liquidez operativo corriente requerido para el funcionamiento diario del establecimiento comercial (arriendo, servicios públicos, compras menores de aseo, transporte local o anticipos de personal). Es un egreso transaccional definitivo que se reconoce única y exclusivamente al momento de la salida de dinero.
-- **Proscripción de Pasivos Operativos:** Principio arquitectónico cardinal que prohíbe la existencia de recibos o deudas por gastos dentro de la base de datos central. El sistema permanece completamente agnóstico a cualquier factura física hasta tanto no se efectúe la erogación.
-- **Canal de Pago (`payment_method`):** Vía monetaria real de donde se extraen los fondos. Valores autorizados: `'efectivo'`, `'nequi'`, `'llave_bre'`.
-- **Catálogo Cerrado de Categorías OPEX:** Lista taxativa de 6 conceptos autorizados para clasificar egresos:
+- **Gasto General (OPEX Inmediato):** Desembolso de liquidez operativo corriente desde Caja Dedicada POS ejecutado por cualquier usuario activo en turno abierto `< 24h`.
+- **Pago Externo / Fuera de Caja:** Desembolso exclusivo del Administrador con fondos propios ajenos al cajón POS (`$0` impacto en caja).
+- **Canal de Pago (`payment_method`):** Exclusivamente `'efectivo'`, `'nequi'`, `'llave_bre'`.
+- **Catálogo Cerrado de Categorías OPEX (5 categorías — sin `'Reembolso'`):**
   1. `Servicios` (Energía eléctrica, acueducto, gas, servicio de internet, telefonía).
   2. `Nomina` (Jornales diarios, sueldos de personal de turno, anticipos aprobados).
   3. `Transporte` (Acarreos menores, taxis para diligencias de la tienda, domicilios/fletes).
   4. `Mantenimiento` (Reparaciones locativas inmediatas, repuestos menores, bombillos, plomería).
   5. `Insumos` (Bolsas plásticas, papel térmico para tickets, marcadores, elementos de aseo).
-  6. `Reembolso` (Salidas monetarias autorizadas para devoluciones o rectificaciones operativas).
-- **Sobregiro de Canal:** Intento de desembolsar un monto superior a los fondos líquidos acumulados en el canal correspondiente para el turno activo. Aborta con error `INSUFFICIENT_FUNDS`.
+- **Snapshot de Firma (`actor_name`, `actor_role`):** Fotografía histórica inmutable del autor.
+- **Sobregiro de Canal:** Intento de desembolsar un monto superior a los fondos líquidos acumulados en el canal correspondiente para el turno activo (`INSUFFICIENT_CHANNEL_FUNDS`).
 
 ---
 

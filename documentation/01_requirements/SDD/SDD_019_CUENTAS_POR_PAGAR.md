@@ -2,23 +2,23 @@
 
 > **Asociado a:** [FRD-019](../FRD/FRD_019_CUENTAS_POR_PAGAR.md)  
 > **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Ítem 4)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-16  
+> **Estado:** 🟠 Alineado a `SDD-003-01` / `ARQ-002` v1.4 (Pendiente implementación en Fase 3)  
+> **Contrato Marco:** [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Alcance y Restricciones Aplicables (PEA-N)
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política ID | Dominio | Mandato Arquitectónico e Impacto Concreto en este SDD |
 | :--- | :--- | :--- |
-| **POL-AUTH-01** | Multi-tenant | Aislamiento multi-tenant obligatorio. Invocación mandatoria de `assert_store_access(p_store_id)` como instrucción número uno incondicional en todos los RPCs del módulo (`rpc_crear_factura_proveedor`, `rpc_pay_supplier_invoice`, `rpc_obtener_cuentas_por_pagar`). Aislamiento en base de datos mediante políticas RLS gobernadas estrictamente por `get_current_store_id()`. |
-| **POL-FIN-01** | Financiero | Solidez de Caja y Prevención Absoluta de Sobregiros por Canal. Toda salida monetaria del sistema originada por un pago interno a proveedor debe respaldarse con fondos reales disponibles en el canal seleccionado (`EFECTIVO`, `NEQUI`, `LLAVE BRE / Daviplata`). Queda terminantemente prohibido el sobregiro contable (`INSUFFICIENT_FUNDS`), el uso de saldos consolidados o el préstamo entre canales para cubrir pagos. |
-| **POL-FIN-02** | Financiero | Aislamiento de Cuentas por Pagar y Segregación de Flujos. El registro inicial de una deuda nace por acción humana explícita y no afecta la caja ni el inventario. La liquidación distingue entre **Abono Externo** (fondos fuera del sistema, $0 movimiento de caja, no requiere turno abierto) y **Pago Interno** (fondos declarados del sistema, requiere turno abierto `< 24h`, egreso multicanal en `cash_movements`). |
-| **POL-LOG-01 / POL-LOG-02** | Logística | Independencia Logística y Contable. La entrada física de mercancía incrementa existencias pero tiene prohibido crear pasivos financieros de forma automática. De igual forma, las devoluciones de mercancía a proveedores no reducen deudas en cascada. La vinculación de inventario con facturas es opcional, manual y meramente documental (`inventory_movements.reference_invoice_id`). |
-| **POL-AUD-01** | Auditoría | Inviolabilidad Contable e Inmutabilidad de Pagos. Prohibición taxativa de operaciones destructivas `DELETE` o `UPDATE` sobre facturas liquidadas, abonos externos o egresos de caja. Cualquier equivocación en un pago debe subsanarse mediante contra-movimientos compensatorios auditables con referencia foránea mandatoria al ID original (`CA-FRD-005-03`). |
-| **POL-SEC-01** | Seguridad | Control de Acceso RBAC en Servidor. El Administrador (`admin_profiles`) ejecuta la totalidad de operaciones. Los empleados (`employees`) requieren permisos funcionales específicos explícitos en su perfil de base de datos (`gestion_cuentas_por_pagar` y `pago_fondos_sistema`), prohibiendo de forma terminante confiar en banderas, botones o metadatos enviados desde el cliente (FRD-002 / RN-18, RN-19). |
+| **POL-AUTH-01** | Multi-tenant | Aislamiento multi-tenant obligatorio. Invocación mandatoria de `assert_store_access(p_store_id)` + `assert_store_admin(p_store_id)` en todos los RPCs del módulo (`rpc_crear_factura_proveedor`, `rpc_pay_supplier_invoice`, `rpc_obtener_cuentas_por_pagar`). |
+| **POL-FIN-01 / POL-FIN-02** | Financiero | Solidez de Caja Dedicada POS y Segregación de Canales. Todo pago interno a proveedor exige fondos suficientes en el canal seleccionado (`EFECTIVO`, `NEQUI`, `LLAVE BRE` / código `'llave_bre'`; se elimina `'daviplata'`). Prohibido el sobregiro (`INSUFFICIENT_FUNDS`) o préstamo entre canales. Todo desembolso fuera de la Caja Dedicada POS se registra como **"pago externo / fuera de caja"** (`$0` movimiento de caja, no requiere turno abierto). |
+| **POL-LOG-01 / POL-LOG-03** | Logística | Independencia Logística-Contable Total. La entrada física de mercancía incrementa existencias sin crear deudas automáticamente. Las **devoluciones físicas a proveedor (`SDD-006-01-02`)** solo descuentan inventario (`$0` en caja) y **tienen prohibido reducir o ajustar automáticamente saldos en Cuentas por Pagar (`supplier_invoices`)**. La referencia `inventory_movements.reference_invoice_id` es opcional y puramente documental. |
+| **POL-AUD-01 / POL-AUD-02** | Auditoría | Inviolabilidad Contable e Inmutabilidad de Pagos con Fotografía de Firma (`actor_name`, `actor_role`). Prohibido `DELETE` o `UPDATE` directo sobre facturas liquidadas, pagos externos o egresos en caja; correcciones solo vía contra-movimiento auditable (`CA-FRD-005-03`). |
+| **POL-SEG-03 / Regla 4** | Seguridad | **Exclusividad 100% del Administrador:** Toda gestión de proveedores y Cuentas por Pagar (consultar, crear facturas, registrar **"pago externo / fuera de caja"** y ejecutar pagos internos desde Caja POS) es facultad exclusiva de `admin_profiles` (`role IN ('owner', 'manager')`) validada con `assert_store_admin(store_id)`. Se retiran permisos delegables (`gestion_cuentas_por_pagar`, `pago_fondos_sistema`); la eventual delegación de pago contra entrega en mostrador queda como **alcance diferido (`FRD-003-01` D-3 / Regla 7)**. |
 | **SPEC-010 / SPEC-011** | Estándar Financiero | Moneda legal entera COP sin decimales. Cero operaciones matemáticas o totalizaciones financieras en el cliente frontend. Backend Authority absoluto en cómputo de saldos pendientes, estados dinámicos y validación de liquidez. |
 
 ---

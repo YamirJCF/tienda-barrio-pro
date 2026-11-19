@@ -1,11 +1,11 @@
 # SDD-015: Diseño de Sistema y Datos — Gestión Centralizada de Dispositivos y Accesos
 
-**Versión:** 2.0 (Sincronizado bajo Protocolo PAC-SDD y Estándar `/doc-standard`)  
-**Fecha:** 2026-10-17  
+**Versión:** 2.1 (Alineado con `SDD-003-01` — Continuidad `<24h`, 1 Dispositivo/Cuenta y Esquema Real de `employees`)  
+**Fecha:** 2026-11-19  
 **Autor:** Arquitecto de Datos y Seguridad (@[/data])  
-**FRD Asociado:** [FRD_015_GESTION_DISPOSITIVOS.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/FRD/FRD_015_GESTION_DISPOSITIVOS.md) (v1.0)  
-**SDDs Relacionados:** [SDD_001_SEGURIDAD_DIARIA.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_001_SEGURIDAD_DIARIA.md), [SDD_013_GESTION_SESIONES.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_013_GESTION_SESIONES.md)  
-**Estado:** 🟢 Aprobado y Certificado en BD (Migración Ola 5 Aplicada con Evidencia)
+**FRD Asociado:** [FRD_015_GESTION_DISPOSITIVOS.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/FRD/FRD_015_GESTION_DISPOSITIVOS.md) (v1.0) y [FRD_001_SEGURIDAD_DIARIA.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/FRD/FRD_001_SEGURIDAD_DIARIA.md)  
+**SDDs Relacionados:** [SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md), [SDD_001_SEGURIDAD_DIARIA.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_001_SEGURIDAD_DIARIA.md), [SDD_013_GESTION_SESIONES.md](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_013_GESTION_SESIONES.md)  
+**Estado:** 🟠 Actualizado Documentalmente (Brecha `B-06` y corrección de contrato `§5.2` para Fase 3)
 
 ---
 
@@ -53,9 +53,10 @@
 
 | ID Deuda | Componente / Objeto | Estado en BD Real | Evidencia de Cierre en Ola 5 |
 |----------|---------------------|-------------------|------------------------------|
-| **D-1** | Erradicación de columna alucinada `expires_at` en `daily_passes` | 🟢 Resuelto | Vigencia gobernada por `pass_date = CURRENT_DATE` (`America/Bogota`) y `status`. |
+| **D-1** | Erradicación de columna alucinada `expires_at` en `daily_passes` | 🟢 Resuelto (ver `D-4`) | Vigencia gobernada por `pass_date = v_today` (`America/Bogota`) o `v_today - 1` en turno abierto `<24h`, y `status`. |
 | **D-2** | Creación del RPC unificado `public.rpc_gestionar_dispositivo` | 🟢 Resuelto | Creado y verificado en `20261017134000_wave5_daily_security_devices_and_employees.sql` con `assert_store_access`, tope de 5 y auditoría dual. |
 | **D-3** | Sincronización de Revocación Remota Inmediata (`H15`) con `SDD-013` | 🟢 Resuelto | Conexión a `daily_passes.status = 'rejected'` y expulsión inmediata en terminal. |
+| **D-4** | **Continuidad `<24h` en consultas/revocación (`B-06`), 1 dispositivo/cuenta y eliminación de columna inexistente `employees.role`.** | 🟠 Pendiente Fase 3 | `employees` posee 9 columnas sin `role` (fijo `'employee'`). La bandeja unificada y `request_employee_access` / `toggle_empleado_activo` deben incluir pases `'approved'` de `v_today - 1` cuando exista turno abierto `<24h`. |
 
 ---
 
@@ -197,9 +198,10 @@ USING (
 ## 4. Reglas de Negocio y Validaciones en Base de Datos
 
 1. **Identificación Semántica de Dispositivo (`RN-015-02`):** El campo `device_fingerprint` almacena el descriptor legible del navegador y sistema operativo junto con la huella del dispositivo para que el Administrador identifique visualmente qué equipo físico solicita acceso.
-2. **Vigencia Estrictamente Diaria por Fecha Calendario (`RN-015-01`):** Ningún dispositivo tiene autorización perpetua ("Recordar por 30 días" está prohibido). La validez depende de `pass_date = (now() AT TIME ZONE 'America/Bogota')::date` y `status = 'approved'`.
+2. **Vigencia Diaria con Continuidad de Medianoche `<24h` (`RN-015-01` / `FRD-017` `RN-017-01`):** Ningún dispositivo tiene autorización perpetua ("Recordar por 30 días" está prohibido). Un pase en `status = 'approved'` es válido si `pass_date = v_today` (`America/Bogota`) **o** si `pass_date = v_today - 1` mientras exista un turno de caja en `cash_sessions` con `status = 'open'` y `opened_at >= now() - interval '24 hours'`. En cambio, toda **nueva aprobación** (`p_action = 'approve'`) exige `pass_date = v_today`.
 3. **Independencia frente al Arqueo de Caja (`FRD-001 D-03`):** El cierre de una sesión de caja (`cash_sessions.status = 'closed'`) **no** altera el estado de `daily_passes`. La revocación antes de medianoche solo ocurre por acción explícita del Administrador (`'revoke'`) o desactivación del empleado (`employees.is_active = false`).
 4. **Prohibición de Fallos Silenciosos (Regla 3 `AGENTS.md`):** Si `rpc_gestionar_dispositivo` falla por falta de permisos (`42501`), pase inexistente (`P0002`) o cupo lleno (`SESSION_LIMIT_REACHED`), lanza `RAISE EXCEPTION` nativo y la interfaz del Administrador debe mostrar el error explícito sin alterar el estado visual de la tarjeta.
+5. **Regla de 1 Dispositivo por Cuenta (Sin Cambio Rápido por PIN — `FRD-001` R11b / `SDD-003-01`):** Cada dispositivo aprobado opera exclusivamente bajo la sesión de la cuenta autenticada en `daily_passes`. Queda prohibido alternar empleados mediante PIN rápido dentro de una misma sesión; para cambiar de operador en un terminal compartido se debe cerrar sesión e iniciar con la cuenta individual correspondiente, preservando la firma histórica inmutable (`actor_name`, `actor_role`).
 
 ---
 
@@ -347,9 +349,9 @@ END;
 $$;
 ```
 
-### 5.2 Consulta de Bandeja Unificada (Lectura de Dispositivos del Día)
+### 5.2 Consulta de Bandeja Unificada (Lectura de Dispositivos Vigentes)
 
-Para poblar las Secciones A ("Solicitudes Pendientes") y B ("Dispositivos con Acceso Hoy") del Centro de Control de Accesos (`CA-015-01`), el cliente consulta `daily_passes` filtrado por `store_id = get_current_store_id()` y `pass_date = (now() AT TIME ZONE 'America/Bogota')::date` haciendo `JOIN` con `employees(id, name, username, role, is_active)`:
+Para poblar las Secciones A ("Solicitudes Pendientes") y B ("Dispositivos con Acceso Activo") del Centro de Control de Accesos (`CA-015-01`), el cliente consulta `daily_passes` filtrado por `store_id = get_current_store_id()` trayendo los registros de `pass_date = (now() AT TIME ZONE 'America/Bogota')::date`, más cualquier pase con `status = 'approved'` de `pass_date = v_today - 1` mientras exista un turno abierto `<24h`, haciendo `JOIN` con `employees(id, name, username, is_active)` *(la tabla `employees` no posee columna `role`; todo miembro en `employees` asume `actor_role = 'employee'`)*.
 
 ```json
 {
@@ -358,7 +360,7 @@ Para poblar las Secciones A ("Solicitudes Pendientes") y B ("Dispositivos con Ac
       "id": "d290f1ee-6c54-4b01-90e6-d701748f0851",
       "employee_id": "a1111111-2222-3333-4444-555555555555",
       "employee_name": "Carlos Pérez",
-      "employee_role": "cajero",
+      "actor_role": "employee",
       "pass_date": "2026-10-17",
       "status": "approved",
       "device_fingerprint": "Chrome 119 / Android 13 (SM-A546E)",

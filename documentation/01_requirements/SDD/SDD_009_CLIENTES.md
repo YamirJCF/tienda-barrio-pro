@@ -3,40 +3,44 @@
 > **Asociado a:** [FRD-009](../FRD/FRD_009_CLIENTES.md)  
 > **Módulo:** Clientes, Cartera y Fiados  
 > **Fase del Plan:** Ola 3 (Ítem 5)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-17
-> **Políticas Aplicables:** ARQ-002 (POL-AUTH-01, POL-AUD-01/02, POL-FIN-01/02/03, POL-LOG-01/02, POL-SEC-01, SPEC-010, SPEC-011)
+> **Estado:** 🟠 Alineado a `SDD-003-01` / `FRD-030` / `ARQ-002` v1.4 (Pendiente implementación en Fase 3)  
+> **Contrato Marco:** [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Última Actualización:** 2026-11-19  
+> **Políticas Aplicables:** ARQ-002 v1.4 (POL-SEG-03, POL-PRIV-01/02, POL-AUD-01/02, POL-FIN-01/02/03, SPEC-010, SPEC-011)
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política ID | Dominio | Impacto Concreto en este SDD |
 | :--- | :--- | :--- |
-| **POL-AUTH-01** | Seguridad | Aislamiento multi-tenant estricto mediante `assert_store_access(p_store_id)` en RPCs y `get_current_store_id()` en políticas RLS de `clients` y `client_ledger`. |
-| **POL-FIN-01** | Financiero | Fidelidad de caja: las ventas fiadas impactan `$0` en caja; los abonos exigen turno de caja abierto (`< 24h`) e inyectan un ingreso real en `cash_movements`. |
-| **POL-FIN-03** | Financiero | Invariante de saldo no negativo (`clients.balance >= 0`) y respeto estricto del cupo (`balance + total <= credit_limit`). |
-| **POL-AUD-01 / 02** | Auditoría | Inviolabilidad append-only en `client_ledger` y borrado exclusivamente lógico (`is_deleted = true`) bloqueado si `balance > 0`. |
+| **POL-SEG-03 / Regla 4** | Seguridad | Aislamiento multi-tenant mediante `assert_store_access(p_store_id)` y `get_current_store_id()`. Ver lista/detalle/estado de cuenta y cobrar abonos exige `assert_employee_permission(p_store_id, 'canFiar')` (o Administrador). |
+| **POL-PRIV-01 / POL-PRIV-02** | Privacidad | Crear, reactivar, editar, cambiar cupos (individuales o `stores.default_credit_limit`) y eliminar clientes es **100% exclusivo del Administrador**. Sin filtro "Mostrar eliminados" (`FRD-030`). |
+| **POL-FIN-01** | Financiero | Fidelidad de caja: las ventas fiadas impactan `$0` en Caja Dedicada POS; los abonos exigen turno abierto (`<24h`) e ingresan a `cash_movements` por `'efectivo'`, `'nequi'` o `'llave_bre'`. |
+| **POL-FIN-03** | Financiero | Invariante `clients.balance >= 0`, cupo `balance + total <= credit_limit`, y `stores.default_credit_limit` aplicado **únicamente a clientes nuevos** sin sobrescribir existentes. |
+| **POL-AUD-01 / 02** | Auditoría | `client_ledger` append-only con snapshot `actor_name`, `actor_role`; eliminación delegada en `rpc_eliminar_cliente` (`FRD-030`) bloqueada si `balance > 0`. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 
 | SDD Vecino | Restricción que Impone |
 | :--- | :--- |
-| **SDD_004 / SDD_020 / SDD_023 (Caja)** | `rpc_registrar_abono` exige sesión de caja en estado `'open'` e inserta en `cash_movements` especificando el `payment_method`. |
-| **SDD_007 / SDD_007_01 (Ventas y POS)** | `rpc_procesar_venta_v3` incrementa `clients.balance` bajo `SELECT ... FOR UPDATE` y asienta en `client_ledger` sin tocar `cash_movements`. |
-| **SDD_024 (Política de Fiados)** | Armoniza la firma de `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` y la reversión de deuda en `rpc_anular_venta`. |
+| **SDD_003_01 (Contrato Marco RBAC)** | Exige `assert_employee_permission(store, 'canFiar')` en consulta/estado de cuenta/abonos y `assert_store_admin(store)` en CRUD y cupos; exige snapshot `actor_name`/`actor_role`. |
+| **SDD_004 / SDD_020 (Caja Dedicada POS)** | `rpc_registrar_abono` exige sesión `open` (`<24h`) e inserta `'ingreso'` en `cash_movements` con `payment_method IN ('efectivo', 'nequi', 'llave_bre')`. |
+| **SDD_007 / SDD_007_01 (Ventas y POS)** | `rpc_procesar_venta_v3` exige `canFiar`, filtra `COALESCE(is_deleted, false) = false` y bloquea por cupo bajo `FOR UPDATE`. |
+| **SDD_024 y SDD_030 (Fiados y Archivo Contable)** | Armonizan `rpc_registrar_abono`, `rpc_crear_cliente_fiado`, `rpc_actualizar_cliente`, `rpc_eliminar_cliente` (sin `p_include_deleted`) y `rpc_obtener_estado_cuenta_cliente` (con `canFiar`). |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
 
-En cumplimiento de las Reglas 2 y 7 de `AGENTS.md`, se declaran las **N=6 deudas técnicas** verificadas contra producción (`ihtjocmhzuliwwvdzfnz`), cuyo desglose completo también se referencia en la Sección 7:
+En cumplimiento de las Reglas 2 y 7 de `AGENTS.md`, se declaran las **N=7 deudas técnicas** verificadas contra producción (`ihtjocmhzuliwwvdzfnz`), cuyo desglose completo también se referencia en la Sección 7:
 - **D-1:** Transición de `registrar_abono(p_client_id, p_amount)` a `rpc_registrar_abono(p_client_id, p_amount, p_payment_method)` con validación de sesión de caja abierta e inserción en `cash_movements` (Hallazgo H10).
 - **D-2:** Adopción estricta de nombres físicos reales en `clients` (`id_number`, `is_deleted`, `deleted_at`).
 - **D-3:** Prohibición de insertar en la columna generada `client_ledger.new_balance` (`GENERATED ALWAYS AS (previous_balance + amount)`).
-- **D-4:** Creación de `rpc_admin_get_clients` con filtros de deuda (Todos/Con Deuda/Al Día), búsqueda parcial, paginación 20 en 20 (`count`) y toggle de inactivos para el Administrador (Hallazgos H4, H13, H19).
+- **D-4:** Adecuación de `rpc_admin_get_clients` con filtros de deuda (`Todos`/`Con Deuda`/`Al Día`), búsqueda parcial, ordenamiento y paginación `{ data, count }`, **retirando `p_include_deleted`, `is_deleted` y `deleted_at`** en estricto cumplimiento de `FRD-009` / `FRD-030` (`POL-PRIV-02`).
 - **D-5:** Remediación de `get_history_creditos` para eliminar la referencia a la columna inexistente `cl.description`.
 - **D-6:** Inclusión obligatoria de `PERFORM public.assert_store_access(p_store_id);` como instrucción #1 en `get_client_ledger_summary`.
+- **D-7:** Incorporación de validación servidor `canFiar` (consulta/abonos), exclusividad Admin en CRUD/cupos, `stores.default_credit_limit` exclusivo para altas nuevas y columnas de snapshot `actor_name`/`actor_role` en `client_ledger` (`SDD-003-01`).
 
 ---
 

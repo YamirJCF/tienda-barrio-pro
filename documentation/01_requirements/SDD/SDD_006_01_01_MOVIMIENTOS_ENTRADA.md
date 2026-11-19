@@ -1,25 +1,25 @@
 # SDD-006-01-01: Movimientos de Entrada de Inventario (Compras y Recepción)
 
-> **Asociado a:** [FRD-006-01-01](../FRD/FRD_006_01_01_MOVIMIENTOS_ENTRADA_INVENTARIO.md)  
+> **Asociado a:** [FRD-006-01-01](../FRD/FRD_006_01_01_MOVIMIENTOS_ENTRADA_INVENTARIO.md) | [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
 > **Módulo Primario:** [SDD-006: Núcleo de Inventario y Catálogo Padre](SDD_006_NUCLEO_INVENTARIO_PADRE.md)  
-> **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-14  
+> **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores (Alineación ARQ-002 v1.4)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Alineado a `SDD-003-01` v1.0, pendiente migración SQL/Frontend Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política ID | Dominio | Mandato Arquitectónico e Impacto en este SDD |
 |-------------|---------|-----------------------------------------------|
-| **POL-LOG-01** | Logística | **Independencia Logística y Financiera:** La función de entrada física de mercancía tiene un único mandato operativo: recibir una cantidad mayor a cero e incrementar el stock actual del producto asociado, creando la capa de lote FIFO correspondiente. Queda terminantemente prohibido descontar dinero de la sesión de caja actual, registrar egresos automáticos o alterar el flujo de caja diario en este módulo. |
-| **POL-FIN-01 / POL-LOG-02** | Financiero / Logística | **Aislamiento de Cuentas por Pagar:** La entrada de inventario desacopla la recepción física de la generación de pasivos. Aunque la interfaz capture datos del proveedor y factura de compra con fines de trazabilidad, el ingreso de unidades no crea deudas financieras automáticas en el módulo de Proveedores; los créditos se gestionan de forma independiente en Cuentas por Pagar (FRD-019 / SDD-019). |
-| **POL-AUD-02** | Auditoría | **Inviolabilidad del Kardex:** Todo movimiento de entrada asienta un registro inmutable y permanente en `inventory_movements` con `movement_type = 'entrada'`, cantidad positiva, costo unitario de adquisición, empleado responsable e instantánea temporal. Queda prohibida cualquier mutación (`UPDATE`) o eliminación física (`DELETE`) sobre registros históricos de movimientos. |
-| **POL-SEC-01** | Seguridad | **Protección de Costos Comerciales:** Los costos unitarios de adquisición (`unit_cost`, `purchase_price`, `cost_unit`) constituyen información confidencial restringida exclusivamente a roles con privilegios de gestión de inventario y administración. La interfaz del terminal POS y consultas de cajero omiten de forma absoluta estos atributos. |
-| **POL-AUTH-01** | Autenticación | **Aislamiento Multi-tenant Centralizado:** Toda operación de entrada exige la invocación de `assert_store_access(v_store_id)` como primera instrucción. La identidad del responsable se resuelve autoritativamente mediante `get_employee_id_from_session()`, erradicando credenciales ad-hoc o validaciones de PIN manuales. |
-| **SPEC-010 / SPEC-011** | Moneda y Formato | **Precisión Numérica y Reglas de Redondeo:** Cantidades físicas estrictamente mayores a cero (`quantity > 0`), representadas como enteros para unidades y con un máximo de 2 decimales para artículos pesables. Costos unitarios de adquisición almacenados como `NUMERIC >= 0` en pesos colombianos (COP). Precios de venta actualizados redondeados estrictamente al múltiplo de $50 inferior (beneficio del cliente). |
+| **POL-LOG-01** | Logística | **Independencia Logística y Alcance Estricto de Entrada:** La función de entrada física se restringe exclusivamente a **Compra / Reposición de Proveedor** (`quantity > 0`). Quedan retirados `'Ajuste Positivo'` (trasladado a `SDD_006_01_02`) y `'Devolución Cliente'` (gestionado por `SDD_006_02`). Tiene impacto **$0** en la Caja Dedicada POS. |
+| **POL-FIN-01 / POL-LOG-04** | Financiero / Logística | **Desvinculación Total de Cuentas por Pagar:** Aunque capture proveedor y referencia de factura con fines informativos, el ingreso físico TIENE PROHIBIDO crear o modificar facturas/deudas en `supplier_invoices` (CxP es 100% exclusivo del Admin en `FRD-019` / `SDD-019`). |
+| **POL-SEG-03** | Seguridad | **Permiso Único `canManageInventory`:** Solo el Administrador o un empleado con permiso **`canManageInventory = true`** puede registrar entradas de inventario y visualizar costos de adquisición. |
+| **POL-AUD-01 / POL-AUD-02** | Auditoría | **Inmutabilidad, Contra-Movimiento y Snapshot de Firma:** Toda entrada inserta en `inventory_movements` con `movement_type = 'entrada'`, motivo obligatorio, `created_by` y fotografía histórica inmutable (`actor_name`, `actor_role`). Nunca se edita ni se elimina; cualquier error se corrige por contra-movimiento en `SDD_006_01_02`. |
+| **POL-AUTH-01** | Autenticación | **Validación Centralizada:** Invocación mandatoria de `assert_store_access(v_store_id)`, `assert_employee_permission(v_store_id, 'canManageInventory')` y `resolve_actor_snapshot(v_store_id)`. |
+| **SPEC-010 / SPEC-011** | Moneda y Formato | `quantity > 0` (enteros para unidad/g; máx 2 decimales para kg/lb), `unit_cost >= 0` en COP enteros, `sale_price` redondeado al múltiplo de `$50` inferior. |
 
 ---
 

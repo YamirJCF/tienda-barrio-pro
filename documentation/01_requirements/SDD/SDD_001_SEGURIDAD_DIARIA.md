@@ -1,30 +1,32 @@
 # SDD-001: Protocolo de Seguridad Diaria y Pase de Acceso ("Zero Trust Daily")
 
-> **Asociado a:** [FRD-001](../FRD/FRD_001_SEGURIDAD_DIARIA.md) (Protocolo de Seguridad Diaria y Pase de Acceso v3.0)  
-> **Fase del Plan:** Ola 5 — Sesiones, Autenticación y Offline (Saneamiento Pre-Código)  
-> **Estado:** 🟢 Aprobado y Certificado en BD (Migración Ola 5 Aplicada con Evidencia)  
-> **Última Actualización:** 2026-10-17  
+> **Asociado a:** [FRD-001](../FRD/FRD_001_SEGURIDAD_DIARIA.md) (Protocolo de Seguridad Diaria y Pase de Acceso)  
+> **Contrato Marco Vinculante:** [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) (`ARQ-002` v1.4)  
+> **Fase del Plan:** Ola 5 — Sesiones, Autenticación y Offline (Alineación Post-`SDD-003-01`)  
+> **Estado:** 🟠 Actualizado Documentalmente (Brecha `B-06` registrada para migración Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política ID | Dominio | Impacto Concreto en este SDD |
 | :--- | :--- | :--- |
-| **POL-SEC-02** | Seguridad | **Cero Confianza Diaria (Zero Trust Daily):** Todo intento de acceso de un empleado operativo inicia en estado `'pending'` (`RN-1`). Ningún colaborador (excepto el Administrador verificado en `admin_profiles`) puede operar sin aprobación explícita del día en `daily_passes` (`RN-2`). No existe aprobación automática. |
-| **POL-AUTH-01 / RN-14** | Seguridad | **Autorización Estricta en Servidor:** Toda operación de aprobación, rechazo, revocación o consulta de pases valida identidad y tienda en el servidor mediante `assert_store_access(p_store_id)` y verificación sobre `admin_profiles` (`auth.uid()`). |
-| **Decisión D-03 (RN-3 / RN-4)** | Operaciones | **Desacople Definitivo entre Pase Diario y Cierre de Caja:** El pase diario es válido hasta las 23:59 del día operativo en curso (`pass_date = (now() AT TIME ZONE 'America/Bogota')::date`) y **NO expira por cierre de caja**. El cierre de caja bloquea las operaciones monetarias y el POS (`RN-5`, `RN-12`), pero permite al empleado permanecer en el sistema para tareas logísticas autorizadas (`RN-13`). |
-| **SPEC-006 (Decisión D-01)** | Seguridad | **Erradicación del PIN de Caja:** Se elimina cualquier requerimiento de PIN de caja secundario. El acceso al sistema se gobierna por `daily_passes` y la operación de caja por el permiso `canOpenCloseCash` en `employees.permissions` (`RN-9`). |
-| **POL-AUD-01** | Auditoría | **Trazabilidad de Accesos:** Toda aprobación, rechazo o revocación de pase diario registra el autor (`resolved_by` / `approved_by`), marca de tiempo (`resolved_at` / `approved_at`) y huella informativa del dispositivo (`device_fingerprint`, `RN-8`). |
+| **POL-SEC-02** | Seguridad | **Cero Confianza Diaria, Continuidad `<24h` y 1 Dispositivo por Cuenta:** Todo intento de acceso de un empleado operativo inicia en estado `'pending'` (`RN-1`). Ningún colaborador (excepto el Administrador verificado en `admin_profiles` con rol `'owner'` o `'manager'`) puede operar sin aprobación explícita del día en `daily_passes` (`RN-2`). El pase diario conserva vigencia tras la medianoche solo mientras exista un turno abierto `<24h` (`FRD-017` `RN-017-01`). Rige la regla de **1 dispositivo por cuenta**: prohibido el cambio rápido por PIN dentro de una misma sesión (`FRD-001` R11b). |
+| **POL-AUTH-01 / RN-14** | Seguridad | **Autorización Estricta en Servidor:** Toda operación de aprobación, rechazo, revocación o consulta de pases valida identidad y tienda en el servidor mediante `assert_store_access(p_store_id)` y `assert_store_admin(p_store_id)` sobre `admin_profiles` (`role IN ('owner', 'manager')`). |
+| **Decisión D-03 (RN-3 / RN-4)** | Operaciones | **Desacople Pase-Caja y Continuidad de Medianoche (`<24h`):** El pase diario es válido hasta las `23:59` del día operativo en curso (`pass_date = v_today`) o hasta el cierre/cumplimiento de 24h del turno abierto de caja de la noche anterior (`pass_date = v_today - 1` con `cash_sessions.status = 'open'` y `opened_at >= now() - interval '24 hours'`), y **NO expira por cierre de caja**. El cierre de caja bloquea operaciones monetarias y POS (`RN-5`, `RN-12`), pero permite permanecer en tareas operativas base no monetarias (`RN-13`). |
+| **SPEC-006 (Decisión D-01)** | Seguridad | **Erradicación del PIN de Caja y Cierre de 4 Permisos:** Se elimina cualquier PIN de caja secundario y cualquier cambio rápido por PIN entre empleados en un mismo dispositivo. El acceso al sistema se gobierna por `daily_passes` y la operación delegada se rige exclusivamente por las 4 llaves de `SDD-003-01` (`canManageInventory`, `canFiar`, `canOpenCloseCash`, `canManageRefunds`). |
+| **POL-AUD-01** | Auditoría | **Trazabilidad y Snapshot Inmutable de Acceso:** Toda aprobación, rechazo o revocación de pase diario registra el autor (`resolved_by` / `approved_by`), su fotografía histórica (`actor_name`, `actor_role`), marca de tiempo (`resolved_at` / `approved_at`) y huella informativa del dispositivo (`device_fingerprint`, `RN-8`). |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 
 | SDD Vecino | Restricción que Impone | Impacto en Seguridad Diaria |
 | :--- | :--- | :--- |
 | **SDD_002 (Registro Admin y Autorización)** | Define la tabla `admin_profiles` y la guardia RBAC de servidor. | Solo un usuario presente en `admin_profiles` con rol `'owner'` o `'manager'` en la tienda activa puede aprobar, rechazar o revocar registros de `daily_passes`. |
-| **SDD_003 (Gestión de Empleados)** | Gobierna el ciclo de vida de `employees` y sus permisos granulares (`permissions` JSONB). | La desactivación de un empleado (`toggle_empleado_activo`) revoca atómicamente su pase diario activo. Un pase aprobado no sustituye los permisos granulares (`RN-9`). |
+| **SDD_003 (Gestión de Empleados)** | Gobierna el ciclo de vida de `employees` y sus 4 permisos granulares (`permissions` JSONB). | La desactivación de un empleado (`toggle_empleado_activo`) revoca atómicamente sus pases diarios vigentes (incluyendo el de `v_today - 1` si cruzó medianoche en turno abierto `<24h`). Un pase aprobado no sustituye los permisos granulares (`RN-9`). |
+| **SDD_003_01 (Matriz de Permisos)** | Contrato marco de 4 permisos, capacidades base, 1 dispositivo/cuenta y continuidad `<24h`. | Define las únicas 4 llaves booleanas válidas en la respuesta de login del empleado, prohíbe cambio rápido por PIN y ordena alinear `request_employee_access` y `toggle_empleado_activo` con `pass_date IN (v_today, v_today - 1)` bajo turno abierto `<24h` (Brecha `B-06`). |
 | **SDD_004 / SDD_020 (Control de Caja)** | La apertura y cierre de turno operan sobre `cash_sessions`. | El cierre de caja (`status = 'closed'`) bloquea el checkout POS (`NO_OPEN_CASH_SESSION`), pero tiene prohibido revocar o expirar `daily_passes` (`RN-4`). |
 | **SDD_013 (Gestión de Sesiones)** | Límite estricto de 6 sesiones activas por tienda (1 Admin + 5 Empleados) e inactividad. | La aprobación de un pase diario verifica el cupo disponible de terminales operativas. La revocación manual expulsa inmediatamente al empleado en su siguiente pulso o evento Realtime (`RN-10`). |
 | **SDD_015 (Gestión de Dispositivos)** | Widget centralizado de control de accesos en el centro de notificaciones del Administrador. | Consume los estados `'pending'` y `'approved'` de `daily_passes` para presentar solicitudes y dispositivos conectados en una sola vista unificada. |
@@ -41,12 +43,14 @@ En cumplimiento de las Reglas 2, 4, 6, 7 y 9 de `AGENTS.md`, la inspección emp�
 | **D-4** | **Sinceramiento de Esquema Físico en `daily_passes` (14 columnas reales).** | 🟢 Resuelto | Modelo sincronizado sin alucinaciones (`expires_at` eliminado) e índice operativo `idx_daily_passes_store_date_status` creado. |
 | **D-5** | **Asimetría Horaria en Funciones Auxiliares RLS (`get_current_store_id()`, `get_employee_id_from_session()`).** | 🟢 Resuelto | Helpers RLS y pases unificados con zona horaria de Bogotá y soporte para turnos de caja nocturnos de hasta 24h (`20261031000000`). |
 | **D-6** | **Resolución pgcrypto y Blindaje ante Hashes Inválidos (`request_employee_access`).** | 🟢 Resuelto | Implementado y verificado en `20261031140000_fix_employee_pgcrypto_search_path.sql` con `SET search_path = public, extensions`, `extensions.crypt` y captura de `SQLSTATE 22023`. |
+| **D-7** | **Brecha `B-06` (`SDD-003-01`): Continuidad `<24h` parcial en `request_employee_access`, `check_my_pass_status` y `toggle_empleado_activo`.** | 🟠 Pendiente Fase 3 | `get_employee_id_from_session()` (`20261111173000` L706–749) ya admite `pass_date = v_today - 1` si existe turno abierto `<24h`, pero `request_employee_access` (`20261031140000` L243) y `toggle_empleado_activo` (`20261017134000` L685) aún filtran solo `pass_date = v_today`. |
 
 ---
 
 ## 1. Glosario Local
 
-- **Pase Diario (`daily_passes`):** Registro diario por empleado y tienda (`pass_date = (now() AT TIME ZONE 'America/Bogota')::date`) que certifica la autorización explícita del Administrador para ingresar al sistema hasta las 23:59 del día operativo en curso.
+- **Pase Diario (`daily_passes`):** Registro diario por empleado y tienda (`pass_date = (now() AT TIME ZONE 'America/Bogota')::date`) que certifica la autorización explícita del Administrador para ingresar al sistema hasta las `23:59` del día operativo en curso, extendiéndose únicamente si existe un turno de caja abierto de la jornada previa con antigüedad menor a 24 horas (`FRD-017` `RN-017-01`).
+- **1 Dispositivo por Cuenta (Sin Cambio Rápido por PIN):** Principio de identidad individual (`FRD-001` R11b, `SDD-003-01` `POL-SEG-03`) por el cual cada sesión de dispositivo pertenece a una única cuenta; si otra persona usa el terminal debe iniciar sesión en su propia cuenta para garantizar la firma individual inmutable.
 - **Sala de Espera:** Estado de bloqueo operativo en el que permanece el empleado autenticado mientras su pase diario se encuentra en estado `'pending'`.
 - **Límite de Insistencia (`P_MAX_ACCESS_ATTEMPTS`):** Tope máximo de tres (3) reintentos de notificación al Administrador (`retry_count = 3`). Al alcanzarse sin respuesta, la solicitud queda bloqueada para nuevos reenvíos automáticos.
 - **Huella de Dispositivo (`device_fingerprint`):** Identificador descriptivo del navegador/terminal enviado en la solicitud con carácter exclusivamente informativo para el Administrador (`RN-8`); nunca bloquea dispositivos por sí mismo.
@@ -73,10 +77,10 @@ sequenceDiagram
     alt Credenciales Inválidas
         RPC-->>UI: Error INVALID_CREDENTIALS / USER_NOT_FOUND
     else Credenciales Válidas
-        RPC->>DB: Consulta/Inserta daily_passes (pass_date = CURRENT_DATE)
-        alt Pase ya aprobado hoy para el dispositivo
-            RPC-->>UI: Retorna status = 'approved' + perfil y permisos
-        else Sin pase aprobado (Inicia en 'pending')
+        RPC->>DB: Consulta daily_passes (pass_date = v_today, o v_today - 1 con turno abierto <24h)
+        alt Pase vigente ya aprobado (hoy o turno nocturno <24h)
+            RPC-->>UI: Retorna status = 'approved' + perfil y 4 permisos canónicos
+        else Sin pase vigente (Inicia en 'pending')
             RPC->>DB: Registra daily_passes (status = 'pending', retry_count = 0)
             RPC->>DB: Inserta alerta prioritaria en notifications (audience = 'admin')
             RPC-->>UI: Retorna status = 'pending', pass_id
@@ -138,7 +142,7 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> SinPase : Inicio de Nuevo Día (pass_date < CURRENT_DATE)
+    [*] --> SinPase : Inicio de Nuevo Día sin turno nocturno abierto <24h
     SinPase --> Pendiente : Empleado ingresa credenciales válidas (retry_count = 0)
     Pendiente --> Pendiente : Reenviar notificación (retry_count 1..3)
     Pendiente --> BloqueadoInsistencia : Intento > 3 (MAX_RETRIES)
@@ -147,7 +151,7 @@ stateDiagram-v2
     BloqueadoInsistencia --> Aprobado : Admin aprueba manualmente tras contacto externo
     BloqueadoInsistencia --> Rechazado : Admin rechaza manualmente
     Aprobado --> Revocado : Admin revoca en cualquier momento (status = 'rejected')
-    Aprobado --> CaducadoPorDia : Cambio de fecha en servidor (CURRENT_DATE > pass_date)
+    Aprobado --> CaducadoPorDia : Cambio de fecha sin turno abierto <24h, cierre de turno nocturno o límite 24h
     Note right of Aprobado
         Decisión D-03: El cierre de caja
         NO transiciona el pase fuera
@@ -215,14 +219,14 @@ stateDiagram-v2
   4. La interfaz informa que la caja está cerrada y deshabilita las acciones monetarias sin cerrar la sesión del empleado.
 - **Postcondición:** La venta no se procesa, pero el empleado conserva su sesión activa para tareas no monetarias permitidas (`CA-FRD-001-08` al `CA-FRD-001-12`, `CA-FRD-001-21`, `CA-FRD-001-22`).
 
-### 4.6 Caso G: Caducidad Natural por Cambio de Día (`RN-3`, `RN-11`)
+### 4.6 Caso G: Caducidad Natural por Cambio de Día y Excepción de Turno Nocturno `<24h` (`RN-3`, `RN-11`)
 - **Actor:** Reloj del Servidor PostgreSQL en Zona Horaria Operativa (`(now() AT TIME ZONE 'America/Bogota')::date`).
 - **Precondición:** Pase aprobado con `pass_date < (now() AT TIME ZONE 'America/Bogota')::date`.
 - **Flujo Principal:**
-  1. Al iniciar un nuevo día calendario operativo (00:00 hora Colombia), las funciones del backend y las consultas de sesión filtran estrictamente `pass_date = (now() AT TIME ZONE 'America/Bogota')::date`.
-  2. Todo pase de fechas anteriores queda automáticamente sin efecto operativo.
-  3. El empleado es redirigido a solicitar un nuevo pase para la nueva jornada operativa.
-- **Postcondición:** Renovación diaria obligatoria garantizada a nivel de motor de base de datos (`CA-FRD-001-05`, `CA-FRD-001-06`).
+  1. Al iniciar un nuevo día calendario operativo (`00:00` hora Colombia), el backend evalúa si existe un turno de caja en `cash_sessions` con `status = 'open'` y `opened_at >= now() - interval '24 hours'`.
+  2. Si **NO** existe turno abierto `<24h`, todo pase de fechas anteriores queda automáticamente sin efecto operativo y el empleado es redirigido a solicitar un nuevo pase para la nueva jornada.
+  3. Si **SÍ** existe un turno abierto `<24h`, el pase de `v_today - 1` conserva vigencia continua hasta que ese turno se cierre o alcance el límite de 24 horas (`FRD-017` `RN-017-01`).
+- **Postcondición:** Renovación diaria obligatoria sin cortes artificiales a medianoche durante turnos nocturnos vigentes (`CA-FRD-001-05`, `CA-FRD-001-06`).
 
 ---
 
@@ -245,8 +249,10 @@ stateDiagram-v2
       "role": "employee",
       "store_id": "uuid-tienda",
       "permissions": {
-        "canSell": true,
-        "canOpenCloseCash": false
+        "canManageInventory": false,
+        "canFiar": false,
+        "canOpenCloseCash": false,
+        "canManageRefunds": false
       }
     }
   }
@@ -269,8 +275,8 @@ stateDiagram-v2
 ### 5.3 Verificación de Estado de Pase: `check_my_pass_status` / `check_daily_pass_status`
 - **Parámetros de Entrada:** `p_pass_id` (`UUID`) o `(p_employee_id UUID, p_device_fingerprint TEXT)`.
 - **Invariante de Fecha y Prohibición de TTL Arbitrario en Cliente:**
-  - Toda consulta de estado de pase debe filtrar por `pass_date = (now() AT TIME ZONE 'America/Bogota')::date`.
-  - **Prohibición de Fallo Silencioso / TTL Arbitrario (Regla 3 `AGENTS.md`):** Se prohíbe terminantemente en el frontend (`authRepository.ts`) cualquier filtro de expiración temporal arbitrario sobre `requested_at` (por ejemplo, `requested_at > now() - 5 minutos`). El pase diario solo caduca a las 23:59 del día operativo o por revocación explícita del Administrador (`RN-3`, `RN-10`).
+  - Toda consulta de estado de pase debe evaluar `pass_date = (now() AT TIME ZONE 'America/Bogota')::date` **o** `pass_date = v_today - 1` exclusivamente cuando exista turno de caja abierto con antigüedad `< 24 horas` (`get_employee_id_from_session`).
+  - **Prohibición de Fallo Silencioso / TTL Arbitrario (Regla 3 `AGENTS.md`):** Se prohíbe terminantemente en el frontend (`authRepository.ts`) cualquier filtro de expiración temporal arbitrario sobre `requested_at`. El pase diario solo caduca al cruzar medianoche sin turno abierto `<24h`, al cerrar/expirar el turno nocturno, o por revocación explícita del Administrador (`RN-3`, `RN-10`, `RN-11`).
 - **Salida Exitosa (`JSONB`):** Retorna `"status": "pending" | "approved" | "rejected" | "expired"` y, si es `"approved"`, el objeto `employee` con sus permisos vigentes.
 
 ### 5.4 Resolución y Revocación Administrativa: `aprobar_pase_diario` / `rpc_gestionar_dispositivo`
@@ -299,9 +305,9 @@ stateDiagram-v2
 ## 6. Análisis de Seguridad
 
 1. **Funciones Centralizadas Obligatorias (Regla 4):**
-   - `public.assert_store_access(p_store_id)`: Primera instrucción obligatoria en toda función administrativa que apruebe, rechace, revoque o liste pases diarios de la tienda.
-   - `public.get_current_store_id()`: Filtra todas las políticas RLS sobre `daily_passes`, `employees` y `notifications`, verificando para empleados que `daily_passes.status = 'approved'` y `pass_date = CURRENT_DATE`.
-   - `public.get_employee_id_from_session()` e `public.is_authorized_employee()`: Guardias de servidor invocadas por los módulos transaccionales para confirmar que el operador tiene pase vigente en la fecha actual del servidor.
+   - `public.assert_store_access(p_store_id)` y `public.assert_store_admin(p_store_id)`: Guardias obligatorias en toda función administrativa que apruebe, rechace, revoque o liste pases diarios (solo `'owner'` / `'manager'` en `admin_profiles`).
+   - `public.get_current_store_id()`: Filtra políticas RLS verificando para empleados `daily_passes.status = 'approved'` con `pass_date = v_today` o `pass_date = v_today - 1` bajo turno abierto `<24h`.
+   - `public.get_employee_id_from_session()` e `public.is_authorized_employee()`: Guardias de servidor que confirman empleado activo (`is_active = true`) con pase vigente del día o continuidad nocturna `<24h`, bajo 1 dispositivo por cuenta.
 2. **Mitigación de Amenazas:**
    - **Manipulación de Reloj Local:** La caducidad del pase se evalúa exclusivamente contra `CURRENT_DATE` del servidor PostgreSQL, haciendo inútil cambiar la hora del dispositivo cliente (`CA-FRD-001-06`).
    - **Suplantación de Rol en Cliente:** El servidor ignora banderas locales y verifica `admin_profiles` mediante `auth.uid()` antes de autorizar cambios de estado en `daily_passes` (`CA-FRD-001-23`, `CA-FRD-001-24`).

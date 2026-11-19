@@ -2,29 +2,29 @@
 
 > **Asociado a:** [FRD-007-01](../FRD/FRD_007_01_NUCLEO_POS.md)  
 > **Fase del Plan:** Ola 3: Ventas, POS y Clientes (Ítem 2)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Post PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-17
-> **Última Actualización:** 2026-10-15  
+> **Estado:** 🟠 Alineado a `SDD-003-01` / `ARQ-002` v1.4 (Pendiente implementación en Fase 3)  
+> **Contrato Marco:** [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Auditoría Contextual PAC-SDD (Etapa 1.5 - Mapa de Dependencias)
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política ID | Dominio | Mandato Arquitectónico Concreto |
 |---|---|---|
-| **POL-AUTH-01** | Seguridad | Aislamiento multi-tenant estricto. La primera instrucción de `rpc_procesar_venta_v3` debe ser `PERFORM assert_store_access(p_store_id);`. Aislamiento en RLS mediante `get_current_store_id()`. |
-| **POL-AUD-01** | Auditoría | Inviolabilidad histórica append-only. Ninguna venta ni despiece de lotes se muta ni elimina tras su consolidación transaccional. |
-| **POL-AUD-02** | Auditoría | Inmutabilidad de turnos cerrados. Todo cobro comercial exige sesión activa (`status = 'open'`) imputando al `session_id` del turno corriente; turnos cerrados permanecen sellados. Totalización previa al `INSERT INTO sales` para que `trg_audit_sale_created` capture el monto real (> $0). |
-| **POL-FIN-01** | Financiero | Fidelidad absoluta de flujo de efectivo. Ventas fiadas (`p_payment_method = 'fiado'`) registran estrictamente $0 en la caja diaria. Prohibido sumar fiados como efectivo virtual. |
-| **POL-FIN-02** | Financiero | Prevención de desbalance y sobregiro. Cobros en efectivo y transferencias digitales ingresan de forma atómica a `cash_movements` vinculados a la sesión de caja abierta. |
-| **POL-FIN-03** | Financiero | Límite estricto de endeudamiento. La venta fiada valida bajo bloqueo pesimista que `balance + total <= credit_limit`. Si excede, aborta la venta completa. |
-| **POL-LOG-01** | Logística | Consumo FIFO y trazabilidad de lotes. Toda salida de mercancía consume capas cronológicas en `inventory_batches` mediante `consume_stock_fifo`, sellando `sale_items.unit_cost` y `sale_item_batches`. |
-| **POL-LOG-02** | Logística | Bloqueo logístico preventivo. Si el inventario disponible es insuficiente para cubrir la demanda, el motor rechaza la adición al carrito o el checkout abortando la transacción atómica. |
-| **POL-SEC-01** | Seguridad | Ceguera financiera en el punto de venta. Los cajeros y terminales POS tienen prohibido conocer o recibir el costo de adquisición de los productos (`unit_cost`). |
-| **SPEC-010** | Financiero | Redondeo comercial a $50 COP. Subtotales de pesables calculados en backend con `FLOOR(subtotal / 50.0) * 50`. Total de venta suma subtotales ya redondeados. Vueltas con algoritmo híbrido de empate hacia abajo. |
-| **SPEC-011** | Datos | Formato y precisión numérica. Importes en moneda legal entera COP sin decimales. Cantidades de productos unitarios enteras; pesables con máximo 2 decimales. Persistencia de `rounding_difference`. |
+| **POL-SEG-03 / Regla 4** | Seguridad | Aislamiento multi-tenant estricto con `PERFORM assert_store_access(p_store_id);` y RLS `get_current_store_id()`. Todo usuario activo con Pase Diario vigente (`<24h`) vende en POS sin interruptor `canSell`; las ventas `fiado` exigen `assert_employee_permission(p_store_id, 'canFiar')`. |
+| **POL-AUD-01 / POL-AUD-02** | Auditoría | Inviolabilidad append-only y fotografía histórica inmutable (`actor_name`, `actor_role`) vía `resolve_actor_snapshot(p_store_id)` en `sales`, `cash_movements`, `inventory_movements` y `client_ledger`. |
+| **POL-FIN-01 / POL-FIN-02** | Financiero | La Caja Dedicada POS solo admite `efectivo`, `nequi` y `llave_bre` (se elimina `daviplata`). Ventas `fiado` y `consumo_personal` registran estrictamente `$0` en `cash_movements`. |
+| **POL-FIN-03** | Financiero | Límite estricto de endeudamiento: la venta `fiado` valida `canFiar`, cliente activo (`COALESCE(is_deleted, false) = false`) y `balance + total <= credit_limit` bajo `FOR UPDATE`. |
+| **POL-FIN-05** | Financiero | Distribución por cierre de carrito: contado/digital ingresa a Caja Dedicada POS; `fiado` suma cartera (`$0` caja); `consumo_personal` opera como venta en carrito auto-asignada al perfil propio (solo Admin selecciona otro perfil) con impacto `$0` en caja. |
+| **POL-LOG-01 / POL-LOG-03** | Logística | Consumo FIFO (`consume_stock_fifo`) y sellado de `unit_cost`. En `consumo_personal`, el retiro se contabiliza al costo en P&L (`FRD-018`) conservando `reference_sale_price`. Mermas y consumo del negocio (`$0` POS) se canalizan en `SDD-006-01-02` abiertos a todo usuario activo. |
+| **POL-LOG-02** | Logística | Bloqueo logístico preventivo cuando el stock es insuficiente (`INSUFFICIENT_STOCK`). Acceso rápido a **Reembolsos** (`SDD-006-02`) en el POS junto al buscador para usuarios con `canManageRefunds`. |
+| **POL-SEC-01** | Seguridad | Ceguera financiera en POS: solo el Administrador o empleados con `canManageInventory` visualizan costos (`unit_cost`); ningún cajero ve costos ni reportes globales. |
+| **POL-PRIV-01** | Privacidad | Ventas de contado/digitales y `consumo_personal` no capturan datos de clientes (`sales.client_id` forzado a `NULL` cuando `p_payment_method <> 'fiado'`). |
+| **SPEC-010** | Financiero | Redondeo comercial a `$50 COP` en pesables (`FLOOR(subtotal / 50.0) * 50`) y vueltas con empate hacia abajo. |
+| **SPEC-011** | Datos | Importes enteros COP sin decimales; unitarios enteros, pesables hasta 2 decimales; persistencia de `rounding_difference`. |
 
 ---
 
@@ -50,8 +50,8 @@ En cumplimiento de las Reglas 2, 4, 6, 7 y 9 de `AGENTS.md`, se identificaron y 
 | ID | Hallazgo / Brecha en Esquema Real | Qué se Decidió | Por qué (Trade-off Concreto) | Condición de Revisión Futura |
 |:--:|---|---|---|---|
 | **D-1** | **Ausencia física de `idempotency_key` en tabla `sales`.** La tabla en producción cuenta con `local_id (text)`, pero carece de `idempotency_key (uuid unique)`. | Definir `idempotency_key` en el contrato canónico de V3 y convivir transitoriamente con `local_id` para trazabilidad de peticiones offline. | Previene doble cobro por reintentos de red sin ejecutar DDL en caliente sobre la tabla más crítica del sistema en producción. | Despliegue de la migración DDL de Ola 3 (`ALTER TABLE sales ADD COLUMN idempotency_key UUID UNIQUE;`). |
-| **D-2** | **Constraint físico `sales_payment_method_check` limitado a 4 valores.** En producción solo admite `['efectivo', 'nequi', 'daviplata', 'fiado']`, excluyendo `'llave_bre'`. | Restringir contractualmente los métodos de pago de `rpc_procesar_venta_v3` a los 4 métodos admitidos por el CHECK físico. | Garantiza estabilidad inmediata y previene fallos transaccionales con error PostgreSQL `23514 (check_violation)`. | Despliegue de la migración multicanal en la Ola 4 (`WO_MIGRATION_OLA4_PAYMENTS`). |
-| **D-3** | **Desacoplamiento de Cierres No Comerciales (Mermas y Devoluciones a Proveedor).** El texto original de FRD-007-01 proyectaba canalizar mermas por el POS. | Enrutar mermas y devoluciones a proveedor exclusivamente mediante `inventory_movements` (`'merma'`, `'devolucion'` con `supplier_id`) y módulos contables, prohibiendo filas en `sales`. | Protege la pureza de ingresos comerciales brutos, ticket promedio y cálculo de utilidad bruta en el P&L operacional de `SDD_018`. | Consolidación del módulo de inventario y bajas logísticas en Ola 2/3. |
+| **D-2** | **Alineación de canales en `sales_payment_method_check`.** El constraint heredado incluía `'daviplata'` y excluía `'llave_bre'` y `'consumo_personal'`. | Migrar el `CHECK` de `sales.payment_method` y RPCs a `('efectivo', 'nequi', 'llave_bre', 'fiado', 'consumo_personal')`, erradicando `'daviplata'` y `'bre'`. | Garantiza trazabilidad real de canales autorizados (`POL-FIN-01/02/05`) sin violaciones `23514`. | Migración SQL de Fase 3 alineada a `SDD-003-01 §7`. |
+| **D-3** | **Separación entre Consumo/Retiro Personal (POS) y Salidas Logísticas (`SDD-006-01-02`).** | Mantener mermas, consumo del negocio y devoluciones a proveedor en `inventory_movements` (`$0` POS, sin restringir mermas al empleado), e incorporar **Consumo/Retiro Personal** literalmente dentro del carrito POS (`payment_method = 'consumo_personal'`, `$0` caja, costo a P&L y precio de venta como referencia). | Respeta `FRD-007-01 R2/Caso C` (`POL-FIN-05`) evitando que el retiro personal distorsione el arqueo de caja o el ingreso comercial neto en P&L. | Migración SQL de Fase 3 en `rpc_procesar_venta_v3` y `SDD-018`. |
 | **D-4** | **Restricción de columna física generada `client_ledger.new_balance`.** En PostgreSQL real, `new_balance` está definida como `GENERATED ALWAYS AS (previous_balance + amount)`. | Prohibir explícitamente incluir `new_balance` en sentencias `INSERT INTO client_ledger` dentro del procedimiento de venta fiada. | Cumplimiento estricto del estándar de PostgreSQL evitando el error fatal `428C9 (cannot insert into a generated column)`. | Invariante arquitectónico permanente de esquema físico en la base de datos. |
 | **D-5** | **Dependencia de retrocompatibilidad de `rpc_force_sale`.** La función de auditoría administrativa `rpc_force_sale` invoca directamente en producción a `rpc_procesar_venta_v2`. | Mantener intacta la función `rpc_procesar_venta_v2` en PostgreSQL durante el despliegue de V3 como capa de compatibilidad. | Evita la rotura inmediata del subsistema de auditoría de ventas forzadas mientras se completa la migración integral. | Refactorización de `rpc_force_sale` en el marco de `SDD_014_VENTA_FORZADA_Y_AUDITORIA` (Ola 5). |
 

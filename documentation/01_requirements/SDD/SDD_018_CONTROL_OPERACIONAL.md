@@ -1,9 +1,9 @@
 # SDD-018: Control Operacional y Análisis Financiero Integral
 
-> **Asociado a:** [FRD-018](../FRD/FRD_018_CONTROL_OPERACIONAL_Y_ANALISIS_FINANCIERO.md)
-> **Fase del Plan:** Ola 4 — Reportes, Auditoría y Cuentas por Pagar (Ítem 5)
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-17
+> **Asociado a:** [FRD-018](../FRD/FRD_018_CONTROL_OPERACIONAL_Y_ANALISIS_FINANCIERO.md) | [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Fase del Plan:** Ola 4 — Reportes, Auditoría y Cuentas por Pagar (Alineación `ARQ-002` v1.4)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Alineado a `SDD-003-01` v1.0, pendiente migración SQL/Frontend Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
@@ -11,29 +11,27 @@
 
 ### 0.1 Metadatos del Documento
 - **Documento:** `SDD_018_CONTROL_OPERACIONAL.md`
-- **FRD Fuente:** `FRD_018_CONTROL_OPERACIONAL_Y_ANALISIS_FINANCIERO.md` (v2.0, Estado: Aprobado)
-- **Fase del Plan:** Ola 4 — Reportes, Auditoría y Cuentas por Pagar (Ítem 5 / Fase 6: Operaciones, Analítica y Soporte)
-- **Módulo Funcional:** Finanzas / Operaciones / Inteligencia de Negocio Micro-Retail (ERP Ligero)
-- **Versión de Especificación:** 2.0 (Saneamiento Arquitectónico PAC-SDD v2.0)
-- **Fecha de Saneamiento:** 2026-10-16
-- **Auditoría PAC:** Certificado en Bloques 0 a 6 por QA Independiente
+- **FRD Fuente:** `FRD_018_CONTROL_OPERACIONAL_Y_ANALISIS_FINANCIERO.md` (Alineado a `ARQ-002` v1.4 y `FRD-003-01`)
+- **Módulo Funcional:** Finanzas / Operaciones / Inteligencia de Negocio Micro-Retail (**100% Exclusivo Administrador**)
+- **Versión de Especificación:** 2.1 (Alineación `SDD-003-01`: OPEX al costo de adquisición, Consumo Personal por perfil/consolidado, canales `efectivo/nequi/llave_bre` y eliminación de `canViewReports`)
 
 ### 0.2 Historial de Revisiones
 | Versión | Fecha | Autor / Rol | Cambios Clave y Justificación |
 |---|---|---|---|
-| 1.0 | 2026-07-25 | Arquitecto de Datos | Borrador preliminar de análisis operacional con payload plano simple. |
-| 1.5 | 2026-08-07 | Arquitecto de Datos | Saneamiento documental inicial removiendo código SQL embebido en FRD. |
-| 2.0 | 2026-10-16 | Orquestador Técnico & Auditor QA | Saneamiento total bajo protocolo PAC-SDD v2.0: erradicación total de código SQL/PLpgSQL, estructuración canónica en 4 Pilares Financieros independientes, especificación del RPC consolidado `rpc_get_comprehensive_financial_report` v2.0 con parámetro opcional `p_employee_id`, guardia RBAC estricto exclusivo para Administradores (`admin_profiles`), segregación contable absoluta de OPEX frente a pagos a proveedor, formalización de N=6 deudas técnicas bajo Regla 7 y contratos JSON Schema en Sección 5. |
-
+| 1.0 | 2026-07-25 | Arquitecto de Datos | Borrador preliminar de análisis operacional. |
+| 1.5 | 2026-08-07 | Arquitecto de Datos | Saneamiento documental inicial. |
+| 2.0 | 2026-10-16 | Orquestador Técnico & Auditor QA | Estructuración en 4 Pilares y `rpc_get_comprehensive_financial_report` Admin-only. |
+| 2.1 | 2026-11-19 | Arquitecto de Producto (`SDD-003-01`) | Eliminación definitiva de `canViewReports` (100% Admin via `assert_store_admin`), retiro de `'daviplata'` en favor de `'llave_bre'`, integración en Pilar 1 OPEX de Mermas (incl. reembolsos `"merma"`), Consumo del Negocio y Consumo/Retiro Personal al **costo de adquisición** (conservando precio de venta referencial en consumo personal + consulta por perfil y consolidado), prevención explícita de doble conteo en reembolsos, y uso de snapshot `actor_name`/`actor_role`. |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
-La inspección empírica del esquema físico de producción (`ihtjocmhzuliwwvdzfnz`) identifica **N=6 deudas técnicas** formalizadas bajo la Regla 7 (cuyo desglose completo reside en la Sección 7):
-- **D-1:** Expansión de `rpc_get_comprehensive_financial_report` para cubrir íntegramente los 4 Pilares Financieros (P&L con devoluciones como ingreso negativo según H7, Flujo de Caja, Inventario DIO y KPIs de Empleados).
-- **D-2:** Guardia RBAC estricto en servidor (`admin_profiles`) + `assert_store_access(p_store_id)` para garantizar ceguera financiera a cajeros (`POL-SEC-01`).
-- **D-3:** Incorporación del parámetro opcional `p_employee_id UUID DEFAULT NULL` para filtrar el Pilar 4 (Hallazgo H17).
-- **D-4:** Segregación contable estricta entre COGS FIFO (`sale_items.unit_cost`), gastos OPEX (`movement_type = 'gasto'`) y pagos a proveedores (`movement_type = 'pago_proveedor'`).
-- **D-5:** Estratificación canónica de cartera por tramos de antigüedad (Aging) en el Pilar 2.
-- **D-6:** Regularización de privilegios base (`GRANT ALL`) conforme a la Regla 8 de `AGENTS.md`.
+La inspección del esquema en `database.types.ts` y producción (`ihtjocmhzuliwwvdzfnz`) identifica **N=7 deudas técnicas** formalizadas bajo la Regla 7 (desglose en Sección 7):
+- **D-1:** Expansión de `rpc_get_comprehensive_financial_report` para integrar los 4 Pilares + nuevo desglose de **Mermas, Reembolsos `"merma"`, Consumo del Negocio y Consumo/Retiro Personal al costo de adquisición** sin doble conteo con devoluciones monetarias.
+- **D-2:** Guardia RBAC estricto 100% Admin-only vía `assert_store_admin(p_store_id)` + `assert_store_access(p_store_id)` (erradicando cualquier referencia residual a permiso `Ver reportes`).
+- **D-3:** Filtro opcional `p_employee_id UUID DEFAULT NULL` para Pilar 4 (sin distorsionar Pilares 1–3) y endpoint/sección de **Consumo Personal por perfil y consolidado**.
+- **D-4:** Segregación contable inviolable entre COGS FIFO (`sale_item_batches`), OPEX monetario de caja (`movement_type = 'gasto'` excluyendo reembolsos), OPEX no monetario al costo (`merma`, `consumo_negocio`, `consumo_personal`), reembolsos monetarios (resta de Ingresos Netos sin duplicar OPEX) y pagos a proveedores (`movement_type = 'pago_proveedor'`, Pilar 2).
+- **D-5:** Estratificación canónica de cartera por Aging en Pilar 2.
+- **D-6:** Privilegios base (`GRANT ALL`) conforme a Regla 8.
+- **D-7:** Estandarización de canales a **`efectivo`, `nequi`, `llave_bre`** (eliminando `'daviplata'`) y consumo de snapshot histórico `actor_name`/`actor_role`.
 
 ---
 
@@ -62,19 +60,24 @@ graph TD
 ### 1.2 Reglas de Negocio por Pilar
 
 #### 📊 Pilar 1: Estado de Resultados Operativo (P&L / Profit & Loss)
-1. **Ingresos Netos Devengados:**
-   $$\text{Ingresos Netos} = \sum (\text{sales.total}) \quad \text{donde } \text{sales.store\_id} = p\_store\_id \land \text{sales.is\_voided} = \text{FALSE} \land \text{created\_at} \in [\text{inicio}, \text{fin})$$
-   Las ventas anuladas (`sales.is_voided = TRUE`) se excluyen incondicionalmente del ingreso operacional.
+1. **Ingresos Netos Devengados (Con Aislamiento de Reembolsos y Consumo Personal):**
+   $$\text{Ventas Brutas Comerciales} = \sum (\text{sales.total}) \quad \text{donde } \text{sales.is\_voided} = \text{FALSE} \land \text{sales.payment\_method} \neq \text{'consumo\_personal'} \land \text{created\_at} \in [\text{inicio}, \text{fin})$$
+   $$\text{Devoluciones / Reembolsos} = \sum (\text{cash\_movements.amount}) \quad \text{donde es reembolso de cliente (`FRD-006-02`) en el período}$$
+   $$\text{Ingresos Netos} = \text{Ventas Brutas Comerciales} - \text{Devoluciones / Reembolsos}$$
+   *(Nota: las operaciones con `payment_method = 'consumo_personal'` tienen impacto `$0` en Caja Dedicada POS y no se suman como venta comercial; su impacto contable ingresa como retiro al costo en el OPEX).*
 2. **Costo de Ventas (COGS FIFO Histórico Real - CA-018-02):**
    $$\text{COGS} = \sum (\text{sale\_item\_batches.quantity\_consumed} \times \text{sale\_item\_batches.unit\_cost})$$
-   El costo real se computa exclusivamente desde el desglose inmutable de capas de inventario consumidas (`sale_item_batches`) vinculadas a ítems de ventas no anuladas. Está terminantemente prohibido asumir un costo de cero o tomar el precio de catálogo de `products.cost_price` para ventas históricas ya selladas.
+   Calculado sobre ítems de ventas comerciales no anuladas (`is_voided = FALSE`, excluyendo `consumo_personal`).
 3. **Margen Bruto de Utilidad:**
    $$\text{Margen Bruto} = \text{Ingresos Netos} - \text{COGS}$$
    $$\text{Porcentaje de Margen Bruto} = \begin{cases} \left(\frac{\text{Margen Bruto}}{\text{Ingresos Netos}}\right) \times 100 & \text{si Ingresos Netos} > 0 \\ 0 & \text{si Ingresos Netos} = 0 \end{cases}$$
-4. **Gastos Operativos (OPEX) y Segregación Inviolable:**
-   $$\text{OPEX} = \sum (\text{cash\_movements.amount}) \quad \text{donde } \text{movement\_type} = \text{'gasto'} \land \text{created\_at} \in [\text{inicio}, \text{fin})$$
-   - **Invariante Contable de Segregación:** En `cash_movements` coexisten egresos por `'gasto'` y `'pago_proveedor'`. El cálculo del OPEX incluye ÚNICAMENTE registros con `movement_type = 'gasto'`. Los egresos por `movement_type = 'pago_proveedor'` constituyen amortizaciones de pasivos con proveedores (Pilar 2); sumarlos en el OPEX provocaría una doble contabilización del costo de la mercancía.
-   - **Categorización OPEX:** Los gastos se clasifican mediante etiquetas estructuradas o parsing del campo `description` en: Servicios, Arriendo, Nómina/Personal, Transporte/Fletes, Mantenimiento, Mermas y Otros.
+4. **Gastos y Costos Operativos (OPEX) — Monetarios de Caja + Salidas Valorizadas al Costo (Sin Doble Conteo):**
+   $$\text{OPEX} = \text{OPEX}_{\text{caja}} + \text{Mermas}_{\text{costo}} + \text{Consumo\_Negocio}_{\text{costo}} + \text{Consumo\_Personal}_{\text{costo}}$$
+   - **$\text{OPEX}_{\text{caja}}$:** Suma de `cash_movements.amount` donde `movement_type = 'gasto'` **excluyendo** pagos a proveedores (`'pago_proveedor'`) y **excluyendo** reembolsos de clientes (ya descontados de `Ingresos Netos` arriba; **prohibido el doble conteo**). Categorías válidas: `Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos`, `Otros/Arriendo`.
+   - **$\text{Mermas}_{\text{costo}}$:** Suma de `quantity * unit_cost` en `inventory_movements` con `movement_type = 'merma'` (incluye mermas directas de estante y **reembolsos marcados con la etiqueta única `"merma"`** de `FRD-006-02`), neta de contra-movimientos (`$0` impacto en Caja POS).
+   - **$\text{Consumo\_Negocio}_{\text{costo}}$:** Suma de `quantity * unit_cost` en `inventory_movements` con `movement_type = 'consumo_negocio'`, neta de contra-movimientos (`$0` impacto en Caja POS).
+   - **$\text{Consumo\_Personal}_{\text{costo}}$:** Suma de `quantity * unit_cost` en `inventory_movements` con `movement_type = 'consumo_personal'`, neta de contra-movimientos (`$0` impacto en Caja POS), conservando además `reference_sale_price` como dato de referencia informativa para el Administrador.
+   - **Regla anti-doble-conteo en Reembolsos:** Un reembolso **sin** etiqueta `"merma"` solo deduce `Ingresos Netos` (el producto volvió al stock vendible); un reembolso **con** etiqueta `"merma"` deduce el efectivo devuelto de `Ingresos Netos` **y** suma únicamente el **costo de adquisición** del producto dañado en $\text{Mermas}_{\text{costo}}$. Jamás se suma como `'gasto'` en $\text{OPEX}_{\text{caja}}$.
 5. **Ganancia Neta Real:**
    $$\mathbf{\text{Ganancia Neta Real}} = \text{Margen Bruto} - \text{OPEX}$$
 
@@ -82,9 +85,9 @@ graph TD
 
 #### 💵 Pilar 2: Flujo de Caja, Tesorería y Capital de Trabajo (Working Capital)
 1. **Conciliación de Canales de Cobro (Cash Flow Líquido):**
-   - **Efectivo en Caja:** Monto total transaccionado en efectivo físico según sesiones de arqueo cerradas o activas en el período.
-   - **Bancos / Canales Digitales:** Fondos percibidos mediante transferencias (`nequi`, `daviplata`) validados en ventas e ingresos de caja.
-   - **Crédito Otorgado (Fiado):** Monto vendido a crédito en el período que no generó liquidez inmediata en caja.
+   - **Efectivo en Caja (`efectivo`):** Dinero físico transaccionado en sesiones del período.
+   - **Canales Digitales (`nequi`, `llave_bre`):** Fondos percibidos/egresados exclusivamente por **`nequi`** y **`llave_bre`** (se elimina `'daviplata'` según `ARQ-002` v1.4 y `SDD_003_01`).
+   - **Crédito Otorgado (`fiado`):** Ventas a crédito sin liquidez inmediata (`$0` en caja).
 2. **Gestión de Cartera (Cuentas por Cobrar - Fiados) y Aging Report (CA-018-03):**
    - **Saldo Total de Cartera:** $\sum (\text{clients.balance})$ donde $\text{balance} > 0 \land (\text{is\_deleted} = \text{FALSE} \lor \text{is\_deleted IS NULL})$.
    - **Estratificación por Envejecimiento (Aging Buckets):** Clasificación del saldo deudor de clientes en 4 tramos canónicos según la antigüedad de la deuda:
