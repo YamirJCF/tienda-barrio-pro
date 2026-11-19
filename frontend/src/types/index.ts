@@ -157,19 +157,25 @@ export type UUID = string;
 export interface CashTransaction {
     id: string;
     type: 'income' | 'expense';
+    movementType?: 'ingreso' | 'gasto' | 'pago_proveedor' | 'reembolso' | string;
     amount: Decimal;
     description: string;
     timestamp: string;
     category?: string;
     relatedSaleId?: string; // Optional link to a sale
-    paymentMethod?: string; // Multichannel
+    paymentMethod?: string; // Multichannel ('efectivo' | 'nequi' | 'llave_bre')
+    voucherRef?: string | null;
+    actorName?: string | null;
+    actorRole?: string | null;
 }
 
-// Maps to: Database['public']['Tables']['cash_register']['Row'] (partially)
+// Maps to: Database['public']['Tables']['cash_sessions']['Row']
 export interface CashSession {
     id: string;
     storeId: string; // Required for RLS - Tienda asociada
-    employeeId: string; // ID of employee who opened the register
+    employeeId: string; // ID of user who opened the register
+    openedByName?: string;
+    openedByRole?: string;
     status: 'open' | 'closed';
     openingTime: string;
     closingTime?: string;
@@ -177,6 +183,9 @@ export interface CashSession {
     closingBalance?: Decimal; // Physical count at closing
     calculatedBalance?: Decimal; // System calculated balance at closing
     discrepancy?: Decimal; // Difference
+    closingAttempts?: number;
+    isExpired24h?: boolean;
+    lifecycleState?: 'open' | 'Expirado/Bloqueado' | 'closed';
     transactions: CashTransaction[];
     notes?: string;
 }

@@ -6,7 +6,7 @@ export interface AuditLog {
     created_at: string;
     store_id: string;
     user_id?: string;
-    event_type: 'login_success' | 'login_failed' | 'pin_change' | 'unauthorized_access' | 'price_change' | 'stock_adjustment' | 'shift_modified' | 'SALE_CREATED';
+    event_type: 'login_success' | 'login_failed' | 'pin_change' | 'unauthorized_access' | 'unauthorized_shift_close' | 'price_change' | 'stock_adjustment' | 'shift_modified' | 'SALE_CREATED';
     severity: 'info' | 'warning' | 'critical';
     details: Record<string, any>;
     ip_address?: string;

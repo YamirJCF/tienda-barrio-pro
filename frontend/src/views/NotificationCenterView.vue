@@ -3,13 +3,13 @@
  * NotificationCenterView - Centro de Notificaciones
  * FRD: 01_REQUIREMENTS/notifications.md v1.1
  */
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useNotificationsStore, type SystemNotification } from '../stores/notificationsStore';
 import { useAuthStore } from '../stores/auth';
 
 import { formatRelativeTime } from '../composables/useRelativeTime';
-import { logger } from '../utils/logger';
+import { useNotifications } from '../composables/useNotifications';
 import NotificationSecurityWidget from '../components/NotificationSecurityWidget.vue';
 import { 
   ArrowLeft, 
@@ -19,15 +19,38 @@ import {
   Package, 
   Banknote, 
   Store, 
-  X 
+  X,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-vue-next';
 
 const router = useRouter();
 const notificationsStore = useNotificationsStore();
 const authStore = useAuthStore();
+const { showError } = useNotifications();
 
 const isAdmin = computed(() => authStore.isAdmin);
 const userType = computed<'admin' | 'employee'>(() => authStore.isAdmin ? 'admin' : 'employee');
+const activeStoreId = computed(() => authStore.currentStore?.id || authStore.currentUser?.storeId || '');
+
+const reloadNotifications = async () => {
+  if (!activeStoreId.value) return;
+  try {
+    await notificationsStore.fetchNotifications(activeStoreId.value);
+  } catch (e: any) {
+    showError(e?.message || 'No se pudieron sincronizar las notificaciones');
+  }
+};
+
+onMounted(reloadNotifications);
+
+const handleRemoveNotification = async (id: string) => {
+  try {
+    await notificationsStore.removeNotification(id);
+  } catch (e: any) {
+    showError(e?.message || 'No se pudo eliminar la notificación');
+  }
+};
 
 // Computed
 const notifications = computed(() => {
@@ -45,7 +68,13 @@ const goBack = () => {
 };
 
 const markAllAsRead = () => {
-  notificationsStore.markAllAsRead();
+  notificationsStore.markAllAsRead(activeStoreId.value || undefined);
+};
+
+const handleNotificationClick = (notification: SystemNotification) => {
+  if (!notification.isRead) {
+    notificationsStore.markAsRead(notification.id);
+  }
 };
 
 
@@ -129,6 +158,24 @@ const getRelativeTime = (createdAt: string) => {
       <!-- Security Widget (Admin Only) -->
       <NotificationSecurityWidget v-if="isAdmin" />
 
+      <!-- Server Load Error Banner (Regla 3: Cero Fallos Silenciosos) -->
+      <div
+        v-if="notificationsStore.fetchError"
+        data-test="notifications-error"
+        class="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-xl p-3 flex items-center justify-between gap-3"
+      >
+        <div class="flex items-center gap-2 text-xs text-red-700 dark:text-red-300 font-medium">
+          <AlertTriangle :size="16" class="shrink-0" />
+          <span>{{ notificationsStore.fetchError }}</span>
+        </div>
+        <button
+          @click="reloadNotifications"
+          class="px-2.5 py-1 rounded-lg bg-red-600 text-white text-xs font-bold flex items-center gap-1 shrink-0"
+        >
+          <RefreshCw :size="12" /> Reintentar
+        </button>
+      </div>
+
       <!-- Empty State -->
       <div
         v-if="isEmpty"
@@ -144,6 +191,7 @@ const getRelativeTime = (createdAt: string) => {
         <article
           v-for="notification in notifications"
           :key="notification.id"
+          @click="handleNotificationClick(notification)"
           class="group relative flex flex-col gap-3 p-4 rounded-xl shadow-sm ring-1 ring-black/5 dark:ring-white/5 overflow-hidden transition-all duration-300"
           :class="[
             notification.isRead
@@ -185,8 +233,8 @@ const getRelativeTime = (createdAt: string) => {
                   </span>
                   <!-- T-013: Botón eliminar notificación (hidden for access requests) -->
                   <button
-                    v-if="!notification.metadata?.requestId"
-                    @click.stop="notificationsStore.removeNotification(notification.id)"
+                    v-if="!notification.metadata?.requestId && (!notification.metadata?.fromDatabase || isAdmin)"
+                    @click.stop="handleRemoveNotification(notification.id)"
                     class="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     title="Eliminar"
                   >

@@ -147,7 +147,7 @@ stateDiagram-v2
   1. El usuario solicita cerrar la sesión activa.
   2. El servidor lista los canales activos que tuvieron base o movimientos en la sesión.
   3. El usuario cuenta el dinero físico e ingresa el monto en el campo "Efectivo Real".
-  4. El usuario verifica su aplicación móvil (ej. Nequi, Daviplata) e ingresa los montos reales en los campos digitales respectivos.
+  4. El usuario verifica su aplicación móvil (ej. Nequi, Llave Bre-B) e ingresa los montos reales en los campos digitales respectivos.
   5. El usuario confirma el cierre sin haber visto el saldo esperado (Arqueo Ciego).
   6. El sistema calcula las discrepancias individuales por canal (`difference = actual - expected`), persiste en `cash_session_balances`, consolida en `cash_sessions` y bloquea operaciones monetarias.
 - **Flujo Alternativo:** Si la sesión ya fue cerrada previamente, el servidor rechaza con código `SESSION_ALREADY_CLOSED`.

@@ -56,7 +56,7 @@
 - **Turno Activo:** Sesión en estado `open` con antigüedad menor a 24 horas.
 - **Arqueo Ciego:** Mecanismo de control donde el usuario reporta el dinero real contado en mano sin conocer previamente el cálculo del saldo esperado generado por el servidor.
 - **Base de Apertura (Fondo de Cambio):** Monto inicial en efectivo físico colocado en la gaveta. Se asigna exclusivamente al canal Efectivo.
-- **Categoría OPEX:** Clasificación contable del gasto operativo (`Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos`, `Reembolso`).
+- **Categoría OPEX:** Clasificación contable del gasto operativo (`Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos` — excluyendo `'Reembolso'`).
 - **Bitácora Forense de Caja (`audit_caja`):** Registro inmutable generado automáticamente por triggers (`fn_audit_cash_opened`, `fn_audit_cash_closed`) que asienta marcas forenses de apertura y cierre con metadatos de saldos.
 - **Turno Olvidado / Caducado:** Sesión de caja abierta cuya antigüedad supera las 24 horas (`opened_at < NOW() - INTERVAL '24 hours'`), requiriendo cierre forzado antes de permitir nuevas ventas.
 
@@ -278,13 +278,17 @@ stateDiagram-v2
     "p_actual_balance": "NUMERIC >= 0 (Obligatorio, dinero real contado en mano)"
   }
   ```
-- **Salida Exitosa:**
+- **Salida Exitosa (Cajero / Sellado Blindado):**
   ```json
   {
     "success": true,
-    "expected_balance": 150000.00,
-    "actual_balance": 148000.00,
-    "difference": -2000.00
+    "data": {
+      "session_id": "UUID",
+      "status": "closed",
+      "sealed_with_alert": false,
+      "closed_by_name": "Laura Cajera",
+      "closed_by_role": "employee"
+    }
   }
   ```
 - **Catálogo de Errores:**
@@ -304,7 +308,7 @@ stateDiagram-v2
     "p_session_id": "UUID (Obligatorio)",
     "p_amount": "NUMERIC > 0 (Obligatorio)",
     "p_payment_method": "TEXT (Obligatorio: 'efectivo', 'nequi', 'llave_bre')",
-    "p_category": "TEXT (Obligatorio: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos', 'Reembolso')",
+    "p_category": "TEXT (Obligatorio: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos')",
     "p_description": "TEXT (Obligatorio, longitud >= 3)"
   }
   ```

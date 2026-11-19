@@ -28,6 +28,8 @@ import SyncIndicator from '../components/common/SyncIndicator.vue';
 import StatCard from '../components/ui/StatCard.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useReportsStore } from '../stores/reports';
+import { useNotifications } from '../composables/useNotifications';
+import { logger } from '../utils/logger';
 
 const router = useRouter();
 const salesStore = useSalesStore();
@@ -37,6 +39,7 @@ const authStore = useAuthStore();
 const notificationsStore = useNotificationsStore();
 const devicesStore = useDevicesStore(); // [NEW]
 const reportsStore = useReportsStore();
+const { showWarning } = useNotifications();
 const { formatWithSign } = useCurrencyFormat();
 
 // State
@@ -53,6 +56,10 @@ onMounted(async () => {
   if (activeStoreId) {
       // WO-006: Sync cash session state to avoid showing previous user's session
       await cashRegisterStore.syncFromBackend(activeStoreId);
+      notificationsStore.fetchNotifications(activeStoreId).catch((err) => {
+          logger.error('⚠️ [Dashboard] Error cargando notificaciones:', err);
+          showWarning('No se pudieron cargar las notificaciones del servidor.');
+      });
   } else {
       console.warn('⚠️ [Dashboard] No active store ID found for sync');
   }

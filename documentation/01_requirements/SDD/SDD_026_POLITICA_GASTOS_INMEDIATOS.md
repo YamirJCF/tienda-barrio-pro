@@ -218,7 +218,7 @@ stateDiagram-v2
     "p_session_id": "UUID (Obligatorio — Identificador de la sesión de caja activa)",
     "p_amount": "NUMERIC (Obligatorio — Monto entero COP estrictamente positivo > 0)",
     "p_payment_method": "TEXT (Obligatorio — Valores autorizados: 'efectivo', 'nequi', 'llave_bre')",
-    "p_category": "TEXT (Obligatorio — Valores autorizados: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos', 'Reembolso')",
+    "p_category": "TEXT (Obligatorio — Valores autorizados: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos')",
     "p_description": "TEXT (Obligatorio — Longitud mínima 3 caracteres, sin contar prefijos)"
   }
   ```
@@ -246,7 +246,7 @@ stateDiagram-v2
   | `SESSION_EXPIRED` | La sesión de caja abierta supera las 24 horas transcurridas desde su apertura | La sesión de caja ha expirado (> 24h) y debe reconciliarse antes de operar |
   | `INVALID_AMOUNT` | El parámetro `p_amount` es menor o igual a cero o nulo | El monto del gasto debe ser un valor numérico estrictamente positivo |
   | `INVALID_PAYMENT_METHOD` | Canal monetario suministrado no válido | Canal de pago no válido. Permitidos: efectivo, nequi, llave_bre |
-  | `INVALID_OPEX_CATEGORY` | La categoría no pertenece a las 6 autorizadas del catálogo cerrado | Categoría OPEX no autorizada. Permitidas: Servicios, Nomina, Transporte, Mantenimiento, Insumos, Reembolso |
+  | `INVALID_OPEX_CATEGORY` | La categoría no pertenece a las 5 autorizadas del catálogo cerrado | Categoría OPEX no autorizada. Permitidas: Servicios, Nomina, Transporte, Mantenimiento, Insumos |
   | `EMPTY_DESCRIPTION` | La descripción suministrada está vacía o tiene menos de 3 caracteres | La descripción o motivo del gasto es obligatoria (mínimo 3 caracteres) |
   | `INSUFFICIENT_FUNDS` | La liquidez disponible en el canal seleccionado es inferior al monto a desembolsar | Fondos insuficientes en el canal monetario seleccionado |
 

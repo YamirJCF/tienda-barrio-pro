@@ -298,13 +298,26 @@ router.beforeEach(async (to, from, next) => {
   // SPEC-005: Permissions Guards
   // =============================================
 
-  // FRD-004/FRD-015: Stale Shift Guard
-  // If a cash session from a previous day is still open, block everything except cash-control
+  // FRD-004 / FRD-017 / SDD-027-02: Stale Shift (+24h Expirado/Bloqueado) Guard
+  // Redirige únicamente al abridor original (con permiso) o al Admin, tanto si la sesión sigue open (>24h)
+  // como si rpc_check_and_force_close_shifts ya la marcó Expirado/Bloqueado (pendingForcedSessionInfo).
+  // Nunca bloquea labores no monetarias de otros empleados.
   if (isAuthenticated && to.meta.requiresAuth && to.name !== 'cash-control' && to.name !== 'login') {
     const cashRegisterStore = useCashRegisterStore();
-    if (cashRegisterStore.isStaleSession) {
-      logger.log('🔒 [Router] Stale shift detected. Redirecting to cash-control for mandatory closure.');
-      return next({ name: 'cash-control' });
+    const hasStaleOrForced =
+      cashRegisterStore.isStaleSession || Boolean(cashRegisterStore.pendingForcedSessionInfo);
+
+    if (hasStaleOrForced) {
+      const currentActorId = authStore.currentUser?.employeeId || authStore.currentUser?.id;
+      const openerId = cashRegisterStore.isStaleSession
+        ? cashRegisterStore.currentSession?.employeeId
+        : cashRegisterStore.pendingForcedSessionInfo?.openedBy;
+      const isOriginalOpener = Boolean(openerId && currentActorId && openerId === currentActorId);
+
+      if (authStore.isAdmin || (authStore.canOpenCloseCash && isOriginalOpener)) {
+        logger.log('🔒 [Router] Stale/Expirado (+24h) shift detected for opener/admin. Redirecting to cash-control.');
+        return next({ name: 'cash-control' });
+      }
     }
   }
 

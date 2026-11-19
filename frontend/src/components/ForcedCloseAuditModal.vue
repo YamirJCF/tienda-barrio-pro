@@ -18,15 +18,19 @@ export interface PendingForcedSession {
 // =============================================
 // PROPS & EMITS
 // =============================================
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** Lista de sesiones cerradas forzosamente pendientes de reconciliación, ordenada ASC */
   pendingSessions: PendingForcedSession[];
   isVisible: boolean;
-}>();
+  /** Admin-only (FRD-027-02 R5): permite omitir conteo físico con confirmación explícita */
+  allowSkipCount?: boolean;
+}>(), {
+  allowSkipCount: true,
+});
 
 const emit = defineEmits<{
-  /** Emitido cuando el usuario confirma el conteo físico de la sesión actual */
-  (e: 'confirm', sessionId: string, actualBalance: number): void;
+  /** Emitido cuando el usuario confirma el conteo físico (o null si omite conteo como Admin) */
+  (e: 'confirm', sessionId: string, actualBalance: number | null): void;
   /** Emitido si el usuario cierra el modal (solo disponible cuando no hay pendientes bloqueantes) */
   (e: 'close'): void;
 }>();
@@ -36,12 +40,16 @@ const emit = defineEmits<{
 // =============================================
 const { formatCurrency } = useCurrencyFormat();
 const physicalCounts = ref<Record<string, number>>({});
+const skipPhysicalCount = ref(false);
+const confirmSkipWithoutCount = ref(false);
 
 // La sesión que se está conciliando ahora es siempre la primera de la lista (más antigua primero)
 const currentSession = computed(() => props.pendingSessions[0] ?? null);
 
 import { watch } from 'vue';
 watch(() => currentSession.value, (session) => {
+  skipPhysicalCount.value = false;
+  confirmSkipWithoutCount.value = false;
   if (session) {
     physicalCounts.value = {};
     session.channels.forEach(method => {
@@ -58,6 +66,9 @@ const totalPhysical = computed(() => {
 
 const isValid = computed(() => {
   if (!currentSession.value) return false;
+  if (props.allowSkipCount && skipPhysicalCount.value) {
+    return confirmSkipWithoutCount.value;
+  }
   return currentSession.value.channels.every(method => {
     const val = physicalCounts.value[method];
     return typeof val === 'number' && !isNaN(val) && val >= 0;
@@ -77,6 +88,10 @@ const formattedOpenedAt = computed(() => {
 // =============================================
 const handleConfirm = () => {
   if (!currentSession.value || !isValid.value) return;
+  if (props.allowSkipCount && skipPhysicalCount.value) {
+    emit('confirm', currentSession.value.id, null);
+    return;
+  }
   emit('confirm', currentSession.value.id, totalPhysical.value);
 };
 </script>
@@ -129,7 +144,7 @@ const handleConfirm = () => {
           </div>
 
           <!-- Physical count inputs -->
-          <div class="space-y-4 max-h-[40vh] overflow-y-auto px-1 no-scrollbar">
+          <div v-if="!skipPhysicalCount" class="space-y-4 max-h-[40vh] overflow-y-auto px-1 no-scrollbar">
             <div v-for="method in currentSession.channels" :key="method" class="space-y-1.5">
               <label class="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400 capitalize">
                 ¿Cuánto dinero físico recuperaste en {{ method }}?
@@ -142,6 +157,38 @@ const handleConfirm = () => {
             </div>
           </div>
 
+          <!-- FRD-027-02 R5: Conteo físico opcional para Cierre Forzoso Admin -->
+          <div v-if="allowSkipCount" class="border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2.5 bg-slate-50 dark:bg-slate-800/60">
+            <label class="flex items-start gap-2.5 cursor-pointer select-none">
+              <input
+                v-model="skipPhysicalCount"
+                type="checkbox"
+                data-test="skip-count-toggle"
+                class="mt-0.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+              />
+              <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Cerrar sin conteo físico (el abridor no está disponible)
+              </span>
+            </label>
+
+            <div v-if="skipPhysicalCount" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg p-2.5 space-y-2">
+              <p class="text-[11px] text-red-700 dark:text-red-300 leading-relaxed">
+                El servidor asumirá el saldo esperado en libros con diferencia $0, marcará <strong>cierre sin conteo</strong> y emitirá alerta crítica de auditoría.
+              </p>
+              <label class="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  v-model="confirmSkipWithoutCount"
+                  type="checkbox"
+                  data-test="confirm-skip-count"
+                  class="mt-0.5 rounded border-red-300 text-red-600 focus:ring-red-500"
+                />
+                <span class="text-[11px] font-bold text-red-800 dark:text-red-200">
+                  Confirmo cerrar este turno sin conteo físico
+                </span>
+              </label>
+            </div>
+          </div>
+
           <!-- Action button -->
           <BaseButton
             id="btn-confirm-forced-close-audit"
@@ -150,7 +197,7 @@ const handleConfirm = () => {
             :disabled="!isValid"
             @click="handleConfirm"
           >
-            Confirmar Conteo y Continuar
+            {{ skipPhysicalCount ? 'Cerrar Sin Conteo y Desbloquear' : 'Confirmar Conteo y Continuar' }}
           </BaseButton>
 
         </div>

@@ -12,6 +12,15 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
     // State
     const currentSession = ref<CashSession | null>(null);
     const sessionHistory = ref<CashSession[]>([]);
+    const pendingForcedSessionInfo = ref<{
+        sessionId: string;
+        openedBy?: string;
+        openedByName?: string;
+        openedByRole?: string;
+        openedAt: string;
+        closingAttempts?: number;
+        lifecycleState?: string;
+    } | null>(null);
 
     // Computed
     const isOpen = computed(() => currentSession.value?.status === 'open');
@@ -67,16 +76,27 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             .reduce((sum, t) => sum.plus(new Decimal(t.amount)), new Decimal(0));
     });
 
-    // FRD-017 v3.0: Stale Shift Detection (24 Hours)
-    // A session is "stale" if it has been open for 24 hours or more
+    // FRD-017 / SDD-017: Stale Shift Detection (24 Hours -> Expirado/Bloqueado)
     const isStaleSession = computed(() => {
         if (!currentSession.value || currentSession.value.status !== 'open') return false;
-        
+        if (currentSession.value.isExpired24h) return true;
+
         const openingTimestamp = new Date(currentSession.value.openingTime).getTime();
         const nowTimestamp = Date.now();
         const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
         return (nowTimestamp - openingTimestamp) >= TWENTY_FOUR_HOURS_MS;
+    });
+
+    const lifecycleState = computed<'open' | 'Expirado/Bloqueado' | 'closed'>(() => {
+        if (!currentSession.value) return pendingForcedSessionInfo.value ? 'Expirado/Bloqueado' : 'closed';
+        if (currentSession.value.status === 'closed') return 'closed';
+        return isStaleSession.value ? 'Expirado/Bloqueado' : 'open';
+    });
+
+    const closingAttemptsRemaining = computed(() => {
+        const used = currentSession.value?.closingAttempts ?? 0;
+        return Math.max(0, 3 - used);
     });
 
     // Human-readable date of the stale session for UI display
@@ -120,18 +140,29 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             }
 
             const status = await cashRepository.getStoreStatus(storeId);
+            pendingForcedSessionInfo.value = status.pendingForcedSession ?? null;
 
             if (status.isOpen && status.sessionId) {
-                // Reconstruct session from status
+                const openingTime = status.lastEvent?.created_at || new Date().toISOString();
+                const computedExpired = Boolean(
+                    status.isExpired24h ||
+                    (Date.now() - new Date(openingTime).getTime() >= 24 * 60 * 60 * 1000)
+                );
+
+                // Reconstruct session from server truth (sin exponer expected_balance ni difference)
                 currentSession.value = {
                     id: status.sessionId,
                     storeId: storeId,
                     employeeId: status.lastEvent?.authorized_by_id || 'unknown',
+                    openedByName: status.openedByName || status.lastEvent?.authorized_by_name,
+                    openedByRole: status.openedByRole,
                     status: 'open',
-                    openingTime: status.lastEvent?.created_at || new Date().toISOString(),
+                    openingTime,
                     openingBalance: new Decimal(status.openingAmount),
-
-                    transactions: [], // Initialize empty to prevent UI crash before fetch
+                    closingAttempts: status.closingAttempts ?? 0,
+                    isExpired24h: computedExpired,
+                    lifecycleState: status.lifecycleState || (computedExpired ? 'Expirado/Bloqueado' : 'open'),
+                    transactions: [],
                     notes: ''
                 };
 
@@ -182,11 +213,14 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             status: 'open',
             openingTime: new Date().toISOString(),
             openingBalance: new Decimal(amount),
+            closingAttempts: 0,
+            isExpired24h: false,
+            lifecycleState: 'open',
             transactions: [],
             notes
         };
 
-        // ===== REPOSITORY INTEGRATION (Aduana Obligatoria) =====
+        // ===== REPOSITORY INTEGRATION (Regla 3: Cero Fallos Silenciosos) =====
         try {
             const result = await cashRepository.registerEvent({
                 id: newSession.id,
@@ -194,126 +228,166 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                 type: 'open',
                 amount_declared: Number(new Decimal(amount)),
                 authorized_by_id: employeeId,
-                authorized_by_name: 'Employee', // TODO: Get name from employee store
+                authorized_by_name: 'Usuario',
                 authorized_by_type: 'employee'
             });
 
             if (!result.success) {
-                // Handle "Already Open" gracefully
                 if (result.error && (result.error.includes('Ya existe una caja abierta') || result.error.includes('CASH_ALREADY_OPEN'))) {
                     console.warn('⚠️ [CashRegisterStore] Backend reported register already open. Syncing...');
                     await syncFromBackend(storeId);
-                    if (isOpen.value) return; // Recovered successfully
+                    if (isOpen.value) return;
                 }
 
                 console.error('🚫 [CashRegisterStore] Repository registration failed:', result.error);
                 throw new Error(result.error || 'Failed to register opening event');
             }
 
-            // FIX: Use the REAL session ID from the backend, not the local UUID
-            // Without this, cerrar_caja will fail with "Sesión no encontrada"
             if (result.data?.session_id) {
                 newSession.id = result.data.session_id;
                 logger.log('✅ [CashRegisterStore] Session ID synced from backend:', newSession.id);
             }
+            if (result.data?.opened_by) {
+                newSession.employeeId = result.data.opened_by;
+            }
+            if (result.data?.opened_by_name) {
+                newSession.openedByName = result.data.opened_by_name;
+            }
+            if (result.data?.opened_by_role) {
+                newSession.openedByRole = result.data.opened_by_role;
+            }
+            if (result.data?.opened_at) {
+                newSession.openingTime = result.data.opened_at;
+            }
 
         } catch (e: any) {
-            // Handle "Already Open" gracefully (if thrown directly)
             if (e.message && (e.message.includes('Ya existe una caja abierta') || e.message.includes('CASH_ALREADY_OPEN'))) {
                 console.warn('⚠️ [CashRegisterStore] Backend reported register already open (caught). Syncing...');
                 await syncFromBackend(storeId);
-                if (isOpen.value) return; // Recovered successfully
+                if (isOpen.value) return;
             }
 
             console.error('🚫 [CashRegisterStore] Repository call failed:', e.message);
-            // Continue with local state but log warning
-            console.warn('⚠️ [CashRegisterStore] Continuing with local state only');
-        }
-
-        currentSession.value = newSession;
-
-        // 📢 Notification Center: Jornada Iniciada (notifications.md L66)
-        try {
-            const notifStore = useNotificationsStore();
-            notifStore.addNotification({
-                type: 'general',
-                audience: 'all',
-                icon: 'store',
-                title: 'Jornada Iniciada',
-                message: `Tienda abierta con base de $${new Decimal(amount).toFixed(0)}`,
-                isRead: false,
-            });
-        } catch (e) { /* Non-critical */ }
-    };
-
-    const closeRegister = async (physicalCount: Decimal | number, notes?: string) => {
-        if (!currentSession.value) throw new Error("No hay una sesión de caja activa");
-
-        const session = currentSession.value;
-        const calculated = currentBalance.value;
-        const physical = new Decimal(physicalCount);
-
-        session.status = 'closed';
-        session.closingTime = new Date().toISOString();
-        session.closingBalance = physical;
-        session.calculatedBalance = calculated;
-        session.discrepancy = physical.minus(calculated);
-        if (notes) session.notes = session.notes ? `${session.notes}\n${notes}` : notes;
-
-        // ===== REPOSITORY INTEGRATION (Aduana Obligatoria) =====
-        try {
-            const result = await cashRepository.registerEvent({
-                id: session.id, // Use existing session ID for closing
-                store_id: session.storeId,
-                type: 'close',
-                amount_declared: Number(physical),
-                amount_expected: Number(calculated),
-                difference: Number(session.discrepancy),
-                authorized_by_id: session.employeeId,
-                authorized_by_name: 'Employee',
-                authorized_by_type: 'employee'
-            });
-
-            if (!result.success) {
-                console.error('🚫 [CashRegisterStore] Repository close failed:', result.error);
-                throw new Error(result.error || 'Error al cerrar caja en el servidor');
-            }
-        } catch (e: any) {
-            console.error('🚫 [CashRegisterStore] Repository close call failed:', e.message);
             throw e;
         }
 
-        // Archive session
-        sessionHistory.value.push({ ...session });
-        currentSession.value = null;
-
-        // 📢 Notification Center: Cierre de Caja (notifications.md L64)
-        try {
-            const notifStore = useNotificationsStore();
-            notifStore.addNotification({
-                type: 'finance',
-                audience: 'admin',
-                icon: 'payments',
-                title: 'Cierre de Caja',
-                message: `Arqueo completado. Balance: $${physical.toFixed(0)}. Diferencia: $${session.discrepancy!.toFixed(0)}`,
-                isRead: false,
-                metadata: { amount: Number(physical) },
-            });
-        } catch (e) { /* Non-critical */ }
-
-        return session;
+        currentSession.value = newSession;
     };
 
-    const registerExpense = async (amount: Decimal | number, description: string, category: string = 'Servicios', paymentMethod: string = 'efectivo') => {
+    const closeRegister = async (
+        declaredTotals: Decimal | number | { efectivo: Decimal | number; nequi?: Decimal | number; llave_bre?: Decimal | number },
+        notes?: string,
+        storeIdOverride?: string
+    ): Promise<{
+        success: boolean;
+        code?: string;
+        attemptsUsed?: number;
+        attemptsRemaining?: number;
+        message?: string;
+        sealedWithAlert?: boolean;
+        closedByName?: string;
+        closedByRole?: string;
+    }> => {
+        const targetSession = currentSession.value;
+        const targetPendingForced = !targetSession ? pendingForcedSessionInfo.value : null;
+
+        if (!targetSession && !targetPendingForced) {
+            throw new Error("No hay una sesión de caja activa");
+        }
+
+        const sessionId = targetSession?.id || targetPendingForced!.sessionId;
+        const storeId = targetSession?.storeId || storeIdOverride || '';
+        const openerId = targetSession?.employeeId || targetPendingForced?.openedBy || '';
+        const openerName = targetSession?.openedByName || targetPendingForced?.openedByName || 'Usuario';
+
+        const isMultichannelPayload = typeof declaredTotals === 'object' && declaredTotals !== null && 'efectivo' in declaredTotals;
+        const declaredEfectivo = isMultichannelPayload
+            ? new Decimal((declaredTotals as any).efectivo)
+            : new Decimal(declaredTotals as Decimal | number);
+        const declaredNequi = isMultichannelPayload && (declaredTotals as any).nequi !== undefined
+            ? new Decimal((declaredTotals as any).nequi)
+            : new Decimal(0);
+        const declaredLlaveBre = isMultichannelPayload && (declaredTotals as any).llave_bre !== undefined
+            ? new Decimal((declaredTotals as any).llave_bre)
+            : new Decimal(0);
+
+        const result = await cashRepository.registerEvent({
+            id: sessionId,
+            store_id: storeId,
+            type: 'close',
+            amount_declared: Number(declaredEfectivo),
+            declared_nequi: Number(declaredNequi),
+            declared_llave_bre: Number(declaredLlaveBre),
+            authorized_by_id: openerId,
+            authorized_by_name: openerName,
+            authorized_by_type: 'employee'
+        });
+
+        // Cierre Asistido (Intentos 1 y 2): servidor no sella ni revela esperado/diferencia
+        if (!result.success && result.code === 'COUNT_MISMATCH_RETRY') {
+            const previousAttempts = targetSession?.closingAttempts ?? targetPendingForced?.closingAttempts ?? 0;
+            const attemptsUsed = Number(result.data?.attempts_used ?? (previousAttempts + 1));
+            const attemptsRemaining = Number(result.data?.attempts_remaining ?? Math.max(0, 3 - attemptsUsed));
+            if (targetSession) {
+                targetSession.closingAttempts = attemptsUsed;
+            } else if (pendingForcedSessionInfo.value) {
+                pendingForcedSessionInfo.value.closingAttempts = attemptsUsed;
+            }
+
+            return {
+                success: false,
+                code: 'COUNT_MISMATCH_RETRY',
+                attemptsUsed,
+                attemptsRemaining,
+                message: result.error || 'El conteo no coincide con el registro del turno. Revisa y vuelve a intentar.'
+            };
+        }
+
+        if (!result.success) {
+            console.error('🚫 [CashRegisterStore] Repository close failed:', result.error);
+            throw new Error(result.error || 'Error al cerrar caja en el servidor');
+        }
+
+        const serverData = result.data?.data ?? result.data ?? {};
+        if (targetSession) {
+            targetSession.status = 'closed';
+            targetSession.lifecycleState = 'closed';
+            targetSession.closingTime = serverData.closed_at || new Date().toISOString();
+            targetSession.closingBalance = declaredEfectivo.plus(declaredNequi).plus(declaredLlaveBre);
+            targetSession.closingAttempts = Number(serverData.closing_attempts ?? targetSession.closingAttempts ?? 0);
+            if (notes) targetSession.notes = targetSession.notes ? `${targetSession.notes}\n${notes}` : notes;
+
+            sessionHistory.value.push({ ...targetSession });
+            currentSession.value = null;
+        }
+        pendingForcedSessionInfo.value = null;
+
+        return {
+            success: true,
+            sealedWithAlert: Boolean(serverData.sealed_with_alert),
+            closedByName: serverData.closed_by_name,
+            closedByRole: serverData.closed_by_role,
+        };
+    };
+
+    const registerExpense = async (
+        amount: Decimal | number,
+        description: string,
+        category: string = 'Servicios',
+        paymentMethod: string = 'efectivo',
+        voucherRef?: string
+    ) => {
         if (!currentSession.value) throw new Error("La caja está cerrada");
 
         const transaction: CashTransaction = {
             id: crypto.randomUUID(),
             type: 'expense',
+            movementType: 'gasto',
             amount: new Decimal(amount),
             description,
             category,
             paymentMethod,
+            voucherRef: voucherRef || null,
             timestamp: new Date().toISOString()
         };
 
@@ -322,8 +396,6 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
         if (!result.success) {
             console.error('🚫 [CashRegisterStore] Failed to persist expense:', result.error);
-            // We still update locally but warn? Or throw?
-            // Throwing allows UI to show error
             throw new Error(result.error || 'Fallo al guardar gasto');
         }
 
@@ -336,43 +408,45 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         const transaction: CashTransaction = {
             id: crypto.randomUUID(),
             type: 'income',
+            movementType: 'ingreso',
             amount: new Decimal(amount),
             description,
             timestamp: new Date().toISOString(),
             relatedSaleId: saleId
         };
 
-        // Note: If saleId is present, this is a UI-only update. 
-        // The backend source of truth is the trigger.
-        // Only persist if NOT a sale (Trigger handles sales)
+        // Only persist if NOT a sale (Trigger/RPC handles sales)
         if (!saleId) {
             const result = await cashRepository.addMovement(transaction, currentSession.value.id);
             if (!result.success) {
                 console.error('🚫 [CashRegisterStore] Failed to persist income:', result.error);
-                // Throw or swallow? Swallow generic income for now logic-wise, but logging is good.
+                throw new Error(result.error || 'Error al registrar ingreso en caja');
             }
         }
 
         currentSession.value.transactions.push(transaction);
     };
 
-    const fetchPendingForcedSessions = async () => {
-        return await cashRepository.getPendingForcedSessions();
+    const fetchPendingForcedSessions = async (storeId?: string) => {
+        return await cashRepository.getPendingForcedSessions(storeId);
     };
 
-    const reconcileForcedClose = async (sessionId: string, employeeId: string, actualBalance: number) => {
+    const reconcileForcedClose = async (sessionId: string, employeeId: string, actualBalance: number | null) => {
         await cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance);
     };
 
     return {
         currentSession,
         sessionHistory,
+        pendingForcedSessionInfo,
         isOpen,
         currentBalance,
         balancesByMethod,
         totalExpenses,
         totalIncome,
         isStaleSession,
+        lifecycleState,
+        closingAttemptsRemaining,
         staleSessionDate,
         openRegister,
         closeRegister,

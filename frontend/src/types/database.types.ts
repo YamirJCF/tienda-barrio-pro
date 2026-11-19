@@ -423,9 +423,11 @@ export type Database = {
           closed_by: string | null
           closed_by_name: string | null
           closed_by_role: string | null
+          closing_attempts: number
           difference: number | null
           expected_balance: number | null
           forced_close: boolean
+          forced_close_without_count: boolean
           id: string
           opened_at: string
           opened_by: string
@@ -441,9 +443,11 @@ export type Database = {
           closed_by?: string | null
           closed_by_name?: string | null
           closed_by_role?: string | null
+          closing_attempts?: number
           difference?: number | null
           expected_balance?: number | null
           forced_close?: boolean
+          forced_close_without_count?: boolean
           id?: string
           opened_at?: string
           opened_by: string
@@ -459,9 +463,11 @@ export type Database = {
           closed_by?: string | null
           closed_by_name?: string | null
           closed_by_role?: string | null
+          closing_attempts?: number
           difference?: number | null
           expected_balance?: number | null
           forced_close?: boolean
+          forced_close_without_count?: boolean
           id?: string
           opened_at?: string
           opened_by?: string
@@ -472,20 +478,6 @@ export type Database = {
           store_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "cash_sessions_closed_by_fkey"
-            columns: ["closed_by"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cash_sessions_opened_by_fkey"
-            columns: ["opened_by"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "cash_sessions_store_id_fkey"
             columns: ["store_id"]
@@ -1501,8 +1493,10 @@ export type Database = {
       }
       cerrar_caja: {
         Args: {
-          p_actual_balance: number
-          p_employee_id: string
+          p_actual_balance?: number
+          p_declared_llave_bre?: number
+          p_declared_nequi?: number
+          p_employee_id?: string | null
           p_session_id: string
         }
         Returns: Json
@@ -1822,8 +1816,8 @@ export type Database = {
       }
       rpc_reconciliar_cierre_forzado: {
         Args: {
-          p_actual_balance: number
-          p_employee_id: string
+          p_actual_balance?: number | null
+          p_employee_id?: string | null
           p_session_id: string
         }
         Returns: Json

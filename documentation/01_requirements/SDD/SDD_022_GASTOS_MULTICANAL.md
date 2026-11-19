@@ -243,7 +243,7 @@ stateDiagram-v2
     "p_session_id": "UUID (Obligatorio — Identificador de la sesión de caja)",
     "p_amount": "NUMERIC (Obligatorio — Monto entero COP > 0)",
     "p_payment_method": "TEXT (Obligatorio — Valores: 'efectivo', 'nequi', 'llave_bre')",
-    "p_category": "TEXT (Obligatorio — Valores: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos', 'Reembolso')",
+    "p_category": "TEXT (Obligatorio — Valores: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos')",
     "p_description": "TEXT (Obligatorio — Longitud mínima 3 caracteres, sin contar prefijos)"
   }
   ```

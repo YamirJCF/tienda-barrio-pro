@@ -127,7 +127,8 @@ export async function handleAccessDeniedError(error: any, router?: any): Promise
     ? error 
     : (error?.message || error?.details || error?.error_description || JSON.stringify(error || ''));
 
-  const isRbacDenial = errString.includes('ADMIN_ONLY_ACTION') || errString.includes('PERMISSION_DENIED');
+  const isOwnershipViolation = errString.includes('SHIFT_OWNERSHIP_VIOLATION');
+  const isRbacDenial = errString.includes('ADMIN_ONLY_ACTION') || errString.includes('PERMISSION_DENIED') || isOwnershipViolation;
   if (isRbacDenial) {
     logger.warn('[SessionGuard] Acción rechazada por RBAC del servidor:', errString);
     try {
@@ -136,7 +137,7 @@ export async function handleAccessDeniedError(error: any, router?: any): Promise
       if (storeId) {
         await auditRepository.logEvent(
           storeId,
-          'unauthorized_access',
+          isOwnershipViolation ? 'unauthorized_shift_close' : 'unauthorized_access',
           'warning',
           { reason: errString },
           authStore.currentUser?.employeeId || authStore.currentUser?.id
@@ -146,8 +147,10 @@ export async function handleAccessDeniedError(error: any, router?: any): Promise
       // No silenciar la UI ante fallo de auditoría auxiliar
     }
     showNotificationOnce(
-      'No tienes permiso para realizar esta acción.',
-      'Acceso Restringido',
+      isOwnershipViolation
+        ? 'Solo quien abrió este turno o el Administrador pueden cerrarlo.'
+        : 'No tienes permiso para realizar esta acción.',
+      isOwnershipViolation ? 'Propiedad del Turno' : 'Acceso Restringido',
       'warning'
     );
     return true;
