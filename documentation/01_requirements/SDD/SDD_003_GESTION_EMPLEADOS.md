@@ -643,7 +643,7 @@ En cumplimiento riguroso de la **Regla 7 de AGENTS.md**, se formalizan explícit
 - **Condición de revisión futura:** Permanente / Invariante físico del esquema de base de datos.
 
 #### 2. D-2 (H-2): Estandarización de Permisos Granulares (POL-SEG-03 / `permissions` JSONB)
-- **Qué se decidió:** Consolidar las 5 llaves canónicas en camelCase (`canManageInventory`, `canViewInventory`, `canFiar`, `canOpenCloseCash`, `canViewReports`) dentro de la columna física `permissions` (JSONB) con estructura plana y valores booleanos por defecto `false`.
+- **Qué se decidió:** Consolidar las **4 llaves canónicas** en camelCase (`canManageInventory`, `canFiar`, `canOpenCloseCash`, `canManageRefunds`) dentro de la columna física `permissions` (JSONB) con estructura plana y valores booleanos por defecto `false` (erradicando `canViewInventory` y `canViewReports`).
 - **Por qué (Trade-off):** Otorga extensibilidad horizontal para incorporar futuros permisos funcionales sin requerir alteraciones DDL en la tabla `employees`, garantizando compatibilidad inmediata con la interfaz Vue.
 - **Condición de revisión futura:** Si el volumen transaccional de auditoría requiere indexación especializada por permiso, evaluar migración a columnas booleanas nativas en la versión 3.0.
 

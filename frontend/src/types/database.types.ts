@@ -49,6 +49,8 @@ export type Database = {
       audit_caja: {
         Row: {
           actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           created_at: string
           event_type: string
           id: string
@@ -58,6 +60,8 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -67,6 +71,8 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -100,7 +106,9 @@ export type Database = {
       }
       audit_logs: {
         Row: {
-          actor_id: string
+          actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           created_at: string | null
           event_type: string
           id: string
@@ -114,7 +122,9 @@ export type Database = {
           store_id: string | null
         }
         Insert: {
-          actor_id: string
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string | null
           event_type: string
           id?: string
@@ -128,7 +138,9 @@ export type Database = {
           store_id?: string | null
         }
         Update: {
-          actor_id?: string
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string | null
           event_type?: string
           id?: string
@@ -160,6 +172,8 @@ export type Database = {
       }
       audit_precios: {
         Row: {
+          actor_name: string | null
+          actor_role: string | null
           changed_by: string | null
           created_at: string
           id: string
@@ -171,6 +185,8 @@ export type Database = {
           store_id: string
         }
         Insert: {
+          actor_name?: string | null
+          actor_role?: string | null
           changed_by?: string | null
           created_at?: string
           id?: string
@@ -182,6 +198,8 @@ export type Database = {
           store_id: string
         }
         Update: {
+          actor_name?: string | null
+          actor_role?: string | null
           changed_by?: string | null
           created_at?: string
           id?: string
@@ -219,6 +237,8 @@ export type Database = {
       audit_seguridad: {
         Row: {
           actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           created_at: string
           event_type: string
           id: string
@@ -229,6 +249,8 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -239,6 +261,8 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -267,6 +291,8 @@ export type Database = {
       audit_ventas: {
         Row: {
           actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           created_at: string
           event_type: string
           id: string
@@ -276,6 +302,8 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -285,6 +313,8 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -319,6 +349,8 @@ export type Database = {
       cash_movements: {
         Row: {
           actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           amount: number
           category: string | null
           created_at: string
@@ -332,6 +364,8 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           amount: number
           category?: string | null
           created_at?: string
@@ -345,6 +379,8 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           amount?: number
           category?: string | null
           created_at?: string
@@ -385,12 +421,16 @@ export type Database = {
           actual_balance: number | null
           closed_at: string | null
           closed_by: string | null
+          closed_by_name: string | null
+          closed_by_role: string | null
           difference: number | null
           expected_balance: number | null
           forced_close: boolean
           id: string
           opened_at: string
           opened_by: string
+          opened_by_name: string | null
+          opened_by_role: string | null
           opening_balance: number
           status: string
           store_id: string
@@ -399,12 +439,16 @@ export type Database = {
           actual_balance?: number | null
           closed_at?: string | null
           closed_by?: string | null
+          closed_by_name?: string | null
+          closed_by_role?: string | null
           difference?: number | null
           expected_balance?: number | null
           forced_close?: boolean
           id?: string
           opened_at?: string
           opened_by: string
+          opened_by_name?: string | null
+          opened_by_role?: string | null
           opening_balance: number
           status?: string
           store_id: string
@@ -413,12 +457,16 @@ export type Database = {
           actual_balance?: number | null
           closed_at?: string | null
           closed_by?: string | null
+          closed_by_name?: string | null
+          closed_by_role?: string | null
           difference?: number | null
           expected_balance?: number | null
           forced_close?: boolean
           id?: string
           opened_at?: string
           opened_by?: string
+          opened_by_name?: string | null
+          opened_by_role?: string | null
           opening_balance?: number
           status?: string
           store_id?: string
@@ -449,6 +497,8 @@ export type Database = {
       }
       client_ledger: {
         Row: {
+          actor_name: string | null
+          actor_role: string | null
           amount: number
           client_id: string
           created_at: string | null
@@ -461,6 +511,8 @@ export type Database = {
           transaction_type: string
         }
         Insert: {
+          actor_name?: string | null
+          actor_role?: string | null
           amount: number
           client_id: string
           created_at?: string | null
@@ -473,6 +525,8 @@ export type Database = {
           transaction_type: string
         }
         Update: {
+          actor_name?: string | null
+          actor_role?: string | null
           amount?: number
           client_id?: string
           created_at?: string | null
@@ -770,6 +824,8 @@ export type Database = {
       }
       inventory_movements: {
         Row: {
+          actor_name: string | null
+          actor_role: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -784,6 +840,8 @@ export type Database = {
           unit_cost: number | null
         }
         Insert: {
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -798,6 +856,8 @@ export type Database = {
           unit_cost?: number | null
         }
         Update: {
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1124,11 +1184,13 @@ export type Database = {
       }
       sales: {
         Row: {
+          actor_name: string | null
+          actor_role: string | null
           amount_received: number | null
           change_given: number | null
           client_id: string | null
           created_at: string
-          employee_id: string
+          employee_id: string | null
           id: string
           idempotency_key: string | null
           is_voided: boolean | null
@@ -1143,13 +1205,17 @@ export type Database = {
           void_session_id: string | null
           voided_at: string | null
           voided_by: string | null
+          voided_by_name: string | null
+          voided_by_role: string | null
         }
         Insert: {
+          actor_name?: string | null
+          actor_role?: string | null
           amount_received?: number | null
           change_given?: number | null
           client_id?: string | null
           created_at?: string
-          employee_id: string
+          employee_id?: string | null
           id?: string
           idempotency_key?: string | null
           is_voided?: boolean | null
@@ -1164,13 +1230,17 @@ export type Database = {
           void_session_id?: string | null
           voided_at?: string | null
           voided_by?: string | null
+          voided_by_name?: string | null
+          voided_by_role?: string | null
         }
         Update: {
+          actor_name?: string | null
+          actor_role?: string | null
           amount_received?: number | null
           change_given?: number | null
           client_id?: string | null
           created_at?: string
-          employee_id?: string
+          employee_id?: string | null
           id?: string
           idempotency_key?: string | null
           is_voided?: boolean | null
@@ -1185,6 +1255,8 @@ export type Database = {
           void_session_id?: string | null
           voided_at?: string | null
           voided_by?: string | null
+          voided_by_name?: string | null
+          voided_by_role?: string | null
         }
         Relationships: [
           {
@@ -1412,7 +1484,12 @@ export type Database = {
         Args: { p_admin_id?: string; p_pass_id: string }
         Returns: Json
       }
+      assert_employee_permission: {
+        Args: { p_permission_key: string; p_store_id: string }
+        Returns: undefined
+      }
       assert_store_access: { Args: { p_store_id: string }; Returns: undefined }
+      assert_store_admin: { Args: { p_store_id: string }; Returns: undefined }
       buscar_producto_pos: {
         Args: {
           p_limit?: number
@@ -1561,6 +1638,7 @@ export type Database = {
         }[]
       }
       is_authorized_employee: { Args: never; Returns: boolean }
+      is_store_admin: { Args: { p_store_id: string }; Returns: boolean }
       procesar_venta: {
         Args: {
           p_amount_received?: number
@@ -1584,6 +1662,18 @@ export type Database = {
           p_pin: string
           p_username: string
         }
+        Returns: Json
+      }
+      resolve_actor_snapshot: {
+        Args: { p_store_id: string }
+        Returns: {
+          actor_id: string
+          actor_name: string
+          actor_role: string
+        }[]
+      }
+      rpc_actualizar_permisos_empleado: {
+        Args: { p_employee_id: string; p_permissions: Json }
         Returns: Json
       }
       rpc_actualizar_precio_lote:

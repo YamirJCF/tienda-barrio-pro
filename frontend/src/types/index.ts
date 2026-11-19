@@ -144,13 +144,10 @@ export interface Employee {
 }
 
 export interface EmployeePermissions {
-    canSell: boolean;
-    canViewInventory: boolean;
-    canViewReports: boolean;
+    canManageInventory: boolean;
     canFiar: boolean;
     canOpenCloseCash: boolean;
-    canManageInventory?: boolean;
-    canManageClients?: boolean;
+    canManageRefunds: boolean;
 }
 
 // WO-001: Helper type for generating UUIDs

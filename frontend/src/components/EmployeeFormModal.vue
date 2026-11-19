@@ -24,16 +24,15 @@ const emit = defineEmits<{
 const employeesStore = useEmployeesStore();
 const authStore = useAuthStore(); // Initialize AuthStore
 
-// Form state
+// Form state (SDD-003-01: exactamente 4 permisos delegables, false por defecto)
 const formData = ref({
   name: '',
   username: '',
   pin: '',
-  canSell: true,
-  canViewInventory: false,
+  canManageInventory: false,
   canFiar: false,
-  canViewReports: false,
   canOpenCloseCash: false,
+  canManageRefunds: false,
 });
 
 const isSubmitting = ref(false);
@@ -91,11 +90,10 @@ const resetForm = () => {
     name: '',
     username: '',
     pin: '',
-    canSell: true,
-    canViewInventory: false,
+    canManageInventory: false,
     canFiar: false,
-    canViewReports: false,
     canOpenCloseCash: false,
+    canManageRefunds: false,
   };
 };
 
@@ -113,11 +111,10 @@ const save = async () => {
       username: formData.value.username.trim(),
       pin: formData.value.pin || '', // Empty string means "don't update PIN" when editing
       permissions: {
-        canSell: true, // Always true
-        canViewInventory: formData.value.canViewInventory,
-        canViewReports: formData.value.canViewReports,
+        canManageInventory: formData.value.canManageInventory,
         canFiar: formData.value.canFiar,
         canOpenCloseCash: formData.value.canOpenCloseCash,
+        canManageRefunds: formData.value.canManageRefunds,
       },
       isActive: true, 
       storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '', // Inject storeId from AuthStore (Robust)
@@ -164,11 +161,10 @@ watch(
           name: employee.name,
           username: employee.username,
           pin: employee.pin,
-          canSell: true, 
-          canViewInventory: perms.canViewInventory ?? false,
-          canFiar: perms.canFiar ?? false,
-          canViewReports: perms.canViewReports ?? false,
-          canOpenCloseCash: perms.canOpenCloseCash ?? false,
+          canManageInventory: Boolean(perms.canManageInventory),
+          canFiar: Boolean(perms.canFiar),
+          canOpenCloseCash: Boolean(perms.canOpenCloseCash),
+          canManageRefunds: Boolean(perms.canManageRefunds),
         };
       }
     } else if (show && !employeeId) {
@@ -235,29 +231,15 @@ watch(
         >
 
         <label
-          class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-75"
-        >
-          <input
-            type="checkbox"
-            checked
-            disabled
-            class="size-5 rounded border-gray-300 text-primary focus:ring-primary cursor-not-allowed"
-          />
-          <span class="text-sm font-medium text-gray-900 dark:text-white"
-            >Puede Vender (Por defecto)</span
-          >
-        </label>
-
-        <label
           class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-700/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
         >
           <input
-            v-model="formData.canViewInventory"
+            v-model="formData.canManageInventory"
             class="size-5 rounded border-gray-300 text-primary focus:ring-primary"
             type="checkbox"
           />
           <span class="text-sm font-medium text-gray-900 dark:text-white"
-            >Ver Inventario</span
+            >Inventario completo</span
           >
         </label>
 
@@ -270,20 +252,7 @@ watch(
             type="checkbox"
           />
           <span class="text-sm font-medium text-gray-900 dark:text-white"
-            >Puede Fiar (Crédito)</span
-          >
-        </label>
-
-        <label
-          class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-700/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        >
-          <input
-            v-model="formData.canViewReports"
-            class="size-5 rounded border-gray-300 text-primary focus:ring-primary"
-            type="checkbox"
-          />
-          <span class="text-sm font-medium text-gray-900 dark:text-white"
-            >Ver Reportes</span
+            >Fiar y cobrar abonos</span
           >
         </label>
 
@@ -296,7 +265,20 @@ watch(
             type="checkbox"
           />
           <span class="text-sm font-medium text-gray-900 dark:text-white"
-            >Caja (Abrir/Cerrar)</span
+            >Abrir/cerrar caja</span
+          >
+        </label>
+
+        <label
+          class="flex items-center gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-700/30 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        >
+          <input
+            v-model="formData.canManageRefunds"
+            class="size-5 rounded border-gray-300 text-primary focus:ring-primary"
+            type="checkbox"
+          />
+          <span class="text-sm font-medium text-gray-900 dark:text-white"
+            >Reembolsos</span
           >
         </label>
       </div>

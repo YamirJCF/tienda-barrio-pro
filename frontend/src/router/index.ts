@@ -313,31 +313,33 @@ router.beforeEach(async (to, from, next) => {
     return next({ name: 'dashboard' });
   }
 
-  // 1b. Reports Hub & History: STRICTLY Admin only (Centro de Inteligencia)
+  // 1b. Reports Hub & History: STRICTLY Admin only (SDD-003-01 / POL-AUD-02)
   if ((to.name === 'reports' || to.name === 'history') && !authStore.isAdmin) {
     return next({ name: 'dashboard' });
   }
 
-  // 2. Admin Hub: Admin OR Reports Viewer
-  if (to.name === 'admin') {
-    if (!authStore.isAdmin && !authStore.canViewReports) {
-      return next({ name: 'dashboard' });
-    }
-    // Block "Gestión" tab for non-admins
-    if (to.query.tab === 'gestion' && !authStore.isAdmin) {
-      return next({ name: 'admin', query: { tab: 'reportes' } });
-    }
+  // 2. Admin Hub: STRICTLY Admin only
+  if (to.name === 'admin' && !authStore.isAdmin) {
+    return next({ name: 'dashboard' });
   }
 
-  // 2b. Financial Dashboard: Admin OR Reports Viewer
-  if (to.name === 'financial-dashboard') {
-    if (!authStore.isAdmin && !authStore.canViewReports) {
-      return next({ name: 'dashboard' });
-    }
+  // 2b. Financial Dashboard: STRICTLY Admin only
+  if (to.name === 'financial-dashboard' && !authStore.isAdmin) {
+    return next({ name: 'dashboard' });
   }
 
-  // 3. Cash Control: Needs permission
+  // 3. Cash Control: Requires canOpenCloseCash (or Admin)
   if (to.name === 'cash-control' && !authStore.canOpenCloseCash) {
+    return next({ name: 'dashboard' });
+  }
+
+  // 3b. Inventory & Stock Entry: Requires canManageInventory (or Admin)
+  if ((to.name === 'inventory' || to.name === 'stock-entry') && !authStore.canManageInventory) {
+    return next({ name: 'dashboard' });
+  }
+
+  // 3c. Clients & Client Detail: Requires canFiar (or Admin)
+  if ((to.name === 'clients' || to.name === 'client-detail') && !authStore.canFiar) {
     return next({ name: 'dashboard' });
   }
 

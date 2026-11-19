@@ -12,7 +12,7 @@ export interface TrafficLight {
 
 export interface MoneyBreakdown {
     cash: number;
-    transfer: number; // Sum of Nequi + Daviplata
+    transfer: number; // Sum of Nequi + Llave Bre-B
     credit: number;   // Fiado
 }
 

@@ -35,11 +35,12 @@ describe('historyShortcutParser', () => {
     expect(parseHistoryShortcuts('30d').patches.datePreset).toBe('month');
   });
 
-  it('reconoce atajos de método de pago (efectivo, digital, nequi, daviplata)', () => {
+  it('reconoce atajos de método de pago (efectivo, digital, nequi, llave_bre)', () => {
     expect(parseHistoryShortcuts('efectivo').patches.paymentMethod).toBe('CASH');
     expect(parseHistoryShortcuts('digitales').patches.paymentMethod).toBe('DIGITAL');
     expect(parseHistoryShortcuts('nequi').patches.paymentMethod).toBe('NEQUI');
-    expect(parseHistoryShortcuts('daviplata').patches.paymentMethod).toBe('DAVIPLATA');
+    expect(parseHistoryShortcuts('llave_bre').patches.paymentMethod).toBe('LLAVE_BRE');
+    expect(parseHistoryShortcuts('daviplata').patches.paymentMethod).toBeUndefined();
   });
 
   it('reconoce atajos de subtipo de evento (anuladas, creaciones, entradas, ajustes, apertura, cierre)', () => {

@@ -87,8 +87,9 @@ const handleVoidSale = async () => {
 const paymentLabels: Record<string, string> = {
   'efectivo': '💵 Efectivo',
   'nequi': '📱 Nequi',
-  'daviplata': '📱 Daviplata',
-  'fiado': '📋 Fiado'
+  'llave_bre': '🔑 Llave Bre-B',
+  'fiado': '📋 Fiado',
+  'consumo_personal': '👤 Retiro Personal'
 };
 
 watch(() => props.modelValue, async (open) => {

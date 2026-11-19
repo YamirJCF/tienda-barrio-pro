@@ -16,12 +16,26 @@ const authStore = useAuthStore();
 
 const isActive = (name: string) => route.name === name;
 
-const canViewReports = computed(() => authStore.canViewReports);
 const isAdmin = computed(() => authStore.isAdmin);
+const showInventory = computed(() => authStore.canManageInventory);
+const showClients = computed(() => authStore.canFiar);
 
-// Tab visibility logic
-const showInventory = true;
-const showClients = true;
+const gridColsClass = computed(() => {
+  const count =
+    1 + // Vender (capacidad base POS)
+    (showInventory.value ? 1 : 0) +
+    (isAdmin.value ? 1 : 0) + // Reportes (100% Admin-only)
+    (showClients.value ? 1 : 0) +
+    (isAdmin.value ? 1 : 0); // Admin
+  const map: Record<number, string> = {
+    1: 'grid-cols-1',
+    2: 'grid-cols-2',
+    3: 'grid-cols-3',
+    4: 'grid-cols-4',
+    5: 'grid-cols-5',
+  };
+  return map[count] || 'grid-cols-3';
+});
 </script>
 
 <template>
@@ -30,7 +44,7 @@ const showClients = true;
   >
     <div
       class="grid h-16 max-w-lg mx-auto"
-      :class="isAdmin ? 'grid-cols-5' : canViewReports ? 'grid-cols-4' : 'grid-cols-3'"
+      :class="gridColsClass"
     >
       <!-- Item: Vender -->
       <button
@@ -42,7 +56,7 @@ const showClients = true;
         <span class="text-[10px] font-medium tracking-wide">Vender</span>
       </button>
 
-      <!-- Item: Productos -->
+      <!-- Item: Productos (Inventario completo) -->
       <button
         v-if="showInventory"
         @click="router.push('/inventory')"
@@ -53,9 +67,9 @@ const showClients = true;
         <span class="text-[10px] font-medium tracking-wide">Productos</span>
       </button>
 
-      <!-- Item: Reportes -->
+      <!-- Item: Reportes (100% Admin-only) -->
       <button
-        v-if="canViewReports"
+        v-if="isAdmin"
         @click="router.push('/reports')"
         class="flex flex-col items-center justify-center gap-1 transition-colors"
         :class="isActive('reports') || isActive('financial-dashboard') || isActive('history') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'"

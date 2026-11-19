@@ -19,6 +19,8 @@ export interface Expense {
     description: string;
     category: string; // Extracted or stored in metadata
     created_by?: string; // Not directly available in cash_movements view unless joined?
+    actor_name?: string | null;
+    actor_role?: string | null;
     created_at?: string;
 }
 
@@ -43,6 +45,9 @@ const expenseMapper: RepositoryMappers<CashMovementDB, Expense> = {
             amount: row.amount,
             description: description,
             category: row.category || category,
+            created_by: row.actor_id ?? undefined,
+            actor_name: (row as any).actor_name ?? null,
+            actor_role: (row as any).actor_role ?? null,
             created_at: row.created_at
         };
     },
@@ -50,6 +55,8 @@ const expenseMapper: RepositoryMappers<CashMovementDB, Expense> = {
         return {
             id: entity.id,
             actor_id: entity.created_by ?? null,
+            actor_name: entity.actor_name ?? null,
+            actor_role: entity.actor_role ?? null,
             amount: entity.amount,
             description: `[${entity.category || 'General'}] ${entity.description}`,
             category: entity.category || 'General',

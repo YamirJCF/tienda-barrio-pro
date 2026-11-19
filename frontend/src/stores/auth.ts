@@ -46,13 +46,10 @@ export interface CurrentUser {
   // For employees
   employeeId?: string; // UUID (migrated from number)
   permissions?: {
-    canSell: boolean;
-    canViewInventory: boolean;
-    canViewReports: boolean;
+    canManageInventory: boolean;
     canFiar: boolean;
-    canOpenCloseCash: boolean; // SPEC-006
-    canManageInventory?: boolean; // New granular permission
-    canManageClients?: boolean; // New granular permission
+    canOpenCloseCash: boolean;
+    canManageRefunds: boolean;
   };
 }
 
@@ -192,23 +189,10 @@ export const useAuthStore = defineStore(
       return stores.value.find((s) => s.id === currentUser.value!.storeId);
     });
 
-    // Permission helpers - admins have all permissions, employees check their assigned permissions
+    // SDD-003-01: Matriz Cerrada de 4 Permisos Delegables + Capacidades Base
     const canSell = computed(() => {
       if (!currentUser.value) return false;
-      if (isAdmin.value) return true;
-      return currentUser.value.permissions?.canSell ?? false;
-    });
-
-    const canViewInventory = computed(() => {
-      if (!currentUser.value) return false;
-      if (isAdmin.value) return true;
-      return currentUser.value.permissions?.canViewInventory ?? false;
-    });
-
-    const canViewReports = computed(() => {
-      if (!currentUser.value) return false;
-      if (isAdmin.value) return true;
-      return currentUser.value.permissions?.canViewReports ?? false;
+      return true;
     });
 
     const canFiar = computed(() => {
@@ -233,17 +217,18 @@ export const useAuthStore = defineStore(
       return deviceApproved.value === 'approved';
     });
 
-    // SPEC-006: Permisos granulares de gestión (Fix para botones CRUD)
+    // Permiso granular: Inventario completo
     const canManageInventory = computed(() => {
       if (!currentUser.value) return false;
       if (isAdmin.value) return true;
       return currentUser.value.permissions?.canManageInventory ?? false;
     });
 
-    const canManageClients = computed(() => {
+    // Permiso granular: Reembolsos en POS (SDD-006-02 / SDD-003-01)
+    const canManageRefunds = computed(() => {
       if (!currentUser.value) return false;
       if (isAdmin.value) return true;
-      return currentUser.value.permissions?.canManageClients ?? false;
+      return currentUser.value.permissions?.canManageRefunds ?? false;
     });
 
     // Methods
@@ -395,11 +380,10 @@ export const useAuthStore = defineStore(
         name: string;
         username: string;
         permissions: {
-          canSell: boolean;
-          canViewInventory: boolean;
-          canViewReports: boolean;
+          canManageInventory: boolean;
           canFiar: boolean;
-          canOpenCloseCash: boolean; // SPEC-006
+          canOpenCloseCash: boolean;
+          canManageRefunds?: boolean;
         };
       },
       storeId: string,
@@ -412,10 +396,10 @@ export const useAuthStore = defineStore(
         storeId: storeId,
         employeeId: employee.id,
         permissions: {
-          ...employee.permissions,
-          // Default to false — client management is admin-only
-          canManageClients: (employee.permissions as any).canManageClients ?? false,
-          canManageInventory: (employee.permissions as any).canManageInventory ?? false
+          canManageInventory: Boolean(employee.permissions?.canManageInventory),
+          canFiar: Boolean(employee.permissions?.canFiar),
+          canOpenCloseCash: Boolean(employee.permissions?.canOpenCloseCash),
+          canManageRefunds: Boolean(employee.permissions?.canManageRefunds)
         },
       };
       isAuthenticated.value = true;
@@ -808,15 +792,13 @@ export const useAuthStore = defineStore(
       isEmployee,
       currentStore,
       hasStores,
-      // Permission helpers
+      // Permission helpers (SDD-003-01: 4 delegables + capacidad base POS)
       canSell,
-      canViewInventory,
-      canViewReports,
       canFiar,
       canOpenCloseCash,
       canAccessPOS,
       canManageInventory,
-      canManageClients,
+      canManageRefunds,
 
       // Admin Lists
 

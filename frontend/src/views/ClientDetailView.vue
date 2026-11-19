@@ -544,12 +544,12 @@ const registerPayment = async () => {
                         <span class="text-xs font-semibold">Nequi</span>
                     </button>
                     <button
-                        @click="paymentMethod = 'daviplata'"
-                        :class="paymentMethod === 'daviplata' ? 'bg-[#E32119] text-white border-[#E32119] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                        @click="paymentMethod = 'llave_bre'"
+                        :class="paymentMethod === 'llave_bre' ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
                         class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
                     >
                         <CreditCard :size="24" :stroke-width="1.5" class="mb-1" />
-                        <span class="text-xs font-semibold">Daviplata</span>
+                        <span class="text-xs font-semibold">Llave Bre-B</span>
                     </button>
                 </div>
             </div>

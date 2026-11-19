@@ -85,12 +85,12 @@
                 </button>
                 <button
                     type="button"
-                    @click="paymentMethod = 'daviplata'"
-                    :class="paymentMethod === 'daviplata' ? 'bg-[#E32119] text-white border-[#E32119] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
+                    @click="paymentMethod = 'llave_bre'"
+                    :class="paymentMethod === 'llave_bre' ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
                     class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
                 >
                     <CreditCard :size="20" :stroke-width="1.5" class="mb-1" />
-                    <span class="text-[11px] font-semibold">Daviplata</span>
+                    <span class="text-[11px] font-semibold">Llave Bre-B</span>
                 </button>
                 <button
                     type="button"

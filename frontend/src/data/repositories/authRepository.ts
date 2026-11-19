@@ -74,8 +74,13 @@ async function ensureAnonymousSession() {
 
 const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
 
+function getBogotaDateOffset(daysOffset = 0): string {
+    const d = new Date(Date.now() + daysOffset * 24 * 60 * 60 * 1000);
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(d);
+}
+
 function getTodayBogota(): string {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+    return getBogotaDateOffset(0);
 }
 
 export const authRepository = {
@@ -247,13 +252,10 @@ export const authRepository = {
                     type: 'admin',
                     storeId: storeData.id,
                     permissions: {
-                        canSell: true,
-                        canViewInventory: true,
-                        canViewReports: true,
+                        canManageInventory: true,
                         canFiar: true,
                         canOpenCloseCash: true,
-                        canManageInventory: true,
-                        canManageClients: true
+                        canManageRefunds: true
                     }
                 },
                 store_state: { is_open: true },
@@ -316,13 +318,10 @@ export const authRepository = {
                     type: 'admin',
                     storeId: storeData.id,
                     permissions: {
-                        canSell: true,
-                        canViewInventory: true,
-                        canViewReports: true,
+                        canManageInventory: true,
                         canFiar: true,
                         canOpenCloseCash: true,
-                        canManageInventory: true,
-                        canManageClients: true
+                        canManageRefunds: true
                     }
                 },
                 store_state: { is_open: true },
@@ -469,12 +468,20 @@ export const authRepository = {
 
             if (error) throw error;
 
-            return data as AccessRequestResponse;
+            const payload = data as any;
+            if (payload && payload.success === false && !payload.error_code && payload.code) {
+                return {
+                    ...payload,
+                    error_code: payload.code
+                } as AccessRequestResponse;
+            }
+
+            return payload as AccessRequestResponse;
         } catch (err: any) {
             logger.error('[AuthRepo] Request Access Error:', err);
             return {
                 success: false,
-                error_code: 'RPC_ERROR',
+                error_code: err?.code || 'RPC_ERROR',
                 message: err.message
             };
         }
@@ -482,16 +489,17 @@ export const authRepository = {
 
     /**
      * Obtener solicitudes de acceso pendientes para el admin
-     * Conforme a SDD_001 / SDD_015: Zona Horaria America/Bogota, sin descarte silencioso por TTL
+     * Conforme a SDD_001 / SDD_015: Zona Horaria America/Bogota, sin referencia a employees.role
      */
     async getPendingAccessRequests(storeId: string) {
         const today = getTodayBogota();
+        const yesterday = getBogotaDateOffset(-1);
 
         const { data, error } = await supabase
             .from('daily_passes')
             .select('*, employees!daily_passes_employee_id_fkey!inner(name, store_id)')
             .eq('status', 'pending')
-            .eq('pass_date', today)
+            .in('pass_date', [yesterday, today])
             .eq('employees.store_id', storeId)
             .order('requested_at', { ascending: false });
 
@@ -512,17 +520,30 @@ export const authRepository = {
     },
 
     /**
-     * Obtener dispositivos autorizados
-     * Conforme a SDD_001 / SDD_015: Zona Horaria America/Bogota
+     * Obtener dispositivos autorizados (hoy + pases nocturnos <24h si existe turno abierto)
+     * Conforme a SDD_001 / SDD_015 / SDD-003-01 (Brecha B-06)
      */
     async getAuthorizedDevices(storeId: string) {
         const today = getTodayBogota();
+        const yesterday = getBogotaDateOffset(-1);
+        const twentyFourHoursAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+        const { data: openShift } = await supabase
+            .from('cash_sessions')
+            .select('id')
+            .eq('store_id', storeId)
+            .eq('status', 'open')
+            .gte('opened_at', twentyFourHoursAgoIso)
+            .limit(1);
+
+        const hasOpenOvernightShift = Boolean(openShift && openShift.length > 0);
+        const validDates = hasOpenOvernightShift ? [yesterday, today] : [today];
 
         const { data, error } = await supabase
             .from('daily_passes')
             .select('*, employees!daily_passes_employee_id_fkey!inner(name, store_id)')
             .eq('status', 'approved')
-            .eq('pass_date', today)
+            .in('pass_date', validDates)
             .eq('employees.store_id', storeId)
             .order('resolved_at', { ascending: false });
 

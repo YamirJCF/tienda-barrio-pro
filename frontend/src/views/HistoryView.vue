@@ -124,7 +124,7 @@ const paymentOptions = computed<DropdownOption[]>(() => {
     { value: 'efectivo', label: '💵 Efectivo' },
     { value: 'digital', label: '📱 Digitales (Todos)' },
     { value: 'nequi', label: '📱 Nequi' },
-    { value: 'daviplata', label: '📱 Daviplata' },
+    { value: 'llave_bre', label: '🔑 Llave Bre-B' },
   ];
   if (currentType.value === 'credits') {
     base.push({ value: 'fiado', label: '📋 Fiado' });

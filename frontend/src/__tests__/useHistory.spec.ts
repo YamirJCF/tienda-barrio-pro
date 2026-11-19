@@ -248,7 +248,7 @@ describe('useHistory — Gobernanza de Filtros y Atajos (FRD-005, FRD-021)', () 
         user: 'Carlos',
         icon: 'cart',
         colorClass: '',
-        metadata: { payment_method: 'daviplata' }
+        metadata: { payment_method: 'llave_bre' }
       }
     ];
 
@@ -257,7 +257,7 @@ describe('useHistory — Gobernanza de Filtros y Atajos (FRD-005, FRD-021)', () 
     expect(history.filteredItems.value[0].id).toBe('1');
 
     history.paymentMethodFilter.value = 'digital';
-    expect(history.filteredItems.value).toHaveLength(2); // nequi + daviplata
+    expect(history.filteredItems.value).toHaveLength(2); // nequi + llave_bre
 
     history.paymentMethodFilter.value = 'nequi';
     expect(history.filteredItems.value).toHaveLength(1);

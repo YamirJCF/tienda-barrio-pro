@@ -93,9 +93,9 @@ sequenceDiagram
     else Es Empleado Operativo
         Helper->>DB: Leer employees.is_active + permissions->>'<key>' en vivo
         alt Inactivo, sin Pase vigente, sin permiso o acción Admin-only
-            Helper->>DB: INSERT audit_logs (PERMISSION_DENIED + snapshot)
-            Helper-->>RPC: RAISE EXCEPTION (42501 / FORBIDDEN)
-            RPC-->>UI: Error explícito de seguridad
+            Helper-->>RPC: RAISE EXCEPTION (42501 ADMIN_ONLY_ACTION / PERMISSION_DENIED)
+            RPC-->>UI: Error explícito de seguridad (rollback ACID)
+            UI->>DB: rpc_log_security_event('UNAUTHORIZED_ACCESS')
             UI-->>User: Banner claro de bloqueo (sin mutar estado)
         else Permiso vigente = true
             Helper-->>RPC: Autorizado + Snapshot (employee.name, 'employee')
@@ -151,11 +151,11 @@ sequenceDiagram
 Todo RPC del sistema DEBE reutilizar funciones centralizadas de seguridad (prohibido reimplementar `JOIN`/`EXISTS` ad-hoc por tabla):
 1. **`assert_store_access(p_store_id UUID)`** *(ya existente)*: valida pertenencia multi-tenant.
 2. **`is_store_admin(p_store_id UUID)`** *(centralizado sobre `admin_profiles`)*: retorna `true` únicamente si `auth.uid()` existe en `admin_profiles` para `p_store_id` con `role IN ('owner', 'manager')`.
-3. **`assert_store_admin(p_store_id UUID)`**: exige `is_store_admin(p_store_id)`; en caso contrario registra intento en `audit_logs` y lanza `RAISE EXCEPTION 'ADMIN_ONLY_ACTION'`.
+3. **`assert_store_admin(p_store_id UUID)`**: exige `is_store_admin(p_store_id)`; en caso contrario aborta atómicamente con `RAISE EXCEPTION 'ADMIN_ONLY_ACTION'` (`SQLSTATE 42501`, dejando la auditoría persistente del intento denegado en una transacción dedicada vía `rpc_log_security_event('UNAUTHORIZED_ACCESS')` para evitar pérdida por rollback ACID en PostgreSQL).
 4. **`assert_employee_permission(p_store_id UUID, p_permission_key TEXT)`**:
    - Si `is_store_admin(p_store_id)` es `true` → aprueba de inmediato sin requerir fila en `employees`.
    - Si es empleado → valida `is_active = true`, Pase Diario vigente (`pass_date = v_today` o `v_today - 1` con turno abierto `<24h`) y `COALESCE((permissions ->> p_permission_key)::boolean, false) = true`.
-   - Si falla → registra en `audit_logs` y lanza `RAISE EXCEPTION 'PERMISSION_DENIED: %', p_permission_key`.
+   - Si falla → aborta atómicamente con `RAISE EXCEPTION 'PERMISSION_DENIED: %', p_permission_key` (`SQLSTATE 42501`; la bitácora persistente del intento denegado se registra en transacción dedicada vía `rpc_log_security_event('UNAUTHORIZED_ACCESS')`).
    - **`p_permission_key` solo admite 4 valores:** `'canManageInventory'`, `'canFiar'`, `'canOpenCloseCash'`, `'canManageRefunds'`.
 5. **`resolve_actor_snapshot(p_store_id UUID)`**: retorna `(actor_id UUID, actor_name TEXT, actor_role TEXT)` resolviendo desde `admin_profiles` (`role`: `'owner'`/`'manager'`) o `employees` (`role`: `'employee'`) para estampar la fotografía histórica inmutable en la misma transacción.
 

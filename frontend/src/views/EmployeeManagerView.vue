@@ -43,14 +43,30 @@ const showPinModal = ref(false);
 const selectedEmployee = ref<Employee | null>(null);
 const newPin = ref('');
 const newlyCreatedId = ref<string | null>(null);
+const statusFilter = ref<'all' | 'active' | 'inactive'>('all');
+const searchQuery = ref('');
 
-// Computed: Filter out system owner employees from UI
-// Owners (username starting with 'owner_') are technical system employees
-// Admins authenticate with email/password, not PIN, so they never interact with these
-const visibleEmployees = computed(() => {
+// Tope de 5 empleados activos excluye explícitamente perfiles técnicos owner_ (SDD-003 §0.3 D-4)
+const operationalEmployees = computed(() => {
   return employeesStore.employees.filter(e => !e.username.startsWith('owner_'));
 });
 
+const activeOperationalCount = computed(() => employeesStore.activeOperationalEmployees.length);
+const isAtEmployeeLimit = computed(() => activeOperationalCount.value >= 5);
+
+const visibleEmployees = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  return operationalEmployees.value.filter(e => {
+    if (statusFilter.value === 'active' && !e.isActive) return false;
+    if (statusFilter.value === 'inactive' && e.isActive) return false;
+    if (q) {
+      return e.name.toLowerCase().includes(q) || e.username.toLowerCase().includes(q);
+    }
+    return true;
+  });
+});
+
+const hasOperationalEmployees = computed(() => operationalEmployees.value.length > 0);
 const hasVisibleEmployees = computed(() => visibleEmployees.value.length > 0);
 
 // Methods
@@ -80,7 +96,7 @@ const getAvatarColor = (name: string) => {
 };
 
 const openNewEmployee = () => {
-  if (employeesStore.activeEmployees.length >= 5) {
+  if (isAtEmployeeLimit.value) {
       showWarning("Límite de empleados activos alcanzado (5/5). Desactiva uno existente para crear nuevo.");
       return;
   }
@@ -193,9 +209,54 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
 
     <!-- Main Content Area -->
     <main class="flex-1 overflow-y-auto px-4 pt-4">
+      <!-- Barra de búsqueda, filtros Activos/Inactivos y cupo 5/5 (sin contar owner_) -->
+      <div v-if="hasOperationalEmployees" class="mb-4 space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <input
+            v-model="searchQuery"
+            type="search"
+            aria-label="Buscar empleado por nombre o alias"
+            placeholder="Buscar por nombre o alias..."
+            class="flex-1 h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <span
+            class="shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+            data-testid="active-employees-count"
+          >
+            {{ activeOperationalCount }}/5 activos
+          </span>
+        </div>
+        <div class="flex gap-2" role="group" aria-label="Filtrar estado de empleados">
+          <button
+            type="button"
+            @click="statusFilter = 'all'"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            :class="statusFilter === 'all' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-gray-700'"
+          >
+            Todos
+          </button>
+          <button
+            type="button"
+            @click="statusFilter = 'active'"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            :class="statusFilter === 'active' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-gray-700'"
+          >
+            Activos
+          </button>
+          <button
+            type="button"
+            @click="statusFilter = 'inactive'"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            :class="statusFilter === 'inactive' ? 'bg-primary text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-gray-700'"
+          >
+            Inactivos
+          </button>
+        </div>
+      </div>
+
       <!-- Empty State -->
       <div
-        v-if="!hasVisibleEmployees"
+        v-if="!hasOperationalEmployees"
         class="flex flex-col items-center justify-center h-full text-center"
       >
         <div
@@ -210,11 +271,20 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
         <BaseButton
           @click="openNewEmployee"
           class="mt-6"
-          :disabled="employeesStore.activeEmployees.length >= 5"
+          :disabled="isAtEmployeeLimit"
         >
           <UserPlus :size="18" class="mr-2" />
-          {{ employeesStore.activeEmployees.length >= 5 ? 'Límite Alcanzado (5/5)' : 'Agregar Empleado' }}
+          {{ isAtEmployeeLimit ? 'Límite Alcanzado (5/5)' : 'Agregar Empleado' }}
         </BaseButton>
+      </div>
+
+      <div
+        v-else-if="!hasVisibleEmployees"
+        class="flex flex-col items-center justify-center py-12 text-center"
+      >
+        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+          No hay empleados que coincidan con el filtro aplicado.
+        </p>
       </div>
 
       <!-- Employee List -->
@@ -290,11 +360,11 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
     <div class="absolute bottom-24 right-4 z-40">
       <button
         @click="openNewEmployee"
-        :disabled="employeesStore.activeEmployees.length >= 5"
+        :disabled="isAtEmployeeLimit"
         class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90 disabled:opacity-50 disabled:bg-gray-400 disabled:cursor-not-allowed"
-        :title="employeesStore.activeEmployees.length >= 5 ? 'Límite de 5 empleados alcanzado' : 'Crear nuevo empleado'"
+        :title="isAtEmployeeLimit ? 'Límite de 5 empleados alcanzado' : 'Crear nuevo empleado'"
       >
-         <component :is="employeesStore.activeEmployees.length >= 5 ? Ban : Plus" :size="32" :stroke-width="1.5" />
+         <component :is="isAtEmployeeLimit ? Ban : Plus" :size="32" :stroke-width="1.5" />
       </button>
     </div>
 

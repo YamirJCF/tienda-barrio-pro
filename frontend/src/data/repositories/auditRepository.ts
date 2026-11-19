@@ -10,7 +10,9 @@ export interface AuditLog {
     severity: 'info' | 'warning' | 'critical';
     details: Record<string, any>;
     ip_address?: string;
-    user_name?: string; // Joined field
+    user_name?: string; // Snapshot or joined field
+    actor_name?: string | null;
+    actor_role?: string | null;
 }
 
 export const auditRepository = {
@@ -78,7 +80,9 @@ export const auditRepository = {
                 ...log,
                 severity: log.metadata?.severity || 'info',
                 details: log.metadata, // Correctly map DB metadata to Domain details
-                user_name: log.employees?.name || 'Sistema/Desconocido'
+                user_name: log.actor_name || log.employees?.name || 'Sistema/Desconocido',
+                actor_name: log.actor_name || log.employees?.name || 'Sistema/Desconocido',
+                actor_role: log.actor_role || null
             }));
         } catch (e) {
             logger.error('[AuditRepo] Failed to fetch logs', e);
@@ -109,7 +113,9 @@ export const auditRepository = {
                 date: log.created_at,
                 productName: log.products?.name,
                 productPlu: log.products?.plu,
-                employeeName: log.employees?.name,
+                employeeName: log.actor_name || log.employees?.name || 'Administrador',
+                actor_name: log.actor_name || log.employees?.name || 'Administrador',
+                actor_role: log.actor_role || null,
                 oldPrice: log.old_price,
                 newPrice: log.new_price,
                 reason: log.metadata?.reason

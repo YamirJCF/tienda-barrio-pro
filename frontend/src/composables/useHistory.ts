@@ -91,7 +91,7 @@ export function useHistory() {
     const dateFilter = ref<DatePreset>('week');
     const employeeFilter = ref<string | null>(null); // UUID or null for all
     const eventTypeFilter = ref<string>('all');
-    const paymentMethodFilter = ref<string>('all'); // 'all', 'efectivo', 'digital', 'nequi', 'daviplata'
+    const paymentMethodFilter = ref<string>('all'); // 'all', 'efectivo', 'digital', 'nequi', 'llave_bre'
 
     // Custom date range
     const customStartDate = ref<string>('');
@@ -163,7 +163,7 @@ export function useHistory() {
                 if (!pm) return false;
 
                 if (pmKey === 'digital') {
-                    return pm === 'nequi' || pm === 'daviplata' || pm === 'digital';
+                    return pm === 'nequi' || pm === 'llave_bre' || pm === 'digital';
                 }
                 
                 return pm === pmKey;
@@ -364,8 +364,9 @@ export function useHistory() {
             const paymentLabel: Record<string, string> = {
                 'efectivo': '💵 Efectivo',
                 'nequi': '📱 Nequi',
-                'daviplata': '📱 Daviplata',
-                'fiado': '📋 Fiado'
+                'llave_bre': '🔑 Llave Bre-B',
+                'fiado': '📋 Fiado',
+                'consumo_personal': '👤 Retiro Personal'
             };
             return {
                 id: sale.id,
@@ -375,7 +376,7 @@ export function useHistory() {
                 date: sale.created_at,
                 amount: Number(sale.total),
                 amountFormatted: formatCurrency(sale.total),
-                user: sale.employee_name,
+                user: sale.actor_name || sale.employee_name || 'Sistema',
                 icon: 'shopping_cart',
                 colorClass: sale.is_voided
                     ? 'text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400'
@@ -517,7 +518,7 @@ export function useHistory() {
                 title: `📦 ${mov.product_name}`,
                 subtitle: `+${mov.quantity} unidades${supplier}${invoice}${payment}`,
                 date: mov.created_at,
-                user: mov.created_by_name,
+                user: mov.actor_name || mov.created_by_name || 'Sistema',
                 icon: 'package',
                 colorClass: 'text-indigo-600 bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400',
                 metadata: mov
@@ -539,7 +540,7 @@ export function useHistory() {
             title: mapAuditEventTitle(log.event_type),
             subtitle: log.details?.description || 'Evento del sistema',
             date: log.created_at,
-            user: log.user_name || 'Sistema',
+            user: log.actor_name || log.user_name || 'Sistema',
             icon: getAuditIcon(log.event_type),
             colorClass: getAuditColor(log.severity),
             metadata: { ...log, event_type: log.event_type }
@@ -560,7 +561,7 @@ export function useHistory() {
             title: `Cambio: ${log.productName}`,
             subtitle: `Anterior: ${formatCurrency(log.oldPrice)} → Nuevo: ${formatCurrency(log.newPrice)}`,
             date: log.date,
-            user: log.employeeName || 'Desconocido',
+            user: log.actor_name || log.employeeName || 'Administrador',
             icon: 'price_change',
             colorClass: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400',
             metadata: log
@@ -583,7 +584,7 @@ export function useHistory() {
             date: exp.created_at || '',
             amount: exp.amount,
             amountFormatted: formatCurrency(exp.amount),
-            user: 'Cajero',
+            user: exp.actor_name || 'Sistema',
             icon: 'payments',
             colorClass: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400',
             metadata: exp
@@ -622,7 +623,7 @@ export function useHistory() {
                 date: cred.created_at,
                 amount: Number(cred.amount),
                 amountFormatted: formatCurrency(cred.amount),
-                user: cred.employee_name || 'Desconocido',
+                user: cred.actor_name || cred.employee_name || 'Desconocido',
                 icon: 'credit_card',
                 colorClass: isPayment
                     ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400'

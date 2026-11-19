@@ -78,7 +78,7 @@ const currentPaymentMethod = computed(() => {
 // Capabilities
 const allowsChange = computed(() => currentPaymentMethod.value?.allowsChange ?? false);
 const isFiado = computed(() => currentMethod.value === 'fiado'); // Special Business Logic
-const isNequi = computed(() => currentMethod.value === 'nequi'); // Special UI Logic (QR)
+const isNequi = computed(() => currentMethod.value === 'nequi' || currentMethod.value === 'llave_bre'); // Canales digitales sin cambio
 
 // Total Calculations
 const totalPaid = computed(() => {
@@ -206,10 +206,16 @@ const clearSelectedFiadoClient = () => {
 // Helpers
 const getIconForMethod = (code: string) => {
     switch (code) {
-        case 'cash': return Banknote;
-        case 'nequi': return Smartphone;
-        case 'fiado': return User;
-        default: return Banknote;
+        case 'cash':
+        case 'efectivo':
+            return Banknote;
+        case 'nequi':
+        case 'llave_bre':
+            return Smartphone;
+        case 'fiado':
+            return User;
+        default:
+            return Banknote;
     }
 };
 
@@ -496,7 +502,9 @@ watch(currentMethod, (newMethod) => {
                     <QrCode :size="48" class="text-pink-600 dark:text-pink-400" />
                 </div>
                 <div>
-                    <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Pago con Nequi / Daviplata</h4>
+                    <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                      {{ currentMethod === 'llave_bre' ? 'Pago con Llave Bre-B' : 'Pago con Nequi' }}
+                    </h4>
                     <p class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed">
                         Solicita al cliente el pago exacto de <strong class="text-gray-900 dark:text-white">$ {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : total) }}</strong>.
                     </p>

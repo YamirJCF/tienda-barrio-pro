@@ -37,8 +37,7 @@ const { formatCurrency } = useCurrencyFormat();
 const { formatStock } = useQuantityFormat();
 const toast = useToast();
 
-// Permisos del usuario
-const canViewInventory = computed(() => authStore.canViewInventory);
+// Permisos del usuario (SDD-003-01: esquema cerrado de 4 permisos)
 const canManageInventory = computed(() => authStore.canManageInventory);
 
 // Admin role check
@@ -193,7 +192,7 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
 <template>
   <div class="flex flex-col h-screen bg-background-light dark:bg-background-dark pb-24 relative">
     <!-- No Permission Overlay -->
-    <NoPermissionOverlay v-if="!canViewInventory"
+    <NoPermissionOverlay v-if="!canManageInventory"
       message="No tienes permiso para ver el inventario. Contacta a tu administrador si necesitas acceso."
       @go-back="goToDashboard" />
 

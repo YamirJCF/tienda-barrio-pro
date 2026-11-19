@@ -82,7 +82,9 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             created_at: entity.timestamp || new Date().toISOString(),
             payment_method: (entity.paymentMethod === 'cash' || (entity.paymentMethod as string) === 'mixed') ? 'efectivo' : entity.paymentMethod,
             total: entity.total.toNumber(),
-            employee_id: entity.employeeId || '',
+            employee_id: entity.employeeId || null,
+            actor_name: null,
+            actor_role: null,
             client_id: entity.clientId || null,
             amount_received: entity.amountReceived ? entity.amountReceived.toNumber() : null,
             change_given: entity.change ? entity.change.toNumber() : null,
@@ -90,6 +92,8 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             is_voided: false,
             void_reason: null,
             voided_by: null,
+            voided_by_name: null,
+            voided_by_role: null,
             voided_at: null,
             void_session_id: null,
             idempotency_key: null,
@@ -254,7 +258,7 @@ export const saleRepository: SaleRepository = {
             const newId = crypto.randomUUID();
 
             // FIX: Map payment method to DB constraint values BEFORE queueing
-            // DB Constraint: payment_method = ANY (ARRAY['efectivo', 'nequi', 'daviplata', 'fiado'])
+            // DB Constraint: payment_method = ANY (ARRAY['efectivo', 'nequi', 'llave_bre', 'fiado', 'consumo_personal'])
             const dbPaymentMethod = (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash')
                 ? 'efectivo'
                 : saleData.paymentMethod;

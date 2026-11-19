@@ -12,6 +12,7 @@ import { onMounted, onUnmounted, getCurrentInstance } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useNotificationsStore } from '../stores/notificationsStore';
+import { auditRepository } from '../data/repositories/auditRepository';
 import { logger } from '../utils/logger';
 import type { SessionVerificationResult } from '../data/repositories/authRepository';
 import { useToast } from 'vue-toastification';
@@ -125,6 +126,32 @@ export async function handleAccessDeniedError(error: any, router?: any): Promise
   const errString = typeof error === 'string' 
     ? error 
     : (error?.message || error?.details || error?.error_description || JSON.stringify(error || ''));
+
+  const isRbacDenial = errString.includes('ADMIN_ONLY_ACTION') || errString.includes('PERMISSION_DENIED');
+  if (isRbacDenial) {
+    logger.warn('[SessionGuard] Acción rechazada por RBAC del servidor:', errString);
+    try {
+      const authStore = useAuthStore();
+      const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+      if (storeId) {
+        await auditRepository.logEvent(
+          storeId,
+          'unauthorized_access',
+          'warning',
+          { reason: errString },
+          authStore.currentUser?.employeeId || authStore.currentUser?.id
+        );
+      }
+    } catch {
+      // No silenciar la UI ante fallo de auditoría auxiliar
+    }
+    showNotificationOnce(
+      'No tienes permiso para realizar esta acción.',
+      'Acceso Restringido',
+      'warning'
+    );
+    return true;
+  }
 
   const isAccessDenied = errString.includes('STORE_ACCESS_DENIED') ||
     errString.includes('P0001') ||
