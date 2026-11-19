@@ -2456,6 +2456,124 @@ BEGIN
 END;
 $$;
 
+-- Alinear trigger de alta de tienda con el esquema cerrado de 4 permisos (chk_employees_permissions_4_keys)
+CREATE OR REPLACE FUNCTION public.handle_new_user_atomic()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'auth'
+AS $$
+DECLARE
+    v_store_name text;
+    v_slug text;
+    v_base_slug text;
+    v_counter int := 1;
+    v_new_store_id uuid;
+    v_terms_version_id uuid;
+    v_privacy_version_id uuid;
+    v_terms_rec RECORD;
+    v_privacy_rec RECORD;
+    v_origin text;
+    v_user_agent text;
+BEGIN
+    -- Omitir autocreación de tienda para: cajeros anónimos, Dueño de Plataforma SaaS o miembros internos aprovisionados por servidor
+    IF COALESCE(new.is_anonymous, false) IS TRUE
+       OR COALESCE(new.is_super_admin, false) IS TRUE
+       OR COALESCE(new.raw_app_meta_data->>'account_kind', '') IN ('platform_owner', 'store_member') THEN
+        RETURN new;
+    END IF;
+
+    BEGIN
+        v_terms_version_id := NULLIF(trim(new.raw_user_meta_data->>'accepted_terms_version_id'), '')::uuid;
+        v_privacy_version_id := NULLIF(trim(new.raw_user_meta_data->>'accepted_privacy_version_id'), '')::uuid;
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE EXCEPTION 'LEGAL_ACCEPTANCE_REQUIRED: Identificadores de versión legal inválidos.'
+            USING ERRCODE = '22023';
+    END;
+
+    IF v_terms_version_id IS NULL OR v_privacy_version_id IS NULL THEN
+        RAISE EXCEPTION 'LEGAL_ACCEPTANCE_REQUIRED: Se requiere aceptación explícita de Términos y Política vigentes.'
+            USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT id, document_type, version_code INTO v_terms_rec
+    FROM public.legal_document_versions
+    WHERE id = v_terms_version_id
+      AND document_type = 'terms_of_service'
+      AND is_active = true;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'LEGAL_VERSION_SUPERSEDED: La versión de Términos y Condiciones (%) no está vigente.', v_terms_version_id
+            USING ERRCODE = 'P0001';
+    END IF;
+
+    SELECT id, document_type, version_code INTO v_privacy_rec
+    FROM public.legal_document_versions
+    WHERE id = v_privacy_version_id
+      AND document_type = 'privacy_policy'
+      AND is_active = true;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'LEGAL_VERSION_SUPERSEDED: La versión de Política de Tratamiento (%) no está vigente.', v_privacy_version_id
+            USING ERRCODE = 'P0001';
+    END IF;
+
+    v_store_name := COALESCE(NULLIF(trim(new.raw_user_meta_data->>'store_name'), ''), 'Tienda Principal');
+    v_store_name := LEFT(v_store_name, 50);
+
+    v_base_slug := lower(regexp_replace(v_store_name, '[^a-zA-Z0-9]+', '-', 'g'));
+    v_base_slug := trim(both '-' from v_base_slug);
+    IF v_base_slug = '' THEN
+        v_base_slug := 'tienda-' || left(new.id::text, 8);
+    END IF;
+
+    v_slug := v_base_slug;
+    WHILE EXISTS (SELECT 1 FROM public.stores WHERE slug = v_slug) LOOP
+        v_slug := v_base_slug || '-' || v_counter;
+        v_counter := v_counter + 1;
+    END LOOP;
+
+    INSERT INTO public.stores (name, slug)
+    VALUES (v_store_name, v_slug)
+    RETURNING id INTO v_new_store_id;
+
+    INSERT INTO public.admin_profiles (id, store_id, role, is_verified)
+    VALUES (new.id, v_new_store_id, 'owner', false);
+
+    INSERT INTO public.employees (
+        id, store_id, name, username, pin_hash, permissions, is_active, created_at, updated_at
+    ) VALUES (
+        new.id,
+        v_new_store_id,
+        COALESCE(NULLIF(trim(new.raw_user_meta_data->>'owner_name'), ''), 'Propietario'),
+        'owner_' || left(new.id::text, 8),
+        '$2a$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+        jsonb_build_object(
+            'canManageInventory', true,
+            'canFiar', true,
+            'canOpenCloseCash', true,
+            'canManageRefunds', true
+        ),
+        true,
+        NOW(),
+        NOW()
+    );
+
+    v_origin := COALESCE(NULLIF(trim(new.raw_user_meta_data->>'origin_channel'), ''), 'web_register');
+    v_user_agent := NULLIF(trim(new.raw_user_meta_data->>'client_user_agent'), '');
+
+    INSERT INTO public.store_legal_acceptances (
+        store_id, accepted_by, version_id, document_type, version_code, origin_channel, ip_address, user_agent
+    ) VALUES
+        (v_new_store_id, new.id, v_terms_rec.id, v_terms_rec.document_type, v_terms_rec.version_code, v_origin, NULL, v_user_agent),
+        (v_new_store_id, new.id, v_privacy_rec.id, v_privacy_rec.document_type, v_privacy_rec.version_code, v_origin, NULL, v_user_agent);
+
+    RETURN new;
+EXCEPTION WHEN OTHERS THEN
+    RAISE;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.get_history_caja(
     p_store_id UUID,
     p_start_date DATE,
