@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0] - 2026-11-19
+
+### Added
+- **FASE 3 — Matriz de Permisos Cerrada (4 Llaves), Caja Multicanal, Auditoría Admin-Only, Clientes/CxP, Salidas `$0`, Reembolsos `"merma"` y P&L de 4 Pilares (Olas 1–5, `CHK-101` a `CHK-512`):**
+  - **Ola 1 — Cimientos Transversales y RBAC (`20261119160000`):** Esquema cerrado de 4 permisos (`canManageInventory`, `canFiar`, `canOpenCloseCash`, `canManageRefunds`), helpers centralizados (`is_store_admin`, `assert_store_admin`, `assert_employee_permission`, `resolve_actor_snapshot`), snapshot histórico inmutable (`actor_name`/`actor_role`), continuidad operativa `<24h` en pases diarios y unificación de canales (`efectivo`, `nequi`, `llave_bre`) erradicando `daviplata` y `bre`.
+  - **Ola 2 — Caja Dedicada POS y Cierre Asistido (`20261119173000`):** Propiedad estricta del turno (`cerrar_caja`), Cierre Asistido de 3 intentos sin fuga de esperados (`Arqueo Ciego`), protocolo de turno expirado `+24h` (`rpc_check_and_force_close_shifts`, `rpc_reconciliar_cierre_forzado`), gastos OPEX en 5 categorías (`Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos`) e integración persistente de alertas en `notifications`.
+  - **Ola 3 — Reportes, Auditoría Admin-Only y Turno Actual (`20261119183000`):** Blindaje `assert_store_admin` y RLS sobre historial, auditoría y Evidence Hub; detalle forense multicanal de turno (`rpc_get_comprehensive_shift_report`, `ShiftForensicDetailModal.vue`) y vista operativa `MyShiftMovementsView.vue` (`rpc_obtener_mis_movimientos_turno`).
+  - **Ola 4 — POS, Retiro Personal `$0`, Clientes `canFiar` y CxP Admin-Only (`20261119220000`):** Modalidad `consumo_personal` (`$0` en caja con trazabilidad de costo FIFO y referencia retail), cupo de crédito global por defecto para clientes nuevos (`rpc_actualizar_cupo_credito_global`), blindaje `canFiar` y bloqueo de anulación fiada con saldo abonado, y facturas CxP 100% Admin-only (`rpc_pay_supplier_invoice` con canal `externo`).
+  - **Ola 5 — Inventario Completo, Salidas `$0`, Reembolsos `"merma"` y P&L 4 Pilares (`20261120000000`):** Desacoplamiento total entre Inventario y `supplier_invoices`; flujo de Salidas Logísticas `$0` (`StockOutputsView.vue`, `rpc_registrar_salida_logistica`) y contra-movimientos en Kardex (`rpc_registrar_contra_movimiento`, `KardexModal.vue`); endurecimiento de `canManageInventory` en catálogo, lotes y entradas; gestor de reembolsos en POS (`RefundModal.vue`, `rpc_procesar_reembolso_item`) con switch único `"merma"` operando incluso con `stock = 0` y guardia `SALE_HAS_PARTIAL_REFUNDS`; reporte `rpc_get_comprehensive_financial_report` sin doble conteo entre reembolsos y OPEX y módulo Admin de Consumos Personales consolidado y por perfil.
+  - **Verificación (`56/56 ✅`):** Suites SQL transaccionales (`test_ola1_sql.sql`..`test_ola5_sql.sql`), 29 archivos / 205 tests Vitest pasando, `vue-tsc` con 0 errores en producción y build de producción en verde.
+
 ## [1.7.1] - 2026-10-31
 
 ### Fixed
