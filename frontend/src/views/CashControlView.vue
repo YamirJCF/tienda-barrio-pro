@@ -36,6 +36,8 @@ const { execute: executeAction, isLoading: isSubmitting } = useAsyncAction();
 // =============================================
 const pendingForcedSessions = ref<PendingForcedSession[]>([]);
 const fetchForcedSessionsError = ref(false);
+const isReconcilingForced = ref(false);
+const forcedReconcileError = ref<string | null>(null);
 const showAuditModal = computed(() => authStore.isAdmin && pendingForcedSessions.value.length > 0);
 
 const fetchPendingForcedSessions = async () => {
@@ -55,15 +57,25 @@ const fetchPendingForcedSessions = async () => {
 const handleAuditConfirm = async (sessionId: string, actualBalance: number | null) => {
     const employeeId = authStore.currentUser?.employeeId || authStore.currentUser?.id;
     if (!employeeId) {
-        showError('No se encontró el ID del usuario para la reconciliación.');
+        forcedReconcileError.value = 'No se encontró el ID del usuario para la reconciliación.';
+        showError(forcedReconcileError.value);
         return;
     }
 
+    isReconcilingForced.value = true;
+    forcedReconcileError.value = null;
     try {
         await cashRegisterStore.reconcileForcedClose(sessionId, employeeId, actualBalance);
 
         // Eliminar la sesión conciliada de la cola
         pendingForcedSessions.value = pendingForcedSessions.value.filter(s => s.id !== sessionId);
+        if (pendingForcedSessions.value.length === 0 && authStore.currentStore?.id) {
+            try {
+                await cashRegisterStore.syncFromBackend(authStore.currentStore.id);
+            } catch {
+                // La reconciliación ya quedó confirmada en BD
+            }
+        }
         showSuccess(
             actualBalance === null
                 ? 'Turno cerrado sin conteo físico. Se generó alerta crítica de auditoría.'
@@ -71,7 +83,11 @@ const handleAuditConfirm = async (sessionId: string, actualBalance: number | nul
         );
     } catch (e: any) {
         console.error('🚫 [CashControl] Reconciliation failed:', e);
-        showError(translateReconciliationError(e?.message));
+        const translated = translateReconciliationError(e?.message);
+        forcedReconcileError.value = translated;
+        showError(translated);
+    } finally {
+        isReconcilingForced.value = false;
     }
 };
 
@@ -211,12 +227,18 @@ const handleSubmit = async () => {
                 return;
             }
 
+            const parsedAmount = Number(amount.value);
+            if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+                showError('Ingresa un monto de base inicial válido (0 o mayor).');
+                return;
+            }
+
             if (authStore.currentUser?.id) {
                 const secureId = authStore.currentUser.employeeId || authStore.currentUser.id;
                 await cashRegisterStore.openRegister(
                     secureId,
                     storeId,
-                    new Decimal(amount.value),
+                    new Decimal(parsedAmount),
                     notes.value
                 );
             } else {
@@ -443,6 +465,8 @@ const goBack = () => {
             :isVisible="showAuditModal"
             :pendingSessions="pendingForcedSessions"
             :allowSkipCount="authStore.isAdmin"
+            :isSubmitting="isReconcilingForced"
+            :errorMessage="forcedReconcileError"
             @confirm="handleAuditConfirm"
         />
 

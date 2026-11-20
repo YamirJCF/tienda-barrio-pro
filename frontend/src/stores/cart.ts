@@ -87,10 +87,12 @@ export const useCartStore = defineStore(
       const product = inventoryStore.products.find(p => p.id === productId);
       if (!product) return { status: 'not_found' };
 
-      const currentInCart = items.value.find(i => i.id === productId);
-      const cartQty = currentInCart
-        ? (currentInCart.quantity instanceof Decimal ? currentInCart.quantity : new Decimal(currentInCart.quantity))
-        : new Decimal(0);
+      const cartQty = items.value
+        .filter(i => i.id === productId)
+        .reduce((sum, i) => {
+          const q = i.quantity instanceof Decimal ? i.quantity : new Decimal(i.quantity);
+          return sum.plus(q);
+        }, new Decimal(0));
 
       const totalRequested = cartQty.plus(quantityToAdd);
       const currentStock = product.stock instanceof Decimal ? product.stock : new Decimal(product.stock);

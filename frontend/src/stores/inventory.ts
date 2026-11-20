@@ -441,8 +441,8 @@ export const useInventoryStore = defineStore(
           success = await productRepository.registerEntry(
             movement.productId,
             qty.toNumber(),
-            movement.unitCost || 0,
-            movement.salePrice || product.price.toNumber(),
+            movement.unitCost ?? 0,
+            movement.salePrice ?? product.price.toNumber(),
             finalReason,
             movement.supplierId,
             movement.paymentType,

@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useClientsStore } from '../stores/clients';
 import { useAuthStore } from '../stores/auth';
+import { useCashRegisterStore } from '../stores/cashRegister';
 import { type ClientTransaction } from '../types';
 import type { ClientStatement, ClientStatementMovement } from '../data/repositories/clientRepository';
 import { Decimal } from 'decimal.js';
@@ -32,6 +33,7 @@ const router = useRouter();
 const route = useRoute();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
+const cashRegisterStore = useCashRegisterStore();
 const isAdmin = computed(() => authStore.isAdmin);
 const canOperateFiado = computed(() => authStore.canFiar || authStore.isAdmin);
 const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
@@ -41,6 +43,7 @@ const { showWarning, showSuccess, showError } = useNotifications();
 const paymentAmount = ref('');
 const paymentMethod = ref('efectivo');
 const showPaymentModal = ref(false);
+const isSubmittingPayment = ref(false);
 const showOptionsMenu = ref(false);
 const showDeleteConfirm = ref(false);
 const showDebtAlert = ref(false);
@@ -240,8 +243,16 @@ const exportStatementCsv = () => {
   showSuccess('Estado de cuenta exportado');
 };
 
+const openPaymentModal = async () => {
+  showPaymentModal.value = true;
+  const storeId = authStore.currentStore?.id || authStore.currentUser?.storeId;
+  if (storeId) {
+    await cashRegisterStore.syncFromBackend(storeId);
+  }
+};
+
 const registerPayment = async () => {
-  if (!paymentAmount.value || !client.value) return;
+  if (isSubmittingPayment.value || !paymentAmount.value || !client.value) return;
 
   const amount = new Decimal(paymentAmount.value);
   if (amount.lte(0)) return;
@@ -252,6 +263,7 @@ const registerPayment = async () => {
     return;
   }
 
+  isSubmittingPayment.value = true;
   try {
     await clientsStore.registerPayment(
       clientId.value, 
@@ -266,6 +278,8 @@ const registerPayment = async () => {
     await loadStatement(clientId.value);
   } catch (err: any) {
     showWarning(err.message || 'Error al registrar el abono');
+  } finally {
+    isSubmittingPayment.value = false;
   }
 };
 
@@ -501,7 +515,7 @@ const registerPayment = async () => {
       class="fixed bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
     >
       <BaseButton
-         @click="showPaymentModal = true"
+         @click="openPaymentModal"
          data-testid="register-payment-btn"
          variant="success"
          class="w-full h-14 text-lg font-bold shadow-lg shadow-emerald-200 dark:shadow-none"
@@ -517,6 +531,12 @@ const registerPayment = async () => {
       title="Registrar Abono"
     >
         <div class="p-6">
+            <div
+              v-if="!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession"
+              class="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 font-medium"
+            >
+              {{ cashRegisterStore.isStaleSession ? 'El turno de caja superó las 24 horas y debe cerrarse antes de registrar abonos.' : 'No hay turno de caja abierto. Abre la caja para poder registrar abonos.' }}
+            </div>
             <BaseInput
                 v-model="paymentAmount"
                 type="number"
@@ -570,7 +590,8 @@ const registerPayment = async () => {
                 </BaseButton>
                 <BaseButton
                     @click="registerPayment"
-                    :disabled="!paymentAmount"
+                    :disabled="!paymentAmount || isSubmittingPayment || !cashRegisterStore.isOpen || cashRegisterStore.isStaleSession"
+                    :loading="isSubmittingPayment"
                     variant="success"
                     class="flex-1"
                 >

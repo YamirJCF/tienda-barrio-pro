@@ -455,6 +455,9 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
     const reconcileForcedClose = async (sessionId: string, employeeId: string, actualBalance: number | null) => {
         await cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance);
+        if (pendingForcedSessionInfo.value?.sessionId === sessionId) {
+            pendingForcedSessionInfo.value = null;
+        }
     };
 
     const fetchOwnShiftMovements = async (

@@ -29,6 +29,8 @@
             v-model.number="amountToPay"
             label="¿Cuánto deseas abonar?"
             type="number"
+            placeholder="0"
+            class="pr-24"
             :max="pendingBalance"
             min="0"
             step="1"

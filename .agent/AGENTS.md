@@ -90,3 +90,19 @@ Con el output real de consola (y la consulta de la Regla 6 si toca SQL), imprime
 ### 10.2 Fase B — Solución Creativa dentro de la Cancha
 Una vez fijados los muros de la Fase A, aplica creatividad técnica para resolver la causa raíz sin efectos secundarios. Cuando el problema admita más de un camino arquitectónico o de experiencia de usuario, **propón 2 o 3 opciones creativas viables** que respeten estrictamente los contratos del punto 2 y la integridad de los vecinos del punto 3.
 
+## 11. Inmutabilidad y Aislamiento de Flujos de Correo/Auth, Creación de Cuentas y Datos Iniciales (Docker vs. Cloud)
+
+Dado que la infraestructura externa de **Correo / Auth** (despacho SMTP real, enlaces de confirmación/recuperación de Supabase Cloud) y el **estado de datos de producción** no son ejecutables de extremo a extremo dentro de Docker local, rigen tres muros obligatorios:
+
+### 11.1 Prohibición de Modificar Comportamiento de Auth y Creación de Cuentas por Pruebas Locales
+- Está **terminantemente prohibido** modificar, debilitar, agregar banderas (`if (isLocal)`, bypass de `email_confirmed_at`) o cambiar el comportamiento de registro, login, verificación de correo, recuperación de contraseña o creación atómica de tienda (`handle_new_user_atomic`, `SDD-029`, guardias de `router/index.ts`, `RegisterStoreView.vue`, `CheckEmailView.vue`) en `frontend/src/` o `supabase/migrations/` para "adaptarlos" a Docker.
+- Lo que no se puede probar de extremo a extremo en local **no se toca ni se altera**.
+
+### 11.2 Aislamiento Estricto de Creación de Cuentas y Datos Iniciales
+- **Estado Inicial Canónico:** Toda cuenta y tienda nueva nace exclusivamente a través del flujo oficial de servidor con sus tablas operativas limpias (en cero) y catálogos base oficiales. Queda prohibido inyectar datos semilla, productos ficticios, saldos iniciales o atajos de onboarding dentro de migraciones productivas (`supabase/migrations/`) o código de interfaz (`frontend/src/`).
+- **Frontera de Semillas de Prueba:** Cualquier confirmación manual de usuario o carga de datos para pruebas en Docker debe realizarse **únicamente por fuera del código productivo y de las migraciones** (vía ejecución SQL efímera en consola sobre `supabase_db_prueba` o scripts en `supabase/tests/` con `BEGIN; ... ROLLBACK;`), garantizando que **cero datos o parches de prueba pasen a Supabase Cloud**.
+
+### 11.3 Compuerta de Bloqueo en Flujos Aislados
+- Si durante una tarea se detecta cualquier necesidad de tocar `auth`, envío de correos, triggers de alta de cuenta o inicialización de datos de tienda, el agente debe **detenerse y pedir autorización explícita al usuario**, manteniendo esos flujos 100% blindados y separados del resto de módulos operativos (Caja, POS, Inventario, Clientes, Reportes).
+
+

@@ -345,31 +345,48 @@ const removeItem = (index: number) => {
 const saveEntry = async () => {
   if (entryItems.value.length === 0) return;
 
+  for (const item of entryItems.value) {
+    const qty = Number(item.quantity);
+    const cost = Number(item.unitCost);
+    const salePrice = Number(item.salePrice);
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+      showWarning(`La cantidad de "${item.productName}" debe ser mayor a 0.`);
+      return;
+    }
+    if (!Number.isFinite(cost) || cost < 0) {
+      showWarning(`El costo unitario de "${item.productName}" no puede ser negativo.`);
+      return;
+    }
+    if (!Number.isFinite(salePrice) || salePrice <= 0) {
+      showWarning(`El precio de venta de "${item.productName}" debe ser mayor a 0.`);
+      return;
+    }
+  }
+
   await executeSave(async () => {
     let successCount = 0;
     const failedItems: string[] = [];
 
     for (const item of entryItems.value) {
       const qty = new Decimal(item.quantity);
-      if (qty.gt(0)) {
-        const result = await inventoryStore.registerStockMovement({
-          productId: item.productId,
-          type: 'entrada',
-          quantity: qty,
-          reason: reason.value,
-          expirationDate: item.expirationDate,
-          unitCost: item.unitCost,
-          salePrice: item.salePrice,
-          supplierId: selectedSupplierId.value || undefined,
-          invoiceRef: invoiceRef.value || undefined
-        });
-        
-        if (result.success) {
-          successCount++;
-        } else {
-          console.error(`Error saving item ${item.productName}:`, result.error);
-          failedItems.push(`${item.productName}: ${result.error || 'Error desconocido'}`);
-        }
+      const result = await inventoryStore.registerStockMovement({
+        productId: item.productId,
+        type: 'entrada',
+        quantity: qty,
+        reason: reason.value,
+        expirationDate: item.expirationDate,
+        unitCost: item.unitCost,
+        salePrice: item.salePrice,
+        supplierId: selectedSupplierId.value || undefined,
+        invoiceRef: invoiceRef.value || undefined
+      });
+      
+      if (result.success) {
+        successCount++;
+      } else {
+        console.error(`Error saving item ${item.productName}:`, result.error);
+        failedItems.push(`${item.productName}: ${result.error || 'Error desconocido'}`);
       }
     }
 

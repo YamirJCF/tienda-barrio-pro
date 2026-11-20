@@ -37,7 +37,7 @@ const emit = defineEmits<{
 const slots = useSlots();
 
 const inputClasses = computed(() => {
-    const base = 'block w-full rounded-xl shadow-sm sm:text-sm transition-colors focus:outline-none disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-800 dark:bg-gray-700 dark:text-white';
+    const base = 'block w-full border rounded-xl shadow-sm sm:text-sm transition-colors focus:outline-none disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-800 dark:bg-gray-700 dark:text-white';
     const state = props.error
         ? 'border-red-300 text-red-900 placeholder-red-300 focus:border-red-500 focus:ring-red-500 dark:border-red-500'
         : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600';

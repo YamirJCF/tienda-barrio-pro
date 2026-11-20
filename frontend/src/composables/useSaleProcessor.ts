@@ -107,25 +107,36 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
     // HELPER: Build force sale item list for modal
     // ============================================
     const buildForceSaleItems = (): ForceSaleItemInfo[] => {
-        return cartStore.items
-            .filter(item => cartStore.isForcedItem(item.id))
-            .map(item => {
-                const product = inventoryStore.products.find(p => p.id === item.id);
-                const available = product?.stock instanceof Decimal
-                    ? product.stock.toNumber()
-                    : Number(product?.stock || 0);
-                const requested = item.quantity instanceof Decimal
-                    ? item.quantity.toNumber()
-                    : Number(item.quantity);
-                return {
+        const grouped = new Map<string, ForceSaleItemInfo>();
+
+        for (const item of cartStore.items) {
+            if (!cartStore.isForcedItem(item.id)) continue;
+
+            const product = inventoryStore.products.find(p => p.id === item.id);
+            const available = product?.stock instanceof Decimal
+                ? product.stock.toNumber()
+                : Number(product?.stock || 0);
+            const lineQty = item.quantity instanceof Decimal
+                ? item.quantity.toNumber()
+                : Number(item.quantity);
+
+            const existing = grouped.get(item.id);
+            if (existing) {
+                existing.requested += lineQty;
+                existing.deficit = Math.max(0, existing.requested - existing.available);
+            } else {
+                grouped.set(item.id, {
                     productId: item.id,
                     name: item.name,
-                    requested,
+                    requested: lineQty,
                     available,
-                    deficit: Math.max(0, requested - available),
+                    deficit: Math.max(0, lineQty - available),
                     unit: item.measurementUnit || 'un',
-                };
-            });
+                });
+            }
+        }
+
+        return Array.from(grouped.values());
     };
 
     // ============================================

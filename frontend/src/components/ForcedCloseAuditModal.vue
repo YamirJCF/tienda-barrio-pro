@@ -24,8 +24,12 @@ const props = withDefaults(defineProps<{
   isVisible: boolean;
   /** Admin-only (FRD-027-02 R5): permite omitir conteo físico con confirmación explícita */
   allowSkipCount?: boolean;
+  isSubmitting?: boolean;
+  errorMessage?: string | null;
 }>(), {
   allowSkipCount: true,
+  isSubmitting: false,
+  errorMessage: null,
 });
 
 const emit = defineEmits<{
@@ -101,7 +105,7 @@ const handleConfirm = () => {
     <Transition name="audit-modal">
       <div
         v-if="isVisible && currentSession"
-        class="fixed inset-0 z-[9999] flex items-end justify-center sm:items-center"
+        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
         role="dialog"
         aria-modal="true"
         aria-labelledby="audit-modal-title"
@@ -189,12 +193,18 @@ const handleConfirm = () => {
             </div>
           </div>
 
+          <!-- Error visible en modal (Regla 3: Cero fallos silenciosos) -->
+          <div v-if="errorMessage" class="p-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-xs font-medium text-red-700 dark:text-red-200">
+            {{ errorMessage }}
+          </div>
+
           <!-- Action button -->
           <BaseButton
             id="btn-confirm-forced-close-audit"
             variant="dark"
             class="w-full h-12 font-bold"
-            :disabled="!isValid"
+            :loading="isSubmitting"
+            :disabled="!isValid || isSubmitting"
             @click="handleConfirm"
           >
             {{ skipPhysicalCount ? 'Cerrar Sin Conteo y Desbloquear' : 'Confirmar Conteo y Continuar' }}

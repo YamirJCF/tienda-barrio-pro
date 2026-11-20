@@ -116,7 +116,7 @@ onMounted(() => {
     </header>
 
     <!-- Filtros por Canal -->
-    <div class="bg-white dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex gap-2 overflow-x-auto">
+    <div class="bg-white dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       <button
         v-for="f in paymentFilters"
         :key="f.value"
