@@ -17,9 +17,9 @@
         </div>
       </div>
 
-      <div v-if="!cashRegisterStore.isOpen && paymentMethod !== 'externo'" class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-r-xl">
+      <div v-if="(!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession) && paymentMethod !== 'externo'" class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-r-xl">
         <p class="text-xs text-amber-700 dark:text-amber-400 font-medium">
-          ℹ️ Turno de caja cerrado. Puedes registrar el abono seleccionando <strong>Fondos Propios (Externo)</strong>.
+          ℹ️ {{ cashRegisterStore.isStaleSession ? 'El turno de caja superó 24 horas.' : 'Turno de caja cerrado.' }} Puedes registrar el abono seleccionando <strong>Pago externo / fuera de caja</strong> ($0 en caja).
         </p>
       </div>
 
@@ -49,11 +49,15 @@
           El abono no puede superar la deuda pendiente.
         </div>
 
-        <!-- Strict Error on Insufficient Cash (No Soft Overdraft) -->
-        <div v-if="paymentMethod === 'efectivo' && amountExceedsCash && !amountExceedsPending" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 rounded-xl flex items-start gap-2">
+        <!-- Strict Error on Insufficient Channel Balance (No Soft Overdraft) -->
+        <div
+          v-if="isInternalPayment && amountExceedsChannel && !amountExceedsPending"
+          data-testid="insufficient-channel-balance-alert"
+          class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 rounded-xl flex items-start gap-2"
+        >
           <span class="text-red-500 text-lg leading-none">🚫</span>
           <p class="text-xs text-red-700 dark:text-red-400 font-medium">
-            Saldo insuficiente en caja de efectivo (Disponible: {{ formatCurrency(Number(cashRegisterStore.currentBalance)) }}). No se permiten sobregiros.
+            Saldo insuficiente en {{ selectedChannelLabel }} (Disponible: {{ formatCurrency(selectedChannelBalance) }}). No se permiten sobregiros.
           </p>
         </div>
 
@@ -67,6 +71,7 @@
             <div class="grid grid-cols-4 gap-2">
                 <button
                     type="button"
+                    data-testid="pay-method-efectivo"
                     @click="paymentMethod = 'efectivo'"
                     :class="paymentMethod === 'efectivo' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
                     class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
@@ -76,6 +81,7 @@
                 </button>
                 <button
                     type="button"
+                    data-testid="pay-method-nequi"
                     @click="paymentMethod = 'nequi'"
                     :class="paymentMethod === 'nequi' ? 'bg-[#4A148C] text-white border-[#4A148C] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
                     class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
@@ -85,6 +91,7 @@
                 </button>
                 <button
                     type="button"
+                    data-testid="pay-method-llave_bre"
                     @click="paymentMethod = 'llave_bre'"
                     :class="paymentMethod === 'llave_bre' ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
                     class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
@@ -94,14 +101,33 @@
                 </button>
                 <button
                     type="button"
+                    data-testid="pay-method-externo"
                     @click="paymentMethod = 'externo'"
                     :class="paymentMethod === 'externo' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
                     class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all"
                 >
                     <Wallet :size="20" :stroke-width="1.5" class="mb-1" />
-                    <span class="text-[11px] font-semibold">Externo</span>
+                    <span class="text-[10px] font-semibold leading-tight text-center">Pago externo / fuera de caja</span>
                 </button>
             </div>
+        </div>
+
+        <!-- Descripción / Nota -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+            {{ isInternalPayment ? 'Descripción del egreso en caja (Obligatorio)' : 'Nota o comprobante externo (Opcional)' }}
+          </label>
+          <input
+            v-model="description"
+            data-testid="pay-invoice-description-input"
+            type="text"
+            :disabled="isSubmitting"
+            :placeholder="isInternalPayment ? 'Ej. Abono parcial factura semanal' : 'Ej. Pagado con cuenta personal del dueño'"
+            class="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+          />
+          <p v-if="isInternalPayment" class="text-[11px] text-slate-400 mt-1">
+            Disponible en {{ selectedChannelLabel }}: <strong>{{ formatCurrency(selectedChannelBalance) }}</strong>
+          </p>
         </div>
       </div>
       
@@ -155,9 +181,38 @@ const cashRegisterStore = useCashRegisterStore();
 const payablesStore = usePayablesStore();
 
 const amountToPay = ref<number | ''>('');
-const paymentMethod = ref(cashRegisterStore.isOpen ? 'efectivo' : 'externo');
+const paymentMethod = ref(cashRegisterStore.isOpen && !cashRegisterStore.isStaleSession ? 'efectivo' : 'externo');
+const description = ref('');
 const isSubmitting = ref(false);
 const errorMessage = ref<string | null>(null);
+
+const isInternalPayment = computed(() => paymentMethod.value !== 'externo');
+
+const selectedChannelLabel = computed(() => {
+  switch (paymentMethod.value) {
+    case 'efectivo':
+      return 'Efectivo';
+    case 'nequi':
+      return 'Nequi';
+    case 'llave_bre':
+      return 'Llave Bre-B';
+    default:
+      return 'Externo';
+  }
+});
+
+const selectedChannelBalance = computed(() => {
+  if (paymentMethod.value === 'externo') return Number.POSITIVE_INFINITY;
+  const byMethod = (cashRegisterStore as any).balancesByMethod as Record<string, any> | undefined;
+  if (byMethod && Object.keys(byMethod).length > 0) {
+    const val = byMethod[paymentMethod.value];
+    return val ? Number(val) : 0;
+  }
+  if (paymentMethod.value === 'efectivo') {
+    return Number(cashRegisterStore.currentBalance ?? 0);
+  }
+  return 0;
+});
 
 const pendingBalance = computed(() => {
   if (!props.invoice) return 0;
@@ -168,17 +223,19 @@ const amountExceedsPending = computed(() => {
   return Number(amountToPay.value) > pendingBalance.value;
 });
 
-const amountExceedsCash = computed(() => {
-  return Number(amountToPay.value) > Number(cashRegisterStore.currentBalance);
+const amountExceedsChannel = computed(() => {
+  if (!isInternalPayment.value) return false;
+  return Number(amountToPay.value) > selectedChannelBalance.value;
 });
 
 const canSubmit = computed(() => {
   if (!authStore.isAdmin) return false;
   const amount = Number(amountToPay.value);
   if (amount <= 0 || amountExceedsPending.value) return false;
-  if (paymentMethod.value === 'externo') return true;
-  if (!cashRegisterStore.isOpen) return false;
-  if (paymentMethod.value === 'efectivo' && amountExceedsCash.value) return false;
+  if (!isInternalPayment.value) return true;
+  if (!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession) return false;
+  if (!description.value.trim()) return false;
+  if (amountExceedsChannel.value) return false;
   return true;
 });
 
@@ -189,7 +246,8 @@ const payFullAmount = () => {
 const close = () => {
   if (isSubmitting.value) return;
   amountToPay.value = '';
-  paymentMethod.value = cashRegisterStore.isOpen ? 'efectivo' : 'externo';
+  description.value = '';
+  paymentMethod.value = cashRegisterStore.isOpen && !cashRegisterStore.isStaleSession ? 'efectivo' : 'externo';
   errorMessage.value = null;
   emit('close');
 };
@@ -200,7 +258,13 @@ const submitPayment = async () => {
   isSubmitting.value = true;
   errorMessage.value = null;
   
-  const { success, error } = await payablesStore.payInvoice(props.invoice.id, Number(amountToPay.value), paymentMethod.value);
+  const cleanDescription = description.value.trim() || undefined;
+  const { success, error } = await payablesStore.payInvoice(
+    props.invoice.id,
+    Number(amountToPay.value),
+    paymentMethod.value,
+    cleanDescription
+  );
   
   if (success) {
     toast.success('Abono registrado correctamente');
@@ -210,7 +274,7 @@ const submitPayment = async () => {
       close();
     }, 400);
   } else {
-    errorMessage.value = error;
+    errorMessage.value = error || 'Error al registrar abono';
     isSubmitting.value = false;
   }
 };

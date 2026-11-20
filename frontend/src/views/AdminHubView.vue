@@ -5,6 +5,8 @@ import { useSalesStore } from '../stores/sales';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth'; // Import auth store
 import { usePresenceStore } from '../stores/presence'; // New Presence Store import
+import { useClientsStore } from '../stores/clients';
+import { useNotifications } from '../composables/useNotifications';
 import { 
   ArrowLeft, 
   Store, 
@@ -17,7 +19,8 @@ import {
   ChevronRight, 
   KeyRound,
   AlertTriangle,
-  Truck
+  Truck,
+  CreditCard
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 
@@ -29,6 +32,8 @@ const salesStore = useSalesStore();
 const cashRegisterStore = useCashRegisterStore();
 const authStore = useAuthStore(); // Use auth store
 const presenceStore = usePresenceStore(); // Initialize
+const clientsStore = useClientsStore();
+const { showSuccess, showError } = useNotifications();
 
 
 
@@ -46,6 +51,57 @@ const navigateTo = (route: string) => {
 // Computed Properties & Refs (Fixing missing definitions)
 const isAdmin = computed(() => authStore.isAdmin);
 const showProfileSidebar = ref(false);
+
+// CHK-406: Cupo global por defecto (solo aplica a nuevos clientes)
+const globalCreditLimit = ref<number>(0);
+const isLoadingCreditLimit = ref(false);
+const isSavingCreditLimit = ref(false);
+const creditLimitError = ref<string | null>(null);
+
+const loadGlobalCreditLimit = async () => {
+    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+    if (!storeId || !authStore.isAdmin) return;
+    isLoadingCreditLimit.value = true;
+    creditLimitError.value = null;
+    try {
+        globalCreditLimit.value = await clientsStore.getDefaultCreditLimit(storeId);
+    } catch (e: any) {
+        creditLimitError.value = e?.message || 'No se pudo cargar el cupo por defecto.';
+    } finally {
+        isLoadingCreditLimit.value = false;
+    }
+};
+
+const saveGlobalCreditLimit = async () => {
+    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+    if (!storeId || isSavingCreditLimit.value) return;
+    const numericLimit = Number(globalCreditLimit.value);
+    if (!Number.isFinite(numericLimit) || numericLimit < 0) {
+        creditLimitError.value = 'El cupo por defecto debe ser mayor o igual a cero.';
+        showError(creditLimitError.value);
+        return;
+    }
+    isSavingCreditLimit.value = true;
+    creditLimitError.value = null;
+    try {
+        const updated = await clientsStore.updateGlobalCreditLimit(storeId, numericLimit);
+        globalCreditLimit.value = updated;
+        showSuccess('Cupo global por defecto actualizado (aplica a clientes nuevos)');
+    } catch (e: any) {
+        creditLimitError.value = e?.message || 'No se pudo guardar el cupo por defecto.';
+        showError(creditLimitError.value || 'Error guardando cupo global');
+    } finally {
+        isSavingCreditLimit.value = false;
+    }
+};
+
+onMounted(() => {
+    loadGlobalCreditLimit();
+});
+
+watch(() => authStore.currentUser?.storeId, (newId) => {
+    if (newId) loadGlobalCreditLimit();
+});
 
 
 </script>
@@ -285,6 +341,56 @@ const showProfileSidebar = ref(false);
             </div>
             <ChevronRight :size="20" class="text-slate-300 group-hover:text-primary transition-colors" />
           </button>
+        </div>
+      </section>
+
+      <!-- Cartera y Fiados (CHK-406: Cupo Global por Defecto) -->
+      <section v-if="isAdmin">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">💳 Cartera y Fiados</h3>
+        <div class="rounded-2xl bg-white dark:bg-slate-800 p-5 shadow-sm border border-slate-100 dark:border-slate-700 space-y-3">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                <CreditCard :size="20" />
+              </div>
+              <div>
+                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Cupo de Crédito Global por Defecto
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  Se precarga solo al crear clientes nuevos. No altera cupos de clientes existentes.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="creditLimitError" role="alert" class="p-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs font-medium text-red-700 dark:text-red-300">
+            {{ creditLimitError }}
+          </div>
+
+          <div class="flex items-center gap-2">
+            <div class="relative flex-1">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+              <input
+                v-model.number="globalCreditLimit"
+                data-testid="global-credit-limit-input"
+                type="number"
+                min="0"
+                step="1000"
+                :disabled="isLoadingCreditLimit || isSavingCreditLimit"
+                class="w-full h-11 pl-7 pr-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
+            <button
+              type="button"
+              data-testid="save-global-credit-limit-btn"
+              @click="saveGlobalCreditLimit"
+              :disabled="isLoadingCreditLimit || isSavingCreditLimit"
+              class="h-11 px-4 rounded-xl bg-primary text-white text-xs font-bold hover:bg-blue-600 active:scale-[0.98] disabled:opacity-50 transition-all cursor-pointer"
+            >
+              {{ isSavingCreditLimit ? 'Guardando...' : 'Guardar Cupo' }}
+            </button>
+          </div>
         </div>
       </section>
 

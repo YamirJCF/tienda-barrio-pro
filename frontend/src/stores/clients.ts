@@ -250,8 +250,14 @@ export const useClientsStore = defineStore(
         });
 
         if (error || !data?.success) {
-          const msg = data?.error || error?.message || 'Error al registrar el abono';
-          throw new Error(msg);
+          const rawMsg = String(data?.error || error?.message || 'Error al registrar el abono');
+          if (rawMsg.includes('PERMISSION_DENIED')) {
+            throw new Error('No tienes permiso autorizado (canFiar) o tu pase diario expiró para cobrar abonos.');
+          }
+          if (rawMsg.includes('CLIENT_NOT_FOUND')) {
+            throw new Error('El cliente no existe o fue archivado de la cartera.');
+          }
+          throw new Error(rawMsg);
         }
 
         // Update local Pinia state with backend calculated new_balance
@@ -330,6 +336,14 @@ export const useClientsStore = defineStore(
       return client.creditLimit.minus(client.totalDebt);
     };
 
+    const getDefaultCreditLimit = async (storeId: string): Promise<number> => {
+      return clientRepository.getDefaultCreditLimit(storeId);
+    };
+
+    const updateGlobalCreditLimit = async (storeId: string, limit: number): Promise<number> => {
+      return clientRepository.updateGlobalCreditLimit(storeId, limit);
+    };
+
     return {
       clients,
       transactions,
@@ -350,6 +364,8 @@ export const useClientsStore = defineStore(
       getClientTransactions,
       getClientStatement,
       getAvailableCredit,
+      getDefaultCreditLimit,
+      updateGlobalCreditLimit,
     };
   },
   {

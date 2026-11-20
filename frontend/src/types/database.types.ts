@@ -818,6 +818,7 @@ export type Database = {
         Row: {
           actor_name: string | null
           actor_role: string | null
+          beneficiary_employee_id: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -828,12 +829,15 @@ export type Database = {
           quantity: number
           reason: string | null
           reference_invoice_id: string | null
+          reference_sale_price: number | null
+          session_id: string | null
           supplier_id: string | null
           unit_cost: number | null
         }
         Insert: {
           actor_name?: string | null
           actor_role?: string | null
+          beneficiary_employee_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -844,12 +848,15 @@ export type Database = {
           quantity: number
           reason?: string | null
           reference_invoice_id?: string | null
+          reference_sale_price?: number | null
+          session_id?: string | null
           supplier_id?: string | null
           unit_cost?: number | null
         }
         Update: {
           actor_name?: string | null
           actor_role?: string | null
+          beneficiary_employee_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -860,6 +867,8 @@ export type Database = {
           quantity?: number
           reason?: string | null
           reference_invoice_id?: string | null
+          reference_sale_price?: number | null
+          session_id?: string | null
           supplier_id?: string | null
           unit_cost?: number | null
         }
@@ -1179,6 +1188,7 @@ export type Database = {
           actor_name: string | null
           actor_role: string | null
           amount_received: number | null
+          beneficiary_employee_id: string | null
           change_given: number | null
           client_id: string | null
           created_at: string
@@ -1204,6 +1214,7 @@ export type Database = {
           actor_name?: string | null
           actor_role?: string | null
           amount_received?: number | null
+          beneficiary_employee_id?: string | null
           change_given?: number | null
           client_id?: string | null
           created_at?: string
@@ -1229,6 +1240,7 @@ export type Database = {
           actor_name?: string | null
           actor_role?: string | null
           amount_received?: number | null
+          beneficiary_employee_id?: string | null
           change_given?: number | null
           client_id?: string | null
           created_at?: string
@@ -1285,6 +1297,7 @@ export type Database = {
         Row: {
           created_at: string
           crypto_salt: string | null
+          default_credit_limit: number
           id: string
           name: string
           pin_hash: string | null
@@ -1296,6 +1309,7 @@ export type Database = {
         Insert: {
           created_at?: string
           crypto_salt?: string | null
+          default_credit_limit?: number
           id?: string
           name: string
           pin_hash?: string | null
@@ -1307,6 +1321,7 @@ export type Database = {
         Update: {
           created_at?: string
           crypto_salt?: string | null
+          default_credit_limit?: number
           id?: string
           name?: string
           pin_hash?: string | null
@@ -1321,7 +1336,7 @@ export type Database = {
         Row: {
           amount_paid: number
           created_at: string
-          due_date: string
+          due_date: string | null
           id: string
           invoice_number: string | null
           store_id: string
@@ -1331,7 +1346,7 @@ export type Database = {
         Insert: {
           amount_paid?: number
           created_at?: string
-          due_date: string
+          due_date?: string | null
           id?: string
           invoice_number?: string | null
           store_id: string
@@ -1341,7 +1356,7 @@ export type Database = {
         Update: {
           amount_paid?: number
           created_at?: string
-          due_date?: string
+          due_date?: string | null
           id?: string
           invoice_number?: string | null
           store_id?: string
@@ -1364,6 +1379,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      supplier_payments: {
+        Row: {
+          actor_id: string | null
+          actor_name: string
+          actor_role: string
+          amount: number
+          cash_movement_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          invoice_id: string
+          origin_type: string
+          payment_method: string
+          store_id: string
+          supplier_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_name: string
+          actor_role: string
+          amount: number
+          cash_movement_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_id: string
+          origin_type: string
+          payment_method: string
+          store_id: string
+          supplier_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_name?: string
+          actor_role?: string
+          amount?: number
+          cash_movement_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_id?: string
+          origin_type?: string
+          payment_method?: string
+          store_id?: string
+          supplier_id?: string
+        }
+        Relationships: []
       }
       suppliers: {
         Row: {
@@ -1666,6 +1729,10 @@ export type Database = {
           actor_role: string
         }[]
       }
+      rpc_actualizar_cupo_credito_global: {
+        Args: { p_default_credit_limit: number; p_store_id: string }
+        Returns: Json
+      }
       rpc_actualizar_permisos_empleado: {
         Args: { p_employee_id: string; p_permissions: Json }
         Returns: Json
@@ -1730,6 +1797,16 @@ export type Database = {
         Returns: Json
       }
       rpc_check_and_force_close_shifts: { Args: never; Returns: Json }
+      rpc_crear_factura_proveedor: {
+        Args: {
+          p_due_date?: string | null
+          p_invoice_number?: string | null
+          p_store_id: string
+          p_supplier_name: string
+          p_total_amount: number
+        }
+        Returns: Json
+      }
       rpc_force_sale: {
         Args: {
           p_amount_received?: number
@@ -1798,6 +1875,20 @@ export type Database = {
           username: string
         }[]
       }
+      rpc_obtener_cuentas_por_pagar: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_status?: string | null
+          p_store_id: string
+          p_supplier_id?: string | null
+        }
+        Returns: Json
+      }
+      rpc_obtener_estado_cuenta_cliente: {
+        Args: { p_client_id: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
       rpc_obtener_historial_caja_multicanal: {
         Args: {
           p_end_date?: string
@@ -1822,10 +1913,11 @@ export type Database = {
       rpc_pay_supplier_invoice: {
         Args: {
           p_amount: number
+          p_description?: string | null
           p_invoice_id: string
           p_payment_method: string
         }
-        Returns: undefined
+        Returns: Json
       }
       rpc_procesar_venta_v2: {
         Args: {
@@ -1840,14 +1932,15 @@ export type Database = {
       rpc_procesar_venta_v3: {
         Args: {
           p_amount_received: number
-          p_client_id: string
+          p_beneficiary_employee_id?: string | null
+          p_client_id: string | null
           p_idempotency_key?: string
           p_is_offline_sync?: boolean
           p_items: Json
           p_local_id?: string
-          p_origin_session_id?: string
+          p_origin_session_id?: string | null
           p_payment_method: string
-          p_sold_by?: string
+          p_sold_by?: string | null
           p_store_id: string
         }
         Returns: Json

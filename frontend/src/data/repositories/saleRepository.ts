@@ -28,6 +28,56 @@ const STORAGE_KEY = 'tienda-sales-db-cache'; // Changed to avoid collision with 
 type SaleDB = Database['public']['Tables']['sales']['Row'];
 type SaleInsert = Database['public']['Tables']['sales']['Insert'];
 
+function mapSaleRpcError(rawMessage?: string): { message: string; code?: string } {
+    const raw = String(rawMessage || '');
+    if (raw.includes('PERMISSION_DENIED')) {
+        return {
+            message: 'No tienes permiso autorizado para realizar esta operación (canFiar o rol Administrador requerido).',
+            code: 'PERMISSION_DENIED'
+        };
+    }
+    if (raw.includes('CLIENT_NOT_FOUND')) {
+        return {
+            message: 'El cliente seleccionado no existe o fue archivado en la cartera.',
+            code: 'CLIENT_NOT_FOUND'
+        };
+    }
+    if (raw.includes('CLIENT_REQUIRED')) {
+        return {
+            message: 'Debes seleccionar un cliente activo para procesar una venta Fiado.',
+            code: 'CLIENT_REQUIRED'
+        };
+    }
+    if (raw.includes('CREDIT_REVERSAL_BLOCKED')) {
+        return {
+            message: 'No se puede anular esta venta fiada porque el cliente ya abonó o no tiene saldo suficiente para revertir la deuda.',
+            code: 'CREDIT_REVERSAL_BLOCKED'
+        };
+    }
+    if (raw.includes('CREDIT_LIMIT_EXCEEDED')) {
+        return { message: raw, code: 'CREDIT_LIMIT_EXCEEDED' };
+    }
+    if (raw.includes('NO_OPEN_CASH_SESSION')) {
+        return {
+            message: 'No hay turno de caja abierto. Abre caja para procesar ventas o retiros.',
+            code: 'NO_OPEN_CASH_SESSION'
+        };
+    }
+    if (raw.includes('SHIFT_EXPIRED_24H')) {
+        return {
+            message: 'El turno de caja superó las 24 horas y debe cerrarse antes de continuar.',
+            code: 'SHIFT_EXPIRED_24H'
+        };
+    }
+    if (raw.includes('EMPLOYEE_NOT_FOUND')) {
+        return {
+            message: 'El empleado beneficiario seleccionado no existe o está inactivo.',
+            code: 'EMPLOYEE_NOT_FOUND'
+        };
+    }
+    return { message: raw || 'Error procesando operación de venta' };
+}
+
 /**
  * Mapper Implementation for Sale
  * Enforces:
@@ -53,7 +103,8 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             amountReceived: row.amount_received ? new Decimal(row.amount_received) : undefined,
             change: row.change_given ? new Decimal(row.change_given) : undefined,
             clientId: row.client_id || undefined,
-            employeeId: row.employee_id,
+            employeeId: row.employee_id || undefined,
+            beneficiaryEmployeeId: row.beneficiary_employee_id || undefined,
             'syncStatus': row.sync_status as any
         };
     },
@@ -83,6 +134,7 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             payment_method: (entity.paymentMethod === 'cash' || (entity.paymentMethod as string) === 'mixed') ? 'efectivo' : entity.paymentMethod,
             total: entity.total.toNumber(),
             employee_id: entity.employeeId || null,
+            beneficiary_employee_id: entity.beneficiaryEmployeeId || null,
             actor_name: null,
             actor_role: null,
             client_id: entity.clientId || null,
@@ -171,16 +223,32 @@ export const saleRepository: SaleRepository = {
                     }
 
                     const normalizedPaymentMethod = (saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod;
+                    const sanitizedClientId = normalizedPaymentMethod === 'fiado' ? (saleData.clientId || null) : null;
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    const sanitizedBeneficiaryId = normalizedPaymentMethod === 'consumo_personal'
+                        && saleData.beneficiaryEmployeeId
+                        && uuidRegex.test(saleData.beneficiaryEmployeeId)
+                        ? saleData.beneficiaryEmployeeId
+                        : null;
+                    const sanitizedOriginSessionId = saleData.originSessionId && uuidRegex.test(saleData.originSessionId)
+                        ? saleData.originSessionId
+                        : null;
+                    const sanitizedSoldBy = saleData.employeeId && uuidRegex.test(saleData.employeeId)
+                        ? saleData.employeeId
+                        : null;
 
                     const rpcPayload = {
                         p_store_id: storeId,
-                        p_client_id: saleData.clientId || null,
+                        p_client_id: sanitizedClientId,
                         p_payment_method: normalizedPaymentMethod,
-                        p_amount_received: p_amount_received,
+                        p_amount_received: normalizedPaymentMethod === 'consumo_personal' ? 0 : p_amount_received,
                         p_items: p_items,
                         p_idempotency_key: crypto.randomUUID(),
                         p_local_id: crypto.randomUUID(),
-                        p_is_offline_sync: false
+                        p_is_offline_sync: false,
+                        p_origin_session_id: sanitizedOriginSessionId,
+                        p_sold_by: sanitizedSoldBy,
+                        p_beneficiary_employee_id: sanitizedBeneficiaryId
                     };
 
                     const { data, error } = await supabase.rpc('rpc_procesar_venta_v3', rpcPayload);
@@ -190,20 +258,23 @@ export const saleRepository: SaleRepository = {
                         if (error.message && (error.message.includes('FetchError') || error.message.includes('Network request failed'))) {
                             // Fallthrough to offline
                         } else {
-                            return { success: false, error: error.message };
+                            const mapped = mapSaleRpcError(error.message);
+                            return { success: false, error: mapped.message, code: mapped.code };
                         }
                     } else {
                         if (data && data.success) {
+                            const payloadData = (data as any).data ?? data;
                             return { 
                                 success: true, 
-                                id: data.sale_id, 
-                                ticketNumber: data.ticket_number,
-                                total: data.total,
-                                roundingDifference: data.rounding_difference,
-                                changeGiven: data.change_given
+                                id: payloadData.sale_id, 
+                                ticketNumber: payloadData.ticket_number,
+                                total: payloadData.total,
+                                roundingDifference: payloadData.rounding_difference,
+                                changeGiven: payloadData.change_given
                             };
                         } else {
-                            return { success: false, error: data?.error || 'Unknown RPC error' };
+                            const mapped = mapSaleRpcError((data as any)?.error);
+                            return { success: false, error: mapped.message || 'Unknown RPC error', code: mapped.code };
                         }
                     }
 
@@ -263,21 +334,28 @@ export const saleRepository: SaleRepository = {
                 ? 'efectivo'
                 : saleData.paymentMethod;
 
-            const enrichedPayload = {
-                ...saleData,
+            const enrichedPayload: Record<string, any> = {
+                id: newId,
+                localId: newId,
+                storeId,
+                clientId: dbPaymentMethod === 'fiado' ? (saleData.clientId ?? null) : null,
+                employeeId: saleData.employeeId ?? null,
+                originSessionId: saleData.originSessionId ?? null,
+                beneficiaryEmployeeId: dbPaymentMethod === 'consumo_personal' ? (saleData.beneficiaryEmployeeId ?? null) : null,
                 paymentMethod: dbPaymentMethod, // Override with DB-compatible value
-                total: new Decimal(saleData.total).toNumber(),
-                amountReceived: saleData.amountReceived ? new Decimal(saleData.amountReceived).toNumber() : undefined,
+                total: dbPaymentMethod === 'consumo_personal' ? 0 : new Decimal(saleData.total).toNumber(),
                 items: saleData.items.map(item => ({
                     ...item,
                     price: new Decimal(item.price).toNumber(),
                     subtotal: new Decimal(item.subtotal).toNumber()
-                })),
-                storeId,
-                id: newId
+                }))
             };
-            // Note: Offline queue will still need V1-like processing or V2-compatible sync handler later.
-            // For now, we queue it. V2 Sync handler usually needs to be updated too, but focusing on Online first.
+            if (saleData.amountReceived !== undefined && saleData.amountReceived !== null) {
+                enrichedPayload.amountReceived = new Decimal(saleData.amountReceived).toNumber();
+            }
+            if (saleData.payments) {
+                enrichedPayload.payments = saleData.payments;
+            }
             const queued = await addToSyncQueue('CREATE_SALE', enrichedPayload);
 
             if (queued) {
@@ -376,13 +454,15 @@ export const saleRepository: SaleRepository = {
 
             if (error) {
                 logger.error('[SaleRepo] Void Sale RPC error:', error);
-                return { success: false, error: error.message };
+                const mapped = mapSaleRpcError(error.message);
+                return { success: false, error: mapped.message };
             }
 
             if (data && data.success) {
                 return { success: true };
             } else {
-                return { success: false, error: data?.error || 'Void failed' };
+                const mapped = mapSaleRpcError(data?.error);
+                return { success: false, error: mapped.message || 'Void failed' };
             }
         } catch (e: any) {
             return { success: false, error: e.message };

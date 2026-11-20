@@ -53,9 +53,11 @@ const detail = ref<SaleDetail | null>(null);
 const fetchError = ref<string | null>(null);
 const isVoiding = ref(false);
 const voidReason = ref('');
+const voidError = ref<string | null>(null);
 const showVoidModal = ref(false);
 
 const handleVoidSale = async () => {
+  voidError.value = null;
   if (voidReason.value.trim().length < 10) {
     showWarning('El motivo de anulación debe tener al menos 10 caracteres');
     return;
@@ -75,10 +77,12 @@ const handleVoidSale = async () => {
       voidReason.value = '';
       emit('voided', props.saleId);
     } else {
-      showError(res.error || 'No se pudo anular la venta');
+      voidError.value = res.error || 'No se pudo anular la venta';
+      showError(voidError.value);
     }
   } catch (err: any) {
-    showError(err.message || 'Error al anular la venta');
+    voidError.value = err.message || 'Error al anular la venta';
+    showError(voidError.value || 'Error al anular la venta');
   } finally {
     isVoiding.value = false;
   }
@@ -244,6 +248,14 @@ watch(() => props.modelValue, async (open) => {
         <div class="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-3 rounded-xl border border-red-200 dark:border-red-800 text-sm">
           <AlertTriangle :size="20" class="shrink-0" />
           <span>Esta acción revertirá los fondos en caja/deuda y reingresará los productos al inventario.</span>
+        </div>
+        <div
+          v-if="voidError"
+          role="alert"
+          data-testid="void-sale-error"
+          class="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 text-xs sm:text-sm font-semibold text-amber-900 dark:text-amber-200"
+        >
+          {{ voidError }}
         </div>
         <div>
           <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">

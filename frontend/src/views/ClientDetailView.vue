@@ -33,6 +33,7 @@ const route = useRoute();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.isAdmin);
+const canOperateFiado = computed(() => authStore.canFiar || authStore.isAdmin);
 const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
 const { showWarning, showSuccess, showError } = useNotifications();
 
@@ -383,8 +384,9 @@ const registerPayment = async () => {
       <div class="flex items-center justify-between px-2 gap-2">
         <h3 class="text-slate-800 dark:text-white text-lg font-bold">Historial de Transacciones</h3>
         <button
-          v-if="client"
+          v-if="client && canOperateFiado"
           type="button"
+          data-testid="export-client-csv-btn"
           @click="exportStatementCsv"
           :disabled="isLoadingStatement"
           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
@@ -495,10 +497,12 @@ const registerPayment = async () => {
 
     <!-- Sticky Footer Action -->
     <div
+      v-if="canOperateFiado"
       class="fixed bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
     >
       <BaseButton
          @click="showPaymentModal = true"
+         data-testid="register-payment-btn"
          variant="success"
          class="w-full h-14 text-lg font-bold shadow-lg shadow-emerald-200 dark:shadow-none"
       >

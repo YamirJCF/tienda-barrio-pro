@@ -137,10 +137,10 @@ const save = async () => {
   }
 };
 
-// Load existing client data for editing
+// Load existing client data for editing or prefill global default credit limit on create
 watch(
   () => [props.modelValue, props.clientId],
-  ([show, clientId]) => {
+  async ([show, clientId]) => {
     if (show && clientId) {
       // WO-001: clientId is now string
       const client = clientsStore.getClientById(clientId as string);
@@ -154,6 +154,15 @@ watch(
       }
     } else if (show && !clientId) {
       resetForm();
+      const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+      if (storeId && typeof clientsStore.getDefaultCreditLimit === 'function') {
+        try {
+          const defLimit = await clientsStore.getDefaultCreditLimit(storeId);
+          formData.value.creditLimit = String(defLimit ?? 0);
+        } catch (err: any) {
+          errorMessage.value = err?.message || 'No se pudo cargar el cupo por defecto del servidor.';
+        }
+      }
     }
   },
   { immediate: true },

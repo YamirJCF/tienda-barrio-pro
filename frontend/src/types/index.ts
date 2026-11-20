@@ -63,6 +63,7 @@ export interface Sale {
     change?: Decimal;
     clientId?: string; // UUID - references Client.id
     employeeId?: string; // UUID - references Employee.id
+    beneficiaryEmployeeId?: string; // UUID - references Employee.id (consumo_personal)
     storeId?: string; // UUID - references Store.id
     syncStatus?: 'synced' | 'pending' | 'failed'; // SPEC-012: Sync Protocol
 }
@@ -80,8 +81,10 @@ export interface SalePayload {
     paymentMethod: string; // Dynamic
     payments?: { method: string, amount: number, reference?: string }[];
     amountReceived?: any; // Decimal or number
-    clientId?: string;
-    employeeId?: string;
+    clientId?: string | null;
+    employeeId?: string | null;
+    originSessionId?: string | null;
+    beneficiaryEmployeeId?: string | null;
     forceOffline?: boolean;
 }
 

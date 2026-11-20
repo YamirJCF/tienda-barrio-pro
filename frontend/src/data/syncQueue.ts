@@ -404,22 +404,27 @@ async function processItem(item: QueueItem): Promise<boolean> {
                     : Number(rawAmountReceived))
                 : null;
 
-            const localId = item.payload.localId || item.payload.id || item.id;
-            const idempotencyKey = item.payload.idempotencyKey || `offline-${localId}`;
+            const localId = item.payload.localId || item.payload.local_id || item.payload.id || item.id;
+            const idempotencyKey = item.payload.idempotencyKey || item.payload.idempotency_key || `offline-${localId}`;
+            const rawPaymentMethod = item.payload.paymentMethod || item.payload.payment_method;
+            const normalizedOfflineMethod = ['cash', 'mixed', 'efectivo'].includes(rawPaymentMethod)
+                ? 'efectivo'
+                : (rawPaymentMethod || 'efectivo');
 
             const rpcPayload = {
                 p_store_id: item.payload.storeId || item.payload.store_id,
-                p_client_id: item.payload.clientId || item.payload.client_id || null,
-                p_payment_method: (['cash', 'mixed', 'efectivo'].includes(item.payload.paymentMethod))
-                    ? 'efectivo' // Standardize on 'efectivo' to match DB Constraint
-                    : (item.payload.paymentMethod || 'efectivo'),
+                p_client_id: normalizedOfflineMethod === 'fiado' ? (item.payload.clientId || item.payload.client_id || null) : null,
+                p_payment_method: normalizedOfflineMethod,
                 p_amount_received: numericAmountReceived,
                 p_items: p_items_v2,
                 p_idempotency_key: idempotencyKey,
                 p_local_id: localId,
                 p_is_offline_sync: true,
-                p_origin_session_id: item.payload.sessionId || item.payload.session_id || item.payload.originSessionId || null,
-                p_sold_by: item.payload.employeeId || item.payload.employee_id || item.payload.soldBy || null
+                p_origin_session_id: item.payload.originSessionId || item.payload.origin_session_id || item.payload.sessionId || item.payload.session_id || null,
+                p_sold_by: item.payload.employeeId || item.payload.employee_id || item.payload.soldBy || item.payload.sold_by || null,
+                p_beneficiary_employee_id: normalizedOfflineMethod === 'consumo_personal'
+                    ? (item.payload.beneficiaryEmployeeId || item.payload.beneficiary_employee_id || null)
+                    : null
             };
 
             const { data, error } = await supabase.rpc('rpc_procesar_venta_v3', rpcPayload);
@@ -442,7 +447,8 @@ async function processItem(item: QueueItem): Promise<boolean> {
             }
 
             // Success!
-            logger.log(`[SyncQueue] ✅ RPC processed sale ${item.id} -> SaleID: ${data.sale_id}`);
+            const resData = (data as any)?.data ?? data;
+            logger.log(`[SyncQueue] ✅ RPC processed sale ${item.id} -> SaleID: ${resData?.sale_id}`);
             return true;
         }
 

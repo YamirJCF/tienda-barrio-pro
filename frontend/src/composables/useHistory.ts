@@ -76,7 +76,9 @@ function getDateRange(preset: DatePreset, customStart?: string, customEnd?: stri
 
 function isDateWithinRange(dateStr?: string, startStr?: string, endStr?: string): boolean {
     if (!dateStr || !startStr || !endStr) return true;
-    const itemDate = dateStr.slice(0, 10);
+    const itemDate = dateStr.includes('T') && !Number.isNaN(new Date(dateStr).getTime())
+        ? toLocalDateStr(new Date(dateStr))
+        : dateStr.slice(0, 10);
     return itemDate >= startStr && itemDate <= endStr;
 }
 

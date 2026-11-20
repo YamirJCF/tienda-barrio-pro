@@ -66,7 +66,8 @@ const TABLE_SCHEMAS: Record<string, {
         optionalFields: [
             'id', 'employee_id', 'amount_received', 'change_given', 'client_id', 'created_at',
             'is_voided', 'local_id', 'rounding_difference', 'sync_status',
-            'void_reason', 'voided_by', 'ticket_number', 'payments'
+            'void_reason', 'voided_by', 'ticket_number', 'payments',
+            'origin_session_id', 'beneficiary_employee_id', 'sold_by', 'idempotency_key'
         ],
         get allFields() { return [...this.requiredFields, ...this.optionalFields]; }
     },
@@ -80,7 +81,10 @@ const TABLE_SCHEMAS: Record<string, {
     },
     inventory_movements: {
         requiredFields: ['product_id', 'movement_type', 'quantity'],
-        optionalFields: ['id', 'created_at', 'created_by', 'reason', 'supplier_id', 'invoice_reference', 'payment_type'],
+        optionalFields: [
+            'id', 'created_at', 'created_by', 'reason', 'supplier_id', 'invoice_reference', 'payment_type',
+            'session_id', 'beneficiary_employee_id', 'reference_sale_price'
+        ],
         get allFields() { return [...this.requiredFields, ...this.optionalFields]; }
     },
     cash_sessions: {
@@ -166,10 +170,15 @@ const CAMEL_TO_SNAKE_MAP: Record<string, string> = {
     deviceFingerprint: 'device_fingerprint',
     passDate: 'pass_date',
 
-    // Inventory movement fields (added for supplier tracking)
+    // Inventory movement & POS audit fields
     supplierId: 'supplier_id',
     invoiceRef: 'invoice_reference',
-    paymentType: 'payment_type'
+    paymentType: 'payment_type',
+    originSessionId: 'origin_session_id',
+    beneficiaryEmployeeId: 'beneficiary_employee_id',
+    soldBy: 'sold_by',
+    idempotencyKey: 'idempotency_key',
+    referenceSalePrice: 'reference_sale_price'
 };
 
 // ============================================
