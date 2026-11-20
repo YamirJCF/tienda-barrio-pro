@@ -1,6 +1,6 @@
 import type { HistoryType, DatePreset } from '../composables/useHistory';
 
-export type PaymentMethodShortcut = 'ALL' | 'CASH' | 'DIGITAL' | 'NEQUI' | 'DAVIPLATA' | 'CREDIT';
+export type PaymentMethodShortcut = 'ALL' | 'CASH' | 'DIGITAL' | 'NEQUI' | 'LLAVE_BRE' | 'CREDIT';
 
 export interface HistoryFilterPatches {
   domain?: HistoryType;
@@ -139,8 +139,8 @@ export function parseHistoryShortcuts(
       matchedCount++;
       continue;
     }
-    if (normalized === 'daviplata') {
-      patches.paymentMethod = 'DAVIPLATA';
+    if (normalized === 'llave_bre' || normalized === 'bre-b' || normalized === 'breb' || normalized === 'llave') {
+      patches.paymentMethod = 'LLAVE_BRE';
       matchedCount++;
       continue;
     }

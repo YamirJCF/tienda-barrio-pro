@@ -21,28 +21,32 @@ const newExpense = ref({
     amount: 0,
     description: '',
     category: 'Servicios',
-    paymentMethod: 'efectivo'
+    paymentMethod: 'efectivo',
+    voucherRef: ''
 });
 
-// isSubmitting handled by useAsyncAction
-
-const categories = ['Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos', 'Reembolso'];
+// Catálogo OPEX cerrado de 5 categorías (POL-FIN-04 / SDD-026: retirado 'Reembolso')
+const categories = ['Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos'];
 const paymentMethods = [
     { id: 'efectivo', name: 'Efectivo' },
     { id: 'nequi', name: 'Nequi' },
     { id: 'llave_bre', name: 'Llave Bre-B' }
 ];
+const channelLabel = (method?: string) =>
+    paymentMethods.find((pm) => pm.id === method)?.name || 'Efectivo';
 
 // Computed
 const currentExpenses = computed(() => {
-    // Get from cash register session
+    // Filtrado estricto: solo gastos OPEX ('gasto'), nunca 'pago_proveedor' ni 'reembolso'
     const transactions = cashRegisterStore.currentSession?.transactions || [];
     return transactions
-        .filter(t => t.type === 'expense')
+        .filter(t => t.type === 'expense' && (!t.movementType || t.movementType === 'gasto'))
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 });
 
-const totalExpenses = computed(() => cashRegisterStore.totalExpenses);
+const totalExpenses = computed(() =>
+    currentExpenses.value.reduce((sum, exp) => sum.plus(new Decimal(exp.amount)), new Decimal(0))
+);
 const isSessionOpen = computed(() => cashRegisterStore.isOpen);
 
 // Composable: Request Management
@@ -50,25 +54,24 @@ import { useAsyncAction } from '../composables/useAsyncAction';
 const { execute: executeExpense, isLoading: isSubmitting } = useAsyncAction();
 
 const handleSubmit = async () => {
-    if (newExpense.value.amount <= 0 || !newExpense.value.description) {
-        showError('Completa todos los campos');
+    if (newExpense.value.amount <= 0 || !newExpense.value.description || newExpense.value.description.trim().length < 3) {
+        showError('Ingresa un monto positivo y una descripción de al menos 3 caracteres');
         return;
     }
 
     await executeExpense(async () => {
         await cashRegisterStore.registerExpense(
             new Decimal(newExpense.value.amount),
-            newExpense.value.description,
+            newExpense.value.description.trim(),
             newExpense.value.category,
-            newExpense.value.paymentMethod
+            newExpense.value.paymentMethod,
+            newExpense.value.voucherRef.trim() || undefined
         );
         
-        // Success actions within the async flow to ensure they happen only on success
         showAddModal.value = false;
-        // Reset form
-        newExpense.value = { amount: 0, description: '', category: 'Servicios', paymentMethod: 'efectivo' };
+        newExpense.value = { amount: 0, description: '', category: 'Servicios', paymentMethod: 'efectivo', voucherRef: '' };
     }, {
-        successMessage: 'Gasto registrado correcto',
+        successMessage: 'Gasto registrado correctamente',
         errorMessage: 'Error al registrar el gasto'
     });
 };
@@ -114,9 +117,13 @@ const goBack = () => router.push('/');
 
              <div v-for="expense in currentExpenses" :key="expense.id" 
                   class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex justify-between items-center animate-fade-in">
-                 <div>
+                 <div class="space-y-1">
                      <p class="font-bold text-gray-800 dark:text-gray-200">{{ expense.description }}</p>
-                     <span class="text-xs px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold uppercase tracking-wide">{{ expense.category }}</span>
+                     <div class="flex flex-wrap items-center gap-1.5">
+                         <span class="text-xs px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold uppercase tracking-wide">{{ expense.category }}</span>
+                         <span class="text-xs px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold">{{ channelLabel(expense.paymentMethod) }}</span>
+                         <span v-if="expense.actorName" class="text-[11px] text-gray-400">· {{ expense.actorName }}</span>
+                     </div>
                  </div>
                  <span class="font-bold text-red-500">-{{ formatCurrency(expense.amount) }}</span>
              </div>
@@ -146,7 +153,15 @@ const goBack = () => router.push('/');
                         <BaseInput
                             v-model="newExpense.description"
                             label="Concepto"
-                            placeholder="Ej. Pago Proveedor Pan"
+                            placeholder="Ej. Pago recibo de energía eléctrica"
+                        />
+                    </div>
+
+                    <div v-if="newExpense.paymentMethod !== 'efectivo'">
+                        <BaseInput
+                            v-model="newExpense.voucherRef"
+                            label="Referencia / Comprobante (Opcional)"
+                            placeholder="Ej. Comprobante Nequi #4821"
                         />
                     </div>
 

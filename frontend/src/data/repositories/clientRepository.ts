@@ -81,6 +81,12 @@ function mapClientRpcError(err: any, fallback: string): ClientRepositoryError {
             'INVALID_CREDIT_LIMIT'
         );
     }
+    if (raw.includes('PERMISSION_DENIED')) {
+        return new ClientRepositoryError(
+            'No tienes permiso autorizado (canFiar) o tu pase diario expiró para operar cartera.',
+            'PERMISSION_DENIED'
+        );
+    }
     if (raw.includes('UNAUTHORIZED') || err?.code === '42501') {
         return new ClientRepositoryError(
             'No tienes permisos autorizados para realizar esta acción sobre la cartera.',
@@ -189,6 +195,7 @@ export const clientMapper: RepositoryMappers<ClientDB, Client> = {
 };
 
 export type ClientDebtFilter = 'all' | 'with_debt' | 'up_to_date';
+export type ClientOrderBy = 'name_asc' | 'name_desc' | 'balance_desc' | 'balance_asc';
 
 export interface ClientPageParams {
     storeId: string;
@@ -196,6 +203,7 @@ export interface ClientPageParams {
     offset?: number;
     search?: string;
     debtFilter?: ClientDebtFilter;
+    orderBy?: ClientOrderBy;
 }
 
 export interface PaginatedClientsResult {
@@ -210,6 +218,8 @@ export interface ClientRepository extends EntityRepository<Client> {
     updateDebt(id: string, amount: number): Promise<boolean>;
     getTransactions(clientId: string): Promise<ClientTransaction[]>;
     getStatement(clientId: string, limit?: number, offset?: number): Promise<ClientStatement>;
+    getDefaultCreditLimit(storeId: string): Promise<number>;
+    updateGlobalCreditLimit(storeId: string, limit: number): Promise<number>;
     addTransaction(tx: any): Promise<boolean>;
     updatePendingTransactionSaleId(description: string, saleId: string): Promise<boolean>;
 }
@@ -242,6 +252,7 @@ export const clientRepository: ClientRepository = {
     async getPaginated(params: ClientPageParams): Promise<PaginatedClientsResult> {
         const limit = Math.max(1, params.limit ?? 5);
         const offset = Math.max(0, params.offset ?? 0);
+        const orderBy: ClientOrderBy = params.orderBy ?? 'name_asc';
         const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
 
         if (isSupabaseConfigured() && isOnline) {
@@ -253,39 +264,61 @@ export const clientRepository: ClientRepository = {
                 );
             }
 
-            let query = supabase
-                .from(TABLE_NAME)
-                .select('*', { count: 'exact' })
-                .eq('store_id', params.storeId)
-                .eq('is_deleted', false);
+            const filterDebtMap: Record<ClientDebtFilter, string> = {
+                all: 'todos',
+                with_debt: 'con_deuda',
+                up_to_date: 'sin_deuda',
+            };
+            const p_filter_debt = params.debtFilter ? (filterDebtMap[params.debtFilter] || 'todos') : 'todos';
+            const cleanSearch = (params.search || '').trim() || null;
 
-            const cleanSearch = (params.search || '').trim().replace(/[%_,()]/g, '');
-            if (cleanSearch) {
-                query = query.or(
-                    `name.ilike.%${cleanSearch}%,id_number.ilike.%${cleanSearch}%,phone.ilike.%${cleanSearch}%`
-                );
-            }
-
-            if (params.debtFilter === 'with_debt') {
-                query = query.gt('balance', 0);
-            } else if (params.debtFilter === 'up_to_date') {
-                query = query.lte('balance', 0);
-            }
-
-            const { data, error, count } = await query
-                .order('name', { ascending: true })
-                .range(offset, offset + limit - 1);
+            const { data: rpcData, error } = await (supabase as any).rpc('rpc_admin_get_clients', {
+                p_store_id: params.storeId,
+                p_filter_debt,
+                p_search_query: cleanSearch,
+                p_order_by: orderBy,
+                p_limit: limit,
+                p_offset: offset,
+            });
 
             if (error) {
                 throw mapClientRpcError(error, 'Error al cargar la lista paginada de clientes.');
             }
 
-            const rows = (data || []) as ClientDB[];
-            rows.forEach((r) => upsertCachedClientRow(r));
-            const mapped = rows.map((r) => clientMapper.toDomain(r));
+            const payload = rpcData as any;
+            if (!payload?.success || !Array.isArray(payload?.data)) {
+                throw new ClientRepositoryError(
+                    'Respuesta inválida del servidor al consultar clientes.',
+                    'INVALID_RESPONSE'
+                );
+            }
+
+            const rawRows = payload.data as any[];
+            rawRows.forEach((r) => {
+                upsertCachedClientRow({
+                    id: r.id,
+                    store_id: r.store_id ?? params.storeId,
+                    name: r.name,
+                    id_number: r.id_number,
+                    phone: r.phone ?? null,
+                    balance: Number(r.balance ?? 0),
+                    credit_limit: Number(r.credit_limit ?? 0),
+                    created_at: r.created_at ?? new Date().toISOString(),
+                    updated_at: r.updated_at ?? new Date().toISOString(),
+                    is_deleted: false,
+                    deleted_at: null,
+                });
+            });
+
+            const mapped = rawRows.map((r) =>
+                mapRawClientToDomain({
+                    ...r,
+                    store_id: r.store_id ?? params.storeId,
+                })
+            );
             return {
                 data: mapped,
-                count: typeof count === 'number' ? count : mapped.length,
+                count: typeof payload.count === 'number' ? payload.count : mapped.length,
             };
         }
 
@@ -306,7 +339,12 @@ export const clientRepository: ClientRepository = {
                 if (params.debtFilter === 'up_to_date') return Number(c.balance || 0) <= 0;
                 return true;
             })
-            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            .sort((a, b) => {
+                if (orderBy === 'name_desc') return (b.name || '').localeCompare(a.name || '');
+                if (orderBy === 'balance_desc') return Number(b.balance || 0) - Number(a.balance || 0);
+                if (orderBy === 'balance_asc') return Number(a.balance || 0) - Number(b.balance || 0);
+                return (a.name || '').localeCompare(b.name || '');
+            });
 
         return {
             data: filtered.slice(offset, offset + limit).map(clientMapper.toDomain),
@@ -482,6 +520,40 @@ export const clientRepository: ClientRepository = {
         return updated !== null;
     },
 
+    async getDefaultCreditLimit(storeId: string): Promise<number> {
+        if (!isSupabaseConfigured() || !storeId) return 0;
+        const supabase = getSupabaseClient();
+        if (!supabase) return 0;
+        const { data, error } = await supabase
+            .from('stores')
+            .select('default_credit_limit')
+            .eq('id', storeId)
+            .single();
+        if (error) {
+            throw mapClientRpcError(error, 'No se pudo consultar el cupo global por defecto.');
+        }
+        return Number((data as any)?.default_credit_limit ?? 0);
+    },
+
+    async updateGlobalCreditLimit(storeId: string, limit: number): Promise<number> {
+        const supabase = ensureOnlineForClientRpc('Actualizar cupo de crédito global');
+        const { data: rpcData, error } = await (supabase as any).rpc('rpc_actualizar_cupo_credito_global', {
+            p_store_id: storeId,
+            p_default_credit_limit: limit,
+        });
+        if (error) {
+            throw mapClientRpcError(error, 'No se pudo actualizar el cupo global por defecto.');
+        }
+        const payload = rpcData as any;
+        if (!payload?.success) {
+            throw new ClientRepositoryError(
+                payload?.error || 'Error al actualizar el cupo global por defecto.',
+                'INVALID_RESPONSE'
+            );
+        }
+        return Number(payload?.data?.default_credit_limit ?? limit);
+    },
+
     async getStatement(clientId: string, limit: number = 100, offset: number = 0): Promise<ClientStatement> {
         const supabase = ensureOnlineForClientRpc('Consultar el estado de cuenta');
         const { data: rpcData, error } = await (supabase as any).rpc('rpc_obtener_estado_cuenta_cliente', {
@@ -500,7 +572,6 @@ export const clientRepository: ClientRepository = {
         }
 
         const rawClient = payload.data.client;
-        const existingLocal = await baseRepository.getById(clientId);
         const movements: ClientStatementMovement[] = (payload.data.movements || []).map((m: any) => {
             const txType = String(m.transaction_type || '');
             const uiType: 'purchase' | 'payment' =
@@ -525,9 +596,9 @@ export const clientRepository: ClientRepository = {
             client: {
                 ...mapRawClientToDomain({
                     ...rawClient,
-                    store_id: rawClient.store_id ?? existingLocal?.storeId ?? '',
-                    created_at: rawClient.created_at ?? existingLocal?.createdAt,
-                    updated_at: rawClient.updated_at ?? existingLocal?.updatedAt,
+                    store_id: rawClient.store_id ?? '',
+                    created_at: rawClient.created_at,
+                    updated_at: rawClient.updated_at,
                 }),
                 creditAvailable: new Decimal(Number(rawClient.credit_available || 0)),
             },

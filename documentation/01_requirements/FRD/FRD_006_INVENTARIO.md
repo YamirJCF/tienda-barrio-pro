@@ -51,36 +51,39 @@ El redondeo se aplica al momento del cálculo, no solo en visualización. Los da
 | Stock | ✅ Sí | Valor inicial: 0 o mayor. **NUNCA puede ser negativo.** |
 | Stock Mínimo | ✅ Sí | Umbral para alerta de stock bajo. Default: 5. |
 | PLU | ❌ No | Código rápido de máximo 4 dígitos. Único por tienda. |
-| Costo | ❌ No | Visible solo para Admin. Protegido por políticas de acceso. |
+| Costo | ❌ No | Visible para Admin y empleados con permiso `Inventario completo` (`FRD-003-01`). Oculto para empleados sin ese permiso. |
 | Categoría | ❌ No | Categoría libre o predefinida. |
 | Unidad de Medida | ✅ Sí | Valores: unidad, kg, lb, g |
 | Es Pesable | ✅ Sí | Si es verdadero, el POS muestra calculadora de peso. |
 
 ---
 
-### Matriz de Permisos
+### Matriz de Permisos (`FRD-003-01`, `POL-SEG-03`, `POL-LOG-03`)
 
-| Acción | Admin | Empleado con `canViewInventory` | Empleado con `canManageInventory` |
-|--------|-------|--------------------------------|-----------------------------------|
-| Ver listado de productos | ✅ | ✅ | ✅ |
-| Ver campo costo | ✅ | ❌ | ❌ |
-| Crear producto | ✅ | ❌ | ✅ |
-| Editar producto | ✅ | ❌ | ✅ |
-| **Eliminar producto** | ✅ | ❌ | ❌ |
-| Registrar movimientos (Kardex) | ✅ | ❌ | ✅ |
-| Ver historial Kardex | ✅ | ✅ | ✅ |
+| Acción | Admin | Empleado con `Inventario completo` (`canManageInventory`) | Empleado sin `Inventario completo` |
+|--------|-------|-----------------------------------|--------------------------------|
+| Ver listado de productos, stock, costo y Kardex | ✅ | ✅ | ❌ *(solo busca en POS para vender)* |
+| Crear y editar producto | ✅ | ✅ (con firma individual) | ❌ |
+| **Eliminar producto (baja lógica)** | ✅ | ✅ (con firma individual) | ❌ |
+| Consultar catálogo de productos eliminados | ✅ | ❌ | ❌ |
+| Registrar Entradas, **Ajustes por conteo físico** y **Devolución física a proveedor** ($0 en Caja POS, sin tocar CxP) | ✅ | ✅ (con motivo, firma individual y alerta al Admin en ajustes) | ❌ |
+| Registrar **Mermas** y **Consumo del negocio** ($0 en Caja POS) | ✅ | ✅ (con motivo y firma individual) | ✅ (con motivo y firma individual, sin ver costo) |
+| Registrar **Consumo / Retiro personal** (como venta en POS, $0 en Caja POS) | ✅ *(puede elegir a cualquier perfil)* | ✅ *(solo a su propio perfil)* | ✅ *(solo a su propio perfil)* |
 
 ---
 
 ### Movimientos de Stock (Kardex)
 
-| Tipo | Efecto en Stock | Ejemplo |
+| Tipo | Efecto en Stock | Ejemplo / Alcance |
 |------|-----------------|---------|
-| Entrada | +Cantidad | Llega mercancía del proveedor |
-| Salida | -Cantidad | Merma, robo, daño |
-| Ajuste | ±Cantidad | Corrección de inventario físico |
-| Venta | -Cantidad | Registrado automáticamente por módulo Ventas |
-| Devolución | +Cantidad | Cliente devuelve producto |
+| Entrada | +Cantidad | Llega mercancía del proveedor (`Inventario completo` / Admin) |
+| Salida por Merma | -Cantidad | Producto roto, dañado o vencido (`Cualquier usuario activo`, $0 en Caja POS) |
+| Salida por Consumo del Negocio | -Cantidad | Insumos tomados del estante para uso de la tienda (`Cualquier usuario activo`, $0 en Caja POS) |
+| Salida por Consumo / Retiro Personal | -Cantidad | Operado como venta en POS asignada al perfil propio (`Cualquier usuario activo`, $0 en Caja POS; solo Admin elige a otros) |
+| Salida por Devolución Física a Proveedor | -Cantidad | Unidades devueltas físicamente al proveedor (`Inventario completo` / Admin, $0 en Caja POS y sin alterar CxP) |
+| Ajuste por Conteo Físico | ±Cantidad | Corrección de inventario físico con alerta administrativa (`Inventario completo` / Admin) |
+| Venta | -Cantidad | Registrado automáticamente por el POS |
+| Reembolso de Cliente | +Cantidad (o directo a Merma si lleva etiqueta `"merma"`) | Devolución en POS: si tiene la etiqueta única `"merma"`, no pasa por stock vendible y sale como merma; si no la tiene, reingresa para otra venta (`FRD-006-02`) |
 
 **Regla Crítica:** Si un movimiento resultaría en stock negativo → **Rechazar operación** con mensaje: "Stock insuficiente. Disponible: X [unidad]".
 
@@ -201,27 +204,29 @@ El catálogo de inventario y cualquier listado asociado (movimientos Kardex, his
 
 **Entidad Producto:**
 - Campos definidos en la tabla de Entidad Producto (arriba)
-- Políticas de acceso: filtrar por tienda, ocultar costo si usuario no es Admin
+- Trazabilidad de autoría: firma individual de quién creó, editó o dio de baja lógica el producto
+- Políticas de acceso: filtrar por tienda; mostrar costo únicamente a Admin y empleados con permiso `Inventario completo`
 
 **Entidad Movimientos de Inventario:**
 - Identificador único
 - Relación con Producto
-- Tipo de movimiento
+- Tipo de movimiento (Entrada, Merma, Consumo del negocio, Consumo/retiro personal, Devolución física a proveedor, Ajuste por conteo físico, Venta, Reembolso)
 - Cantidad
-- Razón
-- Usuario que registró
+- Razón / Motivo obligatorio
+- Usuario responsable (firma individual inmutable con fotografía histórica de nombre y rol)
 - Timestamp
-- Trigger: Al insertar, actualizar stock del producto automáticamente
+- Inmutabilidad: ningún movimiento se borra ni edita; toda corrección se realiza por contra-movimiento
 
 ---
 
 ## Criterios de Aceptación
 
-- [ ] El botón "Eliminar Producto" está oculto para empleados (solo visible para Admin).
-- [ ] El campo costo no es visible para empleados en ninguna pantalla.
+- [ ] Crear, editar, dar baja lógica ("Eliminar Producto"), ver el campo **costo**, ver Kardex y registrar Entradas, Ajustes por conteo físico y Devoluciones físicas a proveedor están habilitados para el Administrador y empleados con permiso **`Inventario completo`** (con firma individual inmutable).
+- [ ] Consultar el catálogo de productos eliminados (inactivos) es exclusivo del Administrador.
+- [ ] Cualquier usuario activo puede registrar Mermas, Consumo del negocio y Consumo/retiro personal (este último a su propio perfil; solo Admin elige a otros) con su firma individual y $0 en Caja POS.
 - [ ] Al llegar stock a nivel bajo, aparece notificación en el centro de notificaciones.
 - [ ] La búsqueda por PLU retorna resultado instantáneo (menos de 1 segundo).
-- [ ] Todos los movimientos de stock quedan registrados con el usuario responsable.
+- [ ] Todos los movimientos de stock y acciones sobre productos quedan registrados de forma inmutable con la firma individual del usuario responsable.
 - [ ] No se permite crear movimientos que resulten en stock negativo.
 - [ ] El precio siempre se guarda redondeado al múltiplo de $50.
 - [ ] La búsqueda por nombre retorna coincidencias parciales desde 2 caracteres ingresados.

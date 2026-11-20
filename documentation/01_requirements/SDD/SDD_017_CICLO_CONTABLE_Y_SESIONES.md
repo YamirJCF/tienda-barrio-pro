@@ -1,41 +1,31 @@
 # SDD-017: Alineación del Ciclo Contable de Caja y Ciclo de Vida de Sesiones
 
 > **Módulo:** Contabilidad / Control de Caja / Autenticación  
-> **Versión Documental:** 3.0.0 (Redactado bajo Protocolo PAC-SDD)  
-> **Estado:** 🟢 ESPECIFICACIÓN APROBADA  
-> **FRD Fuente:** [`documentation/01_requirements/FRD/FRD_017_CICLO_CONTABLE_Y_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/FRD/FRD_017_CICLO_CONTABLE_Y_SESIONES.md) (Versión 4.0)  
-> **SDDs Vecinos Vinculados:** [`SDD_004_CONTROL_DE_CAJA.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_004_CONTROL_DE_CAJA.md), [`SDD_007_01_NUCLEO_POS.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_007_01_NUCLEO_POS.md), [`SDD_012_SINCRONIZACION_OFFLINE.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_012_SINCRONIZACION_OFFLINE.md), [`SDD_013_GESTION_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_013_GESTION_SESIONES.md), [`SDD_020_CAJA_MULTICANAL.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_020_CAJA_MULTICANAL.md), [`SDD_027_02_LIMITE_24_HORAS.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/SDD/SDD_027_02_LIMITE_24_HORAS.md)
+> **Versión Documental:** 4.0.0 (Alineación `ARQ-002` v1.4 y Contrato Marco `SDD-003-01`)  
+> **Estado:** 🟢 ESPECIFICACIÓN ALINEADA (Pendiente migración Fase 3)  
+> **FRD Fuente:** [`documentation/01_requirements/FRD/FRD_017_CICLO_CONTABLE_Y_SESIONES.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/FRD/FRD_017_CICLO_CONTABLE_Y_SESIONES.md) y [`FRD_027_02_LIMITE_24_HORAS_CAJA.md`](file:///c:/Users/Windows%2011/OneDrive/Desktop/prueba/documentation/01_requirements/FRD/FRD_027_02_LIMITE_24_HORAS_CAJA.md)  
+> **SDDs Vecinos Vinculados:** [`SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md`](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md), [`SDD_004_CONTROL_DE_CAJA.md`](./SDD_004_CONTROL_DE_CAJA.md), [`SDD_007_01_NUCLEO_POS.md`](./SDD_007_01_NUCLEO_POS.md), [`SDD_012_SINCRONIZACION_OFFLINE.md`](./SDD_012_SINCRONIZACION_OFFLINE.md), [`SDD_013_GESTION_SESIONES.md`](./SDD_013_GESTION_SESIONES.md), [`SDD_020_CAJA_MULTICANAL.md`](./SDD_020_CAJA_MULTICANAL.md), [`SDD_027_02_LIMITE_24_HORAS.md`](./SDD_027_02_LIMITE_24_HORAS.md)
 
 ---
 
 ## 0. Evidencia Contextual del Protocolo PAC-SDD
 
-En cumplimiento estricto del Protocolo de Pre-Análisis Contextual (PAC-SDD), este diseño técnico se fundamenta exclusivamente en la evidencia real auditada y contrastada de forma autónoma:
-
-1. **Esquema Real Verificado (PAC Bloque 2):**
-   - Se verificaron 6 tablas en el catálogo de PostgreSQL (`ihtjocmhzuliwwvdzfnz`): `cash_sessions` (12 columnas), `cash_movements` (10 columnas), `daily_passes` (14 columnas), `sales` (19 columnas), `audit_logs` (12 columnas) y `notifications` (9 columnas). Total: 76 columnas físicas verificadas en schema `public`.
-   - Brechas DDL identificadas: La tabla `cash_movements` cuenta con 10 columnas y carece de la columna física `actor_id` en producción (Deuda D-2). En `sales`, la única referencia a sesiones es `void_session_id`.
-   - Restricción de integridad en `audit_logs`: La columna `actor_id` posee colisión por doble Foreign Key (`employees` y `auth.users`), mitigada canalizando la autoría de colaboradores en `metadata: jsonb` (Deuda D-1).
-2. **Seguridad Centralizada (PAC Bloque 3):**
-   - Funciones multi-tenant obligatorias: `public.assert_store_access(p_store_id uuid)` y `public.get_current_store_id()`.
-   - Funciones de identidad operativa: `public.get_employee_id_from_session()` y `public.is_authorized_employee()`.
-   - Corrección de compuerta: Se erradica la vulnerabilidad de `abrir_caja` legacy que no ejecutaba `assert_store_access` y devolvía fallos silenciosos.
-3. **Radio de Impacto Cruzado Auditado (PAC Bloque 4):**
-   - 12 funciones en `pg_proc` impactan directamente `cash_sessions` y 9 funciones impactan `cash_movements`.
-   - Erradicación de fallos silenciosos: Se elimina la cláusula `IF EXISTS` sobre `information_schema.tables` en `rpc_check_and_force_close_shifts` para inserciones en `notifications`.
-   - Compuerta obligatoria contra reaperturas fraudulentas (RIC-5 / Deuda D-7): `abrir_caja` debe abortar con excepción si existe un turno caducado con `forced_close = true AND actual_balance IS NULL`.
-4. **Contratos Vecinos Validados (PAC Bloque 5):**
-   - Armonizado con `SDD-004` (arqueo ciego), `SDD-007_01` (excepciones `NO_OPEN_CASH_SESSION` y `SHIFT_EXPIRED_24H`), `SDD-012` (sincronización tardía con `LATE_SYNC_UPDATE` - Deuda D-6), `SDD-013` (desacople total caja-pases) y `SDD-020` (segregación multicanal).
+1. **Esquema Real Verificado y Brechas (`SDD-003-01 §0.3`):**
+   - `cash_movements` ya incorpora `actor_id`, `payment_method`, `category` y `voucher_ref`, pero `cash_sessions` carece de `closing_attempts`, `forced_close_without_count` y columnas de fotografía histórica (`opened_by_name`/`opened_by_role`, `closed_by_name`/`closed_by_role`), y `cash_movements`/`sales`/`audit_logs` carecen de `actor_name`/`actor_role`.
+   - `get_employee_id_from_session()` ya admite continuidad nocturna `<24h` (`20261111173000` L706–749), pero `request_employee_access` y `toggle_empleado_activo` requieren alineación para `pass_date IN (v_today, v_today - 1)` con turno abierto `<24h`.
+2. **Seguridad Centralizada (`SDD-003-01 §3.1`):**
+   - Toda operación reutiliza `assert_store_access`, `is_store_admin`, `assert_store_admin`, `assert_employee_permission` y `resolve_actor_snapshot` (Regla 4 `AGENTS.md`).
+   - Erradicación de guardias silenciosas `IF EXISTS (... information_schema.tables ...)` en `rpc_check_and_force_close_shifts` (Regla 3 `AGENTS.md`).
 
 ---
 
 ## 1. Glosario Técnico
 
-- **Hecho Económico Continuo:** Período operativo ininterrumpido gobernado por un solo turno de caja, cuya validez contable no está delimitada por la medianoche astronómica sino por el acto físico de apertura y cierre.
-- **Techo Temporal de Turno (`P_MAX_HORAS_TURNO`):** Parámetro de arquitectura (24 horas) que define el límite temporal máximo que un turno de caja puede permanecer abierto antes de ser sellado automáticamente por el servidor.
-- **Cierre Forzado por Caducidad:** Transición automática ejecutada por el sistema que conmuta una sesión a `status = 'closed'` fijando `forced_close = true`, sellando el saldo esperado matemático y dejando el saldo real en `NULL`.
-- **Reconciliación de Turno Caducado (`rpc_reconciliar_cierre_forzado`):** Procedimiento administrativo obligatorio que exige el conteo físico a ciegas del dinero en gaveta para liquidar la diferencia contable (`actual_balance - expected_balance`) antes de permitir la apertura de un nuevo turno.
-- **Principio de Devengo e Imputación Tardía:** Norma contable (`RN-017-04`) que exige que toda venta offline generada durante un turno cerrado se impute retrospectivamente a dicho turno (`origin_session_id`), recalculando su saldo esperado y emitiendo el evento forense `LATE_SYNC_UPDATE`.
+- **Hecho Económico Continuo:** Turno operativo que puede cruzar la medianoche (`00:00:00`) manteniendo vigente el Pase Diario del personal mientras la antigüedad sea `< 24h`.
+- **Techo Temporal (`P_MAX_HORAS_TURNO`):** Límite estricto de 24 horas tras el cual el turno transiciona a estado **`Expirado/Bloqueado`**.
+- **Propiedad Estricta del Turno en Caducidad:** Un turno `+24h` solo puede ser cerrado por el **abridor original** (mediante Cierre Asistido de hasta 3 intentos) o por el **Administrador** mediante Cierre Forzoso.
+- **Cierre Forzoso Administrativo (`rpc_reconciliar_cierre_forzado`):** Clausura ejecutada exclusivamente por el Administrador cuando el abridor original no está disponible. **Declarar conteo físico no siempre es obligatorio** (`p_actual_balance` opcional): si se omite, el servidor asume `expected_balance`, fija `difference = 0`, marca `forced_close_without_count = true` y emite alerta crítica de fondos desconocidos.
+- **Imputación Tardía (`LATE_SYNC_UPDATE`):** Registro retrospectivo de una venta offline arribada tras cerrar su turno de origen, recalculando `expected_balance` del turno original y atribuido inmutablemente a la **firma individual de quien vendió offline** (`p_sold_by`, `actor_name`, `actor_role`).
 
 ---
 

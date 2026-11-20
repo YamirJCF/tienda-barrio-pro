@@ -18,9 +18,9 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 4. **Vinculación trazable con inventario:** El sistema DEBE permitir crear facturas por pagar sin referencia a inventario. El sistema DEBE permitir asociar manualmente una factura por pagar con una entrada de inventario existente. El sistema NO DEBE autocompletar esta referencia de forma automática. Si el usuario proporciona una referencia, el sistema DEBE validar que la entrada de inventario exista y pertenezca a la misma tienda. Si la referencia no existe o pertenece a otra tienda, el sistema DEBE rechazar la operación. La creación, modificación o eliminación de esta referencia NO DEBE crear deuda automáticamente, NO DEBE modificar inventario, NO DEBE generar movimientos de caja, NO DEBE alterar el saldo pendiente de la factura, NO DEBE alterar el monto total de la factura y NO DEBE alterar el estado calculado de la factura.
 
-5. **Abono externo:** Un abono externo representa una reducción de deuda pagada con fondos externos al control del turno actual. El abono externo DEBE reducir el saldo pendiente de la factura. El abono externo NO DEBE generar movimiento de caja. El abono externo NO DEBE afectar el canal EFECTIVO, NO DEBE afectar el canal NEQUI y NO DEBE afectar el canal LLAVE BRE. El abono externo NO DEBE afectar el arqueo físico. El abono externo NO DEBE requerir turno de caja abierto. El abono externo DEBE quedar registrado como apunte de control.
+5. **Abono externo ("pago externo / fuera de caja", `POL-FIN-01`):** Un abono externo representa una reducción de deuda pagada con fondos propios del negocio o del dueño **fuera de la Caja Dedicada POS**. El pago externo DEBE reducir el saldo pendiente de la factura, NO DEBE generar movimiento en la Caja Dedicada POS, NO DEBE afectar los canales EFECTIVO, NEQUI ni LLAVE BRE del turno, NO DEBE afectar el arqueo físico y NO DEBE requerir turno de caja abierto. DEBE quedar registrado como apunte contable de control con la firma del Administrador.
 
-6. **Pago interno:** Un pago interno representa una reducción de deuda pagada con fondos declarados dentro del sistema. El pago interno DEBE reducir el saldo pendiente de la factura. El pago interno DEBE generar un egreso en el canal seleccionado. El pago interno DEBE requerir turno de caja abierto. El pago interno DEBE requerir selección explícita de canal. El pago interno DEBE requerir validación de fondos por canal. El pago interno NO DEBE usar saldo consolidado. El pago interno NO DEBE generar sobregiro.
+6. **Pago interno (desde la Caja Dedicada POS):** Un pago interno representa una reducción de deuda pagada con fondos del turno actual de la **Caja Dedicada POS**. El pago interno DEBE reducir el saldo pendiente de la factura, generar un egreso en el canal seleccionado, requerir turno de caja abierto, exigir selección explícita de canal y validar fondos disponibles en ese canal (sin usar saldo consolidado ni generar sobregiro).
 
 7. **Canales válidos para pago interno:** Los canales permitidos para pagos internos son exclusivamente los definidos por FRD-004 Caja Estricta Multicanal: EFECTIVO, NEQUI y LLAVE BRE. El sistema NO DEBE permitir canales adicionales. El sistema NO DEBE aceptar términos genéricos como "canal digital" u "otro canal".
 
@@ -46,9 +46,10 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 18. **Autorización estricta:** Toda operación del módulo DEBE validar permisos en el servidor según FRD-002 Autorización Estricta. El servidor NO DEBE confiar en botones visibles, estado del frontend, roles enviados por cliente, variables temporales, banderas de autoridad ni metadatos inyectados por interfaz. La validación DEBE hacerse consultando el perfil real del usuario en la base de datos.
 
-19. **Roles y permisos:** El sistema reconoce dos tipos de usuarios: Admin y Empleado. El Admin DEBE poder ejecutar todas las operaciones del módulo. Un empleado solo DEBE poder ejecutar operaciones para las cuales tenga permiso explícito otorgado por el Admin. El sistema DEBE definir dos permisos funcionales para este módulo: (a) permiso de gestión de cuentas por pagar, que autoriza registrar facturas y registrar abonos externos; (b) permiso de pago con fondos del sistema, que autoriza ejecutar pagos internos. El permiso de pago con fondos del sistema NO DEBE otorgar automáticamente el permiso de apertura y cierre de caja. El permiso de apertura y cierre de caja se rige por FRD-004 Control de Caja.
+19. **Exclusividad del Administrador y Alcance Diferido (`POL-SEG-03`, `FRD-003-01`):** En la versión actual, **toda gestión de proveedores y Cuentas por Pagar (registrar facturas por pagar, registrar pagos externos / fuera de caja, ejecutar pagos internos desde la Caja Dedicada POS y consultar el módulo) es 100% exclusiva del Administrador**. Ninguno de los 4 permisos delegables a empleados otorga acceso a este módulo.
+    - *Alcance Diferido (Regla 7 / `FRD-003-01` D-3):* La opción de delegar en el futuro a un empleado de confianza el registro y pago contra entrega de facturas desde la caja del turno queda documentada formalmente como una actualización futura, con el fin de mantener hoy el modelo simplificado de 4 permisos y el control de pasivos en manos del dueño.
 
-20. **Registro claro del origen:** Cada reducción de deuda DEBE indicar su origen: EXTERNO o INTERNO. Si el origen es EXTERNO, el registro NO DEBE indicar canal, NO DEBE indicar movimiento de caja y NO DEBE requerir turno abierto. Si el origen es INTERNO, el registro DEBE indicar canal, DEBE indicar movimiento de caja asociado, DEBE indicar turno asociado y DEBE validar fondos.
+20. **Registro claro del origen:** Cada reducción de deuda DEBE indicar su origen: **EXTERNO ("pago externo / fuera de caja")** o **INTERNO (desde la Caja Dedicada POS)**, junto con la firma del Administrador. Si el origen es EXTERNO, el registro NO DEBE indicar canal, NO DEBE indicar movimiento de caja y NO DEBE requerir turno abierto. Si el origen es INTERNO, el registro DEBE indicar canal (**Efectivo, Nequi o Llave BRE**), movimiento de caja asociado, turno asociado y validar fondos.
 
 21. **Navegación y Filtrado del Listado:** El módulo DEBE proveer mecanismos de búsqueda y filtrado para que el usuario localice facturas dentro de la lista de cuentas por pagar sin necesidad de recorrerla completa.
     - **Búsqueda por proveedor:** El sistema DEBE permitir buscar facturas ingresando una porción del nombre del proveedor. La búsqueda es insensible a mayúsculas/minúsculas y retorna coincidencias parciales.
@@ -69,7 +70,7 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 **Caso A: Registro manual de factura por pagar**
 
-- **Actor:** Admin o empleado con permiso de gestión de cuentas por pagar.
+- **Actor:** Administrador.
 - **Precondición:** Existe una obligación con un proveedor.
 - **Flujo Principal:**
     1. El usuario accede al módulo de Cuentas por Pagar.
@@ -92,7 +93,7 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 **Caso B: Registro de abono externo**
 
-- **Actor:** Admin o empleado con permiso de gestión de cuentas por pagar.
+- **Actor:** Administrador.
 - **Precondición:** Existe una factura pendiente y el pago se realizó con fondos externos al sistema.
 - **Flujo Principal:**
     1. El usuario accede a la lista de cuentas por pagar.
@@ -115,7 +116,7 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 **Caso C: Pago interno con fondos suficientes**
 
-- **Actor:** Admin o empleado con permiso de pago con fondos del sistema.
+- **Actor:** Administrador.
 - **Precondición:** Existe una factura pendiente y hay turno de caja abierto.
 - **Flujo Principal:**
     1. El usuario accede a la lista de cuentas por pagar.
@@ -143,7 +144,7 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 **Caso D: Pago interno rechazado por fondos insuficientes**
 
-- **Actor:** Admin o empleado con permiso de pago con fondos del sistema.
+- **Actor:** Administrador.
 - **Precondición:** El canal seleccionado no tiene fondos suficientes.
 - **Flujo Principal:**
     1. El usuario intenta pagar una factura.
@@ -162,7 +163,7 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 **Caso E: Pago interno sin turno abierto**
 
-- **Actor:** Admin o empleado con permiso de pago con fondos del sistema.
+- **Actor:** Administrador.
 - **Precondición:** No existe turno de caja abierto.
 - **Flujo Principal:**
     1. El usuario intenta pagar una factura con fondos del sistema.
@@ -192,7 +193,7 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 **Caso G: Filtrar facturas vencidas**
 
-- **Actor:** Admin o empleado con permiso de gestión de cuentas por pagar.
+- **Actor:** Administrador.
 - **Precondición:** Existen facturas en distintos estados (pendientes, vencidas, pagadas).
 - **Flujo Principal:**
     1. El usuario accede al módulo de Cuentas por Pagar.
@@ -208,7 +209,7 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 
 **Caso H: Buscar facturas de un proveedor específico**
 
-- **Actor:** Admin o empleado con permiso de gestión de cuentas por pagar.
+- **Actor:** Administrador.
 - **Precondición:** Existen múltiples facturas de distintos proveedores.
 - **Flujo Principal:**
     1. El usuario accede al módulo de Cuentas por Pagar.
@@ -288,15 +289,15 @@ Este módulo provee al tendero una herramienta de control para registrar, dar se
 - [ ] CA-FRD-019-64: Una factura está en estado VENCIDA si tiene fecha de vencimiento pasada y no está pagada.
 - [ ] CA-FRD-019-65: Una factura sin fecha de vencimiento no se marca como VENCIDA por cálculo automático.
 - [ ] CA-FRD-019-66: Una factura está en estado PENDIENTE mientras no esté pagada ni vencida.
-- [ ] CA-FRD-019-67: El Admin ejecuta todas las operaciones del módulo.
-- [ ] CA-FRD-019-68: Un empleado solo ejecuta operaciones para las cuales tenga permiso explícito.
-- [ ] CA-FRD-019-69: El registro de facturas requiere permiso de gestión de cuentas por pagar validado en servidor.
-- [ ] CA-FRD-019-70: El registro de abonos externos requiere permiso de gestión de cuentas por pagar validado en servidor.
-- [ ] CA-FRD-019-71: El pago interno requiere permiso de pago con fondos del sistema validado en servidor.
-- [ ] CA-FRD-019-72: Toda operación valida permisos en el servidor según FRD-002.
+- [ ] CA-FRD-019-67: Solo el Administrador ejecuta las operaciones del módulo de Cuentas por Pagar (`FRD-003-01`).
+- [ ] CA-FRD-019-68: Cualquier intento de un empleado de consultar, crear facturas o registrar pagos en Cuentas por Pagar es rechazado en el servidor con error de seguridad.
+- [ ] CA-FRD-019-69: El registro de facturas valida rol Administrador en servidor.
+- [ ] CA-FRD-019-70: El registro de abonos externos ("pago externo / fuera de caja") valida rol Administrador en servidor.
+- [ ] CA-FRD-019-71: El pago interno desde la Caja Dedicada POS valida rol Administrador en servidor.
+- [ ] CA-FRD-019-72: Toda operación valida autoridad en el servidor según FRD-002.
 - [ ] CA-FRD-019-73: El servidor no confía en banderas de autoridad enviadas por el cliente.
 - [ ] CA-FRD-019-74: La ocultación de botones en la interfaz no sustituye la validación de servidor.
-- [ ] CA-FRD-019-75: El sistema rechaza explícitamente operaciones sin permiso suficiente.
+- [ ] CA-FRD-019-75: El sistema rechaza explícitamente operaciones de usuarios sin rol Administrador.
 - [ ] CA-FRD-019-76: El listado de cuentas por pagar permite buscar facturas por nombre parcial de proveedor.
 - [ ] CA-FRD-019-77: El listado de cuentas por pagar ofrece filtro por estado calculado: Todas, Pendientes, Vencidas, Pagadas.
 - [ ] CA-FRD-019-78: El listado de cuentas por pagar ofrece filtro por rango de fechas de creación.

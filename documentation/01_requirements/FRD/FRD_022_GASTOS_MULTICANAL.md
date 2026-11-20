@@ -11,30 +11,30 @@ Permite registrar salidas de dinero (gastos del día y pagos a proveedores) espe
 
 ## Reglas de Negocio
 
-1. **Origen de Fondos Obligatorio:**
-   - Al registrar un gasto del día o un pago a proveedor (salida de dinero), el sistema DEBE exigir la selección del método de pago que origina los fondos (Ej. Efectivo, Nequi, Daviplata).
-   - Esto impacta directamente a la operación de pago a proveedor (definido en FRD-019), la cual ahora DEBE recibir y registrar el método de pago con el que se le pagó a dicho proveedor.
+1. **Origen de Fondos Obligatorio y Canales Unificados (`POL-FIN-02`):**
+   - Al registrar un gasto menor del turno (por cualquier usuario activo con Caja Dedicada POS abierta y firma individual) o un pago interno a proveedor (exclusivo del Administrador según `FRD-019` y `FRD-003-01`), el sistema DEBE exigir la selección del canal que origina los fondos entre los tres únicos canales válidos: **Efectivo, Nequi o Llave BRE**.
+   - Todo pago realizado con fondos externos al cajón del turno se marca como **"pago externo / fuera de caja"** (`FRD-019`) y no afecta la Caja Dedicada POS.
 
-2. **Impacto en el Turno (Protección de Saldos):**
-   - Si un gasto o pago a proveedor se registra en Efectivo, DEBE restar únicamente del "Saldo Esperado Efectivo" del turno actual.
-   - Si se registra en Nequi, DEBE restar únicamente del "Saldo Esperado Nequi" del turno actual.
-   - Los gastos digitales (ej. pagar la mercancía haciendo una transferencia) NO PUEDEN alterar el cuadre del dinero físico en el cajón.
+2. **Impacto en el Turno (Protección de Saldos por Canal):**
+   - Si un gasto menor o pago interno a proveedor se registra en **Efectivo**, DEBE restar únicamente del "Saldo Esperado Efectivo" del turno actual.
+   - Si se registra en **Nequi** o **Llave BRE**, DEBE restar únicamente del saldo esperado de ese canal digital en el turno actual.
+   - Los egresos digitales NO PUEDEN alterar jamás el cuadre del dinero físico en el cajón.
 
 3. **Restricción de Operación:**
-   - Para poder registrar un gasto en el sistema, independiente del método de pago, la caja DEBE estar abierta.
+   - Para poder registrar un gasto menor o un pago interno desde la Caja Dedicada POS, independiente del canal, la caja DEBE estar abierta y el canal elegido DEBE tener fondos suficientes.
 
 ## Casos de Uso
 
-**Caso A: Pago a Proveedor Pagado con Nequi**
-- **Actor:** Empleado / Admin
-- **Precondición:** Caja abierta.
+**Caso A: Pago Interno a Proveedor Pagado con Nequi (Exclusivo Administrador)**
+- **Actor:** Administrador (`FRD-019`, `FRD-003-01`).
+- **Precondición:** Caja Dedicada POS abierta y fondos suficientes en Nequi.
 - **Flujo Principal:**
-  1. Usuario ingresa al módulo de Cuentas por Pagar.
-  2. Selecciona abonar/pagar a un proveedor.
+  1. El Administrador ingresa al módulo de Cuentas por Pagar.
+  2. Selecciona abonar/pagar internamente a un proveedor.
   3. Ingresa el monto.
-  4. Selecciona "Nequi" en el selector de Método de Pago.
+  4. Selecciona "Nequi" en el selector de Canal de Pago (`Efectivo, Nequi o Llave BRE`).
   5. Confirma el pago.
-  6. Sistema ejecuta la operación de pago a proveedor con el nuevo parámetro, la cual reduce el saldo de la deuda e inserta un movimiento en la caja restando el saldo esperado de Nequi, dejando el saldo esperado de efectivo intacto.
+  6. El sistema reduce el saldo de la deuda e inserta un movimiento con la firma del Administrador restando el saldo esperado de Nequi, dejando el saldo esperado de efectivo intacto.
 
 ## Criterios de Aceptación
 - [ ] El formulario de registro de gastos exige seleccionar de dónde salió el dinero.

@@ -7,9 +7,8 @@ export const ALLOWED_POS_PAYMENT_CODES = new Set([
     'cash',
     'efectivo',
     'nequi',
-    'daviplata',
-    'fiado',
-    'bre'
+    'llave_bre',
+    'fiado'
 ]);
 
 export interface PaymentMethod {

@@ -18,31 +18,37 @@ export interface Expense {
     amount: number;
     description: string;
     category: string; // Extracted or stored in metadata
-    created_by?: string; // Not directly available in cash_movements view unless joined?
+    payment_method?: 'efectivo' | 'nequi' | 'llave_bre';
+    voucher_ref?: string | null;
+    created_by?: string;
+    actor_name?: string | null;
+    actor_role?: string | null;
     created_at?: string;
 }
 
 // Map to cash_movements
-// Note: cash_movements does not have store_id direct, but linked via session_id.
-// It also lacks 'category'. We might store "[Category] Desc"
 type CashMovementDB = Database['public']['Tables']['cash_movements']['Row'];
 
-const TABLE_NAME = 'cash_movements'; // Actually used via custom queries mostly
-const STORAGE_KEY = 'tienda-expenses'; // Legacy key
+const TABLE_NAME = 'cash_movements';
+const STORAGE_KEY = 'tienda-expenses';
 
 const expenseMapper: RepositoryMappers<CashMovementDB, Expense> = {
     toDomain: (row: CashMovementDB): Expense => {
-        // Extract category from description "[Category] Description"
         const match = row.description.match(/^\[(.*?)\] (.*)/);
         const category = match ? match[1] : 'General';
         const description = match ? match[2] : row.description;
 
         return {
             id: row.id,
-            store_id: '', // Cannot know from row alone, query fills it
+            store_id: '',
             amount: row.amount,
             description: description,
             category: row.category || category,
+            payment_method: (row.payment_method as Expense['payment_method']) || 'efectivo',
+            voucher_ref: row.voucher_ref ?? null,
+            created_by: row.actor_id ?? undefined,
+            actor_name: (row as any).actor_name ?? null,
+            actor_role: (row as any).actor_role ?? null,
             created_at: row.created_at
         };
     },
@@ -50,14 +56,16 @@ const expenseMapper: RepositoryMappers<CashMovementDB, Expense> = {
         return {
             id: entity.id,
             actor_id: entity.created_by ?? null,
+            actor_name: entity.actor_name ?? null,
+            actor_role: entity.actor_role ?? null,
             amount: entity.amount,
-            description: `[${entity.category || 'General'}] ${entity.description}`,
-            category: entity.category || 'General',
-            payment_method: 'efectivo',
-            voucher_ref: null,
-            movement_type: 'expense',
+            description: entity.description,
+            category: entity.category || 'Servicios',
+            payment_method: entity.payment_method || 'efectivo',
+            voucher_ref: entity.voucher_ref ?? null,
+            movement_type: 'gasto',
             created_at: entity.created_at || new Date().toISOString(),
-            session_id: '', // Must be filled by creator
+            session_id: '',
             sale_id: null
         };
     }
@@ -67,91 +75,73 @@ const baseRepository = createSupabaseRepository<Expense, CashMovementDB>(TABLE_N
 
 export interface ExpenseRepository extends EntityRepository<Expense> {
     getTodayExpenses(storeId: string): Promise<Expense[]>;
-    createExpense(expense: Omit<Expense, 'id' | 'created_at'>): Promise<Expense | null>;
+    createExpense(expense: Omit<Expense, 'id' | 'created_at'>): Promise<Expense>;
 }
+
+const getBogotaTodayDate = (): string =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
 
 export const expenseRepository: ExpenseRepository = {
     ...baseRepository,
 
     /**
-     * Get expenses for the current day
+     * Get expenses for the current business day (America/Bogota)
      */
     async getTodayExpenses(storeId: string): Promise<Expense[]> {
         const isOnline = navigator.onLine && isSupabaseConfigured();
+        const today = getBogotaTodayDate();
 
         if (isOnline) {
             const supabase = getSupabaseClient()!;
-            try {
-                const today = new Date().toISOString().split('T')[0];
+            const { data, error } = await supabase
+                .from('cash_movements')
+                .select('*, cash_sessions!inner(store_id)')
+                .eq('cash_sessions.store_id', storeId)
+                .eq('movement_type', 'gasto')
+                .gte('created_at', `${today}T00:00:00-05:00`);
 
-                // Query cash_movements joined with cash_sessions to filter by store_id
-                const { data, error } = await supabase
-                    .from('cash_movements')
-                    .select('*, cash_sessions!inner(store_id)')
-                    .eq('cash_sessions.store_id', storeId)
-                    .eq('movement_type', 'expense')
-                    .gte('created_at', `${today}T00:00:00`);
-
-                if (error) throw error;
-
-                // Map result
-                return (data as any[]).map(row => {
-                    const domain = expenseMapper.toDomain(row);
-                    domain.store_id = storeId;
-                    return domain;
-                });
-
-            } catch (e) {
-                logger.error('[ExpenseRepo] Online fetch failed, fallback to local', e);
+            if (error) {
+                logger.error('[ExpenseRepo] Online fetch failed:', error);
+                throw new Error(error.message || 'Error cargando gastos del servidor');
             }
+
+            return (data as any[]).map(row => {
+                const domain = expenseMapper.toDomain(row);
+                domain.store_id = storeId;
+                return domain;
+            });
         }
 
-        // Fallback or Offline: Filter local data
-        // Note: getAll from baseRepository for 'cash_movements' might return all movements, not just expenses
-        // We rely on local storage matching the key 'tienda-expenses' which might still explicitly store expenses?
-        // Or if we use the adapter on 'cash_movements', we get everything.
-        // If we want dedicated expense storage offline, we might need a separate mechanism or filter.
-        // For now, assuming adapter fallback handles the key 'tienda-expenses' which we write to in createExpense.
-
+        // Offline-only cache fallback
         try {
-            // If we write to localStorage using 'tienda-expenses', reading it back gives Expenses.
-            // But baseRepository using TABLE_NAME 'cash_movements' implies it reads/writes 'cash_movements' structure?
-            // Since createSupabaseRepository is generic, if we pass Expense as TDomain, 
-            // it expects localStorage to hold TPersistence (mapped) or TDomain?
-            // Adapter logic: "localStorage always stores TPersistence if mappers are provided".
-            // So localStorage has CashMovementDB[].
-
-            const allVars = await baseRepository.getAll(storeId); // Returns Expense[] (mapped from persistence)
-            const today = new Date().toISOString().split('T')[0];
-
+            const allVars = await baseRepository.getAll(storeId);
             return allVars.filter(e => {
-                const date = e.created_at ? e.created_at.split('T')[0] : '';
-                return date === today; // And potentially type if we stored other movements? 
-                // If STORAGE_KEY is unique to expenses, we are safe.
+                const date = e.created_at
+                    ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date(e.created_at))
+                    : '';
+                return date === today;
             });
         } catch (e) {
+            logger.error('[ExpenseRepo] Offline fallback failed:', e);
             return [];
         }
     },
 
     /**
-     * Create a new expense
+     * Create a new expense (Regla 3: nunca retorna null en error o sin caja abierta)
      */
-    async createExpense(expense: Omit<Expense, 'id' | 'created_at'>): Promise<Expense | null> {
-        // FRD-012: Expenses do NOT support offline mode
+    async createExpense(expense: Omit<Expense, 'id' | 'created_at'>): Promise<Expense> {
         if (!navigator.onLine) {
-            logger.warn('[ExpenseRepo] Expense blocked - requires connection');
-            return null;
+            logger.error('[ExpenseRepo] Expense creation failed: offline not supported for minor cash expenses');
+            throw new Error('No es posible registrar gastos en modo sin conexión');
         }
 
-        // ===== VALIDATION CHECKPOINT (Fase 2 Blindaje) =====
         if (!expense.store_id || expense.store_id.trim() === '') {
             const error = new Error('Cannot create Expense without valid store_id. This would fail RLS policies.');
             console.error('🚫 [ExpenseRepo] RLSViolationError:', error.message);
             throw error;
         }
 
-        // Validate UUID format
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(expense.store_id)) {
             const error = new Error(`Invalid UUID format for store_id: "${expense.store_id}"`);
@@ -159,57 +149,49 @@ export const expenseRepository: ExpenseRepository = {
             throw error;
         }
 
-        // We need an open session ID to insert into cash_movements
-        let sessionId = '';
-
-        try {
-            const status = await cashRepository.getStoreStatus(expense.store_id);
-            if (status.isOpen && status.sessionId) {
-                sessionId = status.sessionId;
-            } else {
-                logger.warn('Cannot create expense: No open session found');
-                return null;
-            }
-        } catch (e) {
-            logger.error('Error fetching session for expense', e);
-            return null;
+        const status = await cashRepository.getStoreStatus(expense.store_id);
+        if (!status.isOpen || !status.sessionId) {
+            throw new Error('NO_OPEN_SESSION: No existe una sesión de caja abierta para registrar el gasto.');
         }
 
         const isOnline = navigator.onLine && isSupabaseConfigured();
-        if (isOnline) {
-            const supabase = getSupabaseClient()!;
-            const { data, error } = await supabase.rpc('rpc_registrar_gasto_v2', {
-                p_session_id: sessionId,
-                p_amount: expense.amount,
-                p_description: expense.description,
-                p_category: expense.category || 'Servicios',
-                p_payment_method: 'efectivo'
-            });
-
-            if (error) {
-                logger.error('[ExpenseRepo] RPC Error registering expense:', error);
-                throw new Error(error.message);
-            }
-
-            const res = data as any;
-            if (res && res.success === false) {
-                logger.error('[ExpenseRepo] Failed registering expense:', res.error);
-                throw new Error(res.error || res.message || 'Error al registrar gasto');
-            }
-
-            return {
-                id: res?.data?.movement_id || crypto.randomUUID(),
-                store_id: expense.store_id || '',
-                amount: expense.amount,
-                description: expense.description,
-                category: expense.category || 'Servicios',
-                created_at: new Date().toISOString()
-            };
+        if (!isOnline) {
+            throw new Error('Supabase no configurado para registrar gastos en línea.');
         }
 
-        // If offline
-        logger.error('[ExpenseRepo] Expense creation failed: offline not supported for minor cash expenses');
-        throw new Error('No es posible registrar gastos en modo sin conexión');
+        const supabase = getSupabaseClient()!;
+        const { data, error } = await supabase.rpc('rpc_registrar_gasto_v2', {
+            p_session_id: status.sessionId,
+            p_amount: expense.amount,
+            p_description: expense.description,
+            p_category: expense.category || 'Servicios',
+            p_payment_method: expense.payment_method || 'efectivo',
+            p_voucher_ref: expense.voucher_ref || undefined
+        });
+
+        if (error) {
+            logger.error('[ExpenseRepo] RPC Error registering expense:', error);
+            throw new Error(error.message);
+        }
+
+        const res = data as any;
+        if (res && res.success === false) {
+            logger.error('[ExpenseRepo] Failed registering expense:', res.error);
+            throw new Error(res.error || res.message || 'Error al registrar gasto');
+        }
+
+        return {
+            id: res?.data?.movement_id || crypto.randomUUID(),
+            store_id: expense.store_id,
+            amount: expense.amount,
+            description: expense.description,
+            category: expense.category || 'Servicios',
+            payment_method: (res?.data?.payment_method || expense.payment_method || 'efectivo') as Expense['payment_method'],
+            voucher_ref: res?.data?.voucher_ref ?? expense.voucher_ref ?? null,
+            actor_name: res?.data?.actor_name ?? null,
+            actor_role: res?.data?.actor_role ?? null,
+            created_at: res?.data?.created_at || new Date().toISOString()
+        };
     }
 };
 

@@ -5,16 +5,60 @@ import { useAuthStore } from './auth';
 
 // --- Interfaces matching RPC payloads ---
 
+export interface OpexBreakdown {
+    cash_expenses: number;
+    servicios: number;
+    nomina: number;
+    transporte: number;
+    mantenimiento: number;
+    insumos: number;
+    otros: number;
+    merma_cost: number;
+    consumo_negocio_cost: number;
+    consumo_personal_cost: number;
+    total: number;
+}
+
+export interface PersonalConsumptionProfileItem {
+    profile_id: string | null;
+    profile_key: string;
+    profile_name: string;
+    profile_role: string;
+    total_cost: number;
+    total_reference_sale_price: number;
+    movements_count: number;
+    items_count: number;
+}
+
+export interface PersonalConsumptionsSummary {
+    total_cost: number;
+    total_reference_sale_price: number;
+    movements_count: number;
+    by_profile: PersonalConsumptionProfileItem[];
+}
+
 export interface FinancialReportPayload {
     period: { start: string; end: string };
+    gross_sales?: number;
+    refunds_total?: number;
     revenue: number;
     cogs: number;
     gross_profit: number;
     gross_margin: number;
     operational_expenses: number;
     net_profit: number;
+    opex_breakdown?: OpexBreakdown;
+    personal_consumptions_summary?: PersonalConsumptionsSummary;
     inventory_value: number;
-    payment_breakdown: { cash: number; transfer: number; credit: number };
+    payment_breakdown: {
+        cash: number;
+        transfer: number;
+        credit: number;
+        efectivo?: number;
+        fiado?: number;
+        nequi?: number;
+        llave_bre?: number;
+    };
     fiado_pendiente: number;
     traffic_light: { status: 'green' | 'red' | 'gray'; message: string };
 }
@@ -136,16 +180,28 @@ export const useFinancialStore = defineStore('financial', () => {
     };
     
     const loadSnapshots = async () => {
+        if (!authStore.isAdmin) {
+            error.value = 'Acceso restringido: solo administradores pueden consultar el panel financiero.';
+            return;
+        }
         if (isLoadingSnapshots.value) return;
         isLoadingSnapshots.value = true;
         try {
-            await Promise.allSettled([
+            const results = await Promise.allSettled([
                 fetchInventoryHealth(),
                 fetchClientLedgerSummary(),
                 fetchStagnantProducts()
             ]);
+            const rejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+            if (rejected) {
+                const msg = rejected.reason?.message || 'Error al cargar indicadores financieros';
+                error.value = msg.includes('ADMIN_ONLY_ACTION')
+                    ? 'Acceso exclusivo del Administrador.'
+                    : msg;
+            }
         } catch (err: any) {
             console.error('[FinancialStore] Error loading snapshots:', err);
+            error.value = err?.message || 'Error al cargar indicadores financieros';
         } finally {
             isLoadingSnapshots.value = false;
         }
@@ -180,6 +236,12 @@ export const useFinancialStore = defineStore('financial', () => {
 
     /** Carga estricta de la serie de tiempo según el periodo seleccionado */
     const setPeriod = async (period: PeriodType) => {
+        if (!authStore.isAdmin) {
+            error.value = 'Acceso restringido: solo administradores pueden consultar reportes financieros.';
+            summary.value = null;
+            topProductsByUnits.value = [];
+            return;
+        }
         if (isLoadingTimeSeries.value) return;
         activePeriod.value = period;
         isLoadingTimeSeries.value = true;
@@ -192,18 +254,19 @@ export const useFinancialStore = defineStore('financial', () => {
                 fetchTopProductsByUnits(start, end)
             ]);
 
-            results.forEach((result, i) => {
-                if (result.status === 'rejected') {
-                    console.warn(`[FinancialStore] Fetch TimeSeries #${i} failed:`, result.reason);
+            const rejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+            if (rejected) {
+                const msg = rejected.reason?.message || 'Error al cargar los datos financieros del periodo';
+                console.warn('[FinancialStore] Fetch TimeSeries failed:', rejected.reason);
+                if (results.every(r => r.status === 'rejected')) {
+                    throw rejected.reason;
                 }
-            });
-
-            const allFailed = results.every(r => r.status === 'rejected');
-            if (allFailed) throw (results[0] as PromiseRejectedResult).reason;
-            
+                error.value = msg.includes('ADMIN_ONLY_ACTION') ? 'Acceso exclusivo del Administrador.' : msg;
+            }
         } catch (err: any) {
             console.error('[FinancialStore] Error loading time-series data:', err);
-            error.value = err.message || 'Error al cargar los datos financieros del periodo';
+            const msg = err?.message || 'Error al cargar los datos financieros del periodo';
+            error.value = msg.includes('ADMIN_ONLY_ACTION') ? 'Acceso exclusivo del Administrador.' : msg;
             summary.value = null;
             topProductsByUnits.value = [];
         } finally {

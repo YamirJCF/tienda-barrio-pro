@@ -134,19 +134,22 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
     const completeSale = async (
         payments: PaymentTransaction[],
         totalPaid: Decimal,
-        clientId?: string
+        clientId?: string,
+        beneficiaryEmployeeId?: string
     ) => {
         // OPTIMISTIC UI: Close modal immediately to show feedback on main screen
         config.closeCheckout();
 
         const currentTicket = config.getTicketLabel();
         const primaryMethod = derivePrimaryMethod(payments);
-        // FRD-029 RN-16: Sanitizar client_id fuera de ventas fiadas
+        const isPersonalWithdrawal = primaryMethod === 'consumo_personal';
+        // CHK-403 / RN-16: Sanitizar client_id fuera de ventas fiadas
         const effectiveClientId = primaryMethod === 'fiado' ? clientId : undefined;
+        const effectiveBeneficiaryId = isPersonalWithdrawal ? beneficiaryEmployeeId : undefined;
 
         // Calculate total cash received for change calculation
-        const cashPayment = payments.find(p => p.method === 'cash');
-        const amountReceived = cashPayment ? cashPayment.amount : undefined;
+        const cashPayment = payments.find(p => p.method === 'cash' || p.method === 'efectivo');
+        const amountReceived = isPersonalWithdrawal ? new Decimal(0) : (cashPayment ? cashPayment.amount : undefined);
 
         const success = await executeSale(async () => {
             // SAFEGUARD: Check Register Status (JIT)
@@ -159,15 +162,17 @@ export function useSaleProcessor(config: UseSaleProcessorConfig) {
             // Register Sale Record (Source of Truth for Inventory & Business Logic)
             await salesStore.addSale({
                 items: saleItems,
-                total: cartStore.total,
+                total: isPersonalWithdrawal ? new Decimal(0) : cartStore.total,
                 roundingDifference: new Decimal(0),
-                effectiveTotal: cartStore.total,
+                effectiveTotal: isPersonalWithdrawal ? new Decimal(0) : cartStore.total,
                 paymentMethod: primaryMethod,
                 payments: payments,
                 amountReceived,
                 change: undefined,
                 clientId: effectiveClientId,
                 employeeId: authStore.currentUser?.employeeId || authStore.currentUser?.id,
+                originSessionId: cashRegisterStore.currentSession?.id ?? null,
+                beneficiaryEmployeeId: effectiveBeneficiaryId ?? null,
             });
 
             return true;

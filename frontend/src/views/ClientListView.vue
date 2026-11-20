@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useClientsStore } from '../stores/clients';
 import { useAuthStore } from '../stores/auth';
+import type { Client } from '../types';
+import type { ClientDebtFilter, ClientOrderBy } from '../data/repositories/clientRepository';
 import BottomNav from '../components/BottomNav.vue';
 import ClientFormModal from '../components/ClientFormModal.vue';
 import { Decimal } from 'decimal.js';
@@ -15,42 +17,97 @@ import {
   Search, 
   AlertTriangle, 
   Users, 
-  UserPlus, 
   ChevronRight, 
-  Plus 
+  Plus,
+  RefreshCw,
+  Loader2
 } from 'lucide-vue-next';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
+
+const PAGE_SIZE = 20;
 
 const router = useRouter();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
 const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
 
-onMounted(async () => {
-  // WO-006: Ensure clients are fetched from server on load
-  // preventing "missing data" issues if cache is empty or stale.
-  if (authStore.currentUser?.storeId) {
-      await clientsStore.initialize(authStore.currentUser.storeId);
-  }
-});
-
 // State
 const searchQuery = ref('');
+const debtFilter = ref<ClientDebtFilter>('all');
+const orderBy = ref<ClientOrderBy>('name_asc');
+const pagedClients = ref<Client[]>([]);
+const totalClientsCount = ref(0);
+const isLoadingPage = ref(false);
+const isLoadingMore = ref(false);
+const fetchError = ref<string | null>(null);
 const showClientModal = ref(false);
 // WO-001: Changed from number to string for UUID
 const editingClientId = ref<string | undefined>(undefined);
 const newlyCreatedId = ref<string | null>(null);
+let fetchSeq = 0;
+
+const loadClients = async (reset: boolean = true) => {
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+  if (!storeId) return;
+
+  const offset = reset ? 0 : pagedClients.value.length;
+  const seq = ++fetchSeq;
+  if (reset) {
+    isLoadingPage.value = true;
+    fetchError.value = null;
+  } else {
+    isLoadingMore.value = true;
+  }
+
+  try {
+    const result = await clientsStore.fetchClientsPage({
+      storeId,
+      limit: PAGE_SIZE,
+      offset,
+      search: searchQuery.value.trim(),
+      debtFilter: debtFilter.value,
+      orderBy: orderBy.value,
+    });
+    if (seq !== fetchSeq) return;
+
+    if (reset) {
+      pagedClients.value = result.data;
+    } else {
+      const seen = new Set(pagedClients.value.map((c) => c.id));
+      pagedClients.value = [...pagedClients.value, ...result.data.filter((c) => !seen.has(c.id))];
+    }
+    totalClientsCount.value = result.count;
+  } catch (err: any) {
+    if (seq !== fetchSeq) return;
+    fetchError.value = err?.message || 'No se pudo cargar la cartera de clientes.';
+  } finally {
+    if (seq === fetchSeq) {
+      isLoadingPage.value = false;
+      isLoadingMore.value = false;
+    }
+  }
+};
+
+onMounted(async () => {
+  await loadClients(true);
+});
+
+watch([searchQuery, debtFilter, orderBy], () => {
+  loadClients(true);
+});
 
 // Computed
-const filteredClients = computed(() => {
-  return clientsStore.searchClients(searchQuery.value);
-});
+const filteredClients = computed(() => pagedClients.value);
+const hasMore = computed(() => pagedClients.value.length < totalClientsCount.value);
 
 const totalDebt = computed(() => {
-  return clientsStore.totalDebt;
+  return pagedClients.value.reduce(
+    (sum, c) => sum.plus(c.totalDebt && c.totalDebt.gt(0) ? c.totalDebt : new Decimal(0)),
+    new Decimal(0)
+  );
 });
 
-// Client creation/editing is admin-only; employees can only view & register payments
+// Client creation/editing is admin-only; employees with canFiar can only view & register payments
 const canManageClients = computed(() => authStore.isAdmin);
 
 // Generate initials and color from name
@@ -99,8 +156,9 @@ const openClientDetail = (clientId: string) => {
   router.push(`/clients/${clientId}`);
 };
 
-const handleClientSaved = (client: { id: string }, action: 'create' | 'update') => {
+const handleClientSaved = async (client: { id: string }, action: 'create' | 'update') => {
   showClientModal.value = false;
+  await loadClients(true);
   if (action === 'create') {
     newlyCreatedId.value = client.id;
     setTimeout(() => {
@@ -140,7 +198,7 @@ const handleClientSaved = (client: { id: string }, action: 'create' | 'update') 
           </span>
         </div>
       </div>
-      <div class="px-4 py-2">
+      <div class="px-4 py-2 space-y-2.5">
            <BaseInput
              v-model="searchQuery"
              placeholder="Buscar por nombre o cédula..."
@@ -149,18 +207,65 @@ const handleClientSaved = (client: { id: string }, action: 'create' | 'update') 
                 <Search :size="18" :stroke-width="1.5" class="text-slate-400" />
              </template>
            </BaseInput>
+
+           <!-- Filtros de Cartera y Ordenamiento (CHK-407: sin filtro de eliminados) -->
+           <div class="flex flex-wrap items-center justify-between gap-2">
+             <div class="flex items-center gap-1.5" role="group" aria-label="Filtro de estado de deuda">
+               <button
+                 v-for="tab in [
+                   { value: 'all', label: 'Todos' },
+                   { value: 'with_debt', label: 'Con Deuda' },
+                   { value: 'up_to_date', label: 'Al Día' }
+                 ]"
+                 :key="tab.value"
+                 type="button"
+                 :data-testid="`filter-debt-${tab.value}`"
+                 @click="debtFilter = tab.value as ClientDebtFilter"
+                 class="px-3 py-1.5 rounded-full text-xs font-bold transition-colors cursor-pointer"
+                 :class="debtFilter === tab.value
+                   ? 'bg-primary text-white shadow-sm'
+                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50'"
+               >
+                 {{ tab.label }}
+               </button>
+             </div>
+
+             <select
+               v-model="orderBy"
+               aria-label="Ordenar clientes"
+               data-testid="client-order-select"
+               class="h-8 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary"
+             >
+               <option value="name_asc">Nombre A-Z</option>
+               <option value="name_desc">Nombre Z-A</option>
+               <option value="balance_desc">Mayor Deuda</option>
+               <option value="balance_asc">Menor Deuda</option>
+             </select>
+           </div>
       </div>
     </header>
 
 
 
     <!-- Loading State -->
-    <div v-if="clientsStore.isLoading" class="flex-1 overflow-y-auto px-4 py-4">
+    <div v-if="isLoadingPage" class="flex-1 overflow-y-auto px-4 py-4">
       <BaseListSkeleton :count="6" type="detail" />
+    </div>
+
+    <!-- Explicit Error State (Regla 3) -->
+    <div v-else-if="fetchError" role="alert" class="m-4 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 space-y-3">
+      <p class="text-sm font-semibold text-red-700 dark:text-red-300">{{ fetchError }}</p>
+      <BaseButton size="sm" variant="danger" @click="loadClients(true)">
+        <RefreshCw :size="14" class="mr-1.5" />
+        Reintentar
+      </BaseButton>
     </div>
 
     <!-- Client List -->
     <main v-else-if="filteredClients.length > 0" class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
+        <span>Mostrando {{ filteredClients.length }} de {{ totalClientsCount }} clientes</span>
+      </div>
       <div
         v-for="client in filteredClients"
         :key="client.id"
@@ -203,6 +308,18 @@ const handleClientSaved = (client: { id: string }, action: 'create' | 'update') 
         </div>
         <ChevronRight :size="20" class="text-slate-300" />
       </div>
+
+      <button
+        v-if="hasMore"
+        type="button"
+        data-testid="load-more-clients-list-btn"
+        :disabled="isLoadingMore"
+        @click="loadClients(false)"
+        class="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-primary hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center gap-2 transition-colors disabled:opacity-60"
+      >
+        <Loader2 v-if="isLoadingMore" :size="14" class="animate-spin" />
+        <span>{{ isLoadingMore ? 'Cargando más...' : `Cargar más (${totalClientsCount - filteredClients.length} restantes)` }}</span>
+      </button>
     </main>
 
     <!-- Empty State -->

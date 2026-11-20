@@ -224,11 +224,12 @@ export const useSalesStore = defineStore(
 
     // WO-001: Changed to use UUID and ticketNumber
     // T2.1/T2.2: Use SaleRepository and update inventory
-    const addSale = async (saleData: Omit<Sale, 'id' | 'ticketNumber' | 'timestamp' | 'date'>) => {
+    const addSale = async (saleData: Omit<Sale, 'id' | 'ticketNumber' | 'timestamp' | 'date'> & { originSessionId?: string | null; beneficiaryEmployeeId?: string | null }) => {
       const now = new Date();
       // Generate ID client-side for UI even if repo generates one
       const tempId = generateUUID();
       const ticketNum = nextTicketNumber.value; // Store current expectation
+      const isPersonalWithdrawal = saleData.paymentMethod === 'consumo_personal';
 
       const newSale: Sale = {
         ...saleData,
@@ -263,18 +264,20 @@ export const useSalesStore = defineStore(
             subtotal: s,
           };
         }),
-        total: saleData.total instanceof Decimal ? saleData.total.toNumber() : Number(saleData.total),
+        total: isPersonalWithdrawal ? 0 : (saleData.total instanceof Decimal ? saleData.total.toNumber() : Number(saleData.total)),
         paymentMethod: saleData.paymentMethod,
         payments: saleData.payments?.map(p => ({
           method: p.method,
           amount: p.amount.toNumber(),
           reference: p.reference
         })),
-        amountReceived: saleData.amountReceived ? (saleData.amountReceived instanceof Decimal ? saleData.amountReceived.toNumber() : Number(saleData.amountReceived)) : undefined,
-        // FIX: Explicitly handle "N/A" string which defaults to "N/A" with || operator
-        clientId: (saleData.clientId && saleData.clientId !== 'N/A') ? saleData.clientId : null,
+        amountReceived: isPersonalWithdrawal ? 0 : (saleData.amountReceived ? (saleData.amountReceived instanceof Decimal ? saleData.amountReceived.toNumber() : Number(saleData.amountReceived)) : undefined),
+        // CHK-403: Sanitizar clientId estrictamente fuera de 'fiado'
+        clientId: (saleData.paymentMethod === 'fiado' && saleData.clientId && saleData.clientId !== 'N/A') ? saleData.clientId : null,
         // FIX: Prioritize employeeId (UUID) or fallback to id (UUID from admin), ensuring no "emp-" or "N/A" junk
-        employeeId: (saleData.employeeId && saleData.employeeId.length > 10 && saleData.employeeId !== 'N/A') ? saleData.employeeId : null
+        employeeId: (saleData.employeeId && saleData.employeeId.length > 10 && saleData.employeeId !== 'N/A') ? saleData.employeeId : null,
+        originSessionId: saleData.originSessionId ?? null,
+        beneficiaryEmployeeId: isPersonalWithdrawal ? (saleData.beneficiaryEmployeeId ?? null) : null
       };
 
       const storeId = authStore.currentUser?.storeId;

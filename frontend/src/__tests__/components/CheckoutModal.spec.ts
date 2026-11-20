@@ -378,7 +378,7 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
 
     configStore.paymentMethods = [
       { id: '1', code: 'cash', name: 'Efectivo', isActive: true, allowsChange: true, requiresReference: false, sortOrder: 10 },
-      { id: '2', code: 'nequi', name: 'Nequi / Daviplata', isActive: true, allowsChange: false, requiresReference: true, sortOrder: 20 },
+      { id: '2', code: 'nequi', name: 'Nequi', isActive: true, allowsChange: false, requiresReference: true, sortOrder: 20 },
       { id: '3', code: 'fiado', name: 'Fiado / Crédito', isActive: true, allowsChange: false, requiresReference: false, sortOrder: 30 },
       { id: '4', code: 'card', name: 'Tarjeta Débito/Crédito', isActive: true, allowsChange: false, requiresReference: true, sortOrder: 40 },
     ];
@@ -387,7 +387,7 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
 
     const wrapper = mountModal();
     expect(wrapper.text()).toContain('Efectivo');
-    expect(wrapper.text()).toContain('Nequi / Daviplata');
+    expect(wrapper.text()).toContain('Nequi');
     expect(wrapper.text()).toContain('Fiado / Crédito');
     expect(wrapper.text()).not.toContain('Tarjeta Débito/Crédito');
   });

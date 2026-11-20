@@ -28,6 +28,135 @@ const STORAGE_KEY = 'tienda-sales-db-cache'; // Changed to avoid collision with 
 type SaleDB = Database['public']['Tables']['sales']['Row'];
 type SaleInsert = Database['public']['Tables']['sales']['Insert'];
 
+function mapSaleRpcError(rawMessage?: string): { message: string; code?: string } {
+    const raw = String(rawMessage || '');
+    if (raw.includes('PERMISSION_DENIED')) {
+        return {
+            message: 'No tienes permiso autorizado para realizar esta operación (canFiar o rol Administrador requerido).',
+            code: 'PERMISSION_DENIED'
+        };
+    }
+    if (raw.includes('CLIENT_NOT_FOUND')) {
+        return {
+            message: 'El cliente seleccionado no existe o fue archivado en la cartera.',
+            code: 'CLIENT_NOT_FOUND'
+        };
+    }
+    if (raw.includes('CLIENT_REQUIRED')) {
+        return {
+            message: 'Debes seleccionar un cliente activo para procesar una venta Fiado.',
+            code: 'CLIENT_REQUIRED'
+        };
+    }
+    if (raw.includes('CREDIT_REVERSAL_BLOCKED')) {
+        return {
+            message: 'No se puede anular esta venta fiada porque el cliente ya abonó o no tiene saldo suficiente para revertir la deuda.',
+            code: 'CREDIT_REVERSAL_BLOCKED'
+        };
+    }
+    if (raw.includes('CREDIT_LIMIT_EXCEEDED')) {
+        return { message: raw, code: 'CREDIT_LIMIT_EXCEEDED' };
+    }
+    if (raw.includes('NO_OPEN_CASH_SESSION')) {
+        return {
+            message: 'No hay turno de caja abierto. Abre caja para procesar ventas o retiros.',
+            code: 'NO_OPEN_CASH_SESSION'
+        };
+    }
+    if (raw.includes('SHIFT_EXPIRED_24H')) {
+        return {
+            message: 'El turno de caja superó las 24 horas y debe cerrarse antes de continuar.',
+            code: 'SHIFT_EXPIRED_24H'
+        };
+    }
+    if (raw.includes('EMPLOYEE_NOT_FOUND')) {
+        return {
+            message: 'El empleado beneficiario seleccionado no existe o está inactivo.',
+            code: 'EMPLOYEE_NOT_FOUND'
+        };
+    }
+    return { message: raw || 'Error procesando operación de venta' };
+}
+
+export interface RefundCandidateItem {
+    sale_item_id: string;
+    product_id: string;
+    product_name: string;
+    plu?: string | null;
+    current_stock: number;
+    is_weighable: boolean;
+    measurement_unit?: string | null;
+    quantity: number;
+    refunded_quantity: number;
+    remaining_quantity: number;
+    unit_price: number;
+    subtotal: number;
+}
+
+export interface RefundCandidateSale {
+    sale_id: string;
+    ticket_number: number;
+    created_at: string;
+    total: number;
+    payment_method: string;
+    actor_name: string;
+    items: RefundCandidateItem[];
+}
+
+export interface ProcessRefundPayload {
+    saleItemId: string;
+    quantity: number;
+    refundChannel: 'efectivo' | 'nequi' | 'llave_bre';
+    originalChannel: 'efectivo' | 'nequi' | 'llave_bre' | 'fiado' | 'transferencia';
+    reason: string;
+    isMerma: boolean;
+}
+
+export interface ProcessRefundResult {
+    cashMovementId: string;
+    inventoryMovementId: string;
+    saleId: string;
+    saleItemId: string;
+    ticketNumber: number;
+    amountRefunded: number;
+    quantityRefunded: number;
+    refundChannel: string;
+    originalChannel: string;
+    isMerma: boolean;
+    newStock: number;
+    actorName: string;
+    actorRole: string;
+}
+
+function mapRefundRpcError(rawMessage?: string): { message: string; code?: string } {
+    const raw = String(rawMessage || '');
+    if (raw.includes('INSUFFICIENT_FUNDS_IN_CHANNEL')) {
+        return {
+            message: raw.replace(/^.*INSUFFICIENT_FUNDS_IN_CHANNEL:\s*/i, ''),
+            code: 'INSUFFICIENT_FUNDS_IN_CHANNEL'
+        };
+    }
+    if (raw.includes('QUANTITY_EXCEEDED')) {
+        return {
+            message: raw.replace(/^.*QUANTITY_EXCEEDED:\s*/i, ''),
+            code: 'QUANTITY_EXCEEDED'
+        };
+    }
+    if (raw.includes('SALE_ALREADY_VOIDED')) {
+        return {
+            message: 'Esta venta fue anulada y no admite reembolsos por ítem.',
+            code: 'SALE_ALREADY_VOIDED'
+        };
+    }
+    if (raw.includes('SALE_HAS_PARTIAL_REFUNDS')) {
+        return {
+            message: 'Esta venta tiene reembolsos parciales registrados y no puede anularse completa.',
+            code: 'SALE_HAS_PARTIAL_REFUNDS'
+        };
+    }
+    return mapSaleRpcError(rawMessage);
+}
+
 /**
  * Mapper Implementation for Sale
  * Enforces:
@@ -53,7 +182,8 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             amountReceived: row.amount_received ? new Decimal(row.amount_received) : undefined,
             change: row.change_given ? new Decimal(row.change_given) : undefined,
             clientId: row.client_id || undefined,
-            employeeId: row.employee_id,
+            employeeId: row.employee_id || undefined,
+            beneficiaryEmployeeId: row.beneficiary_employee_id || undefined,
             'syncStatus': row.sync_status as any
         };
     },
@@ -82,7 +212,10 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             created_at: entity.timestamp || new Date().toISOString(),
             payment_method: (entity.paymentMethod === 'cash' || (entity.paymentMethod as string) === 'mixed') ? 'efectivo' : entity.paymentMethod,
             total: entity.total.toNumber(),
-            employee_id: entity.employeeId || '',
+            employee_id: entity.employeeId || null,
+            beneficiary_employee_id: entity.beneficiaryEmployeeId || null,
+            actor_name: null,
+            actor_role: null,
             client_id: entity.clientId || null,
             amount_received: entity.amountReceived ? entity.amountReceived.toNumber() : null,
             change_given: entity.change ? entity.change.toNumber() : null,
@@ -90,6 +223,8 @@ export const saleMapper: RepositoryMappers<SaleDB, Sale> = {
             is_voided: false,
             void_reason: null,
             voided_by: null,
+            voided_by_name: null,
+            voided_by_role: null,
             voided_at: null,
             void_session_id: null,
             idempotency_key: null,
@@ -110,6 +245,8 @@ export interface SaleRepository extends EntityRepository<Sale> {
     getLastTicketNumber(storeId: string): Promise<number>;
     voidSale(saleId: string, reason: string): Promise<{ success: boolean; error?: string }>;
     getSaleDetail(saleId: string): Promise<any>;
+    searchRefundCandidates(storeId: string, query?: string, limit?: number): Promise<RefundCandidateSale[]>;
+    processItemRefund(payload: ProcessRefundPayload): Promise<ProcessRefundResult>;
 }
 
 // Create base repository with Mappers
@@ -167,16 +304,32 @@ export const saleRepository: SaleRepository = {
                     }
 
                     const normalizedPaymentMethod = (saleData.paymentMethod === 'cash') ? 'efectivo' : saleData.paymentMethod;
+                    const sanitizedClientId = normalizedPaymentMethod === 'fiado' ? (saleData.clientId || null) : null;
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    const sanitizedBeneficiaryId = normalizedPaymentMethod === 'consumo_personal'
+                        && saleData.beneficiaryEmployeeId
+                        && uuidRegex.test(saleData.beneficiaryEmployeeId)
+                        ? saleData.beneficiaryEmployeeId
+                        : null;
+                    const sanitizedOriginSessionId = saleData.originSessionId && uuidRegex.test(saleData.originSessionId)
+                        ? saleData.originSessionId
+                        : null;
+                    const sanitizedSoldBy = saleData.employeeId && uuidRegex.test(saleData.employeeId)
+                        ? saleData.employeeId
+                        : null;
 
                     const rpcPayload = {
                         p_store_id: storeId,
-                        p_client_id: saleData.clientId || null,
+                        p_client_id: sanitizedClientId,
                         p_payment_method: normalizedPaymentMethod,
-                        p_amount_received: p_amount_received,
+                        p_amount_received: normalizedPaymentMethod === 'consumo_personal' ? 0 : p_amount_received,
                         p_items: p_items,
                         p_idempotency_key: crypto.randomUUID(),
                         p_local_id: crypto.randomUUID(),
-                        p_is_offline_sync: false
+                        p_is_offline_sync: false,
+                        p_origin_session_id: sanitizedOriginSessionId,
+                        p_sold_by: sanitizedSoldBy,
+                        p_beneficiary_employee_id: sanitizedBeneficiaryId
                     };
 
                     const { data, error } = await supabase.rpc('rpc_procesar_venta_v3', rpcPayload);
@@ -186,20 +339,23 @@ export const saleRepository: SaleRepository = {
                         if (error.message && (error.message.includes('FetchError') || error.message.includes('Network request failed'))) {
                             // Fallthrough to offline
                         } else {
-                            return { success: false, error: error.message };
+                            const mapped = mapSaleRpcError(error.message);
+                            return { success: false, error: mapped.message, code: mapped.code };
                         }
                     } else {
                         if (data && data.success) {
+                            const payloadData = (data as any).data ?? data;
                             return { 
                                 success: true, 
-                                id: data.sale_id, 
-                                ticketNumber: data.ticket_number,
-                                total: data.total,
-                                roundingDifference: data.rounding_difference,
-                                changeGiven: data.change_given
+                                id: payloadData.sale_id, 
+                                ticketNumber: payloadData.ticket_number,
+                                total: payloadData.total,
+                                roundingDifference: payloadData.rounding_difference,
+                                changeGiven: payloadData.change_given
                             };
                         } else {
-                            return { success: false, error: data?.error || 'Unknown RPC error' };
+                            const mapped = mapSaleRpcError((data as any)?.error);
+                            return { success: false, error: mapped.message || 'Unknown RPC error', code: mapped.code };
                         }
                     }
 
@@ -254,26 +410,33 @@ export const saleRepository: SaleRepository = {
             const newId = crypto.randomUUID();
 
             // FIX: Map payment method to DB constraint values BEFORE queueing
-            // DB Constraint: payment_method = ANY (ARRAY['efectivo', 'nequi', 'daviplata', 'fiado'])
+            // DB Constraint: payment_method = ANY (ARRAY['efectivo', 'nequi', 'llave_bre', 'fiado', 'consumo_personal'])
             const dbPaymentMethod = (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash')
                 ? 'efectivo'
                 : saleData.paymentMethod;
 
-            const enrichedPayload = {
-                ...saleData,
+            const enrichedPayload: Record<string, any> = {
+                id: newId,
+                localId: newId,
+                storeId,
+                clientId: dbPaymentMethod === 'fiado' ? (saleData.clientId ?? null) : null,
+                employeeId: saleData.employeeId ?? null,
+                originSessionId: saleData.originSessionId ?? null,
+                beneficiaryEmployeeId: dbPaymentMethod === 'consumo_personal' ? (saleData.beneficiaryEmployeeId ?? null) : null,
                 paymentMethod: dbPaymentMethod, // Override with DB-compatible value
-                total: new Decimal(saleData.total).toNumber(),
-                amountReceived: saleData.amountReceived ? new Decimal(saleData.amountReceived).toNumber() : undefined,
+                total: dbPaymentMethod === 'consumo_personal' ? 0 : new Decimal(saleData.total).toNumber(),
                 items: saleData.items.map(item => ({
                     ...item,
                     price: new Decimal(item.price).toNumber(),
                     subtotal: new Decimal(item.subtotal).toNumber()
-                })),
-                storeId,
-                id: newId
+                }))
             };
-            // Note: Offline queue will still need V1-like processing or V2-compatible sync handler later.
-            // For now, we queue it. V2 Sync handler usually needs to be updated too, but focusing on Online first.
+            if (saleData.amountReceived !== undefined && saleData.amountReceived !== null) {
+                enrichedPayload.amountReceived = new Decimal(saleData.amountReceived).toNumber();
+            }
+            if (saleData.payments) {
+                enrichedPayload.payments = saleData.payments;
+            }
             const queued = await addToSyncQueue('CREATE_SALE', enrichedPayload);
 
             if (queued) {
@@ -372,13 +535,15 @@ export const saleRepository: SaleRepository = {
 
             if (error) {
                 logger.error('[SaleRepo] Void Sale RPC error:', error);
-                return { success: false, error: error.message };
+                const mapped = mapSaleRpcError(error.message);
+                return { success: false, error: mapped.message };
             }
 
             if (data && data.success) {
                 return { success: true };
             } else {
-                return { success: false, error: data?.error || 'Void failed' };
+                const mapped = mapSaleRpcError(data?.error);
+                return { success: false, error: mapped.message || 'Void failed' };
             }
         } catch (e: any) {
             return { success: false, error: e.message };
@@ -485,6 +650,83 @@ export const saleRepository: SaleRepository = {
         });
         if (error) throw error;
         return data;
+    },
+
+    async searchRefundCandidates(storeId: string, query?: string, limit: number = 20): Promise<RefundCandidateSale[]> {
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Sin conexión activa con el servidor.');
+
+        const { data, error } = await supabase.rpc('rpc_buscar_ventas_para_reembolso', {
+            p_store_id: storeId,
+            p_query: query?.trim() || undefined,
+            p_limit: limit
+        });
+
+        if (error) {
+            const mapped = mapRefundRpcError(error.message);
+            const err: any = new Error(mapped.message);
+            err.code = mapped.code;
+            throw err;
+        }
+
+        const res = data as any;
+        return Array.isArray(res?.data) ? res.data : [];
+    },
+
+    async processItemRefund(payload: ProcessRefundPayload): Promise<ProcessRefundResult> {
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Sin conexión activa con el servidor.');
+
+        const { data, error } = await supabase.rpc('rpc_procesar_reembolso_item', {
+            p_sale_item_id: payload.saleItemId,
+            p_quantity: payload.quantity,
+            p_refund_channel: payload.refundChannel,
+            p_original_channel: payload.originalChannel,
+            p_reason: payload.reason,
+            p_is_merma: payload.isMerma
+        });
+
+        if (error) {
+            const mapped = mapRefundRpcError(error.message);
+            const err: any = new Error(mapped.message);
+            err.code = mapped.code;
+            throw err;
+        }
+
+        const res = data as any;
+        if (!res || res.success === false || !res.data) {
+            const mapped = mapRefundRpcError(res?.error || 'Error procesando reembolso');
+            const err: any = new Error(mapped.message);
+            err.code = mapped.code;
+            throw err;
+        }
+
+        const d = res.data;
+        try {
+            const inventoryStore = useInventoryStore();
+            if (payload.isMerma === false && typeof d.new_stock === 'number') {
+                // Re-sincronizar stock del producto reembolsado en memoria desde la verdad del servidor
+                await inventoryStore.fetchProducts(undefined);
+            }
+        } catch (syncErr) {
+            logger.warn('[SaleRepo] No se pudo refrescar inventario tras reembolso:', syncErr);
+        }
+
+        return {
+            cashMovementId: d.cash_movement_id,
+            inventoryMovementId: d.inventory_movement_id,
+            saleId: d.sale_id,
+            saleItemId: d.sale_item_id,
+            ticketNumber: Number(d.ticket_number),
+            amountRefunded: Number(d.amount_refunded),
+            quantityRefunded: Number(d.quantity_refunded),
+            refundChannel: d.refund_channel,
+            originalChannel: d.original_channel,
+            isMerma: Boolean(d.is_merma),
+            newStock: Number(d.new_stock),
+            actorName: d.actor_name,
+            actorRole: d.actor_role
+        };
     }
 };
 

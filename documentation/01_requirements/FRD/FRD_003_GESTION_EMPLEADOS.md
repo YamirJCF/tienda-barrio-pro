@@ -25,23 +25,26 @@ Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar 
     - Este PIN es local y gestionado por el Admin.
     - El Admin puede restablecer el PIN en cualquier momento sin intervención del empleado.
 
-4. **Capacidad de Venta por Defecto (Subordinada al Pase Diario):**
-    - Todo empleado creado TIENE la capacidad base de operar el Punto de Venta (POS).
-    - **Restricción Zero Trust:** Esta capacidad está bloqueada por defecto cada día. El empleado DEBE obtener un **Pase Diario** aprobado por el Admin (FRD-001) para poder ingresar al sistema.
-    - **Restricción de Caja:** Si el turno de caja está cerrado, la capacidad de venta se degrada a "Solo Lectura" (no puede procesar pagos).
+4. **Capacidades Operativas Base por Defecto (Subordinadas al Pase Diario, `FRD-003-01` R2):**
+    - Todo empleado activo con **Pase Diario** aprobado (`FRD-001`) posee de base, bajo su propia cuenta (1 dispositivo por cuenta) y con su **firma individual obligatoria**:
+      - Operar el Punto de Venta (POS) y registrar **Consumo/Retiro personal** (como una venta asignada a su propio perfil; solo el Admin puede elegir a otros) cuando la Caja Dedicada POS está abierta.
+      - Registrar **gastos menores** desde la Caja Dedicada POS cuando está abierta (con fondos en el canal, categoría OPEX y motivo).
+      - Registrar **mermas** y **consumo del negocio** ($0 en Caja POS, sin requerir caja abierta).
+      - Consultar únicamente **sus propios movimientos del turno actual, con toda su información**.
+    - **Restricción de Caja:** Si el turno de caja está cerrado, las operaciones monetarias y ventas del POS quedan bloqueadas.
 
-5. **Permisos Adicionales (POL-SEG-03):**
-    - El acceso a funciones privilegiadas se controla estrictamente por booleanos (toggles) en el perfil del empleado. No hay jerarquías implícitas.
-    - `canManageInventory`: Permite crear/editar productos, registrar Entradas de mercancía y procesar Reembolsos. (Nivel de riesgo: Alto).
-    - `canViewInventory`: Permite buscar y consultar stock (Nivel de riesgo: Bajo).
-    - `canFiar`: Permite seleccionar el método de pago "Fiado" para clientes en el POS.
-    - `canOpenCloseCash`: Permite abrir y cerrar el turno de caja (requiere PIN adicional).
-    - `canViewReports`: Permite ver el reporte parcial del turno activo.
+5. **Cuatro (4) Permisos Delegables (`POL-SEG-03`, gobernados por `FRD-003-01`):**
+    - El acceso a funciones delegables se controla estrictamente por 4 interruptores booleanos en el perfil del empleado, todos apagados por defecto y sin jerarquías implícitas (ver alcance completo en `FRD-003-01`):
+      1. **`Inventario completo` (`canManageInventory`):** Ver catálogo, stock, costos y Kardex; crear, editar y dar baja lógica a productos; registrar Entradas, **Ajustes por conteo físico** y **Devolución física a proveedor** ($0 en caja y sin tocar Cuentas por Pagar).
+      2. **`Fiar y cobrar abonos` (`canFiar`):** Vender a fiado en POS respetando cupo, cobrar abonos con caja abierta y consultar ficha y estado de cuenta de clientes activos. (Crear, editar, cambiar cupos y eliminar clientes es exclusivo del Admin).
+      3. **`Abrir/cerrar caja` (`canOpenCloseCash`):** Abrir turno en la Caja Dedicada POS y cerrar **únicamente el turno que él mismo abrió** bajo **Cierre Asistido** (sin PIN adicional; hasta 3 intentos con aviso si no coincide y alerta al Admin al tercer intento).
+      4. **`Reembolsos` (`canManageRefunds`):** Ejecutar devoluciones desde el POS (al lado del buscador) con caja abierta y fondos en el canal, en una sola acción mediante la etiqueta opcional **`"merma"`** cuando el producto regresa dañado.
+    - *(Nota: No existe permiso de `Ver inventario` separado ni permiso de `Ver reportes` para empleados; todos los reportes del negocio son 100% exclusivos del Administrador).*
 
-6. **Estado Activo/Inactivo:**
-    - Los empleados NO se eliminan para preservar el histórico de ventas.
-    - Se marcan como "inactivo" para bloquear el acceso inmediato.
-    - Al desactivar un empleado, cualquier sesión activa DEBE caducar inmediatamente.
+6. **Estado Activo/Inactivo y Fotografía Histórica de la Firma (`POL-AUD-01`):**
+    - Los empleados NO se eliminan para preservar el histórico de operaciones.
+    - Se marcan como "inactivo" para bloquear el acceso inmediato y caducar cualquier sesión activa.
+    - Todo movimiento conserva de forma inmutable la **fotografía histórica de la firma** (identificador, nombre y rol vigentes en el instante en que ocurrió el evento), incluso si el empleado es editado o desactivado posteriormente.
 
 7. **Límite de Equipo:**
     - Cada cuenta de Admin tiene un límite máximo de empleados activos definido por el parámetro `P_MAX_EMPLOYEES_PER_STORE`.

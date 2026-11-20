@@ -1,15 +1,16 @@
 # SDD-008: Resumen Diario y Abastecimiento Inteligente (Reportes)
 
 > **Asociado a:** [FRD-008](../FRD/FRD_008_REPORTES.md) (Resumen Diario y Abastecimiento Inteligente)  
-> **Fase del Plan:** Ola 4 — Reportes, Auditoría y Cuentas por Pagar (Saneamiento Pre-Código)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)  
-> **Última Actualización:** 2026-10-17  
+> **Contrato Marco Vinculante:** [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) (`ARQ-002` v1.4)  
+> **Fase del Plan:** Ola 4 — Reportes, Auditoría y Cuentas por Pagar (Alineación Post-`SDD-003-01`)  
+> **Estado:** 🟠 Actualizado Documentalmente (Brechas `B-01`, `B-02`, `B-04` pendientes en SQL/Frontend Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política ID | Dominio | Impacto Concreto en este SDD |
 | :--- | :--- | :--- |
@@ -17,20 +18,22 @@
 | **SPEC-011** | Financiero | **Moneda Entera sin Decimales:** Los importes monetarios principales del resumen diario y pérdidas estimadas se entregan y muestran como enteros en pesos colombianos (COP) sin centavos. |
 | **RN-008-01** | Usabilidad | **Lenguaje Humano Obligatorio:** Los mensajes devueltos por el servidor (`traffic_light.message`, `suggestion`) emplean frases conversacionales directas, prohibiendo términos técnicos como *"ROI"*, *"Lead Time"* o *"Forecast"*. |
 | **RN-008-02** | Analítica | **Política de Verdad Tangible (Umbral de Silencio):** Si un producto tiene menos de 15 días de antigüedad en el catálogo (`created_at > NOW() - INTERVAL '15 days'`), el motor omite alertas de color y devuelve el estado gris *"Aprendiendo de tus ventas..."* / *"Recopilando información"*. |
-| **POL-AUTH-01** | Seguridad | **Aislamiento Multi-Tenant:** `get_daily_summary` y `get_smart_supply_report` ejecutan `PERFORM public.assert_store_access(p_store_id);` como su primera instrucción inmutable. |
+| **POL-AUTH-01 / POL-SEC-01 / POL-AUD-02** | Seguridad y Auditoría | **Reportes 100% Admin-Only (`SDD-003-01`):** `get_daily_summary`, `get_smart_supply_report` y `rpc_asignar_proveedor_masivo` ejecutan obligatoriamente `assert_store_access(p_store_id)` seguido de **`assert_store_admin(p_store_id)`** (`admin_profiles.role IN ('owner', 'manager')`). Se **elimina `canViewReports`**; ningún empleado puede consultar resúmenes del negocio, semáforos ni abastecimiento. |
+| **POL-FIN-01** | Canales Válidos | Los canales digitales monetarios permitidos en el sistema son exclusivamente **`nequi`** y **`llave_bre`** (junto a `efectivo` y `fiado`). Queda eliminado `'daviplata'`. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 
 | SDD Vecino | Restricción que Impone | Impacto en Reportes |
 | :--- | :--- | :--- |
+| **SDD_003_01 (Contrato Marco RBAC)** | Eliminación de `canViewReports` y exclusividad Admin de reportes. | Obliga a proteger `get_daily_summary` y `get_smart_supply_report` con `assert_store_admin` (`B-04`), eliminando la carga del resumen en el Dashboard de empleados (`DashboardView.vue`, `BottomNav.vue`). |
 | **SDD_006 (Inventario Padre)** | Ciclo de vida de `products` (`is_active = true`) y vínculo con `suppliers` (`supplier_id`). | Todo producto nuevo se asocia por defecto al `'Proveedor General'` (`is_default = true`). Las consultas de abastecimiento deben excluir productos dados de baja lógica (`is_active = false`). |
 | **SDD_007 / SDD_007_01 (Ventas y POS)** | Tabla `sales` (`is_voided = false`) y `sale_items`. | Tanto el resumen diario como el cálculo de velocidad de venta a 30 días deben excluir obligatoriamente las ventas anuladas (`is_voided = false`). |
-| **SDD_018 (Control Operacional)** | Reporte financiero ejecutivo de 4 Pilares para el Administrador. | `SDD_008` provee la vista operativa rápida (< 2s) de resumen diario y alertas de pedido, sin exponer costos confidenciales (`cost_price` / `unit_cost`) a terminales no administrativas (`POL-SEC-01`). |
-| **SDD_020 / SDD_023 (Caja Multicanal)** | Segregación de efectivo, transferencias digitales y fiados. | El `money_breakdown` de `get_daily_summary` agrupa separadamente `cash`, `transfer` (`nequi`, `daviplata`) y `credit` (`fiado`). |
+| **SDD_018 (Control Operacional)** | Reporte financiero ejecutivo de 4 Pilares para el Administrador. | Tanto `SDD_008` como `SDD_018` son **100% exclusivos del Administrador**. |
+| **SDD_020 / SDD_023 (Caja Multicanal)** | Segregación de efectivo, transferencias digitales y fiados. | El `money_breakdown` de `get_daily_summary` agrupa separadamente `cash` (`efectivo`), `transfer` (**`nequi` + `llave_bre`**, sin `daviplata`) y `credit` (`fiado`). |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Formalizada)
 
-En cumplimiento de las Reglas 2, 4, 6, 7 y 9 de `AGENTS.md`, la inspección empírica en Supabase producción (`ihtjocmhzuliwwvdzfnz`) sobre `pg_proc` e `information_schema.columns` identifica **N = 5 deudas técnicas**:
+En cumplimiento de las Reglas 2, 4, 6, 7 y 9 de `AGENTS.md`, la inspección empírica en Supabase producción (`ihtjocmhzuliwwvdzfnz`) sobre `pg_proc` e `information_schema.columns` identifica **N = 7 deudas técnicas**:
 
 | ID | Hallazgo en Esquema / Función Real | 1. Qué se Decidió | 2. Por qué (Trade-off Concreto) | 3. Condición de Revisión Futura |
 | :---: | :--- | :--- | :--- | :--- |
@@ -39,6 +42,8 @@ En cumplimiento de las Reglas 2, 4, 6, 7 y 9 de `AGENTS.md`, la inspección emp�
 | **D-3** | **Falta de filtro `p.is_active = TRUE` en `get_smart_supply_report` y en las alertas de `get_daily_summary`.** Ambas funciones en producción consultan `products WHERE store_id = p_store_id` incluyendo productos eliminados lógicamente. | Añadir `AND p.is_active = TRUE` en las consultas sobre `products` dentro de `get_daily_summary` y `get_smart_supply_report`. | Previene que el tendero reciba alertas de agotamiento sobre productos dados de baja (`SDD_006`). | Migración de remediación de reportes en Ola 4. |
 | **D-4** | **Ausencia física de RPC para Asignación Masiva de Proveedores (`Caso C` de `FRD-008`).** No existe en `pg_proc` una función atómica para reasignar el `supplier_id` de múltiples productos simultáneamente. | Especificar el contrato `rpc_asignar_proveedor_masivo(p_store_id, p_supplier_id, p_product_ids)` con validación `assert_store_access` y guardia administrativa en `admin_profiles`. | Permite reasignar en lote los productos del `'Proveedor General'` hacia un proveedor específico recalculando inmediatamente su autonomía (`RN-008-03`). | Creación de RPC en migración de Ola 4. |
 | **D-5** | **Sincronización de nombres reales de RPC en BD.** El borrador anterior citaba `rpc_get_daily_summary_v2` y `rpc_get_smart_supply`, mientras que en `pg_proc` existen `get_daily_summary(p_store_id, p_date)` y `get_smart_supply_report(p_store_id)`. | Adoptar en este SDD los nombres físicos exactos que residen en producción (`get_daily_summary` y `get_smart_supply_report`). | Cumple la Regla 2 de Anti-Alucinación de Nombres y mantiene compatibilidad con los clientes existentes. | Cerrado normativamente en esta versión v2.0. |
+| **D-6** | **Ausencia de guardia `assert_store_admin` en `get_daily_summary` y `get_smart_supply_report` (`B-04` / `B-01`).** En BD actual solo validan `assert_store_access`, y el Frontend los consume incluso en sesiones de empleados vía `canViewReports` o `DashboardView`. | Inyectar `PERFORM public.assert_store_admin(p_store_id);` en ambos RPCs (`owner`/`manager` en `admin_profiles`) y erradicar `canViewReports` del cliente Vue. | Garantiza que ningún empleado acceda a cifras globales de ventas, métricas ni abastecimiento (`FRD-008` L4, `FRD-003-01` R5.1). | Migración de endurecimiento de reportes y limpieza de `DashboardView.vue` / `BottomNav.vue` en Fase 3. |
+| **D-7** | **Eliminación de `'daviplata'` y normalización de `'llave_bre'` en `money_breakdown.transfer` (`B-02`).** `sales` y RPCs legacy aún contemplan `'daviplata'` y `'bre'`. | Restringir el mapeo de `transfer` exclusivamente a `payment_method IN ('nequi', 'llave_bre')` tras migrar datos históricos `'bre'` → `'llave_bre'`. | Unifica la taxonomía oficial de canales de `ARQ-002` v1.4 (`efectivo`, `nequi`, `llave_bre`) sin romper registros previos antes de la migración DDL. | Migración multicanal de Fase 3 previa verificación de datos en `sales`. |
 
 ---
 
@@ -59,16 +64,16 @@ En cumplimiento de las Reglas 2, 4, 6, 7 y 9 de `AGENTS.md`, la inspección emp�
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Dueño / Encargado
-    participant UI as Vista de Reportes
+    actor User as Administrador (owner / manager)
+    participant UI as Vista de Reportes / Admin
     participant RPC_Sum as get_daily_summary
     participant RPC_Sup as get_smart_supply_report
-    participant DB as PostgreSQL (sales, products, suppliers)
+    participant DB as PostgreSQL (admin_profiles, sales, products, suppliers)
 
-    User->>UI: Abre módulo de Reportes Diarios
+    User->>UI: Abre Dashboard / Reportes Diarios
     UI->>RPC_Sum: Invoca get_daily_summary(p_store_id, p_date)
-    RPC_Sum->>DB: Ejecuta assert_store_access(p_store_id)
-    RPC_Sum->>DB: Suma ventas del día (is_voided = false) y desglose (cash, transfer, credit)
+    RPC_Sum->>DB: assert_store_access(p_store_id) + assert_store_admin(p_store_id)
+    RPC_Sum->>DB: Suma ventas del día (is_voided = false) y desglose (cash, transfer [nequi+llave_bre], credit)
     RPC_Sum->>DB: Calcula promedio últimos 7 días y evalúa semáforo conversacional
     RPC_Sum->>DB: Consulta hasta 5 alertas críticas (current_stock <= min_stock AND is_active = true)
     RPC_Sum-->>UI: Retorna JSONB { traffic_light, hero_number, money_breakdown, alerts, reminder }
@@ -76,7 +81,7 @@ sequenceDiagram
 
     User->>UI: Consulta sección de Abastecimiento Inteligente (Smart Supply)
     UI->>RPC_Sup: Invoca get_smart_supply_report(p_store_id)
-    RPC_Sup->>DB: Ejecuta assert_store_access(p_store_id)
+    RPC_Sup->>DB: assert_store_access(p_store_id) + assert_store_admin(p_store_id)
     RPC_Sup->>DB: Calcula velocity (30d, is_voided = false) y cruza con lead_time_days / frequency_days de suppliers
     RPC_Sup->>DB: Aplica Umbral de Silencio (< 15 días -> LEARNING) y clasifica (CRITICAL, WARNING, OK)
     RPC_Sup-->>UI: Retorna filas con doi, revenue_at_risk, status y suggestion en lenguaje natural
@@ -125,14 +130,14 @@ stateDiagram-v2
 ## 4. Especificación Detallada de Casos de Uso
 
 ### 4.1 Caso A: Consultar el Estado del Negocio (`RN-008-01`, `SPEC-011`)
-- **Actor:** Dueño de Tienda / Encargado autenticado.
-- **Precondición:** Usuario con acceso válido a la tienda (`assert_store_access`).
+- **Actor:** Administrador (`admin_profiles` con rol `'owner'` o `'manager'`).
+- **Precondición:** Usuario con pertenencia validada (`assert_store_access`) y rol administrativo confirmado (`assert_store_admin`).
 - **Flujo Principal:**
-  1. El usuario abre el resumen del día (`p_date`, por defecto fecha actual).
-  2. El servidor ejecuta `get_daily_summary(p_store_id, p_date)`, totalizando las ventas no anuladas del día (`hero_number`), el desglose por grupo de pago (`cash`, `transfer`, `credit`) y la comparación porcentual contra los 7 días previos.
-  3. La interfaz presenta el Número Héroe, el mensaje conversacional del semáforo y las tarjetas de medios de pago sin decimales.
-- **Flujo Alternativo:** Si no existen ventas en los 7 días previos (`v_avg_sales_7d = 0`), el semáforo retorna estado `'gray'` con mensaje *"Recopilando datos históricos..."*.
-- **Postcondición:** El actor conoce en menos de 2 segundos el desempeño del día y los totales por modalidad de cobro.
+  1. El Administrador abre el resumen del día (`p_date`, por defecto fecha actual).
+  2. El servidor valida `assert_store_access` + `assert_store_admin` y ejecuta `get_daily_summary(p_store_id, p_date)`, totalizando ventas válidas (`is_voided = false`), el desglose (`cash`, `transfer` = `nequi` + `llave_bre`, `credit`) y la comparación contra los 7 días previos.
+  3. La interfaz presenta el Número Héroe, el mensaje del semáforo y las tarjetas sin decimales.
+- **Flujo Alternativo:** Si un empleado intenta invocar `get_daily_summary` o `get_smart_supply_report`, el servidor rechaza con `ADMIN_ONLY_ACTION` (`42501`). Si no existen ventas en los 7 días previos, retorna `'gray'` con *"Recopilando datos históricos..."*.
+- **Postcondición:** Solo el Administrador conoce el desempeño del día y los totales por modalidad de cobro (`FRD-008` L4, `FRD-003-01` R5.1).
 
 ### 4.2 Caso B: Gestión de Reabastecimiento Crítico (`RN-008-01`, `RN-008-03`, `RN-008-04`)
 - **Actor:** Dueño de Tienda.
@@ -222,7 +227,7 @@ stateDiagram-v2
 | Código de Error | Condición de Disparo | Comportamiento Esperado en Cliente |
 | :--- | :--- | :--- |
 | `STORE_ACCESS_DENIED` | El usuario no pertenece a `p_store_id` (`assert_store_access`). | Bloquear vista y redirigir a inicio de sesión / error 403. |
-| `UNAUTHORIZED_ROLE` | Un empleado no administrador intenta ejecutar `rpc_asignar_proveedor_masivo`. | Rechazar operación e informar que requiere permisos de Administrador. |
+| `ADMIN_ONLY_ACTION` / `UNAUTHORIZED_ROLE` | Un empleado sin rol en `admin_profiles` (`owner`/`manager`) intenta consultar `get_daily_summary`, `get_smart_supply_report` o ejecutar `rpc_asignar_proveedor_masivo`. | Abortar con HTTP 403 (`RAISE EXCEPTION`), ocultar vistas/pestañas de reportes y redirigir fuera de rutas administrativas. |
 | `SUPPLIER_NOT_FOUND` | El `p_supplier_id` no existe o pertenece a otra tienda. | Abortar transacción con `RAISE EXCEPTION` y notificar al usuario. |
 | `EMPTY_PRODUCT_LIST` | El arreglo `p_product_ids` se envía vacío. | Impedir envío en interfaz y rechazar en servidor con error de validación. |
 
@@ -230,11 +235,11 @@ stateDiagram-v2
 
 ## 6. Análisis de Seguridad
 
-1. **Reutilización de Funciones Centralizadas (Regla 4):**
-   - `public.assert_store_access(p_store_id)` se ejecuta obligatoriamente en la primera línea de `get_daily_summary`, `get_smart_supply_report` y `rpc_asignar_proveedor_masivo`.
+1. **Reutilización de Funciones Centralizadas y Exclusividad Admin (Regla 4):**
+   - `public.assert_store_access(p_store_id)` y **`public.assert_store_admin(p_store_id)`** se ejecutan obligatoriamente en las primeras líneas de `get_daily_summary`, `get_smart_supply_report` y `rpc_asignar_proveedor_masivo`.
    - Las tablas base (`sales`, `sale_items`, `products`, `suppliers`) mantienen activas sus políticas RLS gobernadas por `public.get_current_store_id()`.
-2. **Protección de Costos (`POL-SEC-01`):**
-   - Ninguno de los payloads de `SDD_008` expone `cost_price`, `unit_cost` ni márgenes de ganancia bruta/neta, preservando la confidencialidad financiera del propietario frente a operadores que consulten alertas de stock.
+2. **Eliminación de `canViewReports` y Ceguera Financiera Total (`POL-SEC-01` / `FRD-008` L4):**
+   - Ninguno de los payloads de `SDD_008` es accesible para empleados operativos ni expone `cost_price`, `unit_cost` o márgenes. El acceso de empleados al módulo de Reportes queda totalmente prohibido tras eliminarse `canViewReports`.
 
 ---
 

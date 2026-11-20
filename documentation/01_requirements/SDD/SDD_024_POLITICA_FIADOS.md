@@ -3,22 +3,24 @@
 > **Asociado a:** [FRD-024](../FRD/FRD_024_POLITICA_FIADOS_CLIENTES.md)  
 > **Módulo:** Ventas, POS, Clientes y Caja  
 > **Fase del Plan:** Ola 3 (Ítem 6 - Cierre de Ola)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-17
-> **Políticas Aplicables:** ARQ-002 (POL-AUTH-01, POL-AUD-01/02, POL-FIN-01/02/03, POL-LOG-01/02, POL-SEC-01, SPEC-010, SPEC-011)
+> **Estado:** 🟠 Alineado a `SDD-003-01` / `ARQ-002` v1.4 (Pendiente implementación en Fase 3)  
+> **Contrato Marco:** [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Última Actualización:** 2026-11-19  
+> **Políticas Aplicables:** ARQ-002 v1.4 (`POL-FIN-01/02/03`, `POL-LOG-01/02`, `POL-SEG-03`, `POL-AUD-01/02`, `POL-PRIV-01/02`, `SPEC-010`, `SPEC-011`)
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política ID | Dominio | Impacto Concreto en este SDD |
 | :--- | :--- | :--- |
-| **POL-FIN-01** | Financiero | Aislamiento monetario de la promesa: la venta fiada impacta `$0` en caja diaria; el abono exige sesión de caja activa (`< 24h`) e inyecta liquidez en `cash_movements`. |
-| **POL-FIN-03** | Financiero | Validación atómica de cupo de crédito (`balance + total <= credit_limit`) e invariante `clients.balance >= 0`. |
+| **POL-FIN-01** | Financiero | Aislamiento monetario de la promesa: la venta fiada impacta `$0` en Caja Dedicada POS; el abono exige sesión de caja activa (`< 24h`) e inyecta liquidez en `cash_movements` por `'efectivo'`, `'nequi'` o `'llave_bre'` (sin `'daviplata'`). |
+| **POL-FIN-03** | Financiero | Validación atómica de cupo de crédito (`balance + total <= credit_limit`), filtro `COALESCE(is_deleted, false) = false` e invariante `clients.balance >= 0`. |
 | **POL-LOG-01** | Logística | Descuento inmediato de inventario físico mediante `consume_stock_fifo` al momento de la venta a crédito. |
-| **POL-AUTH-01** | Seguridad | Validación obligatoria con `assert_store_access(p_store_id)` en RPCs y `get_current_store_id()` en RLS. |
+| **POL-SEG-03 / Regla 4** | Seguridad | Validación obligatoria con `assert_store_access(p_store_id)` + `assert_employee_permission(p_store_id, 'canFiar')` en fiado y abono, y `get_current_store_id()` en RLS. |
+| **POL-AUD-01** | Auditoría | Fotografía histórica inmutable (`actor_name`, `actor_role`) vía `resolve_actor_snapshot()` en `sales`, `client_ledger` y `cash_movements`. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 

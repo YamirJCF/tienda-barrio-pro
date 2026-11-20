@@ -4,13 +4,15 @@ import { Decimal } from 'decimal.js';
 import { Sale } from '../types';
 
 // Mock DB Row
-const mockSaleDB = {
+const mockSaleDB: any = {
     id: 'sale-001',
     ticket_number: 101,
     created_at: '2023-01-01T10:00:00Z',
     payment_method: 'efectivo',
     total: 5000, // Number
     employee_id: 'emp-001',
+    actor_name: 'Carlos',
+    actor_role: 'employee',
     client_id: null,
     amount_received: 5000,
     change_given: 0,
@@ -18,6 +20,11 @@ const mockSaleDB = {
     is_voided: false,
     void_reason: null,
     voided_by: null,
+    voided_by_name: null,
+    voided_by_role: null,
+    voided_at: null,
+    void_session_id: null,
+    idempotency_key: null,
     local_id: null,
     sync_status: 'synced',
     store_id: '11111111-1111-4111-8111-111111111111'

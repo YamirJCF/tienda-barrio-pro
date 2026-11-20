@@ -261,63 +261,40 @@ describe('CashRegister Store - Bridge Validation', () => {
     });
 
     // =========================================================
-    // 6. ERROR HANDLING - Repository failures
+    // 6. ERROR HANDLING - Repository failures (Regla 3: Zero silent local fallback)
     // =========================================================
     describe('Error Handling - Repository failures', () => {
-        it('should continue with local state if repository call fails', async () => {
+        it('should propagate error and NOT create local session if repository call throws', async () => {
             const { cashRepository } = await import('../../data/repositories/cashRepository');
 
-            // Mock repository to fail
             vi.mocked(cashRepository.registerEvent).mockRejectedValueOnce(
                 new Error('Network error')
             );
 
-            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
-
             const validStoreId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-            await store.openRegister('emp-123', validStoreId, 1000);
+            await expect(
+                store.openRegister('emp-123', validStoreId, 1000)
+            ).rejects.toThrow('Network error');
 
-            // Should still create local session
-            expect(store.isOpen).toBe(true);
-            expect(store.currentSession?.storeId).toBe(validStoreId);
-
-            // Should log warning
-            expect(consoleSpy).toHaveBeenCalledWith(
-                '⚠️ [CashRegisterStore] Continuing with local state only'
-            );
-
-            consoleSpy.mockRestore();
+            expect(store.isOpen).toBe(false);
+            expect(store.currentSession).toBeNull();
         });
 
-        it('should log error when repository returns unsuccessful result but still create session', async () => {
+        it('should propagate backend rejection (e.g. RECONCILIATION_REQUIRED / PERMISSION_DENIED) without local fallback', async () => {
             const { cashRepository } = await import('../../data/repositories/cashRepository');
 
-            // Mock repository to return failure
             vi.mocked(cashRepository.registerEvent).mockResolvedValueOnce({
                 success: false,
-                error: 'RLS policy violation'
+                error: 'RECONCILIATION_REQUIRED: Existe un turno cerrado forzosamente pendiente de reconciliación.'
             });
 
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
-            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
-
             const validStoreId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+            await expect(
+                store.openRegister('emp-123', validStoreId, 1000)
+            ).rejects.toThrow('RECONCILIATION_REQUIRED');
 
-            // Should still create session despite repository failure
-            await store.openRegister('emp-123', validStoreId, 1000);
-
-            // Session should be created locally
-            expect(store.isOpen).toBe(true);
-            expect(store.currentSession?.storeId).toBe(validStoreId);
-
-            // Should log the error and warning
-            expect(consoleSpy).toHaveBeenCalled();
-            expect(warnSpy).toHaveBeenCalledWith(
-                '⚠️ [CashRegisterStore] Continuing with local state only'
-            );
-
-            consoleSpy.mockRestore();
-            warnSpy.mockRestore();
+            expect(store.isOpen).toBe(false);
+            expect(store.currentSession).toBeNull();
         });
     });
 });

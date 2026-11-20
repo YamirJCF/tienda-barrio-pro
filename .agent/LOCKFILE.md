@@ -58,7 +58,7 @@ Antes de modificar **cualquier** función, archivo o componente listado en este 
 
 | Fecha | LF-ID | Cambio Propuesto | Aprobado Por | Commit |
 |-------|-------|------------------|--------------|--------|
-| - | - | (Sin entradas aún) | - | - |
+| 2026-11-19 | LF-008, LF-010 | Fase 3 Ola 1: Esquema cerrado de 4 permisos en `EmployeePermissions` (eliminando `canViewReports`/`canViewInventory`) + políticas RLS/helpers centralizados (`is_store_admin`, `assert_store_admin`, `assert_employee_permission`) y continuidad `<24h` | Usuario (Sesión Fase 3 Ola 1) | `[LOCKFILE-APPROVED]` (rama `feat/fase3-ola1-cimientos-rbac-canales`) |
 
 ---
 

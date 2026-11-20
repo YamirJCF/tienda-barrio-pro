@@ -5,6 +5,18 @@ description: Protocolo de Pre-Análisis Contextual (PAC) - Secuencia inmutable d
 
 # 🔒 Workflow: PAC-SDD — Protocolo de Verificación Previo a Redacción de SDD
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 2 — Peaje de Entrada a Diseño Técnico (Ruta A → Ruta B)
+- **Rama permitida:** `draft/*`, `docs/*`
+- **Entrada requerida (Gate In):** FRD validado con `validate-policy` (`✅ CONFORME`).
+- **Límite estricto:** Verifica el esquema real en BD (Regla 2) y contratos vecinos antes de redactar el SDD; **PROHIBIDO** redactar un SDD o tocar código sin completar sus bloques con evidencia real.
+- **🛑 Freno de Emergencia (Hard Stop):** Si una consulta a la BD falla o revela discrepancias bloqueantes con el FRD → DETENERSE y reportar al usuario.
+- **➡️ Siguiente eslabón:** Redacción del SDD (`data` + `ux`) ➔ `orchestrator`.
+  - **En Modo AUTO:** Con todos los bloques PAC-SDD aprobados, redacta el SDD y pasa a `orchestrator`.
+  - **En Modo PAUSADO:** Entrega las Declaraciones de Cierre del PAC-SDD y espera confirmación para pasar a `orchestrator`.
+
+---
+
 > **REGLA DE ORO:** Este workflow es una secuencia de bloques inmutables. Cada bloque produce una **DECLARACIÓN DE CIERRE** con evidencia real. Sin esa declaración, el siguiente bloque está bloqueado. Asumir que un paso se realizó sin mostrar su output es una violación del protocolo equivalente a omitirlo.
 
 > **PROHIBICIÓN ABSOLUTA:** Ningún resumen narrativo ("Se verificó que...", "La auditoría confirmó que...") reemplaza el output real (resultado de consulta, cita textual, lista de nombres). Si el output no puede mostrarse, el bloque falla y se debe declarar el fallo explícitamente.

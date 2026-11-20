@@ -35,14 +35,14 @@ El sistema debe permitir atender los derechos legales de los titulares registrad
    - **Sin ningún movimiento histórico (Borrado definitivo):** Si el cliente tiene `0 movimientos históricos`, el servidor DEBE eliminarlo definitivamente de la base de datos.
 
 ### B. Re-alta Transparente y Unicidad del Tercero
-5. **RN-05 (Unicidad de cédula y re-alta silenciosa):** La cédula del cliente es única por tienda (`FRD-009`). Cuando un operador crea un cliente ingresando una cédula:
+5. **RN-05 (Unicidad de cédula y re-alta silenciosa, exclusiva del Administrador):** La cédula del cliente es única por tienda (`FRD-009`), y crear o reactivar clientes es **100% exclusivo del Administrador** (`FRD-003-01`, `POL-PRIV-01`). Cuando el Administrador crea un cliente ingresando una cédula:
    - Si la cédula pertenece a un cliente **actualmente activo**, el servidor DEBE negar la creación informando que el cliente ya existe.
-   - Si la cédula pertenece a un registro que fue eliminado previamente pero **conservado en archivo contable interno**, el servidor DEBE reutilizar y reactivar silenciosamente ese mismo tercero con los nuevos datos ingresados (nombre, teléfono, cupo) sin arrojar avisos sobre su estado archivado previo, y estampar un nuevo registro inmutable de confirmación con el usuario creador y la fecha/hora del servidor (`FRD-029`, Reglas 14 y 15).
+   - Si la cédula pertenece a un registro que fue eliminado previamente pero **conservado en archivo contable interno**, el servidor DEBE reutilizar y reactivar silenciosamente ese mismo tercero con los nuevos datos ingresados (nombre, teléfono, cupo) sin arrojar avisos sobre su estado archivado previo, y estampar un nuevo registro inmutable de confirmación con la firma del Administrador creador y la fecha/hora del servidor (`FRD-029`, Reglas 14 y 15).
 
 ### C. Derechos de Consulta, Actualización y Trazabilidad
-6. **RN-06 (Consulta y estado de cuenta):** El sistema DEBE permitir consultar y exportar el historial de movimientos (compras a crédito, abonos realizados y saldo actual) de un cliente activo para entregárselo al titular cuando lo solicite.
-7. **RN-07 (Actualización sin alterar saldos ni historia):** El sistema DEBE permitir actualizar los datos del cliente activo (nombre, teléfono o cupo) sin alterar jamás los montos, fechas o saldos de sus transacciones pasadas ni los cierres de caja históricos (`POL-AUD-01`).
-8. **RN-08 (Bitácora inmutable en el servidor):** Toda eliminación o re-alta de un cliente DEBE quedar registrada internamente de forma inmutable en la bitácora del servidor con la tienda, el cliente, el usuario ejecutor y la fecha y hora exacta del servidor (`POL-AUD-02`).
+6. **RN-06 (Consulta y estado de cuenta):** El sistema DEBE permitir al **Administrador y a empleados con el permiso `Fiar y cobrar abonos`** (`FRD-003-01`) consultar y exportar el historial de movimientos (compras a crédito, abonos realizados y saldo actual) de un cliente activo para entregárselo al titular cuando lo solicite.
+7. **RN-07 (Actualización sin alterar saldos ni historia — Exclusiva del Administrador):** El sistema DEBE permitir **exclusivamente al Administrador** actualizar los datos del cliente activo (nombre, teléfono o cupo) sin alterar jamás los montos, fechas o saldos de sus transacciones pasadas ni los cierres de caja históricos (`POL-AUD-01`, `FRD-003-01`).
+8. **RN-08 (Bitácora inmutable en el servidor):** Toda eliminación o re-alta de un cliente DEBE quedar registrada internamente de forma inmutable en la bitácora del servidor con la tienda, el cliente, la firma del Administrador ejecutor y la fecha y hora exacta del servidor (`POL-AUD-02`).
 
 ---
 
@@ -69,25 +69,27 @@ El sistema debe permitir atender los derechos legales de los titulares registrad
   - **B1. Un cajero intenta eliminar al cliente:** El sistema niega la acción por falta de permisos (RN-02).
 - **Postcondición:** El cliente desaparece de la cartera activa de la tienda y la contabilidad histórica permanece íntegra.
 
-**Caso C: Creación de un cliente cuya cédula había sido eliminada en el pasado (Re-alta transparente)**
-- **Actor:** Cajero / Administrador de la tienda.
+**Caso C: Creación de un cliente cuya cédula había sido eliminada en el pasado (Re-alta transparente — Exclusivo Administrador)**
+- **Actor:** Administrador de la tienda (`FRD-003-01`, `POL-PRIV-01`).
 - **Precondición:** Una persona que años o meses atrás tuvo crédito y fue eliminada solicita nuevamente abrir crédito con su misma cédula.
 - **Flujo Principal:**
-  1. El operador abre el formulario de crear cliente, ingresa nombre, cédula, teléfono y cupo, y presiona **Guardar**.
+  1. El Administrador abre el formulario de crear cliente, ingresa nombre, cédula, teléfono y cupo, y presiona **Guardar**.
   2. El servidor detecta internamente que la cédula corresponde a un tercero archivado con saldo `$0`.
-  3. Sin mostrar alertas adicionales ni exponer información histórica innecesaria, el servidor reactiva el registro único del tercero con los datos nuevos y estampa el nuevo registro inmutable de confirmación con el usuario creador y la fecha/hora del servidor (RN-05).
+  3. Sin mostrar alertas adicionales ni exponer información histórica innecesaria, el servidor reactiva el registro único del tercero con los datos nuevos y estampa el nuevo registro inmutable de confirmación con la firma del Administrador creador y la fecha/hora del servidor (RN-05).
   4. El sistema confirma que el cliente fue guardado.
 - **Flujos Alternativos:**
   - **C1. La cédula pertenece a un cliente que ya está activo hoy:** El servidor niega la acción indicando que el cliente ya se encuentra registrado (RN-05).
 - **Postcondición:** El cliente queda activo nuevamente bajo su registro contable único, sin duplicar terceros.
 
 **Caso D: Consulta de estado de cuenta y actualización de datos**
-- **Actor:** Administrador / Cajero.
+- **Actor:**
+  - **Consulta de estado de cuenta (RN-06):** Administrador o Empleado con permiso **`Fiar y cobrar abonos`** (`FRD-003-01`).
+  - **Actualización de datos y cupos (RN-07):** **Exclusivamente el Administrador**.
 - **Precondición:** El cliente activo solicita conocer sus movimientos o corregir sus datos.
 - **Flujo Principal:**
-  1. El operador abre la ficha del cliente activo.
-  2. Para **consulta**: visualiza o exporta el estado de cuenta (compras a crédito, abonos y saldo actual) (RN-06).
-  3. Para **actualización**: edita los datos permitidos y presiona Guardar; el servidor actualiza la ficha sin modificar transacciones pasadas (RN-07).
+  1. El usuario autorizado abre la ficha del cliente activo.
+  2. Para **consulta**: el Administrador o el empleado con permiso `Fiar y cobrar abonos` visualiza o exporta el estado de cuenta (compras a crédito, abonos y saldo actual) (RN-06).
+  3. Para **actualización**: exclusivamente el Administrador edita los datos permitidos (nombre, teléfono o cupo) y presiona Guardar; el servidor actualiza la ficha sin modificar transacciones pasadas (RN-07).
 - **Postcondición:** Datos actualizados o estado de cuenta entregado sin afectar la integridad contable.
 
 ---

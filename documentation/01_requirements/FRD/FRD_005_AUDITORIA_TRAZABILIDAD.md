@@ -17,17 +17,16 @@ Implementación de un sistema centralizado de historiales que permite auditar to
     - Los errores se corrigen únicamente mediante contra-operaciones registradas.
     - Ejemplo: una devolución anula una venta, pero ambos registros existen.
 
-2. **Trazabilidad Completa:**
+2. **Trazabilidad Completa y Fotografía Histórica de la Firma (`POL-AUD-01`, `POL-AUD-02`):**
     - Cada registro DEBE contener obligatoriamente:
-        - Timestamp exacto
-        - Usuario responsable
-        - Tipo de operación
+        - Timestamp exacto del servidor
+        - **Firma individual del usuario responsable** (`Administrador` o `Empleado específico`), conservando la fotografía histórica inmutable de su identificador, nombre y rol al instante del evento
+        - Sección y tipo de operación
         - Datos del evento (payload)
 
-3. **Seguridad y Acceso Exclusivo de Administrador:**
-    - El acceso al módulo centralizado del Evidence Hub (Historial y Auditoría en el Centro de Inteligencia) está restringido **estrictamente al rol Admin**.
-    - Los usuarios sin rol de Administrador tienen prohibido el acceso a esta vista centralizada y a sus herramientas de supervisión de personal.
-    - Los historiales operativos contextuales (ej: abonos de un cliente desde su ficha) permanecen sujetos a los permisos específicos del módulo respectivo.
+3. **Seguridad y Acceso 100% Exclusivo de Administrador (`POL-SEG-03`, `FRD-003-01`):**
+    - El acceso al módulo centralizado del Evidence Hub y a **todos los reportes del negocio** (incluyendo reportes de turnos cerrados, mermas y consumos por perfil y consolidado) está restringido **estrictamente al rol Administrador**.
+    - Los empleados no poseen permiso de reportes; durante su jornada solo pueden ver **sus propios movimientos del turno actual con toda su información** (`FRD-003-01` R2.5) y, si poseen el permiso `Fiar y cobrar abonos`, consultar el historial/estado de cuenta de un cliente activo desde su ficha.
 
 4. **Estructura de Almacenamiento:**
     - El sistema utiliza **tablas separadas por dominio** para mejor rendimiento y organización.
@@ -57,16 +56,16 @@ Implementación de un sistema centralizado de historiales que permite auditar to
 ## Clasificación de Eventos
 
 **Nivel 1: Críticos (Integridad Financiera)**
-- Transacciones de venta: tickets, anulaciones, métodos de pago
-- Control de caja: aperturas, cierres, conteo de efectivo, diferencias
-- Auditoría de seguridad: logins fallidos, cambios de PIN, accesos fuera de horario, bloqueos de mutación concurrente y sospechas de manipulación (`CONCURRENT_MUTATION_BLOCKED`)
+- Transacciones de venta: tickets, reembolsos (con o sin etiqueta `"merma"`), anulaciones administrativas, métodos de pago y **consumo/retiro personal** (por perfil y consolidado)
+- Control de caja: aperturas, cierres asistidos (alertas al tercer intento sin coincidencia), conteo declarado, diferencias, turnos vencidos (+24h), cierres forzosos e intentos bloqueados de cerrar un turno ajeno
+- Auditoría de seguridad: logins fallidos, cambios de PIN o de permisos, pases diarios, bloqueos de mutación concurrente y sospechas de manipulación (`CONCURRENT_MUTATION_BLOCKED`)
 
 **Nivel 2: Operativos (Control de Gestión)**
-- Kardex de inventario: compras, ventas, mermas, ajustes de stock
-- Gastos operativos: salidas de dinero de caja menor
+- Kardex de inventario: entradas, ventas, mermas, consumo del negocio, devoluciones físicas a proveedor y ajustes por conteo físico (con alerta administrativa)
+- Gastos menores de Caja Dedicada POS y pagos externos / fuera de caja
 
 **Nivel 3: Valor Agregado**
-- Historial de créditos: abonos, nuevas deudas, liquidaciones
+- Historial de créditos: abonos, nuevas deudas, altas/eliminaciones contables de clientes
 - Historial de precios: cambios en costo y precio de venta
 
 ---

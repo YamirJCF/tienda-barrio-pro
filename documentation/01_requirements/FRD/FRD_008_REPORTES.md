@@ -1,7 +1,7 @@
 # FRD-008: Resumen Diario y Abastecimiento Inteligente
 
 ## 1. Descripción General
-El módulo de Reportes es la herramienta de inteligencia de negocios diseñada para usuarios no técnicos. Su propósito es responder, en lenguaje natural y en menos de 5 segundos, las dos preguntas críticas del operación diaria:
+El módulo de Reportes es la herramienta de inteligencia de negocios diseñada exclusivamente para el **Administrador / Dueño de la Tienda** (`POL-SEG-03`, `FRD-003-01` — no existe permiso de reportes para empleados; el empleado solo ve sus propios movimientos del turno actual). Su propósito es responder, en lenguaje natural y en menos de 5 segundos, las dos preguntas críticas de la operación diaria:
 1.  **Evaluación de Desempeño:** "¿Cómo me fue hoy?" (Resumen Diario).
 2.  **Gestión de Abastecimiento:** "¿Qué debo comprar hoy para no perder ventas?" (Smart Supply).
 
@@ -32,8 +32,8 @@ El sistema DEBE identificar los días donde el stock se agotó antes del cierre 
 
 ## 3. Casos de Uso
 
-### Caso A: Consultar el Estado del Negocio (Cierre de Turno)
-- **Actor:** Dueño de Tienda / Encargado
+### Caso A: Consultar el Estado del Negocio (Exclusivo Administrador)
+- **Actor:** Dueño de Tienda / Administrador (acceso estrictamente exclusivo del Administrador según `FRD-003-01`).
 - **Precondición:** Existen ventas registradas en el día en curso.
 - **Flujo Principal:**
     1. El Actor accede al módulo de Reportes.

@@ -13,6 +13,15 @@
           </button>
           <h2 class="text-slate-900 dark:text-white text-xl font-bold">Cuentas por Pagar</h2>
         </div>
+        <BaseButton
+          v-if="authStore.isAdmin"
+          size="sm"
+          data-testid="open-create-invoice-btn"
+          @click="openCreateModal"
+        >
+          <Plus :size="16" class="mr-1" />
+          Nueva Factura
+        </BaseButton>
       </div>
       
       <!-- Filters (Barra Pegajosa) -->
@@ -91,8 +100,18 @@
 
     <!-- Main Content -->
     <main class="flex-1 px-4 flex flex-col gap-3">
+      <!-- Explicit Error State (Regla 3) -->
+      <div
+        v-if="payablesStore.error"
+        role="alert"
+        class="p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 space-y-2"
+      >
+        <p class="text-sm font-semibold text-red-700 dark:text-red-300">{{ payablesStore.error }}</p>
+        <BaseButton size="sm" variant="danger" @click="loadInvoicesPage(true)">Reintentar</BaseButton>
+      </div>
+
       <!-- Loading State -->
-      <template v-if="payablesStore.isLoading">
+      <template v-else-if="payablesStore.isLoading">
         <div v-for="i in 3" :key="i" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 border-l-[6px] border-slate-200 dark:border-slate-700">
           <div class="flex justify-between mb-3">
             <Skeleton width="120px" height="16px" />
@@ -153,7 +172,7 @@
                   'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400': invoice.status === 'pagada'
                 }"
               >
-                {{ invoice.status === 'vencida' ? 'Vence: ' + invoice.due_date : invoice.status }}
+                {{ invoice.status === 'vencida' && invoice.due_date ? 'Vence: ' + invoice.due_date : (invoice.due_date && invoice.status === 'pendiente' ? 'Vence: ' + invoice.due_date : invoice.status) }}
               </span>
             </div>
             <BaseButton
@@ -165,6 +184,16 @@
             </BaseButton>
           </div>
         </div>
+
+        <button
+          v-if="payablesStore.invoices.length < payablesStore.totalCount"
+          type="button"
+          data-testid="load-more-invoices-btn"
+          @click="loadMoreInvoices"
+          class="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        >
+          Cargar más facturas ({{ payablesStore.totalCount - payablesStore.invoices.length }} restantes)
+        </button>
       </template>
 
       <!-- Empty State -->
@@ -188,6 +217,82 @@
       @close="closePaymentModal"
       @success="handlePaymentSuccess"
     />
+
+    <!-- Nueva Factura Proveedor Modal (CHK-410: Admin-only) -->
+    <BaseModal
+      v-model="showCreateModal"
+      title="Nueva Factura de Proveedor"
+      maxHeight="560px"
+    >
+      <div class="p-4 space-y-4">
+        <div v-if="createError" role="alert" class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs font-semibold text-red-700 dark:text-red-300">
+          {{ createError }}
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+            Nombre del proveedor (Obligatorio)
+          </label>
+          <input
+            v-model="newInvoiceForm.supplierName"
+            data-testid="create-invoice-supplier-input"
+            type="text"
+            placeholder="Ej. Distribuidora Central"
+            class="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+            Valor total factura (Obligatorio)
+          </label>
+          <input
+            v-model.number="newInvoiceForm.totalAmount"
+            data-testid="create-invoice-amount-input"
+            type="number"
+            min="1"
+            step="100"
+            placeholder="0"
+            class="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+              Fecha vencimiento (Opcional)
+            </label>
+            <input
+              v-model="newInvoiceForm.dueDate"
+              data-testid="create-invoice-duedate-input"
+              type="date"
+              class="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+              N° Referencia (Opcional)
+            </label>
+            <input
+              v-model="newInvoiceForm.invoiceNumber"
+              data-testid="create-invoice-ref-input"
+              type="text"
+              placeholder="Ej. FAC-001"
+              class="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <BaseButton variant="secondary" class="flex-1" :disabled="isCreatingInvoice" @click="showCreateModal = false">
+            Cancelar
+          </BaseButton>
+          <BaseButton class="flex-1" data-testid="submit-create-invoice-btn" :loading="isCreatingInvoice" :disabled="isCreatingInvoice" @click="submitCreateInvoice">
+            Guardar Factura
+          </BaseButton>
+        </div>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -198,13 +303,18 @@ import { useAuthStore } from '@/stores/auth';
 import { usePayablesStore, type SupplierInvoice } from '@/stores/payables';
 import { useSuppliersStore } from '@/stores/suppliers';
 import { useCurrencyFormat } from '@/composables/useCurrencyFormat';
+import { useNotifications } from '@/composables/useNotifications';
 import PayInvoiceModal from '@/components/suppliers/PayInvoiceModal.vue';
 import BottomNav from '@/components/BottomNav.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
-import { ArrowLeft, Banknote, AlertTriangle, Truck, Receipt } from 'lucide-vue-next';
+import BaseModal from '@/components/ui/BaseModal.vue';
+import { ArrowLeft, Banknote, AlertTriangle, Truck, Receipt, Plus } from 'lucide-vue-next';
+
+const INVOICES_PAGE_SIZE = 50;
 
 const { formatCurrency } = useCurrencyFormat();
+const { showSuccess, showError } = useNotifications();
 const router = useRouter();
 const authStore = useAuthStore();
 const payablesStore = usePayablesStore();
@@ -216,17 +326,21 @@ const selectedStatus = ref('');
 const isPaymentModalOpen = ref(false);
 const selectedInvoice = ref<SupplierInvoice | null>(null);
 
+const showCreateModal = ref(false);
+const isCreatingInvoice = ref(false);
+const createError = ref<string | null>(null);
+const newInvoiceForm = ref({
+  supplierName: '',
+  totalAmount: '' as number | '',
+  dueDate: '',
+  invoiceNumber: '',
+});
+
 const goBack = () => {
   router.push('/suppliers');
 };
 
-const filteredInvoices = computed(() => {
-  return payablesStore.invoices.filter(inv => {
-    const matchSupplier = selectedSupplierId.value ? inv.supplier_id === selectedSupplierId.value : true;
-    const matchStatus = selectedStatus.value ? inv.status === selectedStatus.value : true;
-    return matchSupplier && matchStatus;
-  });
-});
+const filteredInvoices = computed(() => payablesStore.invoices);
 
 const totalDebt = computed(() => {
   return filteredInvoices.value
@@ -247,16 +361,30 @@ const emptyStateMessage = computed(() => {
   return 'No hay deudas con proveedores actualmente.';
 });
 
+const loadInvoicesPage = async (reset: boolean = true) => {
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+  if (!storeId) return;
+  await payablesStore.fetchInvoices({
+    storeId,
+    supplierId: selectedSupplierId.value || undefined,
+    status: selectedStatus.value || undefined,
+    limit: INVOICES_PAGE_SIZE,
+    offset: reset ? 0 : payablesStore.invoices.length,
+    append: !reset,
+  });
+};
+
+const loadMoreInvoices = async () => {
+  await loadInvoicesPage(false);
+};
+
 const loadData = async () => {
   const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-  if (storeId) {
-    await Promise.all([
-      suppliersStore.fetchSuppliers(storeId),
-      payablesStore.fetchInvoices()
-    ]);
-  } else {
-    await payablesStore.fetchInvoices();
-  }
+  if (!storeId) return;
+  await Promise.all([
+    suppliersStore.fetchSuppliers(storeId),
+    loadInvoicesPage(true),
+  ]);
 };
 
 onMounted(() => {
@@ -267,6 +395,10 @@ watch(() => authStore.currentUser?.storeId || authStore.currentStore?.id, (newSt
   if (newStoreId) {
     loadData();
   }
+});
+
+watch([selectedSupplierId, selectedStatus], () => {
+  loadInvoicesPage(true);
 });
 
 const openPaymentModal = (invoice: SupplierInvoice) => {
@@ -280,7 +412,48 @@ const closePaymentModal = () => {
 };
 
 const handlePaymentSuccess = () => {
-  payablesStore.fetchInvoices();
+  loadInvoicesPage(true);
+};
+
+const openCreateModal = () => {
+  createError.value = null;
+  newInvoiceForm.value = { supplierName: '', totalAmount: '', dueDate: '', invoiceNumber: '' };
+  showCreateModal.value = true;
+};
+
+const submitCreateInvoice = async () => {
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+  if (!storeId || isCreatingInvoice.value) return;
+  const cleanSupplier = newInvoiceForm.value.supplierName.trim();
+  const amount = Number(newInvoiceForm.value.totalAmount);
+  if (cleanSupplier.length < 2) {
+    createError.value = 'Ingresa el nombre del proveedor (mínimo 2 caracteres).';
+    return;
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    createError.value = 'Ingresa un valor total válido mayor a cero.';
+    return;
+  }
+
+  isCreatingInvoice.value = true;
+  createError.value = null;
+  const res = await payablesStore.createInvoice({
+    storeId,
+    supplierName: cleanSupplier,
+    totalAmount: amount,
+    dueDate: newInvoiceForm.value.dueDate || null,
+    invoiceNumber: newInvoiceForm.value.invoiceNumber.trim() || null,
+  });
+  isCreatingInvoice.value = false;
+
+  if (res.success) {
+    showSuccess('Factura de proveedor registrada');
+    showCreateModal.value = false;
+    await loadData();
+  } else {
+    createError.value = res.error || 'No se pudo crear la factura';
+    showError(createError.value);
+  }
 };
 </script>
 

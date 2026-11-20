@@ -1,25 +1,26 @@
 # SDD-006-02: Gestor de Reembolsos y Devoluciones de Ítems de Venta
 
-> **Asociado a:** [FRD-006-02](../FRD/FRD_006_02_GESTOR_REEMBOLSOS.md)  
+> **Asociado a:** [FRD-006-02](../FRD/FRD_006_02_GESTOR_REEMBOLSOS.md) | [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
 > **Módulo Primario:** [SDD-006: Núcleo de Inventario y Catálogo Padre](SDD_006_NUCLEO_INVENTARIO_PADRE.md)  
-> **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-14  
+> **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores (Alineación `ARQ-002` v1.4)  
+> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Alineado a `SDD-003-01` v1.0, pendiente migración SQL/Frontend Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (`ARQ-002` v1.4)
 
 | Política ID | Dominio | Mandato Arquitectónico e Impacto en este SDD |
 |-------------|---------|-----------------------------------------------|
-| **POL-AUTH-01** | Autenticación | **Aislamiento Multi-tenant Centralizado:** Toda operación de reembolso exige la invocación de `assert_store_access(v_store_id)` como instrucción #1 obligatoria. La identidad del responsable se resuelve autoritativamente mediante `get_employee_id_from_session()`, erradicando credenciales ad-hoc o validaciones de PIN manuales. |
-| **POL-LOG-01** | Logística | **Restauración Física de Inventario:** El reembolso de mercancía tiene el mandato operativo de reincorporar las unidades devueltas en buen estado al catálogo activo, incrementando `products.current_stock` y creando la capa de lote correspondiente en `inventory_batches`. |
-| **POL-FIN-01 / POL-FIN-02** | Financiero | **Solidez de Caja y Segregación Multicanal:** Todo reembolso genera un egreso inmediato en el turno de caja activo (`cash_sessions.status = 'open'`). El canal de egreso (Efectivo por defecto, Nequi o Llave BRE) debe contar con saldo suficiente en la sesión. Queda terminantemente prohibido compensar entre canales o generar sobregiro; si el canal no tiene fondos, la transacción completa se rechaza (rollback). |
-| **POL-AUD-01 / POL-AUD-02** | Auditoría | **Inviolabilidad del Kardex y Trazabilidad Vinculada:** El reingreso al inventario (`movement_type = 'devolucion'`) y el egreso financiero (`movement_type = 'gasto'` tipificado como Reembolso) son inseparables e inmutables: o se registran ambos o ninguno. Ambos asientos quedan vinculados mediante un identificador común de operación, congelando ticket, producto, cantidad, monto, canal de salida y canal original. |
-| **POL-SEC-01 / POL-SEC-02** | Seguridad | **Control de Acceso RBAC:** El acceso a la herramienta de reembolsos está gobernado por perfil: reservado a administradores o empleados con permiso explícito `canManageRefunds` en `employees.permissions` (JSONB). Erradicación de PINs temporales. |
-| **SPEC-010 / SPEC-011** | Moneda y Formato | **Precisión Numérica y Reglas Financieras:** Montos monetarios calculados estrictamente por el backend en pesos colombianos enteros (COP) multiplicando cantidad devuelta por precio unitario congelado. Prohibición total de redondeos al alza o manipulación manual de importes desde el cliente. |
+| **POL-AUTH-01 / POL-SEG-03** | Seguridad / Acceso | **Botón en POS y Permiso `canManageRefunds`:** El acceso se ubica directamente en la pantalla del **POS, al lado del buscador**, habilitado únicamente para Administrador (`is_store_admin`) o empleado con `"canManageRefunds": true` (`assert_employee_permission(v_store_id, 'canManageRefunds')`), independiente de `canManageInventory`. |
+| **POL-LOG-02** | Logística | **Acción Única Atómica con Etiqueta `"merma"`:** El operador marca opcionalmente la etiqueta única **`"merma"`** si el producto devuelto viene dañado o vencido. Si **NO** tiene etiqueta `"merma"`, reingresa al stock vendible (`+cantidad`, nueva capa FIFO). Si **SÍ** tiene etiqueta `"merma"`, **NO pasa por el inventario vendible** (no suma ni resta `current_stock`, ejecutándose sin bloqueo incluso si `current_stock = 0`) y asienta directamente su salida/pérdida como merma al costo de adquisición en `SDD_018`. |
+| **POL-FIN-01 / POL-FIN-02** | Financiero | **Caja Dedicada POS Abierta y Validación por Canal (`efectivo`, `nequi`, `llave_bre`):** Exige turno abierto y vigente (`status = 'open'`, `<24h`) y saldo suficiente exclusivamente en el canal de salida seleccionado (Efectivo preseleccionado, Nequi o Llave BRE). Cero sobregiro ni compensación entre canales (`INSUFFICIENT_FUNDS_IN_CHANNEL`). |
+| **POL-FIN-04** | Financiero / P&L | **Separación Contable en P&L:** Todo reembolso descuenta de Ventas Brutas en `SDD_018` ($\text{Ingresos Netos} = \text{Ventas Brutas} - \text{Devoluciones}$) sin contaminar el OPEX monetario de gastos menores. Únicamente cuando lleva la etiqueta `"merma"`, su **costo de adquisición** alimenta el rubro de Mermas en el Pilar 1 de `SDD_018`. |
+| **POL-AUD-01 / POL-AUD-02** | Auditoría | **Inmutabilidad y Snapshot de Firma:** El egreso de caja y el registro logístico en `inventory_movements` quedan vinculados atómicamente con `session_id`, canal de egreso, canal de venta original, etiqueta `"merma"`, `created_by` y fotografía histórica inmutable (`actor_name`, `actor_role`). Toda corrección posterior se realiza por contra-movimiento. |
+| **POL-AUD-03** | Alertas | Todo reembolso con etiqueta `"merma"` genera notificación informativa/auditoría para el Administrador (`notifications`). |
+| **SPEC-010 / SPEC-011** | Moneda y Formato | Monto calculado exclusivamente en servidor (`unit_price * p_quantity`) en pesos COP enteros; prohibida su edición manual en cliente. |
 
 ---
 

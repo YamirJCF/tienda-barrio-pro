@@ -5,6 +5,18 @@ description: Verificación y despliegue seguro a producción con checklist autom
 
 # Workflow: Despliegue a Producción (`/deploy`)
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 5 — Compuerta de Producción (Ruta D)
+- **Rama destino:** `master` (Única rama oficial de producción)
+- **Entrada requerida (Gate In):** Orden explícita del usuario para desplegar a producción + rama de trabajo validada y comiteada.
+- **Límite estricto:** Nunca se auto-invoca desde `push-sync`. Verifica TypeScript, build y bundle antes de integrar en `master` y subir a `origin/master`.
+- **🛑 Freno de Emergencia (Hard Stop):** Si hay archivos sin comitear, errores TypeScript en producción o fallo en `npm run build` → ABORTAR inmediatamente antes de tocar `master`.
+- **➡️ Siguiente eslabón:** `release` (opcional, si el despliegue cierra una versión semántica `vX.Y.Z` con `CHANGELOG.md`) o Fin de Ruta D.
+  - **En Modo AUTO:** Si el usuario pidió deploy + release, continúa a `release`; si solo pidió `/deploy`, finaliza tras confirmar `origin/master`.
+  - **En Modo PAUSADO:** Confirma el despliegue en `master` y pregunta si desea ejecutar `release` para etiquetar versión.
+
+---
+
 // turbo-all
 
 Protocolo estándar para subir código a producción **sin tener que revisar todo manualmente** cada vez. Este workflow automatiza las verificaciones críticas.

@@ -8,13 +8,13 @@ Este documento rige la generación, visualización y protección de la informaci
 ---
 
 ## Reglas de Negocio
-1. **Dicotomía del Reporte:** El sistema DEBE proveer dos perfiles de extracción de información del turno:
-   - **Reporte Operativo (Visual/Humano):** Diseñado para el cajero. Muestra resúmenes limpios por canal (sin mezclar), orientados exclusivamente a facilitar el cuadre físico y digital del momento.
-   - **Reporte de Auditoría Interna (Sistema/Dueño):** Diseñado para la seguridad. Rastrea y documenta cada movimiento, intentos fallidos de sobregiro, transacciones de contrapeso (anulaciones) y discrepancias entre lo físico y lo calculado.
-2. **Ceguera Operativa (Arqueo Ciego):** Durante el transcurso de un turno activo y en el instante de cerrarlo, el sistema TIENE PROHIBIDO mostrarle al usuario cajero cuál es el saldo total esperado en efectivo. El operario DEBE contar el dinero a ciegas y declarar la suma real, previniendo que manipule los billetes para hacerlos cuadrar artificialmente con la expectativa del software.
-3. **Inmutabilidad del Cierre (Sello de Tiempo):** En el instante en que el operario declara el monto físico y cierra el turno, el servidor DEBE generar una instantánea matemática irreversible de los totales y el descuadre (si lo hubiere). Este reporte queda sellado criptográficamente o bloqueado a nivel de base de datos; nadie, ni siquiera un administrador, PUEDE alterarlo o recalcularlo en el futuro.
-4. **Fidelidad al Flujo Puro:** Fiel a las reglas de caja, los reportes TIENEN PROHIBIDO proyectar ingresos futuros (fiados no cobrados) o egresos futuros (facturas de proveedores pendientes). El reporte es un reflejo dogmático de la liquidez exclusiva que cambió de manos en ese periodo.
-5. **Autenticidad de Descuadres:** Si el monto físico declarado por el operario difiere del monto líquido calculado por el servidor, el sistema DEBE generar un registro de ajuste por diferencia (faltante o sobrante) que impacte el reporte de auditoría de manera indeleble, emitiendo alertas de seguridad silenciosas a los perfiles de administración.
+1. **Exclusividad de Reportes de Caja para el Administrador y Visibilidad Propia del Empleado (`POL-SEG-03`, `POL-AUD-02`, `FRD-003-01`):**
+   - **Visibilidad del Empleado durante el turno:** El empleado no posee permiso de reportes; durante su jornada únicamente puede ver **sus propios movimientos realizados en el turno actual, con toda su información**, sin acceso a saldos esperados de caja ni movimientos de otros usuarios.
+   - **Reporte de Auditoría y Cierre de Caja (100% Exclusivo del Administrador):** Muestra los resúmenes limpios por canal (**Efectivo, Nequi y Llave BRE**), cada movimiento con su firma individual, intentos fallidos, reembolsos (con o sin etiqueta `"merma"`), gastos menores de turno y discrepancias entre lo físico declarado y lo calculado.
+2. **Arqueo Ciego con Cierre Asistido (`POL-SEG-01`):** Durante el transcurso de un turno activo y en el formulario de cierre, el sistema TIENE PROHIBIDO mostrarle al cajero cuál es el saldo total esperado o la diferencia exacta. El operario DEBE contar el dinero y declarar la suma real. Si al confirmar el cierre el monto no coincide con el cálculo del servidor, el sistema **solo avisa que no coincide** dando hasta **3 intentos** para revisar o recontar; al **tercer intento**, sella el cierre y envía una **notificación/alerta inmediata al Administrador**.
+3. **Inmutabilidad del Cierre (Sello de Tiempo):** En el instante en que se confirma el cierre (al coincidir o al tercer intento del Cierre Asistido), el servidor DEBE generar una instantánea matemática irreversible de los totales y el descuadre (si lo hubiere), sujeta únicamente a la excepción auditada de sincronización tardía offline (`LATE_SYNC_UPDATE` de `FRD-017` atribuida a quien vendió sin conexión).
+4. **Fidelidad al Flujo Puro de la Caja Dedicada POS (`POL-FIN-01`):** Fiel a las reglas de caja, los reportes de turno TIENEN PROHIBIDO proyectar ingresos futuros (fiados no cobrados), egresos futuros (facturas pendientes), pagos marcados como **"pago externo / fuera de caja"** o bajas logísticas `$0` (mermas y consumos). El reporte de caja refleja exclusivamente la liquidez que cambió de manos en los canales de la Caja Dedicada POS en ese turno.
+5. **Autenticidad de Descuadres y Alerta al Tercer Intento (`POL-AUD-03`):** Si tras los **3 intentos** del Cierre Asistido el monto físico declarado por el operario difiere del monto líquido calculado por el servidor, el sistema DEBE generar un registro de ajuste por diferencia (faltante o sobrante) que impacte el reporte de auditoría de manera indeleble, emitiendo una notificación/alerta inmediata al Administrador.
 6. **Navegación Temporal por Turnos Cerrados:** El módulo de reportes DEBE permitir al Administrador consultar turnos cerrados anteriores mediante un mecanismo de selección temporal.
    - **Unidad de consulta:** El turno (sesión de caja) es la unidad atómica. No existe un "reporte diario" consolidado; cada turno se inspecciona individualmente.
    - **Listado de turnos:** El sistema DEBE presentar una lista cronológica de turnos cerrados, mostrando para cada uno: fecha, hora de apertura, hora de cierre, empleado responsable y estado de cuadre (con/sin descuadre).
@@ -25,17 +25,17 @@ Este documento rige la generación, visualización y protección de la informaci
 
 ## Casos de Uso
 
-**Caso A: Ejecución de Arqueo Ciego y Cierre de Turno**
-- **Actor:** Usuario Operativo / Cajero.
-- **Precondición:** Llega el final de la jornada. El sistema sabe internamente que la caja debe contener doscientas mil unidades en efectivo, producto de ventas puras.
+**Caso A: Ejecución de Arqueo Ciego con Cierre Asistido (Hasta 3 Intentos)**
+- **Actor:** Empleado que abrió el turno (o Administrador).
+- **Precondición:** Llega el final de la jornada. El sistema sabe internamente que la caja debe contener doscientas mil unidades en efectivo.
 - **Flujo Principal:**
-  1. El usuario inicia el proceso de cierre de turno. El sistema bloquea la entrada de nuevas transacciones.
-  2. El sistema solicita al usuario introducir la cantidad de efectivo físico que hay en la gaveta, ocultando el valor esperado (doscientas mil unidades).
-  3. El usuario cuenta el dinero e ingresa el monto: ciento noventa y cinco mil unidades.
-  4. El servidor recibe el monto, compara y detecta un faltante de cinco mil unidades.
-  5. El servidor sella el turno, crea la instantánea del reporte operativo (indicando el valor entregado) y genera un evento crítico de faltante en el reporte de auditoría interna.
-- **Flujo Alternativo:** Ninguno.
-- **Postcondición:** El turno se cierra preservando la verdad sobre el faltante. El cajero no pudo ajustar el dinero de su bolsillo para simular un cuadre perfecto porque desconocía la meta.
+  1. El titular que abrió el turno inicia el proceso de cierre. El sistema bloquea la entrada de nuevas transacciones.
+  2. El sistema solicita introducir la cantidad de efectivo físico que hay en la gaveta, ocultando el valor esperado.
+  3. El usuario cuenta el dinero e ingresa ciento noventa y cinco mil unidades.
+  4. El servidor detecta que no coincide con las doscientas mil unidades y **solo avisa que no coincide** (sin mostrar el monto esperado), permitiendo revisar o recontar hasta un máximo de **3 intentos**.
+  5. Si al **tercer intento** persiste el faltante de cinco mil unidades, el servidor sella el turno con el monto declarado, guarda la instantánea inmutable para el Administrador y dispara una **notificación/alerta inmediata al Administrador**.
+- **Flujo Alternativo:** Si en el primer, segundo o tercer intento el conteo coincide, el turno se sella de inmediato sin alerta de descuadre.
+- **Postcondición:** El turno se cierra preservando la verdad contable y asistiendo errores involuntarios de conteo sin revelar el monto esperado.
 
 **Caso B: Inspección Forense del Propietario**
 - **Actor:** Administrador / Propietario.

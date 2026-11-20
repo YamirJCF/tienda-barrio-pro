@@ -6,6 +6,8 @@ import { useAuthStore } from '../stores/auth';
 import { useEmployeesStore } from '../stores/employees';
 import HistoryItemCard from '../components/history/HistoryItemCard.vue';
 import SaleDetailModal from '../components/history/SaleDetailModal.vue';
+import ShiftForensicDetailModal from '../components/history/ShiftForensicDetailModal.vue';
+import type { AuditSeverity, EvidenceHubDomain } from '../data/repositories/auditRepository';
 import BaseButton from '../components/ui/BaseButton.vue';
 import BaseDropdown, { type DropdownOption } from '../components/ui/BaseDropdown.vue';
 import { 
@@ -33,6 +35,8 @@ const {
   employeeFilter,
   eventTypeFilter,
   paymentMethodFilter,
+  auditDomainFilter,
+  auditSeverityFilter,
   searchQuery,
   customStartDate,
   customEndDate,
@@ -124,7 +128,7 @@ const paymentOptions = computed<DropdownOption[]>(() => {
     { value: 'efectivo', label: '💵 Efectivo' },
     { value: 'digital', label: '📱 Digitales (Todos)' },
     { value: 'nequi', label: '📱 Nequi' },
-    { value: 'daviplata', label: '📱 Daviplata' },
+    { value: 'llave_bre', label: '🔑 Llave Bre-B' },
   ];
   if (currentType.value === 'credits') {
     base.push({ value: 'fiado', label: '📋 Fiado' });
@@ -159,12 +163,21 @@ const eventTypeOptions = computed<DropdownOption[]>(() => {
         { value: 'LOGIN_SUCCESS', label: 'Login OK' },
         { value: 'LOGIN_FAILED', label: 'Login Fallido' },
         { value: 'PIN_CHANGE', label: 'Cambio PIN' },
+        { value: 'CASH_DISCREPANCY_ALERT', label: 'Descuadre Crítico' },
+        { value: 'CASH_DISCREPANCY', label: 'Diferencia Arqueo' },
+        { value: 'UNAUTHORIZED_SHIFT_CLOSE', label: 'Cierre Ajeno Bloqueado' },
+        { value: 'INVENTORY_COUNT_ADJUSTMENT', label: 'Ajuste Conteo Físico' },
+        { value: 'BUSINESS_CONSUMPTION', label: 'Consumo Negocio' },
+        { value: 'PERSONAL_WITHDRAWAL', label: 'Retiro Personal ($0)' },
+        { value: 'REFUND_MERMA', label: 'Merma por Devolución' },
+        { value: 'SALE_VOIDED', label: 'Venta Anulada' },
       ];
     case 'credits':
       return [
         { value: 'all', label: 'Tipo: Todos' },
-        { value: 'payment', label: 'Abonos' },
-        { value: 'charge', label: 'Deudas' },
+        { value: 'abono', label: 'Abonos' },
+        { value: 'venta_fiado', label: 'Deudas Fiado' },
+        { value: 'anulacion_fiado', label: 'Anulaciones Fiado' },
       ];
     default:
       return [];
@@ -220,14 +233,46 @@ const handleResetFilters = async () => {
   await resetFilters();
 };
 
-// Sale Detail Modal
+// Sale & Shift Forensic Detail Modals
 const showSaleDetail = ref(false);
 const selectedSaleId = ref<string | null>(null);
+const showShiftDetail = ref(false);
+const selectedSessionId = ref<string | null>(null);
+
+const auditDomainOptions: DropdownOption[] = [
+  { value: 'todos', label: 'Hub: Todos' },
+  { value: 'caja', label: 'Hub: Caja' },
+  { value: 'ventas', label: 'Hub: Ventas' },
+  { value: 'inventario', label: 'Hub: Inventario' },
+  { value: 'seguridad', label: 'Hub: Seguridad' },
+  { value: 'precios', label: 'Hub: Precios' },
+  { value: 'creditos', label: 'Hub: Créditos' },
+];
+
+const auditSeverityOptions: DropdownOption[] = [
+  { value: 'all', label: 'Severidad: Todas' },
+  { value: 'critical', label: 'Crítico' },
+  { value: 'warning', label: 'Alerta' },
+  { value: 'info', label: 'Info' },
+];
+
+const handleAuditDomainChange = (val: string) => {
+  auditDomainFilter.value = val as EvidenceHubDomain;
+  fetchHistory('audit');
+};
+
+const handleAuditSeverityChange = (val: string) => {
+  auditSeverityFilter.value = val as 'all' | AuditSeverity;
+  fetchHistory('audit');
+};
 
 const handleCardClick = (id: string) => {
   if (currentType.value === 'sales') {
     selectedSaleId.value = id;
     showSaleDetail.value = true;
+  } else if (currentType.value === 'cash') {
+    selectedSessionId.value = id;
+    showShiftDetail.value = true;
   }
 };
 
@@ -312,6 +357,20 @@ onUnmounted(() => {
           :model-value="eventTypeFilter"
           :options="eventTypeOptions"
           @update:model-value="(val) => eventTypeFilter = val"
+        />
+
+        <!-- 4b. Sub-filtros Evidence Hub (Dominio y Severidad) -->
+        <BaseDropdown
+          v-if="currentType === 'audit'"
+          :model-value="auditDomainFilter"
+          :options="auditDomainOptions"
+          @update:model-value="handleAuditDomainChange"
+        />
+        <BaseDropdown
+          v-if="currentType === 'audit'"
+          :model-value="auditSeverityFilter"
+          :options="auditSeverityOptions"
+          @update:model-value="handleAuditSeverityChange"
         />
 
         <!-- 5. Empleado -->
@@ -460,6 +519,12 @@ onUnmounted(() => {
     <SaleDetailModal
       v-model="showSaleDetail"
       :saleId="selectedSaleId"
+    />
+
+    <!-- Forensic Shift Report Modal (SDD-027-01 CHK-306) -->
+    <ShiftForensicDetailModal
+      v-model="showShiftDetail"
+      :sessionId="selectedSessionId"
     />
   </div>
 </template>

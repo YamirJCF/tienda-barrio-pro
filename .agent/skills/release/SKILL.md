@@ -5,6 +5,16 @@ description: Ritual de guardado seguro con CHANGELOG, commit semántico y tag
 
 # Protocolo de Guardado Seguro (Release Ritual)
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 5 — Cierre de Versión y Etiquetado en Producción (Ruta D)
+- **Rama permitida:** `master` (Única rama oficial de producción)
+- **Entrada requerida (Gate In):** Orden explícita del usuario + validaciones de `/deploy` en verde + Panel de Auditoría (`/#/sys-audit`) en verde ✅.
+- **Límite estricto:** Solo etiqueta versiones estables en `master` con `CHANGELOG.md` actualizado; prohibido etiquetar releases desde ramas `draft/*` o `feat/*` sin integrar.
+- **🛑 Freno de Emergencia (Hard Stop):** Si `/#/sys-audit` tiene errores 🔴 o el build falla → ABORTAR el release y reportar al usuario.
+- **➡️ Siguiente eslabón:** Fin de la Ruta D (Versión publicada y etiquetada en `origin/master`).
+
+---
+
 // turbo-all
 
 ## Pre-requisitos
@@ -43,9 +53,9 @@ git commit -m "sec(core): implementación de blindaje y validación de datos"
 git tag -a vX.Y.Z -m "Descripción de la versión"
 ```
 
-### 5. Push con tags (si tienes remoto)
+### 5. Push a producción con tags
 ```bash
-git push origin main --tags
+git push origin master --tags
 ```
 
 ## Notas

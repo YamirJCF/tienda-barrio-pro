@@ -125,9 +125,21 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/stock-outputs',
+    name: 'stock-outputs',
+    component: () => import('../views/StockOutputsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/cash-control',
     name: 'cash-control',
     component: () => import('../views/CashControlView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/my-shift-movements',
+    name: 'my-shift-movements',
+    component: () => import('../views/MyShiftMovementsView.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -298,13 +310,26 @@ router.beforeEach(async (to, from, next) => {
   // SPEC-005: Permissions Guards
   // =============================================
 
-  // FRD-004/FRD-015: Stale Shift Guard
-  // If a cash session from a previous day is still open, block everything except cash-control
+  // FRD-004 / FRD-017 / SDD-027-02: Stale Shift (+24h Expirado/Bloqueado) Guard
+  // Redirige únicamente al abridor original (con permiso) o al Admin, tanto si la sesión sigue open (>24h)
+  // como si rpc_check_and_force_close_shifts ya la marcó Expirado/Bloqueado (pendingForcedSessionInfo).
+  // Nunca bloquea labores no monetarias de otros empleados.
   if (isAuthenticated && to.meta.requiresAuth && to.name !== 'cash-control' && to.name !== 'login') {
     const cashRegisterStore = useCashRegisterStore();
-    if (cashRegisterStore.isStaleSession) {
-      logger.log('🔒 [Router] Stale shift detected. Redirecting to cash-control for mandatory closure.');
-      return next({ name: 'cash-control' });
+    const hasStaleOrForced =
+      cashRegisterStore.isStaleSession || Boolean(cashRegisterStore.pendingForcedSessionInfo);
+
+    if (hasStaleOrForced) {
+      const currentActorId = authStore.currentUser?.employeeId || authStore.currentUser?.id;
+      const openerId = cashRegisterStore.isStaleSession
+        ? cashRegisterStore.currentSession?.employeeId
+        : cashRegisterStore.pendingForcedSessionInfo?.openedBy;
+      const isOriginalOpener = Boolean(openerId && currentActorId && openerId === currentActorId);
+
+      if (authStore.isAdmin || (authStore.canOpenCloseCash && isOriginalOpener)) {
+        logger.log('🔒 [Router] Stale/Expirado (+24h) shift detected for opener/admin. Redirecting to cash-control.');
+        return next({ name: 'cash-control' });
+      }
     }
   }
 
@@ -313,31 +338,33 @@ router.beforeEach(async (to, from, next) => {
     return next({ name: 'dashboard' });
   }
 
-  // 1b. Reports Hub & History: STRICTLY Admin only (Centro de Inteligencia)
+  // 1b. Reports Hub & History: STRICTLY Admin only (SDD-003-01 / POL-AUD-02)
   if ((to.name === 'reports' || to.name === 'history') && !authStore.isAdmin) {
     return next({ name: 'dashboard' });
   }
 
-  // 2. Admin Hub: Admin OR Reports Viewer
-  if (to.name === 'admin') {
-    if (!authStore.isAdmin && !authStore.canViewReports) {
-      return next({ name: 'dashboard' });
-    }
-    // Block "Gestión" tab for non-admins
-    if (to.query.tab === 'gestion' && !authStore.isAdmin) {
-      return next({ name: 'admin', query: { tab: 'reportes' } });
-    }
+  // 2. Admin Hub: STRICTLY Admin only
+  if (to.name === 'admin' && !authStore.isAdmin) {
+    return next({ name: 'dashboard' });
   }
 
-  // 2b. Financial Dashboard: Admin OR Reports Viewer
-  if (to.name === 'financial-dashboard') {
-    if (!authStore.isAdmin && !authStore.canViewReports) {
-      return next({ name: 'dashboard' });
-    }
+  // 2b. Financial Dashboard: STRICTLY Admin only
+  if (to.name === 'financial-dashboard' && !authStore.isAdmin) {
+    return next({ name: 'dashboard' });
   }
 
-  // 3. Cash Control: Needs permission
+  // 3. Cash Control: Requires canOpenCloseCash (or Admin)
   if (to.name === 'cash-control' && !authStore.canOpenCloseCash) {
+    return next({ name: 'dashboard' });
+  }
+
+  // 3b. Inventory & Stock Entry: Requires canManageInventory (or Admin)
+  if ((to.name === 'inventory' || to.name === 'stock-entry') && !authStore.canManageInventory) {
+    return next({ name: 'dashboard' });
+  }
+
+  // 3c. Clients & Client Detail: Requires canFiar (or Admin)
+  if ((to.name === 'clients' || to.name === 'client-detail') && !authStore.canFiar) {
     return next({ name: 'dashboard' });
   }
 

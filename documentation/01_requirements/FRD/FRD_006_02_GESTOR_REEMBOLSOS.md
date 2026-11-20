@@ -1,63 +1,66 @@
 # FRD-006-02: Gestor de Reembolsos (Devoluciones de Clientes)
 
-### Orquestación Atómica de Ingresos Logísticos y Egresos Monetarios
+### Acción Única de Devolución con Etiqueta `"merma"` y Egreso de Caja Dedicada POS (`POL-FIN-04`, `POL-LOG-02`, `FRD-003-01`)
 
 #### Descripción
-Herramienta especializada ubicada en la pantalla de "Administración" (sección "Equipo"), diseñada exclusivamente para manejar las devoluciones de productos por parte de clientes. Su propósito es resolver la "paradoja de la devolución": ingresar stock y sacar dinero simultáneamente. Al ser un módulo independiente, evita contaminar las ventas del POS y prohíbe la manipulación manual de inventarios, asegurando que el dinero reembolsado cuadre perfectamente en el turno de caja actual.
+Herramienta ubicada directamente en el **Punto de Venta (POS), al lado del buscador**, diseñada para procesar devoluciones de productos por parte de clientes cuando la **Caja Dedicada POS está abierta**. Resuelve en **una sola acción** el flujo de dinero y mercancía mediante una única etiqueta opcional **`"merma"`**: si el producto devuelto lleva la etiqueta `"merma"` (porque viene dañado o vencido), el sistema lee la etiqueta, el producto **no pasa por el inventario vendible** y se ejecuta directamente su salida como merma; si no lleva la etiqueta `"merma"`, el producto se reingresa al inventario para otra venta.
 
 ---
 
 ## Reglas de Negocio
 
-1. **Control de Acceso Basado en Perfil:** No se requieren PINs temporales. El acceso a esta herramienta está gobernado estrictamente por el sistema de permisos. Un empleado solo podrá visualizar y ejecutar esta función si el Administrador le ha otorgado explícitamente dicho permiso en su perfil de usuario.
-2. **Entrada Manual por PLU:** El registro del producto a devolver se realiza digitando manualmente su código identificador interno (PLU), prescindiendo del uso del escáner de código de barras.
-3. **Cálculo de Monto Estricto e Inmutable:** Una vez ingresado el PLU y la cantidad de unidades, el sistema calcula automáticamente el valor monetario a devolver (basado en el precio de venta del sistema). Este monto total desglosado es **exacto e inalterable** por el usuario. El sistema y el cajero asumen este valor como la única verdad contable para el reembolso.
-4. **Transacción Atómica Bidireccional:** Al confirmar el reembolso, el sistema ejecuta una única transacción en la base de datos que dispara dos eventos simultáneos:
-   - **Evento Logístico:** Incrementa el inventario del PLU en la cantidad especificada.
-   - **Evento Financiero:** Registra un "Egreso" (salida de efectivo) en la sesión de caja activa por el monto exacto calculado.
-5. **Dependencia de Turno Activo:** Para poder entregar dinero al cliente, el sistema exige que el usuario tenga un Turno de Caja (Sesión) abierto y vigente. El egreso queda amarrado al `session_id` actual, asegurando que el arqueo de caja al final del día refleje el dinero entregado por la devolución.
-6. **Selección de Canal y Validación de Fondos por Canal:**
-   - Todo reembolso DEBE especificar el canal por el cual sale el dinero: **EFECTIVO**, **NEQUI** o **LLAVE BRE** (los tres canales fijos de FRD-004 Caja Estricta Multicanal). La interfaz DEBE preseleccionar **EFECTIVO** por defecto, permitiendo al usuario modificarlo a cualquiera de los otros canales permitidos.
-   - Para garantizar total transparencia y trazabilidad contable, el formulario DEBE incluir una lista desplegable para registrar el **Canal de Venta Original** (Efectivo, Nequi, Llave BRE) por el cual el cliente pagó la compra inicial.
-   - El canal de egreso seleccionado DEBE ser el origen real del dinero entregado al cliente (mismo principio de FRD-026). El saldo de cada canal se evalúa de forma aislada por turno (FRD-027, Regla 2).
-   - El servidor DEBE validar los fondos disponibles exclusivamente en el canal de egreso seleccionado (FRD-027, Regla 3). Si los fondos no alcanzan, el servidor DEBE rechazar la operación completa: no se ingresa stock ni se registra egreso. No se compensa con saldo de otro canal ni se permite sobregiro.
-   - La pantalla de reembolsos NO DEBE ofrecer ni requerir ingresos manuales ficticios para habilitar un reembolso.
-   - Cuando el canal de egreso difiere del canal de venta original, el sistema registra ambos canales de forma transparente para auditoría sin realizar transferencias automáticas entre canales: cada canal concilia su realidad contable independientemente.
-7. **Trazabilidad Contable del Reembolso (POL-AUD-02):**
-   - El Egreso generado DEBE clasificarse con el tipo o subtipo **Reembolso**, diferenciado claramente de los gastos operativos estándar, para que los reportes de caja (FRD-027-01) y el análisis financiero (FRD-018, fórmula: $\text{Ingresos Netos} = \text{Ventas Brutas} - \text{Devoluciones}$) puedan identificarlo, aislarlo y descontarlo correctamente.
-   - El Egreso de caja y el Ingreso de inventario de una misma operación DEBEN quedar vinculados entre sí con un identificador común de operación, almacenando: `session_id`, usuario responsable, PLU, cantidad, monto total reembolsado, canal de egreso y canal de venta original.
-   - Ambos registros son inmutables. Cualquier error en el proceso se corrige mediante contra-movimiento auditable (FRD-004 Control de Caja, Regla 5).
+1. **Control de Acceso Basado en el Permiso `Reembolsos` (`POL-SEG-03`, `FRD-003-01`):**
+   - No se requieren PINs temporales y es independiente del permiso de inventario.
+   - El botón de Reembolsos (ubicado en el POS, al lado del buscador) solo puede ser ejecutado por el Administrador o por un empleado que tenga activado el permiso **`Reembolsos`** y un turno de Caja Dedicada POS abierto.
+
+2. **Búsqueda Flexible del Producto:**
+   - El operador puede localizar el producto devuelto buscando por **nombre, código de barras o PLU** (no está restringido únicamente a digitar PLU manual).
+
+3. **Cálculo de Monto Estricto e Inmutable:**
+   - Una vez seleccionado el producto e ingresada la cantidad de unidades, el sistema calcula automáticamente el valor monetario a devolver (basado en el precio de venta del sistema). Este monto total es **exacto e inalterable** manualmente por el usuario.
+
+4. **Acción Única con Etiqueta `"merma"` y Egreso de Caja (`POL-LOG-02`, `POL-FIN-04`):**
+   - Al confirmar el reembolso, el servidor ejecuta una única transacción atómica con la **firma individual** del usuario:
+     - **Evento Financiero:** Registra un egreso tipificado como **Reembolso** en la Caja Dedicada POS activa por el monto exacto calculado, en el canal de salida seleccionado.
+     - **Evento Logístico de Acción Única (Etiqueta `"merma"`):** El operador puede marcar una única etiqueta **`"merma"`** si el producto devuelto está dañado o no sirve para volver a vender:
+       - **Con etiqueta `"merma"`:** El sistema lee la etiqueta; el producto **no pasa por el inventario vendible** (no suma ni resta del stock actual, por lo que se procesa sin bloqueo incluso si el stock vendible actual está en `0`) y se ejecuta directamente su salida/pérdida como **Merma** (valorada al costo de adquisición en el P&L de `FRD-018`).
+       - **Sin etiqueta `"merma"`:** El producto se reingresa directamente al inventario vendible (`+cantidad`) para otra venta.
+
+5. **Dependencia de Turno Activo en la Caja Dedicada POS:**
+   - Para entregar dinero al cliente, el sistema exige que la Caja Dedicada POS tenga un turno abierto y vigente (<24h). El egreso queda amarrado al `session_id` actual y a la firma individual del operador.
+
+6. **Selección de Canal y Validación de Fondos por Canal (`POL-FIN-02`):**
+   - Todo reembolso DEBE especificar el canal real por el cual sale el dinero: **EFECTIVO**, **NEQUI** o **LLAVE BRE** (Efectivo preseleccionado por defecto).
+   - El formulario incluye una lista desplegable para registrar el **Canal de Venta Original** (Efectivo, Nequi, Llave BRE) por trazabilidad.
+   - El servidor DEBE validar fondos disponibles exclusivamente en el canal de egreso seleccionado. Si los fondos no alcanzan, rechaza la operación completa sin modificar inventario ni caja.
+
+7. **Trazabilidad Contable e Inmutabilidad (`POL-AUD-01`, `POL-AUD-02`):**
+   - El egreso se clasifica como **Reembolso** (separado de gastos menores) para que `FRD-018` calcule $\text{Ingresos Netos} = \text{Ventas Brutas} - \text{Devoluciones}$, mientras que si llevó la etiqueta `"merma"`, su costo alimenta el rubro de Mermas en el P&L.
+   - El registro almacena: `session_id`, **firma individual del usuario responsable**, producto, cantidad, etiqueta `"merma"` (sí/no), monto reembolsado, canal de egreso y canal de venta original. Ambos registros son inmutables (cualquier error se corrige mediante contra-movimiento).
 
 ---
 
 ## Casos de Uso
 
-**Caso A: Reembolso por Producto Devuelto**
-- **Actor:** Administrador o Empleado con permiso explícito de Reembolso.
-- **Precondición:** El cliente devuelve mercancía en buen estado. El actor tiene un turno de caja activo.
+**Caso A: Reembolso de Producto (Apto para Venta o con Etiqueta `"merma"`)**
+- **Actor:** Administrador o Empleado con permiso `Reembolsos`.
+- **Precondición:** Turno de Caja Dedicada POS abierto y canal de salida con fondos suficientes.
 - **Flujo Principal:**
-  1. El actor navega a la pantalla de "Administración", bajo la sección "Equipo", y abre la herramienta de Reembolsos.
-  2. Digita manualmente el código PLU del producto.
-  3. Ingresa la cantidad de productos a devolver.
-  4. El sistema calcula y muestra en pantalla el total exacto a reembolsar al cliente.
-  5. El actor selecciona en la lista desplegable el **Canal de Venta Original** (Efectivo, Nequi o Llave BRE) por el que pagó el cliente.
-  6. El actor verifica el **Canal de Reembolso** (Efectivo preseleccionado por defecto) y lo modifica si entregará el dinero por un canal digital.
-  7. El actor confirma la operación.
-  8. El sistema valida fondos en el canal de egreso, extrae el dinero contablemente de dicho canal en la sesión de caja, registra el canal original para trazabilidad y suma el stock al inventario de forma atómica.
-- **Flujo Alternativo (Sin Permiso):** Si un cajero sin autorización intenta acceder a la ruta, el sistema le deniega el acceso visual o funcional.
-- **Flujo Alternativo (Sin Turno):** Si el actor tiene permisos pero su caja está cerrada, el sistema aborta la operación advirtiendo que no hay caja de dónde sacar el dinero.
-- **Flujo Alternativo (Fondos Insuficientes en el Canal):** Si el canal de reembolso seleccionado no posee saldo suficiente en el turno activo, el sistema aborta la operación completa y muestra: "Fondos insuficientes en [canal]. Saldo actual: $X. Selecciona el canal por el que realmente entregarás el dinero." El formulario conserva el PLU, la cantidad y el canal original para que el actor ajuste el canal de entrega y reintente sin perder los datos ingresados. No se modifica inventario ni caja.
-- **Postcondición:** El inventario aumenta, el flujo de caja del turno actual registra un egreso tipificado como Reembolso en el canal de salida, el canal original queda registrado para auditoría y el arqueo de cada canal cuadra con la realidad física y digital.
+  1. En la pantalla del POS, el actor pulsa el botón **Reembolsos** (al lado del buscador).
+  2. Busca el producto por nombre, código o PLU e ingresa la cantidad devuelta.
+  3. Si el producto viene dañado o vencido, activa la etiqueta **`"merma"`**.
+  4. El sistema muestra el total exacto e inmutable a reembolsar.
+  5. El actor selecciona el **Canal de Venta Original** y verifica el **Canal de Reembolso** (Efectivo, Nequi o Llave BRE).
+  6. El actor confirma la operación.
+  7. El servidor valida fondos en el canal de egreso, descuenta el dinero de ese canal en la Caja Dedicada POS y procesa la mercancía en una sola acción: si tiene la etiqueta `"merma"`, no toca el stock vendible y registra directamente su salida por merma; si no la tiene, reingresa las unidades al stock vendible.
+- **Flujo Alternativo (Sin Permiso o Sin Turno):** El servidor rechaza la operación con error explícito.
+- **Flujo Alternativo (Fondos Insuficientes en el Canal):** El servidor aborta la operación e informa el saldo actual del canal conservando los datos del formulario para que el actor elija el canal real de entrega.
 
 ---
 
 ## Criterios de Aceptación
-- [ ] **CA-FRD-006-02-01:** La herramienta de devoluciones DEBE estar protegida por la matriz de roles y permisos existente, denegando el renderizado o ejecución a usuarios sin autorización.
-- [ ] **CA-FRD-006-02-02:** La interfaz DEBE requerir la digitación del PLU y PROHIBIR la edición manual del campo "Monto a Reembolsar", el cual debe ser un cálculo inyectado por el sistema.
-- [ ] **CA-FRD-006-02-03:** El backend DEBE abortar (rollback) la operación si la inserción del ingreso de inventario falla, o si la inserción del egreso de caja falla, garantizando consistencia.
-- [ ] **CA-FRD-006-02-04:** La función backend DEBE exigir un `session_id` activo para procesar el egreso de dinero.
-- [ ] **CA-FRD-006-02-05:** La interfaz muestra el canal de egreso con Efectivo preseleccionado por defecto, permitiendo cambiarlo a Nequi o Llave BRE.
-- [ ] **CA-FRD-006-02-06:** La interfaz incluye una lista desplegable obligatoria para registrar el canal de venta original (Efectivo, Nequi, Llave BRE) y el sistema lo persiste junto a la transacción.
-- [ ] **CA-FRD-006-02-07:** El backend DEBE rechazar el reembolso completo (sin ingresar stock ni registrar egreso) si el canal de salida no tiene fondos suficientes en el turno, sin compensar con otros canales.
-- [ ] **CA-FRD-006-02-08:** El egreso generado queda tipificado como Reembolso (diferenciado de gastos operativos) para asegurar el cálculo de Ingresos Netos según FRD-018.
-- [ ] **CA-FRD-006-02-09:** El egreso de caja y el ingreso de inventario quedan vinculados atómicamente con trazabilidad completa (turno, usuario, PLU, cantidad, monto, canal de salida y canal original).
+- [ ] **CA-FRD-006-02-01:** El botón de Reembolsos está ubicado en el **POS, al lado del buscador**, y está protegido en servidor por el permiso **`Reembolsos`** (`FRD-003-01`) y turno abierto.
+- [ ] **CA-FRD-006-02-02:** Permite buscar el producto por **nombre, código o PLU** y prohíbe editar manualmente el "Monto a Reembolsar".
+- [ ] **CA-FRD-006-02-03:** El reembolso opera como **una sola acción** mediante la etiqueta **`"merma"`**: si tiene la etiqueta `"merma"`, no pasa por el inventario vendible (sin bloquearse aunque el stock sea `0`) y ejecuta directamente su salida como merma al costo en el P&L; si no tiene la etiqueta, reingresa al stock vendible para otra venta.
+- [ ] **CA-FRD-006-02-04:** La función backend exige un `session_id` activo y valida fondos suficientes en el canal seleccionado (**Efectivo, Nequi o Llave BRE**), abortando toda la transacción si no alcanzan.
+- [ ] **CA-FRD-006-02-05:** Persiste el canal de venta original, el canal de egreso, la etiqueta `"merma"` y la **firma individual inmutable** del usuario que ejecutó el reembolso.

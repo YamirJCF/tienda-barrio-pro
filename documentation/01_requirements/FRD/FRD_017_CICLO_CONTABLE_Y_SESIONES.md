@@ -35,15 +35,15 @@ stateDiagram-v2
     TurnoActivo --> CierreForzado: Turno cumple P_MAX_HORAS_TURNO abierto
     
     state EvaluacionCierre {
-        state "Arqueo Ciego de Efectivo" as Arqueo
-        state "Conciliación (Esperado vs Real)" as Conciliacion
+        state "Arqueo Ciego con Cierre Asistido (hasta 3 intentos)" as Arqueo
+        state "Conciliación y Alerta al 3er Intento (si no cuadra)" as Conciliacion
         Arqueo --> Conciliacion
     }
     
-    EvaluacionCierre --> CajaCerrada: Firma de Cierre
+    EvaluacionCierre --> CajaCerrada: Firma de Cierre (Solo quien abrió o Admin)
     
-    CierreForzado --> CajaBloqueada: Cierre automático por sistema con auditoría
-    CajaBloqueada --> CajaCerrada: Reconciliación administrativa del arqueo
+    CierreForzado --> CajaBloqueada: Turno Expirado/Bloqueado (+24h) con auditoría
+    CajaBloqueada --> CajaCerrada: Cierre por quien abrió o Cierre Forzoso del Admin
 ```
 
 ---
@@ -55,32 +55,30 @@ Un turno de caja puede cruzar libremente la medianoche sin interrupciones operat
 - Las sesiones de los usuarios y los Pases Diarios aprobados en el día calendario anterior conservan plena validez operativa después de las `00:00` horas siempre y cuando el turno de caja de la tienda continúe abierto y no haya alcanzado el límite de `P_MAX_HORAS_TURNO`.
 - El sistema **TIENE PROHIBIDO** ejecutar cierres de sesión forzados o invalidar pases diarios a las `00:00` horas si existe un turno nocturno abierto en curso.
 
-### RN-017-02: Cierre Forzado por Techo Temporal (`P_MAX_HORAS_TURNO`)
-Si un turno de caja permanece abierto exactamente `P_MAX_HORAS_TURNO` (24 horas) después de su marca temporal de apertura:
-1. El servidor central transiciona automáticamente el estado del turno a `closed` marcándolo como cierre forzado por caducidad.
-2. El sistema sella el saldo esperado de la caja con las transacciones registradas hasta ese instante.
-3. Las operaciones monetarias (ventas, gastos, abonos) quedan inmediatamente bloqueadas para toda la tienda hasta que se realice el arqueo de reconciliación.
-4. Si un colaborador operaba amparado exclusivamente en el turno nocturno del día anterior, su pase diario expira en ese momento; si cuenta con un pase aprobado para el día calendario actual, conserva acceso para labores no monetarias (inventario, catálogo, proveedores).
+### RN-017-02: Bloqueo por Techo Temporal (`P_MAX_HORAS_TURNO` / `FRD-027-02`)
+Si un turno de la Caja Dedicada POS permanece abierto exactamente `P_MAX_HORAS_TURNO` (24 horas) después de su marca temporal de apertura:
+1. El servidor central transiciona automáticamente el estado del turno a **"Expirado/Bloqueado"** (`FRD-027-02`), registrando la alerta de negligencia temporal.
+2. Las operaciones monetarias (ventas, gastos menores, abonos, reembolsos) quedan inmediatamente bloqueadas para toda la tienda hasta que el turno sea cerrado.
+3. Si un colaborador operaba amparado exclusivamente en el turno nocturno del día anterior, su pase diario expira en ese momento; si cuenta con un pase aprobado para el día calendario actual, conserva acceso para labores logísticas no monetarias (inventario, entradas, mermas, consumo del negocio).
 
-### RN-017-03: Auditoría y Reconciliación de Cierre Forzado
-Cuando ocurre un Cierre Forzado:
-1. **Auditoría Inviolable:** Se registra un evento en la bitácora de auditoría (`audit_logs`) con nivel de advertencia, indicando cierre forzado por negligencia temporal y sellando los totales esperados.
-2. **Notificación al Administrador:** El sistema genera una alerta prioritaria para el Administrador.
-3. **Desbloqueo mediante Reconciliación:** Para poder iniciar un nuevo turno de caja, un usuario autorizado (Administrador o colaborador con permiso de apertura/cierre de caja) DEBE realizar el conteo físico del dinero para sellar el arqueo real y justificar los descuadres si existiesen.
+### RN-017-03: Propiedad Estricta del Turno y Resolución de Turno Expirado (`POL-SEG-02`, `POL-SEG-03`)
+1. **Propiedad estricta al cerrar:** Tanto en cierre ordinario como al vencer las 24 horas, **únicamente el empleado específico que abrió ese turno o el Administrador** tienen potestad para cerrarlo. Cualquier otro empleado, aunque tenga activado el permiso `Abrir/cerrar caja`, tiene **estrictamente bloqueado** cerrar un turno ajeno.
+2. **Cierre Asistido del titular:** Cuando cierra quien abrió el turno, opera el Cierre Asistido (`POL-SEG-01`: si no coincide, solo avisa dando hasta 3 intentos y al tercero sella y notifica al Administrador).
+3. **Cierre Forzoso del Administrador (`FRD-027-02`):** Si quien abrió el turno no está disponible tras vencer las 24 horas, el Administrador ejecuta el Cierre Forzoso, en el cual **no siempre es obligatorio declarar conteo físico**, registrando el evento de máxima severidad en auditoría.
 
-### RN-017-04: Inmutabilidad de la Asignación Contable y Trazabilidad Multi-Actor
-Toda transacción monetaria (venta, gasto, abono, anulación) registrada durante un turno queda irrevocablemente asociada al turno activo en que se ejecutó (*Principio de Devengo*).
-- **Autoría Individual:** En una tienda con múltiples colaboradores operando simultáneamente, cada movimiento de caja DEBE almacenar de forma obligatoria el identificador del colaborador o Administrador específico que ejecutó la operación (`POL-AUD-02`).
-- **Sincronización Tardía de Ventas Offline:** Si una venta realizada en Modo Offline contiene un sello de turno (`origin_session_id`) que ya fue cerrado (ordinaria o forzosamente) al momento de sincronizar:
+### RN-017-04: Inmutabilidad de la Asignación Contable y Firma Individual con Fotografía Histórica
+Toda transacción monetaria (venta, gasto menor, abono, reembolso) y retiro de consumo personal registrado durante un turno queda irrevocablemente asociado al turno activo en que se ejecutó (*Principio de Devengo*).
+- **Firma Individual y 1 Dispositivo por Cuenta:** En una tienda con múltiples colaboradores operando simultáneamente desde sus propias cuentas sobre la Caja Dedicada POS, cada movimiento DEBE almacenar de forma obligatoria la firma individual del colaborador o Administrador específico que ejecutó la operación, conservando la fotografía histórica inmutable de su nombre y rol (`POL-AUD-01`, `POL-AUD-02`).
+- **Sincronización Tardía de Ventas Offline:** Si una venta realizada en Modo Offline contiene un sello de turno (`origin_session_id`) que ya fue cerrado al momento de sincronizar:
   1. La venta se imputa contablemente al turno de origen al que perteneció.
   2. El servidor recalcula el balance esperado del turno de origen para reflejar el ingreso real.
-  3. El sistema estampa un registro de auditoría (`LATE_SYNC_UPDATE`) documentando el ajuste contable tardío y su responsable.
+  3. El sistema estampa un registro de auditoría (`LATE_SYNC_UPDATE`) atribuyendo explícitamente la diferencia a la **firma de quien vendió offline** (sin alterar la declaración física de quien cerró la caja).
   4. La venta **NO SE IMPUTA** al turno nuevo que pudiera estar abierto, protegiendo la pureza contable de ambos períodos.
 
-### RN-017-05: Independencia de Labores No Monetarias ante Estado de Caja
-El estado de la caja (abierta, cerrada, o caducada por 24 horas) rige única y exclusivamente sobre las transacciones que involucren flujo monetario.
-- Los módulos de Inventario, Proveedores, Cuentas por Pagar y Reportes operan con total independencia del estado de la caja (*POL-LOG-01*).
-- El sistema NO PUEDE bloquear el acceso ni forzar la navegación hacia el control de caja a colaboradores que no posean permiso de arqueo o que se encuentren ejecutando labores logísticas de inventario.
+### RN-017-05: Independencia de Labores Logísticas No Monetarias ante Estado de Caja
+El estado de la Caja Dedicada POS (abierta, cerrada o expirada por 24 horas) rige única y exclusivamente sobre las transacciones que involucren flujo monetario o el carrito de ventas del POS.
+- Las labores logísticas de Inventario (entradas, mermas, consumo del negocio, ajustes por conteo físico y devoluciones físicas a proveedor) operan con total independencia del estado de la caja (*POL-LOG-01*, *POL-LOG-03*).
+- El sistema NO PUEDE bloquear el acceso ni forzar la navegación hacia el control de caja a colaboradores que no sean el titular que abrió el turno o que se encuentren ejecutando labores logísticas. *(Nota: Los módulos de Proveedores/Cuentas por Pagar y todos los Reportes son 100% exclusivos del Administrador).*
 
 ---
 

@@ -27,7 +27,7 @@ Este documento regula el acceso diario de empleados al sistema bajo el principio
 
 2. **Aprobación diaria obligatoria:** El Administrador DEBE aprobar explícitamente el ingreso de cada empleado cada día. El sistema NO DEBE otorgar acceso sin esta aprobación.
 
-3. **Validez del pase diario:** El pase diario es válido hasta las 23:59 del día en curso. El pase diario expira por caducidad natural al iniciar un nuevo día. El pase diario expira por revocación manual del Administrador. El pase diario NO expira por cierre de caja.
+3. **Validez del pase diario y continuidad en turno nocturno (`POL-SEG-02`, `FRD-017`):** El pase diario es válido durante la jornada del día en curso; si existe un turno de caja abierto que aún no supera el límite de 24 horas (`P_MAX_HORAS_TURNO`) y cruza la medianoche, el pase diario de quienes operan ese turno continúa vigente hasta que se cierre dicho turno. Fuera de un turno nocturno abierto (<24h), el pase diario expira al iniciar un nuevo día o por revocación manual del Administrador. El pase diario NO expira por cierre de caja.
 
 4. **Desacople entre pase y caja:** El cierre de caja NO revoca los pases diarios activos. El cierre de caja bloquea las operaciones monetarias y el sistema de ventas, pero NO fuerza la salida del empleado del sistema. El pase diario controla el acceso al sistema. La caja abierta controla la ejecución de operaciones monetarias. Los permisos del usuario controlan las acciones específicas que puede realizar.
 
@@ -43,7 +43,9 @@ Este documento regula el acceso diario de empleados al sistema bajo el principio
 
 10. **Revocación manual:** El Administrador DEBE poder revocar un pase diario aprobado en cualquier momento. La revocación manual produce la pérdida total de acceso del empleado. El sistema DEBE exigir una nueva solicitud de acceso tras la revocación.
 
-11. **Caducidad natural:** Al iniciar un nuevo día, todo pase diario del día anterior DEBE quedar sin efecto. El sistema DEBE exigir una nueva solicitud de acceso para el nuevo día.
+11. **Caducidad natural:** Al iniciar un nuevo día sin un turno nocturno activo en curso (<24h), todo pase diario del día anterior DEBE quedar sin efecto y el sistema DEBE exigir una nueva solicitud de acceso para el nuevo día. Si hay un turno abierto (<24h) que cruzó la medianoche, el pase se mantiene vigente hasta cerrar ese turno (`FRD-017`).
+
+11b. **Un solo dispositivo por cuenta (`POL-SEG-03`, `FRD-003-01`):** Cada usuario opera ingresando a su propia cuenta en su sesión. Si otra persona desea utilizar el mismo equipo físico, DEBE ingresar a su propia cuenta; no existe cambio rápido de usuario por PIN dentro de la sesión de otra cuenta.
 
 12. **Venta en curso con caja cerrada:** Si un empleado está en medio de una venta y la caja se cierra, el sistema DEBE rechazar la operación al momento de procesar el pago. El sistema NO DEBE forzar la salida del empleado. El sistema DEBE deshabilitar las funciones monetarias mientras la caja permanezca cerrada.
 

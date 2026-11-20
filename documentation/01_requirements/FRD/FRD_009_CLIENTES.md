@@ -66,67 +66,53 @@ Cuando el usuario intenta procesar una venta "Fiado" desde el POS:
 | Cupo por Defecto | Cupo inicial para nuevos clientes | $100,000 |
 
 - Configurable por Admin en configuración de tienda.
-- Se aplica a nuevos clientes al momento de creación.
-- Si la configuración cambia → Se actualiza en clientes existentes automáticamente.
+- Se aplica **únicamente a clientes nuevos** al momento de su creación.
+- Si la configuración cambia → **NO altera ni sobrescribe** los cupos de los clientes que ya existen en el sistema.
 
 ---
 
-### Matriz de Permisos
+### Matriz de Permisos (`FRD-003-01`, `POL-SEG-03`)
 
-| Acción | Admin | Empleado |
-|--------|-------|----------|
-| Ver lista de clientes | ✅ | ✅ |
-| Ver detalle de cliente | ✅ | ✅ |
-| Crear cliente | ✅ | ❌ |
-| Editar cliente | ✅ | ❌ |
-| **Eliminar cliente** | ✅ (solo si balance = 0) | ❌ |
-| Registrar abono (pago) | ✅ | ✅ |
-| Cambiar cupo individual | ✅ | ❌ |
-| Cambiar cupo global | ✅ | ❌ |
+| Acción | Admin | Empleado con `Fiar y cobrar abonos` (`canFiar`) | Empleado sin `Fiar y cobrar abonos` |
+|--------|-------|----------|----------------------------------|
+| Ver lista, detalle y estado de cuenta de clientes activos | ✅ | ✅ | ❌ |
+| Seleccionar "Fiado" en POS (respetando cupo) | ✅ | ✅ (con firma individual) | ❌ |
+| Registrar abono (pago con Caja Dedicada POS abierta) | ✅ | ✅ (con firma individual) | ❌ |
+| Crear cliente | ✅ | ❌ | ❌ |
+| Editar cliente | ✅ | ❌ | ❌ |
+| **Eliminar cliente** | ✅ (solo si balance = 0, `FRD-030`) | ❌ | ❌ |
+| Cambiar cupo individual | ✅ | ❌ | ❌ |
+| Cambiar cupo global por defecto | ✅ | ❌ | ❌ |
 
 ---
 
-### Eliminación de Cliente (Soft Delete)
+### Eliminación de Cliente y Resguardo Contable Interno (`FRD-030`, `POL-PRIV-02`)
 
-**Precondición:** Balance del cliente = $0
+**Precondición:** Balance del cliente = $0 y rol **Administrador**.
 
 | Estado del Balance | Acción |
 |--------------------|--------|
 | Balance > 0 (debe dinero) | ❌ Botón "Eliminar" deshabilitado. Tooltip: "El cliente tiene deuda pendiente." |
-| Balance = 0 | ✅ Modal de confirmación → Marcar cliente como eliminado. |
+| Balance = 0 | ✅ Modal de confirmación → El servidor resuelve internamente según `FRD-030` (`POL-PRIV-02`). |
 
 > [!IMPORTANT]
-> **Política de Borrado Lógico (Soft Delete):**
-> Al "eliminar" un cliente, el sistema NO borra físicamente los datos. Se aplica un borrado lógico para preservar la auditoría.
-
-#### Comportamiento del Soft Delete
-
-| Aspecto | Resultado |
-|---------|-----------|
-| **Campo `deleted`** | Se marca como `true` |
-| **Campo `deletedAt`** | Se registra timestamp de eliminación |
-| **Listas de UI** | El cliente **desaparece** de búsquedas y listas |
-| **Ventas históricas** | Mantienen referencia al `clientId` |
-| **Transacciones** | Se conservan para auditoría |
-| **Reportes/Historial** | Nombre aparece como: *"María García (eliminado)"* |
-
-#### Justificación
-*   **Auditoría fiscal:** Si existe una disputa sobre pagos, se puede reconstruir el historial completo.
-*   **Integridad referencial:** Las ventas pasadas no quedan con `clientId: null`.
-*   **Almacenamiento:** Impacto mínimo, una tienda de barrio no acumula miles de clientes eliminados.
+> **Política de Eliminación Protegida y Resguardo Contable Silencioso (`POL-PRIV-02`, `FRD-030`):**
+> Frente al Administrador existe una única acción de eliminación y **no se expone un filtro de "Mostrar eliminados"** en las listas operativas:
+> - Si el cliente eliminado **nunca tuvo movimientos históricos**, el servidor lo borra definitivamente.
+> - Si el cliente **sí tuvo movimientos históricos**, el servidor conserva en silencio su nombre, cédula y transacciones pasadas como soporte contable obligatorio (limpiando su teléfono y fijando su cupo en $0, ocultándolo de toda lista activa). Si en el futuro esa misma cédula vuelve a registrarse por el Administrador, se reactiva en silencio sin duplicar el tercero (`FRD-030` RN-04 y RN-05).
 
 ---
 
 ### Navegación y Filtrado del Listado de Clientes
 
-El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clientes según su estado financiero sin necesidad de recorrer la lista completa.
+El módulo DEBE proveer mecanismos de filtrado para que el usuario autorizado (Administrador o empleado con permiso `Fiar y cobrar abonos`) localice clientes activos según su estado financiero sin necesidad de recorrer la lista completa.
 
-1. **Filtro por Estado de Deuda:** El listado DEBE ofrecer un filtro para mostrar clientes según su estado financiero:
+1. **Filtro por Estado de Deuda:** El listado DEBE ofrecer un filtro para mostrar clientes activos según su estado financiero:
    - **Todos:** Muestra todos los clientes activos (estado por defecto).
    - **Con Deuda:** Muestra únicamente clientes cuyo balance es mayor a $0.
    - **Al Día:** Muestra únicamente clientes cuyo balance es igual a $0.
 
-2. **Filtro de Clientes Eliminados:** El Admin DEBE poder activar una opción para incluir clientes eliminados (soft-deleted) en el listado. Por defecto, los clientes eliminados no se muestran. Este filtro NO está disponible para empleados.
+2. **Ausencia de Filtro de Eliminados (`FRD-030`):** En cumplimiento de `POL-PRIV-02` y `FRD-030`, las listas y búsquedas muestran exclusivamente clientes activos (sin opción ni filtro de mostrar eliminados).
 
 3. **Ordenamiento:** El listado DEBE permitir ordenar por:
    - Nombre (A-Z / Z-A) — orden por defecto.
@@ -186,21 +172,21 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 ## Casos de Uso
 
 **Caso A: Registrar Abono**
-- **Actor:** Admin o Empleado
-- **Precondición:** Cliente con balance > 0. Existe un turno de caja abierto.
+- **Actor:** Admin o Empleado con permiso **`Fiar y cobrar abonos`** (`FRD-003-01`)
+- **Precondición:** Cliente con balance > 0. Existe un turno de Caja Dedicada POS abierto.
 - **Flujo Principal:**
     1. Usuario navega a clientes → Selecciona cliente.
     2. Sistema muestra: Balance $45,000, Cupo $100,000.
     3. Usuario selecciona "Registrar Abono".
-    4. Ingresa monto $20,000 y selecciona obligatoriamente el canal de pago (ej: "Nequi").
+    4. Ingresa monto $20,000 y selecciona obligatoriamente el canal de pago (**Efectivo, Nequi o Llave BRE**).
     5. Sistema valida: $20,000 ≤ $45,000 (balance actual) ✅.
-    6. Sistema registra transacción tipo pago asociada al canal seleccionado y al turno activo.
+    6. Sistema registra transacción tipo pago con la **firma individual** del usuario, asociada al canal seleccionado y al turno activo.
     7. Nuevo balance: $25,000.
 - **Flujo Alternativo (Caja Cerrada):** Si no hay turno abierto, el sistema bloquea el abono indicando "Debe abrir caja para recibir dinero".
-- **Postcondición:** Balance actualizado, transacción registrada, dinero sumado al canal en la caja activa.
+- **Postcondición:** Balance actualizado, transacción registrada con firma individual, dinero sumado al canal en la caja activa.
 
 **Caso B: Venta Fiado Bloqueada por Cupo**
-- **Actor:** Empleado con permiso de venta
+- **Actor:** Admin o Empleado con permiso **`Fiar y cobrar abonos`** (`FRD-003-01`)
 - **Precondición:** Cliente con cupo utilizado.
 - **Flujo Principal:**
     1. Usuario en POS agrega items por $80,000.
@@ -234,7 +220,7 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 ---
 
 **Caso E: Consultar Clientes con Deuda Pendiente**
-- **Actor:** Admin o Empleado.
+- **Actor:** Admin o Empleado con permiso **`Fiar y cobrar abonos`** (`FRD-003-01`).
 - **Precondición:** Existen clientes con balance > 0 y clientes con balance = 0.
 - **Flujo Principal:**
     1. Usuario ingresa al módulo de Clientes.
@@ -245,15 +231,13 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
     6. Usuario identifica rápidamente a los clientes con mayor deuda pendiente.
 - **Postcondición:** Vista filtrada y ordenada que permite priorizar cobros.
 
-**Caso F: Consultar Clientes Eliminados (Auditoría)**
-- **Actor:** Admin.
-- **Precondición:** Existen clientes eliminados mediante Soft Delete.
+**Caso F: Eliminación Protegida y Resguardo Contable Silencioso (`FRD-030`, `POL-PRIV-02`)**
+- **Actor:** Exclusivamente el Administrador.
+- **Precondición:** Cliente activo con balance exactamente igual a `$0`.
 - **Flujo Principal:**
-    1. Admin ingresa al módulo de Clientes.
-    2. Admin activa la opción "Mostrar eliminados".
-    3. Sistema muestra el listado incluyendo clientes eliminados, identificados visualmente como "(eliminado)".
-    4. Admin selecciona un cliente eliminado para consultar su historial de transacciones.
-- **Postcondición:** Acceso a la auditoría de clientes eliminados sin restaurar su estado.
+    1. Admin selecciona "Eliminar Cliente" y confirma.
+    2. El servidor verifica que el saldo es `$0`: si nunca tuvo movimientos históricos, lo borra definitivamente; si tuvo movimientos históricos, conserva en silencio su nombre, cédula y transacciones pasadas como soporte contable (limpiando teléfono y cupo, y ocultándolo de toda lista y búsqueda activa sin ofrecer un filtro de "Mostrar eliminados").
+- **Postcondición:** El cliente desaparece de la cartera activa y la contabilidad histórica permanece íntegra.
 
 ---
 
@@ -267,16 +251,17 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 - Teléfono
 - Cupo de crédito
 - Balance actual
-- Fecha de creación
-- **deleted** (boolean) - Indica si el cliente fue eliminado lógicamente
-- **deletedAt** (timestamp) - Fecha/hora del borrado lógico (null si activo)
+- Fecha de creación y firma del Administrador creador
+- Estado de ciclo de vida interno (`FRD-030`): Activo vs. Archivado Contablemente (transparente, sin filtro de eliminados en listas)
+- Fecha y hora de eliminación en servidor (null si activo)
 
 **Entidad Transacción de Cliente:**
 - Identificador único
 - Relación con Cliente
+- Usuario responsable (firma individual inmutable)
 - Tipo: compra o pago
 - Monto
-- Canal de Pago (si aplica)
+- Canal de Pago (**Efectivo, Nequi o Llave BRE**, obligatorio en abonos)
 - Relación con Turno de Caja (si aplica)
 - Descripción
 - Fecha/hora
@@ -287,13 +272,12 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 ## Criterios de Aceptación
 
 ### Funcionalidad
-- [ ] Empleados pueden registrar abonos pero NO crear/editar/eliminar clientes.
-- [ ] Venta Fiado se bloquea si total > (cupo - balance).
+- [ ] Empleados con el permiso **`Fiar y cobrar abonos`** pueden fiar en POS, registrar abonos y consultar el estado de cuenta de clientes activos, pero **NO** crear, editar, cambiar cupos ni eliminar clientes (**100% exclusivo del Administrador**).
+- [ ] Venta Fiado se bloquea si total > (cupo - balance) o si el empleado no posee el permiso `Fiar y cobrar abonos`.
 - [ ] No se puede eliminar cliente con balance > 0.
 - [ ] Balance nunca es negativo (validación en frontend Y backend).
-- [ ] Cupo por defecto configurable y se propaga a clientes existentes.
-- [ ] El registro de un abono exige seleccionar obligatoriamente un canal de pago.
-- [ ] El registro de un abono es rechazado si no existe un turno de caja abierto.
+- [ ] El "Cupo por Defecto" es configurable por el Admin y **se aplica únicamente a clientes nuevos al crearlos**, sin sobrescribir jamás los cupos de clientes ya existentes.
+- [ ] El registro de un abono exige seleccionar obligatoriamente un canal de pago (**Efectivo, Nequi o Llave BRE**) y un turno de Caja Dedicada POS abierto.
 
 ### UX
 - [ ] Botón "Eliminar" deshabilitado con tooltip cuando hay deuda.
@@ -302,14 +286,12 @@ El módulo DEBE proveer mecanismos de filtrado para que el usuario localice clie
 - [ ] Barra de progreso de cupo en detalle del cliente.
 
 ### Datos
-- [ ] Cada transacción registra cliente, tipo, monto, fecha.
+- [ ] Cada transacción registra cliente, firma individual del usuario responsable, tipo, monto, canal y fecha.
 - [ ] Transacciones tipo compra incluyen referencia a venta para trazabilidad.
-- [ ] Búsqueda funciona por nombre, cédula y teléfono.
-- [ ] Eliminación usa Soft Delete (campos `deleted`, `deletedAt`).
-- [ ] Clientes eliminados no aparecen en listados pero conservan historial.
+- [ ] Búsqueda funciona por nombre, cédula y teléfono sobre clientes activos.
+- [ ] La eliminación con saldo `$0` cumple `FRD-030` (`POL-PRIV-02`): borrado definitivo si no tiene movimientos, o resguardo contable silencioso sin filtro "Mostrar eliminados" en listas operativas (y re-alta transparente si la cédula vuelve a crearse).
 - [ ] El listado de clientes ofrece filtro por estado de deuda: Todos, Con Deuda, Al Día.
 - [ ] El listado de clientes permite ordenar por nombre o por monto de deuda.
-- [ ] El Admin puede activar la visualización de clientes eliminados (soft-deleted) en el listado.
 - [ ] Los filtros de estado de deuda y la búsqueda textual se pueden combinar simultáneamente.
 - [ ] El listado muestra por defecto todos los clientes activos ordenados por nombre.
 - [ ] El historial de transacciones de un cliente individual carga las últimas 20 transacciones inicialmente con opción de cargar más.

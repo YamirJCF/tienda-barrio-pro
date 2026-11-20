@@ -21,21 +21,174 @@ export interface CashControlEvent {
     store_id: string;
     type: 'open' | 'close';
     amount_declared: number;
+    declared_nequi?: number;
+    declared_llave_bre?: number;
     amount_expected?: number;
     difference?: number;
-    authorized_by_id?: string; // Employee ID
+    authorized_by_id?: string; // Actor ID
     authorized_by_name: string;
     authorized_by_type: 'admin' | 'employee';
     created_at?: string;
 }
 
+export interface StoreCashStatus {
+    isOpen: boolean;
+    openingAmount: number;
+    lastEvent?: CashControlEvent;
+    sessionId?: string;
+    openedByName?: string;
+    openedByRole?: string;
+    closingAttempts?: number;
+    isExpired24h?: boolean;
+    lifecycleState?: 'open' | 'Expirado/Bloqueado' | 'closed';
+    pendingForcedSession?: {
+        sessionId: string;
+        openedBy?: string;
+        openedByName?: string;
+        openedByRole?: string;
+        openedAt: string;
+        closingAttempts?: number;
+        lifecycleState?: string;
+    } | null;
+}
+
+export type OwnShiftPaymentMethodFilter =
+    | 'all'
+    | 'efectivo'
+    | 'digitales'
+    | 'nequi'
+    | 'llave_bre'
+    | 'fiado'
+    | 'consumo_personal';
+
+export interface OwnShiftMovement {
+    id: string;
+    source: 'sale' | 'expense' | 'payment' | 'refund' | 'personal_withdrawal';
+    payment_method: 'efectivo' | 'nequi' | 'llave_bre' | 'fiado' | 'consumo_personal';
+    amount: number;
+    description: string;
+    category?: string | null;
+    created_at: string;
+    actor_name: string;
+    actor_role: 'owner' | 'manager' | 'employee';
+    ticket_number?: number | null;
+    voucher_ref?: string | null;
+}
+
+export interface OwnShiftMovementsResponse {
+    data: OwnShiftMovement[];
+    count: number;
+    has_open_shift: boolean;
+    shift_id: string | null;
+    shift_opened_at: string | null;
+}
+
+export interface MultichannelCashHistoryItem {
+    id: string;
+    session_id: string;
+    movement_type: 'ingreso' | 'gasto' | 'pago_proveedor' | 'reembolso';
+    origin_type: 'venta' | 'abono' | 'gasto_opex' | 'abono_proveedor' | 'reembolso';
+    amount: number;
+    payment_method: 'efectivo' | 'nequi' | 'llave_bre';
+    description: string;
+    category?: string | null;
+    voucher_ref?: string | null;
+    sale_id?: string | null;
+    ticket_number?: number | null;
+    actor_name: string;
+    actor_role: string;
+    created_at: string;
+}
+
+export interface ShiftForensicReport {
+    session: {
+        id: string;
+        store_id: string;
+        status: string;
+        forced_close: boolean;
+        forced_close_without_count: boolean;
+        closing_attempts: number;
+        opened_at: string;
+        closed_at: string | null;
+        opened_by_name: string;
+        opened_by_role: string;
+        closed_by_name: string | null;
+        closed_by_role: string | null;
+        opening_balance: number;
+        expected_balance: number | null;
+        actual_balance: number | null;
+        difference: number | null;
+    };
+    financial_summary: {
+        total_sales_cash: number;
+        total_sales_nequi: number;
+        total_sales_llave_bre: number;
+        total_sales_transfer: number;
+        total_credit_sales: number;
+        total_client_abonos: number;
+        total_opex_expenses: number;
+        total_refunds: number;
+        total_supplier_payments: number;
+        net_cash_flow: number;
+    };
+    movements: Array<{
+        id: string;
+        movement_type: string;
+        payment_method: 'efectivo' | 'nequi' | 'llave_bre';
+        category?: string | null;
+        voucher_ref?: string | null;
+        amount: number;
+        description: string;
+        actor_name: string;
+        actor_role: string;
+        created_at: string;
+    }>;
+    operational_noise: {
+        voided_sales: Array<{
+            sale_id: string;
+            ticket_number: number;
+            total: number;
+            payment_method: string;
+            void_reason: string;
+            voided_by_name: string;
+            voided_by_role: string;
+            voided_at: string | null;
+        }>;
+        security_alerts: Array<{
+            id: string;
+            event_type: string;
+            severity: string;
+            actor_name: string;
+            actor_role: string;
+            created_at: string;
+            metadata: Record<string, any>;
+        }>;
+    };
+}
+
 export interface CashRepository {
-    getStoreStatus(storeId: string): Promise<{ isOpen: boolean; openingAmount: number; lastEvent?: CashControlEvent; sessionId?: string }>;
-    registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string }>;
+    getStoreStatus(storeId: string): Promise<StoreCashStatus>;
+    registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string; code?: string }>;
     getSessionTransactions(sessionId: string): Promise<CashTransaction[]>;
     addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; error?: string }>;
-    getPendingForcedSessions(): Promise<{ id: string; openedAt: string; channels: string[] }[]>;
-    reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number): Promise<void>;
+    getPendingForcedSessions(storeId?: string): Promise<{ id: string; openedAt: string; channels: string[] }[]>;
+    reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number | null): Promise<void>;
+    getOwnShiftMovements(
+        storeId: string,
+        paymentMethod?: OwnShiftPaymentMethodFilter,
+        limit?: number,
+        offset?: number
+    ): Promise<OwnShiftMovementsResponse>;
+    getMultichannelCashHistory(params: {
+        storeId: string;
+        sessionId?: string;
+        paymentMethod?: 'all' | 'efectivo' | 'digitales' | 'nequi' | 'llave_bre';
+        startDate?: string;
+        endDate?: string;
+        limit?: number;
+        offset?: number;
+    }): Promise<{ data: MultichannelCashHistoryItem[]; count: number }>;
+    getShiftForensicReport(sessionId: string): Promise<ShiftForensicReport>;
 }
 
 export const cashRepository: CashRepository = {
@@ -43,77 +196,61 @@ export const cashRepository: CashRepository = {
     /**
      * Check if store is currently open by querying active cash_sessions
      */
-    async getStoreStatus(storeId: string): Promise<{ isOpen: boolean; openingAmount: number; lastEvent?: CashControlEvent; sessionId?: string }> {
+    async getStoreStatus(storeId: string): Promise<StoreCashStatus> {
         const isOnline = navigator.onLine && isSupabaseConfigured();
 
         // Default closed state
-        const status = { isOpen: false, openingAmount: 0, lastEvent: undefined as CashControlEvent | undefined, sessionId: undefined as string | undefined };
+        const status: StoreCashStatus = {
+            isOpen: false,
+            openingAmount: 0,
+            lastEvent: undefined,
+            sessionId: undefined,
+            pendingForcedSession: null,
+        };
 
-        // 1. Try Online via RPC (Security Definer - Bypasses RLS)
-        // This prevents "Blind Spots" where session exists but RLS hides it
+        // 1. Try Online via RPC (Regla 3: Cero fallbacks silenciosos a query parcial ni localStorage cuando está online)
         if (isOnline) {
             const supabase = getSupabaseClient()!;
-            try {
-                // Try Robust RPC first
-                const { data, error } = await supabase.rpc('get_active_cash_session', { p_store_id: storeId });
+            const { data, error } = await supabase.rpc('get_active_cash_session', { p_store_id: storeId });
 
-                if (!error && data) {
-                    const result = data as any;
-                    if (result.isOpen) {
-                        status.isOpen = true;
-                        status.openingAmount = Number(result.openingAmount);
-                        status.sessionId = result.sessionId;
-                        status.lastEvent = {
-                            id: result.sessionId,
-                            store_id: storeId,
-                            type: 'open',
-                            amount_declared: Number(result.openingAmount),
-                            authorized_by_name: 'Unknown',
-                            authorized_by_type: 'employee',
-                            authorized_by_id: result.openedBy,
-                            created_at: result.openedAt // FRD-015: Critical for stale shift detection
-                        };
-                        return status;
-                    } else {
-                        // RPC Authoritatively says "Closed" -> Trust it.
-                        // Do NOT fallback to LocalStorage (which might have stale "Open" state)
-                        return status; // Default is closed
-                    }
-                } else {
-                    // Fallback to legacy select if RPC fails or not exists (backward compat)
-                    // ... existing select logic ...
-                    const { data: legacyData, error: legacyError } = await supabase
-                        .from('cash_sessions')
-                        .select('*')
-                        .eq('store_id', storeId)
-                        .eq('status', 'open')
-                        .order('opened_at', { ascending: false })
-                        .limit(1);
-
-                    if (!legacyError && legacyData && legacyData.length > 0) {
-                        const session = legacyData[0];
-                        status.isOpen = true;
-                        status.openingAmount = Number(session.opening_balance);
-                        status.sessionId = session.id;
-                        status.lastEvent = {
-                            id: session.id,
-                            store_id: session.store_id,
-                            type: 'open',
-                            amount_declared: Number(session.opening_balance),
-                            authorized_by_name: 'Unknown',
-                            authorized_by_type: 'employee',
-                            authorized_by_id: session.opened_by,
-                            created_at: session.opened_at // FRD-015: Critical for stale shift detection
-                        };
-                        return status;
-                    }
-                }
-            } catch (e) {
-                logger.error('[CashRepo] Online status check failed', e);
+            if (error) {
+                logger.error('[CashRepo] get_active_cash_session RPC failed online:', error);
+                throw new Error(error.message || 'Error consultando estado de caja en servidor');
             }
+
+            if (data) {
+                const result = data as any;
+                if (result.isOpen) {
+                    const isAdminOpener = result.openedByRole === 'owner' || result.openedByRole === 'manager';
+                    status.isOpen = true;
+                    status.openingAmount = Number(result.openingAmount);
+                    status.sessionId = result.sessionId;
+                    status.openedByName = result.openedByName;
+                    status.openedByRole = result.openedByRole;
+                    status.closingAttempts = Number(result.closingAttempts ?? 0);
+                    status.isExpired24h = Boolean(result.isExpired24h);
+                    status.lifecycleState = result.lifecycleState || (status.isExpired24h ? 'Expirado/Bloqueado' : 'open');
+                    status.lastEvent = {
+                        id: result.sessionId,
+                        store_id: storeId,
+                        type: 'open',
+                        amount_declared: Number(result.openingAmount),
+                        authorized_by_name: result.openedByName || 'Usuario',
+                        authorized_by_type: isAdminOpener ? 'admin' : 'employee',
+                        authorized_by_id: result.openedBy,
+                        created_at: result.openedAt
+                    };
+                    return status;
+                } else {
+                    status.pendingForcedSession = result.pendingForcedSession ?? null;
+                    return status;
+                }
+            }
+
+            return status;
         }
 
-        // 2. Fallback to LocalStorage (Optimistic)
+        // 2. Fallback to LocalStorage (Offline)
         try {
             const storedStatus = localStorage.getItem('tienda-store-status');
             if (storedStatus) {
@@ -135,7 +272,7 @@ export const cashRepository: CashRepository = {
     /**
      * Register an Open or Close event
      */
-    async registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string }> {
+    async registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string; code?: string }> {
         if (!event.store_id || event.store_id.trim() === '') {
             const errorMsg = 'Cannot register CashEvent without valid store_id. This would fail RLS policies.';
             console.error('🚫 [CashRepo] RLSViolationError:', errorMsg);
@@ -163,10 +300,9 @@ export const cashRepository: CashRepository = {
             const supabase = getSupabaseClient()!;
             try {
                 let rpcName = '';
-                let rpcArgs = {};
+                let rpcArgs: Record<string, any> = {};
 
                 if (event.type === 'open') {
-                    // VALIDATION: Ensure employee ID is UUID (prevents 22P02 error)
                     if (event.authorized_by_id && !uuidRegex.test(event.authorized_by_id)) {
                         return {
                             success: false,
@@ -177,7 +313,7 @@ export const cashRepository: CashRepository = {
                     rpcName = 'abrir_caja';
                     rpcArgs = {
                         p_store_id: event.store_id,
-                        p_employee_id: event.authorized_by_id, // Opened by
+                        p_employee_id: event.authorized_by_id,
                         p_opening_balance: event.amount_declared
                     };
                 } else if (event.type === 'close') {
@@ -187,8 +323,10 @@ export const cashRepository: CashRepository = {
                     }
                     rpcArgs = {
                         p_session_id: event.id,
-                        p_employee_id: event.authorized_by_id,
-                        p_actual_balance: event.amount_declared
+                        p_employee_id: event.authorized_by_id ?? null,
+                        p_actual_balance: event.amount_declared,
+                        p_declared_nequi: event.declared_nequi ?? 0,
+                        p_declared_llave_bre: event.declared_llave_bre ?? 0
                     };
                 } else {
                     return { success: false, error: "Invalid event type" };
@@ -198,13 +336,32 @@ export const cashRepository: CashRepository = {
 
                 if (error) {
                     logger.error('[CashRepo] RPC error', error);
-                    if (!error.message.includes('FetchError')) {
-                        return { success: false, error: error.message };
+                    const msg = error.message || '';
+
+                    // Transacción dedicada para persistir rechazo por propiedad estricta tras rollback de RPC
+                    if (msg.includes('SHIFT_OWNERSHIP_VIOLATION')) {
+                        try {
+                            await supabase.rpc('rpc_log_security_event', {
+                                p_event_type: 'UNAUTHORIZED_SHIFT_CLOSE',
+                                p_store_id: event.store_id,
+                                p_metadata: {
+                                    session_id: event.id,
+                                    reason: msg
+                                }
+                            });
+                        } catch {
+                            // No ocultar la excepción principal
+                        }
+                        return { success: false, code: 'SHIFT_OWNERSHIP_VIOLATION', error: msg };
+                    }
+
+                    if (!msg.includes('FetchError')) {
+                        return { success: false, error: msg };
                     }
                 } else {
                     const response = data as any;
-                    if (response.success) {
-                        const sessionId = response.session_id || event.id;
+                    if (response?.success) {
+                        const sessionId = response.session_id || response.data?.session_id || event.id;
 
                         const statusCache = {
                             date: new Date().toISOString().split('T')[0],
@@ -217,12 +374,18 @@ export const cashRepository: CashRepository = {
 
                         return { success: true, data: response };
                     } else {
-                        return { success: false, error: response.error || 'Operation failed' };
+                        return {
+                            success: false,
+                            code: response?.code,
+                            data: response,
+                            error: response?.message || response?.error || 'Operation failed'
+                        };
                     }
                 }
 
             } catch (e: any) {
                 logger.error('[CashRepo] RPC exception', e);
+                return { success: false, error: e?.message || 'Error al procesar operación de caja' };
             }
         }
 
@@ -234,33 +397,31 @@ export const cashRepository: CashRepository = {
      */
     async getSessionTransactions(sessionId: string): Promise<CashTransaction[]> {
         const supabase = getSupabaseClient()!;
-        try {
-            const { data, error } = await supabase
-                .from('cash_movements')
-                .select('*')
-                .eq('session_id', sessionId)
-                .order('created_at', { ascending: true });
+        const { data, error } = await supabase
+            .from('cash_movements')
+            .select('*')
+            .eq('session_id', sessionId)
+            .order('created_at', { ascending: true });
 
-            if (error) {
-                logger.error('[CashRepo] Fetch transactions error', error);
-                return [];
-            }
-
-            return (data || []).map(row => ({
-                id: row.id,
-                type: row.movement_type === 'ingreso' ? 'income' : 'expense',
-                amount: new Decimal(row.amount),
-                description: row.description,
-                timestamp: row.created_at,
-                relatedSaleId: row.sale_id,
-                paymentMethod: row.payment_method || 'efectivo',
-                category: 'General'
-            }));
-
-        } catch (e) {
-            logger.error('[CashRepo] Exception fetching transactions', e);
-            return [];
+        if (error) {
+            logger.error('[CashRepo] Fetch transactions error', error);
+            throw new Error(error.message || 'Error consultando movimientos de la sesión');
         }
+
+        return (data || []).map((row: any) => ({
+            id: row.id,
+            type: row.movement_type === 'ingreso' ? 'income' : 'expense',
+            movementType: row.movement_type,
+            amount: new Decimal(row.amount),
+            description: row.description,
+            timestamp: row.created_at,
+            relatedSaleId: row.sale_id,
+            paymentMethod: row.payment_method || 'efectivo',
+            category: row.category || 'General',
+            voucherRef: row.voucher_ref ?? null,
+            actorName: row.actor_name ?? null,
+            actorRole: row.actor_role ?? null,
+        }));
     },
 
     /**
@@ -275,7 +436,8 @@ export const cashRepository: CashRepository = {
                     p_amount: transaction.amount.toNumber(),
                     p_description: transaction.description,
                     p_category: transaction.category || 'Servicios',
-                    p_payment_method: transaction.paymentMethod || 'efectivo'
+                    p_payment_method: transaction.paymentMethod || 'efectivo',
+                    p_voucher_ref: transaction.voucherRef || undefined
                 });
 
                 if (error) {
@@ -310,15 +472,20 @@ export const cashRepository: CashRepository = {
         }
     },
 
-    async getPendingForcedSessions(): Promise<{ id: string; openedAt: string; channels: string[] }[]> {
+    async getPendingForcedSessions(storeId?: string): Promise<{ id: string; openedAt: string; channels: string[] }[]> {
         const supabase = requireSupabase();
-        const { data: sessions, error } = await supabase
+        let query = supabase
             .from('cash_sessions')
             .select('id, opened_at')
             .eq('status', 'closed')
             .eq('forced_close', true)
-            .is('actual_balance', null)
-            .order('opened_at', { ascending: true });
+            .is('actual_balance', null);
+
+        if (storeId) {
+            query = query.eq('store_id', storeId);
+        }
+
+        const { data: sessions, error } = await query.order('opened_at', { ascending: true });
 
         if (error) throw error;
 
@@ -329,7 +496,7 @@ export const cashRepository: CashRepository = {
         }));
     },
 
-    async reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number): Promise<void> {
+    async reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number | null): Promise<void> {
         const supabase = requireSupabase();
         const { data, error } = await supabase.rpc('rpc_reconciliar_cierre_forzado', {
             p_session_id: sessionId,
@@ -339,6 +506,84 @@ export const cashRepository: CashRepository = {
 
         if (error) throw error;
         if (!(data as any)?.success) throw new Error('RECONCILIATION_FAILED');
+    },
+
+    async getOwnShiftMovements(
+        storeId: string,
+        paymentMethod: OwnShiftPaymentMethodFilter = 'all',
+        limit = 50,
+        offset = 0
+    ): Promise<OwnShiftMovementsResponse> {
+        const supabase = requireSupabase();
+        const { data, error } = await supabase.rpc('rpc_obtener_mis_movimientos_turno', {
+            p_store_id: storeId,
+            p_payment_method: paymentMethod,
+            p_limit: limit,
+            p_offset: offset,
+        });
+
+        if (error) {
+            logger.error('[CashRepo] rpc_obtener_mis_movimientos_turno failed:', error);
+            throw new Error(error.message || 'Error consultando tus movimientos del turno actual');
+        }
+
+        const payload = (data || {}) as Partial<OwnShiftMovementsResponse>;
+        return {
+            data: Array.isArray(payload.data) ? payload.data : [],
+            count: Number(payload.count ?? 0),
+            has_open_shift: Boolean(payload.has_open_shift),
+            shift_id: payload.shift_id ?? null,
+            shift_opened_at: payload.shift_opened_at ?? null,
+        };
+    },
+
+    async getMultichannelCashHistory(params): Promise<{ data: MultichannelCashHistoryItem[]; count: number }> {
+        const supabase = requireSupabase();
+        const { data, error } = await supabase.rpc('rpc_obtener_historial_caja_multicanal', {
+            p_store_id: params.storeId,
+            p_session_id: params.sessionId || undefined,
+            p_payment_method: params.paymentMethod || 'all',
+            p_start_date: params.startDate || undefined,
+            p_end_date: params.endDate || undefined,
+            p_limit: params.limit ?? 50,
+            p_offset: params.offset ?? 0,
+        });
+
+        if (error) {
+            logger.error('[CashRepo] rpc_obtener_historial_caja_multicanal failed:', error);
+            if (error.message?.includes('ADMIN_ONLY_ACTION') || error.code === '42501') {
+                throw new Error('ADMIN_ONLY_ACTION: Acceso exclusivo del Administrador.');
+            }
+            throw new Error(error.message || 'Error consultando movimientos multicanal');
+        }
+
+        const payload = (data || {}) as { data?: MultichannelCashHistoryItem[]; count?: number };
+        return {
+            data: Array.isArray(payload.data) ? payload.data : [],
+            count: Number(payload.count ?? 0),
+        };
+    },
+
+    async getShiftForensicReport(sessionId: string): Promise<ShiftForensicReport> {
+        const supabase = requireSupabase();
+        const { data, error } = await supabase.rpc('rpc_get_comprehensive_shift_report', {
+            p_session_id: sessionId,
+        });
+
+        if (error) {
+            logger.error('[CashRepo] rpc_get_comprehensive_shift_report failed:', error);
+            if (error.message?.includes('ADMIN_ONLY_ACTION') || error.code === '42501') {
+                throw new Error('ADMIN_ONLY_ACTION: Acceso exclusivo del Administrador.');
+            }
+            throw new Error(error.message || 'Error cargando expediente forense del turno');
+        }
+
+        const payload = data as { success?: boolean; data?: ShiftForensicReport };
+        if (!payload?.success || !payload.data) {
+            throw new Error('Respuesta inválida del reporte forense de turno');
+        }
+
+        return payload.data;
     }
 };
 

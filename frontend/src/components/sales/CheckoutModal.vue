@@ -24,6 +24,7 @@ import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
 import { useNotifications } from '../../composables/useNotifications';
 import { useClientsStore } from '../../stores/clients';
 import { useConfigStore } from '../../stores/config'; // Import Config Store
+import { useEmployeesStore } from '../../stores/employees';
 import type { PaymentTransaction } from '../../types';
 
 interface Props {
@@ -38,14 +39,16 @@ const CLIENTS_PAGE_SIZE = 5;
 const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  'complete': [payments: PaymentTransaction[], totalPaid: Decimal, clientId?: string];
+  'complete': [payments: PaymentTransaction[], totalPaid: Decimal, clientId?: string, beneficiaryEmployeeId?: string];
 }>();
 
 const router = useRouter();
 const { formatCurrency } = useCurrencyFormat();
 const { showWarning } = useNotifications();
+const authStore = useAuthStore();
 const clientsStore = useClientsStore();
 const configStore = useConfigStore(); // Use Config Store
+const employeesStore = useEmployeesStore();
 
 // State
 const payments = ref<PaymentTransaction[]>([]);
@@ -59,6 +62,7 @@ const isLoadingClientsPage = ref<boolean>(false);
 const isLoadingMoreClients = ref<boolean>(false);
 const clientsPageError = ref<string | null>(null);
 const selectedFiadoClient = ref<Client | null>(null);
+const selectedBeneficiaryEmployeeId = ref<string>('');
 let activeFetchSeq = 0;
 let inFlightQueryKey = '';
 
@@ -68,8 +72,25 @@ const isCreditLimitExceeded = computed(() => {
   return currentDebt.plus(props.total).gt(selectedFiadoClient.value.creditLimit);
 });
 
-// Computed: Dynamic Methods
-const activeMethods = computed(() => configStore.activePaymentMethods);
+// Computed: Dynamic Methods (Fiado requiere canFiar || isAdmin; incluye Retiro Personal $0)
+const activeMethods = computed(() => {
+    const canUseFiado = authStore.canFiar || authStore.isAdmin;
+    const base = configStore.activePaymentMethods
+        .filter((m) => m.code !== 'fiado' || canUseFiado)
+        .map((m) => ({
+            code: m.code,
+            name: m.name,
+            allowsChange: Boolean(m.allowsChange),
+        }));
+    return [
+        ...base,
+        {
+            code: 'consumo_personal',
+            name: 'Retiro ($0)',
+            allowsChange: false,
+        },
+    ];
+});
 
 const currentPaymentMethod = computed(() => {
     return activeMethods.value.find(m => m.code === currentMethod.value);
@@ -78,7 +99,8 @@ const currentPaymentMethod = computed(() => {
 // Capabilities
 const allowsChange = computed(() => currentPaymentMethod.value?.allowsChange ?? false);
 const isFiado = computed(() => currentMethod.value === 'fiado'); // Special Business Logic
-const isNequi = computed(() => currentMethod.value === 'nequi'); // Special UI Logic (QR)
+const isPersonalWithdrawal = computed(() => currentMethod.value === 'consumo_personal');
+const isNequi = computed(() => currentMethod.value === 'nequi' || currentMethod.value === 'llave_bre'); // Canales digitales sin cambio
 
 // Total Calculations
 const totalPaid = computed(() => {
@@ -107,6 +129,9 @@ const change = computed(() => {
 });
 
 const canComplete = computed(() => {
+    if (isPersonalWithdrawal.value) {
+        return true;
+    }
     if (isFiado.value) {
         return !!selectedFiadoClient.value;
     }
@@ -206,10 +231,18 @@ const clearSelectedFiadoClient = () => {
 // Helpers
 const getIconForMethod = (code: string) => {
     switch (code) {
-        case 'cash': return Banknote;
-        case 'nequi': return Smartphone;
-        case 'fiado': return User;
-        default: return Banknote;
+        case 'cash':
+        case 'efectivo':
+            return Banknote;
+        case 'nequi':
+        case 'llave_bre':
+            return Smartphone;
+        case 'fiado':
+            return User;
+        case 'consumo_personal':
+            return Users;
+        default:
+            return Banknote;
     }
 };
 
@@ -252,7 +285,24 @@ const removePayment = (index: number) => {
 };
 
 const confirmTransaction = () => {
+    if (isPersonalWithdrawal.value) {
+        payments.value = [{
+            method: 'consumo_personal',
+            amount: new Decimal(0),
+        }];
+        const beneficiaryId = authStore.isAdmin && selectedBeneficiaryEmployeeId.value
+            ? selectedBeneficiaryEmployeeId.value
+            : undefined;
+        // CHK-403: Consumo personal nunca envía client_id
+        emit('complete', payments.value, new Decimal(0), undefined, beneficiaryId);
+        return;
+    }
+
     if (isFiado.value) {
+        if (!authStore.canFiar && !authStore.isAdmin) {
+            showWarning('No tienes permiso autorizado (canFiar) para registrar ventas fiadas.');
+            return;
+        }
         if (!selectedFiadoClient.value) {
             showWarning('Debes seleccionar un cliente para fiar.');
             return;
@@ -294,8 +344,8 @@ const confirmTransaction = () => {
     const finalTotalPaid = payments.value.reduce((sum, p) => sum.plus(p.amount), new Decimal(0));
     
     if (finalTotalPaid.gte(props.total)) {
-        // FRD-029 RN-16: Ventas de contado / no fiadas nunca asocian client_id
-        emit('complete', payments.value, finalTotalPaid, isFiado.value ? selectedFiadoClient.value?.id : undefined);
+        // CHK-403 / RN-16: Ventas de contado / no fiadas nunca asocian client_id
+        emit('complete', payments.value, finalTotalPaid, undefined);
     } else {
         showWarning('El monto es insuficiente');
     }
@@ -331,6 +381,12 @@ watch(() => props.modelValue, (val) => {
     totalClientsCount.value = 0;
     clientsPageError.value = null;
     selectedFiadoClient.value = props.selectedClient || null;
+    selectedBeneficiaryEmployeeId.value = '';
+
+    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+    if (authStore.isAdmin && storeId && employeesStore.employees.length === 0 && typeof employeesStore.initialize === 'function') {
+      employeesStore.initialize(storeId).catch(() => {});
+    }
 
     if (currentMethod.value === 'fiado' && !selectedFiadoClient.value) {
       loadClientsPage(true);
@@ -347,6 +403,15 @@ watch(() => props.selectedClient, (client) => {
 watch(currentMethod, (newMethod) => {
     reference.value = ''; 
     payments.value = []; 
+
+    if (newMethod !== 'fiado') {
+        selectedFiadoClient.value = null;
+    }
+
+    if (newMethod === 'consumo_personal') {
+        inputAmount.value = '';
+        return;
+    }
     
     const methodObj = configStore.getMethodByCode(newMethod);
     
@@ -380,11 +445,18 @@ watch(currentMethod, (newMethod) => {
         
         <!-- 1. HEADER (Total Summary) -->
         <header class="flex flex-col items-center justify-center py-2.5 bg-gray-50 dark:bg-background-dark border-b border-gray-100 dark:border-gray-800 shrink-0">
-            <h3 class="text-gray-500 dark:text-gray-400 text-xs font-semibold tracking-wide uppercase mb-0.5">Total a Pagar</h3>
+            <h3 class="text-gray-500 dark:text-gray-400 text-xs font-semibold tracking-wide uppercase mb-0.5">
+                {{ isPersonalWithdrawal ? 'Consumo / Retiro Personal ($0 en Caja)' : 'Total a Pagar' }}
+            </h3>
             <div class="flex items-baseline gap-1">
                 <span class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">$</span>
-                <span class="text-3xl md:text-4xl font-black text-gray-900 dark:text-primary tracking-tight">{{ formatCurrency(total) }}</span>
+                <span class="text-3xl md:text-4xl font-black text-gray-900 dark:text-primary tracking-tight">
+                    {{ isPersonalWithdrawal ? '0' : formatCurrency(total) }}
+                </span>
             </div>
+            <p v-if="isPersonalWithdrawal" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Valor venta ref.: ${{ formatCurrency(total) }} • Costeado en inventario
+            </p>
         </header>
 
         <!-- 2. Payment Method Tabs (Dynamic) -->
@@ -496,7 +568,9 @@ watch(currentMethod, (newMethod) => {
                     <QrCode :size="48" class="text-pink-600 dark:text-pink-400" />
                 </div>
                 <div>
-                    <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Pago con Nequi / Daviplata</h4>
+                    <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                      {{ currentMethod === 'llave_bre' ? 'Pago con Llave Bre-B' : 'Pago con Nequi' }}
+                    </h4>
                     <p class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed">
                         Solicita al cliente el pago exacto de <strong class="text-gray-900 dark:text-white">$ {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : total) }}</strong>.
                     </p>
@@ -509,6 +583,47 @@ watch(currentMethod, (newMethod) => {
                         class="w-full h-12 rounded-lg border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-center text-lg font-medium focus:ring-pink-500 focus:border-pink-500" 
                         placeholder="Últimos 4 dígitos"
                     />
+                </div>
+            </div>
+
+            <!-- Scenario D: Consumo / Retiro Personal ($0 en Caja) -->
+            <div v-else-if="isPersonalWithdrawal" data-testid="personal-withdrawal-panel" class="flex flex-col gap-4 py-3">
+                <div class="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                            Consumo / Retiro Personal
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
+                            $0 en Caja
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-600 dark:text-slate-300">
+                        Los productos se descuentan del inventario al costo FIFO sin sumar ingresos en la gaveta POS ni generar ventas comerciales.
+                    </p>
+                </div>
+
+                <div v-if="authStore.isAdmin" class="space-y-1.5">
+                    <label class="block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                        Beneficiario del Retiro (Admin)
+                    </label>
+                    <select
+                        v-model="selectedBeneficiaryEmployeeId"
+                        data-testid="beneficiary-employee-select"
+                        class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                    >
+                        <option value="">Administrador ({{ authStore.currentUser?.name || 'Propio' }})</option>
+                        <option
+                            v-for="emp in employeesStore.activeOperationalEmployees"
+                            :key="emp.id"
+                            :value="emp.id"
+                        >
+                            {{ emp.name }} (@{{ emp.username }})
+                        </option>
+                    </select>
+                </div>
+
+                <div v-else class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+                    Asignado automáticamente a: <strong class="text-slate-900 dark:text-white">{{ authStore.currentUser?.name || 'Colaborador actual' }}</strong>
                 </div>
             </div>
 
@@ -728,7 +843,9 @@ watch(currentMethod, (newMethod) => {
                 class="w-full h-[52px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:dark:bg-gray-800 disabled:dark:text-gray-600 rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none flex flex-col items-center justify-center transition-all duration-200"
             >
                 <div class="flex flex-col items-center leading-none">
-                    <span class="text-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-0.5">Completar Venta</span>
+                    <span class="text-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-0.5">
+                        {{ isPersonalWithdrawal ? 'Registrar Retiro Personal ($0)' : 'Completar Venta' }}
+                    </span>
                     <div class="flex items-center gap-2">
                         <span class="text-white text-xl font-black tracking-wide">CONFIRMAR</span>
                         <span v-if="change.gt(0)" class="bg-emerald-800/40 text-emerald-50 text-[10px] px-1.5 py-0.5 rounded font-bold ml-1">

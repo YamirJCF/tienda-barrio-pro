@@ -49,6 +49,8 @@ export type Database = {
       audit_caja: {
         Row: {
           actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           created_at: string
           event_type: string
           id: string
@@ -58,6 +60,8 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -67,6 +71,8 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -100,7 +106,9 @@ export type Database = {
       }
       audit_logs: {
         Row: {
-          actor_id: string
+          actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           created_at: string | null
           event_type: string
           id: string
@@ -114,7 +122,9 @@ export type Database = {
           store_id: string | null
         }
         Insert: {
-          actor_id: string
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string | null
           event_type: string
           id?: string
@@ -128,7 +138,9 @@ export type Database = {
           store_id?: string | null
         }
         Update: {
-          actor_id?: string
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string | null
           event_type?: string
           id?: string
@@ -160,6 +172,8 @@ export type Database = {
       }
       audit_precios: {
         Row: {
+          actor_name: string | null
+          actor_role: string | null
           changed_by: string | null
           created_at: string
           id: string
@@ -171,6 +185,8 @@ export type Database = {
           store_id: string
         }
         Insert: {
+          actor_name?: string | null
+          actor_role?: string | null
           changed_by?: string | null
           created_at?: string
           id?: string
@@ -182,6 +198,8 @@ export type Database = {
           store_id: string
         }
         Update: {
+          actor_name?: string | null
+          actor_role?: string | null
           changed_by?: string | null
           created_at?: string
           id?: string
@@ -219,6 +237,8 @@ export type Database = {
       audit_seguridad: {
         Row: {
           actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           created_at: string
           event_type: string
           id: string
@@ -229,6 +249,8 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -239,6 +261,8 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -267,6 +291,8 @@ export type Database = {
       audit_ventas: {
         Row: {
           actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           created_at: string
           event_type: string
           id: string
@@ -276,6 +302,8 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -285,6 +313,8 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -319,6 +349,8 @@ export type Database = {
       cash_movements: {
         Row: {
           actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
           amount: number
           category: string | null
           created_at: string
@@ -332,6 +364,8 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           amount: number
           category?: string | null
           created_at?: string
@@ -345,6 +379,8 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
           amount?: number
           category?: string | null
           created_at?: string
@@ -385,12 +421,18 @@ export type Database = {
           actual_balance: number | null
           closed_at: string | null
           closed_by: string | null
+          closed_by_name: string | null
+          closed_by_role: string | null
+          closing_attempts: number
           difference: number | null
           expected_balance: number | null
           forced_close: boolean
+          forced_close_without_count: boolean
           id: string
           opened_at: string
           opened_by: string
+          opened_by_name: string | null
+          opened_by_role: string | null
           opening_balance: number
           status: string
           store_id: string
@@ -399,12 +441,18 @@ export type Database = {
           actual_balance?: number | null
           closed_at?: string | null
           closed_by?: string | null
+          closed_by_name?: string | null
+          closed_by_role?: string | null
+          closing_attempts?: number
           difference?: number | null
           expected_balance?: number | null
           forced_close?: boolean
+          forced_close_without_count?: boolean
           id?: string
           opened_at?: string
           opened_by: string
+          opened_by_name?: string | null
+          opened_by_role?: string | null
           opening_balance: number
           status?: string
           store_id: string
@@ -413,31 +461,23 @@ export type Database = {
           actual_balance?: number | null
           closed_at?: string | null
           closed_by?: string | null
+          closed_by_name?: string | null
+          closed_by_role?: string | null
+          closing_attempts?: number
           difference?: number | null
           expected_balance?: number | null
           forced_close?: boolean
+          forced_close_without_count?: boolean
           id?: string
           opened_at?: string
           opened_by?: string
+          opened_by_name?: string | null
+          opened_by_role?: string | null
           opening_balance?: number
           status?: string
           store_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "cash_sessions_closed_by_fkey"
-            columns: ["closed_by"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cash_sessions_opened_by_fkey"
-            columns: ["opened_by"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "cash_sessions_store_id_fkey"
             columns: ["store_id"]
@@ -449,6 +489,8 @@ export type Database = {
       }
       client_ledger: {
         Row: {
+          actor_name: string | null
+          actor_role: string | null
           amount: number
           client_id: string
           created_at: string | null
@@ -461,6 +503,8 @@ export type Database = {
           transaction_type: string
         }
         Insert: {
+          actor_name?: string | null
+          actor_role?: string | null
           amount: number
           client_id: string
           created_at?: string | null
@@ -473,6 +517,8 @@ export type Database = {
           transaction_type: string
         }
         Update: {
+          actor_name?: string | null
+          actor_role?: string | null
           amount?: number
           client_id?: string
           created_at?: string | null
@@ -770,6 +816,9 @@ export type Database = {
       }
       inventory_movements: {
         Row: {
+          actor_name: string | null
+          actor_role: string | null
+          beneficiary_employee_id: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -780,10 +829,16 @@ export type Database = {
           quantity: number
           reason: string | null
           reference_invoice_id: string | null
+          reference_sale_price: number | null
+          reversed_movement_id: string | null
+          session_id: string | null
           supplier_id: string | null
           unit_cost: number | null
         }
         Insert: {
+          actor_name?: string | null
+          actor_role?: string | null
+          beneficiary_employee_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -794,10 +849,16 @@ export type Database = {
           quantity: number
           reason?: string | null
           reference_invoice_id?: string | null
+          reference_sale_price?: number | null
+          reversed_movement_id?: string | null
+          session_id?: string | null
           supplier_id?: string | null
           unit_cost?: number | null
         }
         Update: {
+          actor_name?: string | null
+          actor_role?: string | null
+          beneficiary_employee_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -808,6 +869,9 @@ export type Database = {
           quantity?: number
           reason?: string | null
           reference_invoice_id?: string | null
+          reference_sale_price?: number | null
+          reversed_movement_id?: string | null
+          session_id?: string | null
           supplier_id?: string | null
           unit_cost?: number | null
         }
@@ -1080,6 +1144,7 @@ export type Database = {
           id: string
           product_id: string
           quantity: number
+          refunded_quantity: number
           sale_id: string
           subtotal: number
           unit_cost: number | null
@@ -1090,6 +1155,7 @@ export type Database = {
           id?: string
           product_id: string
           quantity: number
+          refunded_quantity: number
           sale_id: string
           subtotal: number
           unit_cost?: number | null
@@ -1124,11 +1190,14 @@ export type Database = {
       }
       sales: {
         Row: {
+          actor_name: string | null
+          actor_role: string | null
           amount_received: number | null
+          beneficiary_employee_id: string | null
           change_given: number | null
           client_id: string | null
           created_at: string
-          employee_id: string
+          employee_id: string | null
           id: string
           idempotency_key: string | null
           is_voided: boolean | null
@@ -1143,13 +1212,18 @@ export type Database = {
           void_session_id: string | null
           voided_at: string | null
           voided_by: string | null
+          voided_by_name: string | null
+          voided_by_role: string | null
         }
         Insert: {
+          actor_name?: string | null
+          actor_role?: string | null
           amount_received?: number | null
+          beneficiary_employee_id?: string | null
           change_given?: number | null
           client_id?: string | null
           created_at?: string
-          employee_id: string
+          employee_id?: string | null
           id?: string
           idempotency_key?: string | null
           is_voided?: boolean | null
@@ -1164,13 +1238,18 @@ export type Database = {
           void_session_id?: string | null
           voided_at?: string | null
           voided_by?: string | null
+          voided_by_name?: string | null
+          voided_by_role?: string | null
         }
         Update: {
+          actor_name?: string | null
+          actor_role?: string | null
           amount_received?: number | null
+          beneficiary_employee_id?: string | null
           change_given?: number | null
           client_id?: string | null
           created_at?: string
-          employee_id?: string
+          employee_id?: string | null
           id?: string
           idempotency_key?: string | null
           is_voided?: boolean | null
@@ -1185,6 +1264,8 @@ export type Database = {
           void_session_id?: string | null
           voided_at?: string | null
           voided_by?: string | null
+          voided_by_name?: string | null
+          voided_by_role?: string | null
         }
         Relationships: [
           {
@@ -1221,6 +1302,7 @@ export type Database = {
         Row: {
           created_at: string
           crypto_salt: string | null
+          default_credit_limit: number
           id: string
           name: string
           pin_hash: string | null
@@ -1232,6 +1314,7 @@ export type Database = {
         Insert: {
           created_at?: string
           crypto_salt?: string | null
+          default_credit_limit?: number
           id?: string
           name: string
           pin_hash?: string | null
@@ -1243,6 +1326,7 @@ export type Database = {
         Update: {
           created_at?: string
           crypto_salt?: string | null
+          default_credit_limit?: number
           id?: string
           name?: string
           pin_hash?: string | null
@@ -1257,7 +1341,7 @@ export type Database = {
         Row: {
           amount_paid: number
           created_at: string
-          due_date: string
+          due_date: string | null
           id: string
           invoice_number: string | null
           store_id: string
@@ -1267,7 +1351,7 @@ export type Database = {
         Insert: {
           amount_paid?: number
           created_at?: string
-          due_date: string
+          due_date?: string | null
           id?: string
           invoice_number?: string | null
           store_id: string
@@ -1277,7 +1361,7 @@ export type Database = {
         Update: {
           amount_paid?: number
           created_at?: string
-          due_date?: string
+          due_date?: string | null
           id?: string
           invoice_number?: string | null
           store_id?: string
@@ -1300,6 +1384,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      supplier_payments: {
+        Row: {
+          actor_id: string | null
+          actor_name: string
+          actor_role: string
+          amount: number
+          cash_movement_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          invoice_id: string
+          origin_type: string
+          payment_method: string
+          store_id: string
+          supplier_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_name: string
+          actor_role: string
+          amount: number
+          cash_movement_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_id: string
+          origin_type: string
+          payment_method: string
+          store_id: string
+          supplier_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_name?: string
+          actor_role?: string
+          amount?: number
+          cash_movement_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          invoice_id?: string
+          origin_type?: string
+          payment_method?: string
+          store_id?: string
+          supplier_id?: string
+        }
+        Relationships: []
       }
       suppliers: {
         Row: {
@@ -1412,9 +1544,15 @@ export type Database = {
         Args: { p_admin_id?: string; p_pass_id: string }
         Returns: Json
       }
+      assert_employee_permission: {
+        Args: { p_permission_key: string; p_store_id: string }
+        Returns: undefined
+      }
       assert_store_access: { Args: { p_store_id: string }; Returns: undefined }
+      assert_store_admin: { Args: { p_store_id: string }; Returns: undefined }
       buscar_producto_pos: {
         Args: {
+          p_include_zero_stock?: boolean
           p_limit?: number
           p_offset?: number
           p_store_id: string
@@ -1422,10 +1560,24 @@ export type Database = {
         }
         Returns: Json
       }
+      get_inventory_kardex: {
+        Args: {
+          p_actor_filter?: string
+          p_end_date?: string
+          p_limit?: number
+          p_movement_type?: string
+          p_offset?: number
+          p_product_id: string
+          p_start_date?: string
+        }
+        Returns: Json
+      }
       cerrar_caja: {
         Args: {
-          p_actual_balance: number
-          p_employee_id: string
+          p_actual_balance?: number
+          p_declared_llave_bre?: number
+          p_declared_nequi?: number
+          p_employee_id?: string | null
           p_session_id: string
         }
         Returns: Json
@@ -1561,6 +1713,7 @@ export type Database = {
         }[]
       }
       is_authorized_employee: { Args: never; Returns: boolean }
+      is_store_admin: { Args: { p_store_id: string }; Returns: boolean }
       procesar_venta: {
         Args: {
           p_amount_received?: number
@@ -1586,19 +1739,67 @@ export type Database = {
         }
         Returns: Json
       }
-      rpc_actualizar_precio_lote:
-        | {
-            Args: {
-              p_batch_id: string
-              p_cost_unit: number
-              p_sale_price: number
-            }
-            Returns: Json
-          }
-        | {
-            Args: { p_batch_id: string; p_new_sale_price: number }
-            Returns: Json
-          }
+      resolve_actor_snapshot: {
+        Args: { p_store_id: string }
+        Returns: {
+          actor_id: string
+          actor_name: string
+          actor_role: string
+        }[]
+      }
+      rpc_actualizar_cupo_credito_global: {
+        Args: { p_default_credit_limit: number; p_store_id: string }
+        Returns: Json
+      }
+      rpc_actualizar_permisos_empleado: {
+        Args: { p_employee_id: string; p_permissions: Json }
+        Returns: Json
+      }
+      rpc_actualizar_precio_lote: {
+        Args: {
+          p_batch_id: string
+          p_cost_unit: number
+          p_sale_price: number
+        }
+        Returns: Json
+      }
+      rpc_buscar_ventas_para_reembolso: {
+        Args: {
+          p_limit?: number
+          p_query?: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
+      rpc_procesar_reembolso_item: {
+        Args: {
+          p_is_merma?: boolean
+          p_original_channel: string
+          p_quantity: number
+          p_reason: string
+          p_refund_channel: string
+          p_sale_item_id: string
+        }
+        Returns: Json
+      }
+      rpc_registrar_contra_movimiento: {
+        Args: {
+          p_original_movement_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      rpc_registrar_salida_logistica: {
+        Args: {
+          p_direction?: string
+          p_movement_type: string
+          p_product_id: string
+          p_quantity: number
+          p_reason: string
+          p_supplier_id?: string
+        }
+        Returns: Json
+      }
       rpc_actualizar_producto_catalogo: {
         Args: {
           p_category?: string
@@ -1646,6 +1847,16 @@ export type Database = {
         Returns: Json
       }
       rpc_check_and_force_close_shifts: { Args: never; Returns: Json }
+      rpc_crear_factura_proveedor: {
+        Args: {
+          p_due_date?: string | null
+          p_invoice_number?: string | null
+          p_store_id: string
+          p_supplier_name: string
+          p_total_amount: number
+        }
+        Returns: Json
+      }
       rpc_force_sale: {
         Args: {
           p_amount_received?: number
@@ -1670,6 +1881,10 @@ export type Database = {
         }
         Returns: Json
       }
+      rpc_get_comprehensive_shift_report: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
       rpc_get_system_config: { Args: never; Returns: Json }
       rpc_log_security_event: {
         Args: { p_event_type: string; p_metadata?: Json; p_store_id?: string }
@@ -1677,6 +1892,19 @@ export type Database = {
       }
       rpc_marcar_auditoria_revisada: {
         Args: { p_audit_id: string; p_notes?: string }
+        Returns: Json
+      }
+      rpc_obtener_auditoria_evidence_hub: {
+        Args: {
+          p_domain?: string
+          p_end_date?: string
+          p_event_type?: string
+          p_limit?: number
+          p_offset?: number
+          p_severity?: string
+          p_start_date?: string
+          p_store_id: string
+        }
         Returns: Json
       }
       rpc_obtener_empleados: {
@@ -1697,13 +1925,49 @@ export type Database = {
           username: string
         }[]
       }
+      rpc_obtener_cuentas_por_pagar: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_status?: string | null
+          p_store_id: string
+          p_supplier_id?: string | null
+        }
+        Returns: Json
+      }
+      rpc_obtener_estado_cuenta_cliente: {
+        Args: { p_client_id: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      rpc_obtener_historial_caja_multicanal: {
+        Args: {
+          p_end_date?: string
+          p_limit?: number
+          p_offset?: number
+          p_payment_method?: string
+          p_session_id?: string
+          p_start_date?: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
+      rpc_obtener_mis_movimientos_turno: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_payment_method?: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
       rpc_pay_supplier_invoice: {
         Args: {
           p_amount: number
+          p_description?: string | null
           p_invoice_id: string
           p_payment_method: string
         }
-        Returns: undefined
+        Returns: Json
       }
       rpc_procesar_venta_v2: {
         Args: {
@@ -1718,22 +1982,23 @@ export type Database = {
       rpc_procesar_venta_v3: {
         Args: {
           p_amount_received: number
-          p_client_id: string
+          p_beneficiary_employee_id?: string | null
+          p_client_id: string | null
           p_idempotency_key?: string
           p_is_offline_sync?: boolean
           p_items: Json
           p_local_id?: string
-          p_origin_session_id?: string
+          p_origin_session_id?: string | null
           p_payment_method: string
-          p_sold_by?: string
+          p_sold_by?: string | null
           p_store_id: string
         }
         Returns: Json
       }
       rpc_reconciliar_cierre_forzado: {
         Args: {
-          p_actual_balance: number
-          p_employee_id: string
+          p_actual_balance?: number | null
+          p_employee_id?: string | null
           p_session_id: string
         }
         Returns: Json
@@ -1747,31 +2012,20 @@ export type Database = {
         }
         Returns: Json
       }
-      rpc_registrar_entrada:
-        | {
-            Args: {
-              p_product_id: string
-              p_purchase_price: number
-              p_quantity: number
-              p_reason?: string
-              p_sale_price: number
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_invoice_reference?: string
-              p_payment_type?: string
-              p_product_id: string
-              p_purchase_price: number
-              p_quantity: number
-              p_reason?: string
-              p_reference_invoice_id?: string
-              p_sale_price: number
-              p_supplier_id?: string
-            }
-            Returns: Json
-          }
+      rpc_registrar_entrada: {
+        Args: {
+          p_invoice_reference?: string
+          p_payment_type?: string
+          p_product_id: string
+          p_purchase_price: number
+          p_quantity: number
+          p_reason?: string
+          p_reference_invoice_id?: string
+          p_sale_price: number
+          p_supplier_id?: string
+        }
+        Returns: Json
+      }
       rpc_registrar_entrada_masiva: {
         Args: { p_entries: Json; p_store_id: string }
         Returns: Json

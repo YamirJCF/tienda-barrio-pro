@@ -1,6 +1,6 @@
-# 🗺️ Mapa de Lógica Global (v3.6)
+# 🗺️ Mapa de Lógica Global (v3.7)
 
-> **Módulos documentados:** 48 FRDs (48 con SDD — 100% cobertura) — `SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO` y `SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE` aprobados con deuda (`🟠`)
+> **Módulos documentados:** 49 FRDs (48 con SDD + `FRD-003-01` validado pendiente de SDD/implementación) — `SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO` y `SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE` aprobados con deuda (`🟠`)
 
 ---
 
@@ -141,7 +141,7 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 |-------------|-------------------------|--------|
 | **Seguridad Diaria** | FRD-001 / SDD-001 | 🟢 Validado |
 | **Registro y Autenticación** | FRD-002 / SDD-002 | 🟢 Validado |
-| **Gestión Empleados** | FRD-003 / SDD-003 | 🟢 Validado |
+| **Gestión Empleados** | FRD-003 / FRD-003-01 / SDD-003 | 🟡 FRD-003-01 Validado (`/validate-policy` — Pendiente SDD/Fase 3) |
 | **Control de Caja** | FRD-004 / SDD-004 | 🟢 Validado |
 | **Auditoría (Inviolable/Trazable)** | FRD-005 | 🟢 Validado |
 | **Inventario (Núcleo, Mov, Reembolso)**| FRD-006 / SDD-006 | 🟢 Validado |

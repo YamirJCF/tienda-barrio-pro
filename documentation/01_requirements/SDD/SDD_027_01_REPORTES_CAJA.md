@@ -1,72 +1,61 @@
 # SDD-027-01: Reportes y Auditoría de Caja Diaria
 
-> **Asociado a:** [FRD-027-01](../FRD/FRD_027_01_REPORTES_DE_CAJA.md)  
-> **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Ítem 1)  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (Protocolo PAC-SDD v2.0)
-> **Última Actualización:** 2026-10-16  
+> **Asociado a:** [FRD-027-01](../FRD/FRD_027_01_REPORTES_DE_CAJA.md), [FRD-004](../FRD/FRD_004_CONTROL_DE_CAJA.md) y Contrato Marco [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Alineación `ARQ-002` v1.4)  
+> **Estado:** 🟢 Alineado a Contrato Marco `SDD-003-01` (Pendiente migración Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Alcance y Restricciones Aplicables (PEA-N)
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (`ARQ-002` v1.4)
 | Política ID | Dominio | Impacto Concreto en este SDD |
 |-------------|---------|------------------------------|
-| **POL-AUTH-01** | Multi-tenant | Aislamiento multi-tenant obligatorio. Invocación mandatoria de `assert_store_access(p_store_id)` como instrucción #1 en todos los RPCs de reporte e historial (`get_history_caja`, `get_daily_summary`, `rpc_get_comprehensive_shift_report`), y filtrado por `store_id = get_current_store_id()` en RLS. |
-| **POL-AUD-01** | Auditoría | Inviolabilidad Histórica. Toda sesión cerrada (`status = 'closed'`) queda congelada irrevocablemente con su timestamp (`closed_at`), autor de cierre (`closed_by`) y respaldo fotográfico inmutable en `audit_caja`. Prohibición de mutaciones retroactivas. |
-| **POL-AUD-02** | Auditoría | Dicotomía del Reporte. Separación estricta entre el Reporte Operativo (resumen limpio por canal para cuadre físico/digital del cajero, ciego a metas teóricas) y el Reporte de Auditoría Interna (destinado al dueño con seguimiento forense de ruido operativo, intentos fallidos y descuadres). |
-| **POL-AUD-03** | Auditoría | Autenticidad de Descuadres. Cualquier discrepancia entre lo calculado por el servidor y lo declarado físicamente por el cajero genera un registro indeleble clasificado como anomalía (`CASH_DISCREPANCY`) en `audit_logs` con severidad `warning`. |
-| **POL-FIN-01** | Financiero | Fidelidad al Flujo Puro. Los reportes de caja tienen terminantemente prohibido proyectar ingresos futuros (fiados no cobrados) o egresos futuros (facturas por pagar pendientes). El reporte refleja exclusivamente la liquidez real: `opening_balance + SUM(ingresos) - SUM(gastos + pagos_proveedor)`. |
-| **POL-SEC-01** | Seguridad | Arqueo Ciego y Ceguera Operativa. El backend tiene PROHIBIDO exponer el saldo esperado (`expected_balance`) al usuario cajero antes y durante el formulario de cierre. La consulta de historial consolidado y reportes forenses está reservada a roles de administración (`admin`, `owner`). |
-| **SPEC-010** | Moneda | Manejo monetario en pesos colombianos (COP) en números enteros sin decimales fiduciarios. |
-| **SPEC-011** | Decimales | Presentación visual formateada con punto separador de miles (ej: `$195.000`), sin alterar los valores numéricos íntegros persistidos en el backend. |
+| **POL-AUTH-01** | Multi-tenant | `assert_store_access(p_store_id)` obligatorio y **`assert_store_admin(p_store_id)`** incondicional en todo reporte de caja (`get_history_caja`, `get_daily_summary`, `rpc_get_comprehensive_shift_report`, `rpc_obtener_historial_caja_multicanal`). |
+| **POL-AUD-01** | Auditoría | Inviolabilidad histórica de turnos cerrados (`status = 'closed'`), excepción controlada `LATE_SYNC_UPDATE` atribuida al vendedor offline, y fotografía inmutable (`opened_by_name/role`, `closed_by_name/role`, `actor_name/role`). |
+| **POL-AUD-02** | Auditoría | **Eliminación del "Reporte Operativo del Cajero" y Visibilidad Seccionada:** Todos los reportes de caja son **100% exclusivos del Administrador (`owner`, `manager`)**. Se elimina `canViewReports`. El empleado únicamente consulta **sus propios movimientos del turno actual** con toda su información (`rpc_obtener_mis_movimientos_turno`). |
+| **POL-AUD-03** | Auditoría | **Alerta Automática al 3.er Intento:** Al agotarse los 3 intentos del Cierre Asistido con descuadre, el servidor registra `CASH_DISCREPANCY` en `audit_logs` y emite notificación inmediata en `notifications` (`audience = 'admin'`). |
+| **POL-FIN-01 / 02** | Financiero | Solo liquidez real de la Caja Dedicada POS por canal (**`efectivo`**, **`nequi`**, **`llave_bre`**; eliminado `'daviplata'`/`'bre'`). Excluye fiados no cobrados, `"pago externo / fuera de caja"` y bajas logísticas `$0` (mermas/consumos/ajustes). |
+| **POL-SEC-01 / 03** | Seguridad | **Arqueo Ciego con Cierre Asistido (3 Intentos) y Propiedad Estricta:** Solo el abridor original o Admin cierra. Nunca se expone `expected_balance` ni `difference` al cajero antes, durante ni al concluir el cierre. |
+| **SPEC-010 / 011** | Moneda | Pesos enteros COP sin coma flotante. |
 
-### 0.2 Restricciones Transversales Inyectadas
-| SDD Origen | Restricción Inyectada | Impacto en los Reportes de Caja |
-|------------|-----------------------|---------------------------------|
-| **SDD_004 / SDD_020 (Caja Diaria y Multicanal)** | Núcleo de sesiones de caja (`cash_sessions`), base en efectivo y movimientos monetarios (`cash_movements`). | La conciliación matemática líquida calcula el saldo esperado deduciendo tanto egresos OPEX (`gasto`) como amortizaciones de proveedores (`pago_proveedor`), liquidando el descuadre exacto `difference = actual_balance - expected_balance`. |
-| **SDD_027_02 (Límite 24 Horas)** | Caducidad forzada de turnos a las 24 horas (`forced_close = true`). | El listado cronológico de turnos cerrados (RN-6) debe identificar claramente turnos regulares versus turnos cerrados forzosamente por caducidad o abandono de turno. |
-| **SDD_021 (Historiales Multicanal)** | Extracción de movimientos desglosados por canal monetario. | Alimenta el Reporte Operativo permitiendo segregar ingresos y egresos según canal (`efectivo`, `nequi`, `daviplata`). Respuestas estandarizadas al contrato canónico `{ data: [...], count: N }`. |
-| **SDD_022 / SDD_026 (Gastos y OPEX Inmediato)** | Egresos registrados directamente en `cash_movements` con barrera de sobregiro por canal. | El Reporte de Auditoría Interna expone el ruido operativo, incluyendo los intentos fallidos de egreso rechazados por falta de fondos (`INSUFFICIENT_FUNDS`). |
-| **SDD_005 (Auditoría Forense)** | Inviolabilidad append-only en `audit_logs` y `audit_caja`. | Registro inmutable de anomalías de cuadre con severidad de alerta silenciosa (`warning`) sin posibilidad de edición o borrado. |
-| **SDD_018 (Control Operacional)** | Desacople entre flujo puro de caja y P&L devengado. | Garantiza que los cobros de cartera (abonos) y pagos de pasivos (proveedores) reflejen liquidez de gaveta sin distorsionar ingresos operacionales ni COGS de catálogo. |
+### 0.2 Contratos Vecinos que Limitan el Diseño
+- **`SDD_003_01` (Contrato Marco):** Gobierna `assert_store_admin`, `closing_attempts`, Cierre Asistido, snapshot de firmas y `rpc_obtener_mis_movimientos_turno`.
+- **`SDD_004` / `SDD_020` / `SDD_027_02`:** Propiedad estricta del turno, canales `efectivo`, `nequi`, `llave_bre`, y cierre `+24h` (abridor asistido vs Admin sin conteo físico siempre obligatorio).
+- **`SDD_021` (Historiales):** `rpc_obtener_historial_caja_multicanal` (100% Admin-only) y `rpc_obtener_mis_movimientos_turno` (empleado).
+- **`SDD_022` / `SDD_026` / `SDD_006_02`:** Gastos OPEX (`5` categorías sin `'Reembolso'`), pagos internos a proveedor (Admin-only) y reembolsos POS (`canManageRefunds`, etiqueta `"merma"`).
 
 ### 0.3 Auditoría de Base de Datos contra Realidad Físico-Técnica
-| Hallazgo / Componente | Estado Real en Producción | Decisión de Diseño Vinculante |
-|-----------------------|---------------------------|-------------------------------|
-| 🔴 Tabla Alucinada `cash_session_balances` | NO EXISTE en la base de datos de producción (alucinación de la versión previa de SDD-027-01). | Erradicación total de `cash_session_balances`. El modelo físico se fundamenta exclusivamente en las tablas reales `cash_sessions` y `cash_movements`. |
-| 🔴 Fórmula de Egresos en `cerrar_caja` Legacy | En la base de datos legacy, `cerrar_caja` solo resta `movement_type = 'gasto'`, ignorando `movement_type = 'pago_proveedor'`. | Estandarización obligatoria de la fórmula universal: `v_expected := opening_balance + SUM(ingresos) - SUM(gastos + pagos_proveedor)`. Evita faltantes ficticios al pagar a proveedores desde caja. |
-| 🔴 Ceguera Operativa en `get_history_caja` | `get_history_caja` valida `assert_store_access` pero carece de filtro RBAC, exponiendo saldos esperados a roles no administradores. | Restricción estricta del listado histórico y reporte forense para requerir membresía en `admin_profiles`, preservando la ceguera del cajero sobre turnos activos. |
-| 🔴 Inmutabilidad de Turnos Cerrados (RLS) | `cash_sessions` posee Default-Deny en DELETE, pero la política UPDATE `cash_sessions_update_store` no restringe `status != 'closed'`. | Mandato de política RLS estricta y trigger `BEFORE UPDATE` que rechace con excepción cualquier intento de edición directa sobre sesiones cerradas. |
-| 🔴 Esquema de Inserción en `audit_logs` | Funciones históricas referencian columnas inexistentes (`action`, `entity`, `payload`). | Normalización vinculante sobre las columnas reales: `actor_id`, `event_type`, `resource_id`, `metadata`, `store_id`, `severity`. |
+| Hallazgo / Componente | Estado Real Verificado (`database.types.ts` / `migrations/`) | Decisión Vinculante Fase 3 |
+|---|---|---|
+| 🔴 Reportes sin guardia Admin-only | `get_history_caja`, `get_daily_summary` y `rpc_get_comprehensive_financial_report` (`20261017133000`) solo validan `assert_store_access`. | Exigir `assert_store_admin(p_store_id)` (`owner`/`manager`) en todos los RPCs de reporte y crear `rpc_obtener_mis_movimientos_turno`. |
+| 🔴 `cerrar_caja` revela esperado y cierra al 1.er intento | `20261017130000` L256–265 retorna `expected_balance`/`difference` al cajero sin propiedad estricta ni 3 intentos. | Implementar `closing_attempts`, propiedad estricta `opened_by = actor OR is_admin`, aviso neutro en intentos 1–2, y sello + alerta Admin en `notifications` al 3.er intento. |
+| 🔴 Canales `'daviplata'` / `'bre'` y ausencia de `rpc_get_comprehensive_shift_report` | `get_history_caja` L178–186 consulta `'daviplata'`/`'bre'` y omite `'pago_proveedor'` en `total_expenses`; `rpc_get_comprehensive_shift_report` no existe en `database.types.ts`. | Migrar a `efectivo`, `nequi`, `llave_bre`; incluir `'pago_proveedor'` en egresos de caja; desplegar `rpc_get_comprehensive_shift_report` Admin-only con snapshot de firmas. |
 
 ---
 
 ## 1. Reglas de Negocio
 
-### RN-027-01-01: Dicotomía del Reporte
-El sistema debe proveer dos perfiles segregados de extracción de información del turno:
-- **Reporte Operativo (Visual/Humano):** Diseñado exclusivamente para el cajero. Muestra resúmenes limpios segregados por canal financiero (`efectivo`, `nequi`, `daviplata`) sin mezclarlos entre sí, orientados a facilitar el conteo y cuadre físico y digital del momento.
-- **Reporte de Auditoría Interna (Sistema/Dueño):** Diseñado exclusivamente para la seguridad y control del propietario. Rastrea y documenta cada movimiento, intentos fallidos de sobregiro por falta de fondos, transacciones de contrapeso (anulaciones de ventas), mermas declaradas y discrepancias matemáticas entre lo físico y lo calculado.
+### RN-027-01-01: Exclusividad Admin-Only de Reportes y Visibilidad Propia del Empleado
+- **Eliminación del "Reporte Operativo del Cajero":** Todos los reportes de caja, cierres históricos, descuadres y métricas consolidadas son **100% exclusivos del Administrador (`admin_profiles.role IN ('owner', 'manager')`)**. Se elimina `canViewReports`.
+- **Visibilidad del Empleado durante su turno:** El empleado únicamente visualiza **sus propios movimientos del turno abierto actual con toda su información** (`rpc_obtener_mis_movimientos_turno`), sin ver saldos esperados de caja ni movimientos de otros compañeros.
+- **Reporte de Auditoría de Caja (100% Admin-only):** Desglosa canales **`efectivo`**, **`nequi`** y **`llave_bre`**, firmas históricas (`actor_name`, `actor_role`), gastos menores POS, reembolsos (marcando etiqueta `"merma"`), pagos internos a proveedores, ruido operativo y discrepancias.
 
-### RN-027-01-02: Ceguera Operativa (Arqueo Ciego)
-Durante el transcurso de un turno activo y en el instante de cerrarlo, el sistema tiene estrictamente PROHIBIDO mostrarle al usuario cajero cuál es el saldo total esperado en efectivo (`expected_balance`). El operario debe contar el dinero físico a ciegas y declarar la suma real en mano (`actual_balance`), impidiendo que ajuste o manipule billetes para hacerlos cuadrar artificialmente con la expectativa del software.
+### RN-027-01-02: Arqueo Ciego con Cierre Asistido (Hasta 3 Intentos)
+Durante el turno y al cerrarlo, el sistema prohíbe mostrar `expected_balance` o `difference` al cajero. Si al confirmar el cierre el conteo no coincide, el sistema **solo avisa que no coincide** dando hasta **3 intentos**; al **3.er intento**, sella el turno y envía una **notificación/alerta inmediata al Administrador**.
 
-### RN-027-01-03: Inmutabilidad del Cierre (Sello de Tiempo y Fotografía Forense)
-En el instante en que el operario declara el monto físico y confirma el cierre del turno, el servidor genera una instantánea matemática irreversible de los totales y el descuadre (si lo hubiere). El turno queda sellado con `status = 'closed'` y `closed_at = NOW()`, y el trigger del sistema genera automáticamente una fotografía en `audit_caja`. Nadie, ni siquiera un administrador, puede alterar, editar o recalcular los valores de una sesión cerrada en el futuro.
+### RN-027-01-03: Inmutabilidad del Cierre y Excepción `LATE_SYNC_UPDATE`
+El sellado genera una instantánea irreversible en `cash_sessions` y `audit_caja`. Única excepción: ventas offline sincronizadas tardíamente que imputan al turno original vía `LATE_SYNC_UPDATE` atribuidas al **vendedor offline original** (`actor_name`, `actor_role`).
 
-### RN-027-01-04: Fidelidad al Flujo Puro
-Los reportes de caja tienen terminantemente prohibido proyectar ingresos futuros (fiados no cobrados) o egresos futuros (facturas de proveedores pendientes de pago). El reporte es un reflejo dogmático de la liquidez exclusiva que cambió físicamente de manos en el turno.
+### RN-027-01-04: Fidelidad al Flujo Puro de Caja Dedicada POS
+Excluye fiados no cobrados, facturas por pagar, operaciones marcadas **"pago externo / fuera de caja"** y bajas logísticas **`$0`** (mermas, consumo del negocio, consumo/retiro personal y ajustes).
 
-### RN-027-01-05: Autenticidad de Descuadres
-Si el monto físico declarado por el operario difiere del monto líquido calculado por el servidor (`actual_balance != expected_balance`), el sistema genera un registro de anomalía clasificado como `CASH_DISCREPANCY` en `audit_logs` con `severity = 'warning'`, dejando constancia indeleble del faltante o sobrante y emitiendo alertas silenciosas a los perfiles administrativos.
+### RN-027-01-05: Autenticidad de Descuadres y Alerta al 3.er Intento
+Si tras 3 intentos persiste diferencia (`actual_balance != expected_balance`), registra `CASH_DISCREPANCY` en `audit_logs` (`severity = 'warning'`) y dispara alerta inmediata en `notifications` (`audience = 'admin'`, `type = 'CASH_DISCREPANCY_ALERT'`).
 
-### RN-027-01-06: Navegación Temporal por Turnos Cerrados
-El módulo de reportes permite al Administrador consultar turnos cerrados anteriores mediante un mecanismo de selección temporal:
-- **Unidad de consulta:** El turno individual (`session_id`) es la unidad atómica de auditoría. Cada turno se inspecciona individualmente.
-- **Listado de turnos:** Presentación cronológica de turnos cerrados mostrando para cada uno: fecha, hora de apertura, hora de cierre, empleado responsable y estado de cuadre (cuadrado / con descuadre / forzado).
-- **Filtro por rango de fechas:** El listado es filtrable por un rango de fechas (desde–hasta). Por defecto, el sistema muestra los turnos de los últimos 7 días.
-- **Acceso al detalle:** Al seleccionar un turno cerrado de la lista, el sistema extrae el reporte de auditoría interna completo de ese turno, mostrando la instantánea inmutable generada al momento del cierre.
+### RN-027-01-06: Navegación Temporal por Turnos Cerrados (Exclusivo Admin)
+Lista cronológica filtrable por rango de fechas (default: últimos 7 días) mostrando apertura, cierre, responsables (`opened_by_name/role`, `closed_by_name/role`) y estado de cuadre (cuadrado / con descuadre / forzado `+24h` con o sin conteo), abriendo al seleccionar el reporte forense inmutable de ese turno.
 
 ---
 

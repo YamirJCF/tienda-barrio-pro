@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
-import { auditRepository } from '../data/repositories/auditRepository';
+import { auditRepository, AUDIT_EVENT_CATALOG, type AuditSeverity, type EvidenceHubDomain } from '../data/repositories/auditRepository';
 import { expenseRepository } from '../data/repositories/expenseRepository';
 import { getSupabaseClient } from '../data/supabaseClient';
 import { logger } from '../utils/logger';
@@ -76,8 +76,18 @@ function getDateRange(preset: DatePreset, customStart?: string, customEnd?: stri
 
 function isDateWithinRange(dateStr?: string, startStr?: string, endStr?: string): boolean {
     if (!dateStr || !startStr || !endStr) return true;
-    const itemDate = dateStr.slice(0, 10);
+    const itemDate = dateStr.includes('T') && !Number.isNaN(new Date(dateStr).getTime())
+        ? toLocalDateStr(new Date(dateStr))
+        : dateStr.slice(0, 10);
     return itemDate >= startStr && itemDate <= endStr;
+}
+
+function mapHistoryRpcError(err: any, fallback: string): string {
+    const raw = String(err?.message || err || '');
+    if (raw.includes('ADMIN_ONLY_ACTION') || err?.code === '42501') {
+        return 'Acceso exclusivo del Administrador.';
+    }
+    return raw || fallback;
 }
 
 export function useHistory() {
@@ -91,7 +101,9 @@ export function useHistory() {
     const dateFilter = ref<DatePreset>('week');
     const employeeFilter = ref<string | null>(null); // UUID or null for all
     const eventTypeFilter = ref<string>('all');
-    const paymentMethodFilter = ref<string>('all'); // 'all', 'efectivo', 'digital', 'nequi', 'daviplata'
+    const paymentMethodFilter = ref<string>('all'); // 'all', 'efectivo', 'digital', 'nequi', 'llave_bre'
+    const auditDomainFilter = ref<EvidenceHubDomain>('todos');
+    const auditSeverityFilter = ref<'all' | AuditSeverity>('all');
 
     // Custom date range
     const customStartDate = ref<string>('');
@@ -109,7 +121,7 @@ export function useHistory() {
             const empId = employeeFilter.value;
             result = result.filter(item => {
                 const m = item.metadata || {};
-                if (m.employee_id === empId || m.cashier_id === empId || m.user_id === empId || m.created_by === empId) {
+                if (m.employee_id === empId || m.cashier_id === empId || m.user_id === empId || m.created_by === empId || m.actor_id === empId) {
                     return true;
                 }
                 if (item.user && item.user.toLowerCase().includes(empId.toLowerCase())) {
@@ -163,7 +175,7 @@ export function useHistory() {
                 if (!pm) return false;
 
                 if (pmKey === 'digital') {
-                    return pm === 'nequi' || pm === 'daviplata' || pm === 'digital';
+                    return pm === 'nequi' || pm === 'llave_bre' || pm === 'digital';
                 }
                 
                 return pm === pmKey;
@@ -225,6 +237,8 @@ export function useHistory() {
             dateFilter.value !== 'week' ||
             paymentMethodFilter.value.toLowerCase() !== 'all' ||
             eventTypeFilter.value.toLowerCase() !== 'all' ||
+            auditDomainFilter.value !== 'todos' ||
+            auditSeverityFilter.value !== 'all' ||
             employeeFilter.value !== null ||
             searchQuery.value.trim().length > 0
         );
@@ -241,12 +255,16 @@ export function useHistory() {
         searchQuery.value = '';
         paymentMethodFilter.value = 'all';
         eventTypeFilter.value = 'all';
+        auditDomainFilter.value = 'todos';
+        auditSeverityFilter.value = 'all';
         employeeFilter.value = null;
         customStartDate.value = '';
         customEndDate.value = '';
         if (dateFilter.value !== 'week') {
             dateFilter.value = 'week';
             await fetchHistory();
+        } else if (currentType.value === 'audit') {
+            await fetchHistory('audit');
         }
     };
 
@@ -327,7 +345,10 @@ export function useHistory() {
             }
         } catch (e: any) {
             logger.error('[useHistory] Error fetching', e);
-            error.value = 'Error al cargar el historial';
+            const raw = String(e?.message || '');
+            error.value = raw.includes('ADMIN_ONLY_ACTION')
+                ? 'Acceso exclusivo del Administrador.'
+                : (raw || 'Error al cargar el historial');
         } finally {
             isLoading.value = false;
         }
@@ -355,7 +376,7 @@ export function useHistory() {
 
         if (rpcError) {
             logger.error('[useHistory] get_history_ventas RPC error', rpcError);
-            error.value = 'Error al obtener ventas';
+            error.value = mapHistoryRpcError(rpcError, 'Error al obtener ventas');
             return;
         }
 
@@ -364,8 +385,9 @@ export function useHistory() {
             const paymentLabel: Record<string, string> = {
                 'efectivo': '💵 Efectivo',
                 'nequi': '📱 Nequi',
-                'daviplata': '📱 Daviplata',
-                'fiado': '📋 Fiado'
+                'llave_bre': '🔑 Llave Bre-B',
+                'fiado': '📋 Fiado',
+                'consumo_personal': '👤 Retiro Personal'
             };
             return {
                 id: sale.id,
@@ -375,7 +397,7 @@ export function useHistory() {
                 date: sale.created_at,
                 amount: Number(sale.total),
                 amountFormatted: formatCurrency(sale.total),
-                user: sale.employee_name,
+                user: sale.actor_name || sale.employee_name || 'Sistema',
                 icon: 'shopping_cart',
                 colorClass: sale.is_voided
                     ? 'text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400'
@@ -403,7 +425,9 @@ export function useHistory() {
 
         if (rpcError) {
             logger.error('[useHistory] get_history_caja RPC error', rpcError);
-            error.value = 'Error al obtener historial de caja';
+            error.value = rpcError.message?.includes('ADMIN_ONLY_ACTION') || rpcError.code === '42501'
+                ? 'Acceso exclusivo del Administrador.'
+                : 'Error al obtener historial de caja';
             return;
         }
 
@@ -501,7 +525,7 @@ export function useHistory() {
 
         if (rpcError) {
             logger.error('[useHistory] get_history_compras RPC error', rpcError);
-            error.value = 'Error al obtener historial de compras';
+            error.value = mapHistoryRpcError(rpcError, 'Error al obtener historial de compras');
             return;
         }
 
@@ -517,7 +541,7 @@ export function useHistory() {
                 title: `📦 ${mov.product_name}`,
                 subtitle: `+${mov.quantity} unidades${supplier}${invoice}${payment}`,
                 date: mov.created_at,
-                user: mov.created_by_name,
+                user: mov.actor_name || mov.created_by_name || 'Sistema',
                 icon: 'package',
                 colorClass: 'text-indigo-600 bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400',
                 metadata: mov
@@ -526,24 +550,60 @@ export function useHistory() {
     };
 
     // =============================================
-    // Audit Logs (FRD-005)
+    // Audit Logs — Federated Evidence Hub (SDD-005 CHK-303/CHK-304)
     // =============================================
     const fetchAuditLogs = async (storeId: string) => {
         const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
-        const logs = await auditRepository.getLogs(storeId, 200);
-        const filteredLogs = logs.filter(log => isDateWithinRange(log.created_at, start, end));
+        const { data: events } = await auditRepository.getEvidenceHub({
+            storeId,
+            domain: auditDomainFilter.value,
+            severity: auditSeverityFilter.value === 'all' ? null : auditSeverityFilter.value,
+            startDate: `${start}T00:00:00-05:00`,
+            endDate: `${end}T23:59:59-05:00`,
+            limit: 100,
+            offset: 0
+        });
 
-        items.value = filteredLogs.map(log => ({
-            id: log.id,
-            type: 'audit' as HistoryType,
-            title: mapAuditEventTitle(log.event_type),
-            subtitle: log.details?.description || 'Evento del sistema',
-            date: log.created_at,
-            user: log.user_name || 'Sistema',
-            icon: getAuditIcon(log.event_type),
-            colorClass: getAuditColor(log.severity),
-            metadata: { ...log, event_type: log.event_type }
-        }));
+        const severityBadgeMap: Record<AuditSeverity, { text: string; color: string }> = {
+            critical: { text: 'Crítico', color: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' },
+            warning: { text: 'Alerta', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' },
+            info: { text: 'Info', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' },
+        };
+
+        items.value = events.map(evt => {
+            const meta = evt.metadata || {};
+            const domainLabel = evt.domain.toUpperCase();
+            const descParts: string[] = [domainLabel];
+            if (meta.reason || meta.description) {
+                descParts.push(String(meta.reason || meta.description));
+            } else if (meta.product_name) {
+                descParts.push(String(meta.product_name));
+            } else if (meta.client_name) {
+                descParts.push(String(meta.client_name));
+            } else if (evt.resource_id) {
+                descParts.push(`Ref: ${evt.resource_id.slice(0, 8)}`);
+            }
+
+            return {
+                id: evt.id,
+                type: 'audit' as HistoryType,
+                title: mapAuditEventTitle(evt.event_type),
+                subtitle: descParts.join(' · '),
+                date: evt.created_at,
+                user: evt.actor_name || 'Sistema',
+                icon: getAuditIcon(evt.event_type),
+                colorClass: getAuditColor(evt.severity),
+                badge: severityBadgeMap[evt.severity] || severityBadgeMap.info,
+                metadata: {
+                    ...evt,
+                    ...meta,
+                    event_type: evt.event_type,
+                    actor_id: evt.actor_id,
+                    actor_name: evt.actor_name,
+                    actor_role: evt.actor_role,
+                }
+            };
+        });
     };
 
     // =============================================
@@ -560,7 +620,7 @@ export function useHistory() {
             title: `Cambio: ${log.productName}`,
             subtitle: `Anterior: ${formatCurrency(log.oldPrice)} → Nuevo: ${formatCurrency(log.newPrice)}`,
             date: log.date,
-            user: log.employeeName || 'Desconocido',
+            user: log.actor_name || log.employeeName || 'Administrador',
             icon: 'price_change',
             colorClass: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400',
             metadata: log
@@ -583,7 +643,7 @@ export function useHistory() {
             date: exp.created_at || '',
             amount: exp.amount,
             amountFormatted: formatCurrency(exp.amount),
-            user: 'Cajero',
+            user: exp.actor_name || 'Sistema',
             icon: 'payments',
             colorClass: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400',
             metadata: exp
@@ -601,19 +661,19 @@ export function useHistory() {
 
         const { data, error: rpcError } = await supabase.rpc('get_history_creditos' as any, {
             p_store_id: storeId,
-            p_start_date: start,
-            p_end_date: end
+            p_start_date: `${start}T00:00:00-05:00`,
+            p_end_date: `${end}T23:59:59-05:00`
         });
 
         if (rpcError) {
             logger.error('[useHistory] get_history_creditos RPC error', rpcError);
-            error.value = 'Error al obtener historial de créditos';
+            error.value = mapHistoryRpcError(rpcError, 'Error al obtener historial de créditos');
             return;
         }
 
         const rows = (data || []) as any[];
         items.value = rows.map(cred => {
-            const isPayment = cred.transaction_type === 'payment';
+            const isPayment = cred.transaction_type === 'abono' || cred.transaction_type === 'payment';
             return {
                 id: cred.id,
                 type: 'credits' as HistoryType,
@@ -622,7 +682,7 @@ export function useHistory() {
                 date: cred.created_at,
                 amount: Number(cred.amount),
                 amountFormatted: formatCurrency(cred.amount),
-                user: cred.employee_name || 'Desconocido',
+                user: cred.actor_name || cred.employee_name || 'Desconocido',
                 icon: 'credit_card',
                 colorClass: isPayment
                     ? 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400'
@@ -634,18 +694,17 @@ export function useHistory() {
 
     // Utils
     const mapAuditEventTitle = (type: string) => {
-        const map: Record<string, string> = {
-            'login_success': 'Inicio de Sesión',
-            'login_failed': 'Intento Fallido',
-            'pin_change': 'Cambio de PIN',
-            'unauthorized_access': 'Acceso Denegado'
-        };
-        return map[type] || type;
+        const key = String(type || '').toUpperCase();
+        return AUDIT_EVENT_CATALOG[key]?.label || type;
     };
 
     const getAuditIcon = (type: string) => {
-        if (type.includes('login')) return 'login';
-        if (type.includes('pin')) return 'lock';
+        const normalized = String(type || '').toLowerCase();
+        if (normalized.includes('login')) return 'login';
+        if (normalized.includes('pin') || normalized.includes('close')) return 'lock';
+        if (normalized.includes('price')) return 'price_change';
+        if (normalized.includes('sale') || normalized.includes('creacion') || normalized.includes('anulacion')) return 'shopping_cart';
+        if (normalized.includes('cash')) return 'vault';
         return 'shield';
     };
 
@@ -665,6 +724,8 @@ export function useHistory() {
         employeeFilter,
         eventTypeFilter,
         paymentMethodFilter,
+        auditDomainFilter,
+        auditSeverityFilter,
         searchQuery,
         customStartDate,
         customEndDate,

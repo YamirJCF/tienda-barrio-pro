@@ -1,32 +1,35 @@
 # SDD-004: Control Operativo de Caja (Sesiones Multicanal)
 
-> **Asociado a:** [FRD-004](../FRD/FRD_004_CONTROL_DE_CAJA.md) (Versión 2.2 — Parche de alineación con FRD-001 v3)  
-> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos  
-> **Estado:** 🟠 Aprobado con Deuda Técnica Documentada (PAC-SDD Completo 2026-10-12)  
-> **Última Actualización:** 2026-10-12  
+> **Asociado a:** [FRD-004](../FRD/FRD_004_CONTROL_DE_CAJA.md), [FRD-027-02](../FRD/FRD_027_02_LIMITE_24_HORAS_CAJA.md) y Contrato Marco [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
+> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos (Alineación `ARQ-002` v1.4)  
+> **Estado:** 🟢 Alineado a Contrato Marco `SDD-003-01` (Pendiente implementación SQL/Frontend Fase 3)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (`ARQ-002` v1.4)
 | Política ID | Dominio | Impacto Concreto en este SDD |
 |-------------|---------|------------------------------|
-| **POL-FIN-01** | Financiero | **Solidez de Caja (Liquidez Real):** La caja solo reconoce dinero físicamente presente en gaveta o confirmado en canal digital. Saldo esperado = Base Inicial + Entradas - Salidas. Queda prohibido el registro de gastos si la caja está cerrada o si el canal no cuenta con fondos suficientes. |
-| **POL-FIN-02** | Financiero | **Segregación de Canales Monetarios:** Prohibición estricta de compensar faltantes de efectivo con sobrantes digitales. La base inicial de apertura se asigna exclusivamente al canal EFECTIVO. Canales digitales inician automáticamente cada turno en $0. |
-| **POL-SEG-01** | Seguridad | **Arqueo Ciego Obligatorio:** El servidor no revela el saldo esperado antes de que el usuario envíe su declaración física y digital contada en mano. |
-| **POL-AUD-01** | Auditoría | **Inmutabilidad de Turnos y Movimientos:** Todo movimiento asentado es definitivo (`append-only`). No se permite edición ni borrado; solo contra-movimientos compensatorios. |
-| **POL-AUTH-01** | Seguridad | **Erradicación del PIN de Caja (Decisión D-01):** Todo control se valida mediante el token de sesión JWT, la función centralizada `assert_store_access` y la resolución de identidad con `get_employee_id_from_session()`. |
-| **SPEC-010 / 011** | Financiero | **Conservación Numérica y Redondeo:** Manejo estricto de montos en pesos colombianos como enteros en tipo `NUMERIC`, sin tipos de coma flotante (`float`/`double`). Redondeo híbrido al múltiplo de $50 más cercano en ventas. |
+| **POL-FIN-01** | Financiero | **Caja Dedicada POS y Liquidez Real:** La única caja operativa es la Caja Dedicada POS (`Saldo Esperado = Base + Ingresos - Gastos Menores - Reembolsos - Pagos Internos`). Todo pago externo se etiqueta **"pago externo / fuera de caja"** (100% Admin-only) con impacto `$0` en POS, al igual que mermas y consumos internos (`$0` en caja). |
+| **POL-FIN-02** | Financiero | **Segregación de Canales (`efectivo`, `nequi`, `llave_bre`):** Se elimina `'daviplata'` y el alias legacy `'bre'`. La base inicial se asigna 100% a `efectivo`; `nequi` y `llave_bre` inician en `$0`. Prohibido compensar faltantes físicos con sobrantes digitales. |
+| **POL-SEG-01** | Seguridad | **Arqueo Ciego con Cierre Asistido (3 Intentos):** Nunca se revela `expected_balance` ni `difference` antes o durante el cierre. Si hay descuadre, el servidor solo avisa que no coincide dando hasta **3 intentos**; al 3.er intento sella la sesión y emite alerta inmediata al Administrador (`notifications`). |
+| **POL-SEG-02** | Seguridad | **Caducidad `+24h` y Continuidad Nocturna:** Turnos `< 24h` conservan vigencia de Pase Diario tras medianoche (`FRD-017`). Al cruzar 24h pasan a `Expirado/Bloqueado`, resolubles solo por el abridor original (Cierre Asistido) o por el Administrador vía Cierre Forzoso (sin requerir conteo físico siempre obligatorio). |
+| **POL-SEG-03** | Seguridad | **Propiedad Estricta del Turno y Permisos:** Abrir exige Admin o `canOpenCloseCash`. **Cerrar está estrictamente bloqueado para cualquier empleado distinto al que abrió el turno** (`opened_by = actor_id OR is_store_admin`). Gastos menores POS están abiertos a todo usuario activo con turno abierto. |
+| **POL-AUD-01 / 02 / 03** | Auditoría | **Inmutabilidad, Snapshot de Firma y Alertas:** Movimientos append-only con fotografía histórica inmutable (`actor_name`, `actor_role`; `opened_by_name`/`role`, `closed_by_name`/`role`). Descuadres al 3.er intento e intentos bloqueados de cierre ajeno generan registro en `audit_logs` y alerta en `notifications` (`audience = 'admin'`). |
+| **SPEC-010 / 011** | Financiero | **Conservación Numérica y Moneda Entera:** Montos enteros COP en `NUMERIC` sin coma flotante. |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
 | SDD Origen | Restricción Inyectada | Impacto en el Control de Caja |
 |------------|-----------------------|-------------------------------|
-| **SDD_001 (Seguridad Diaria)** | Desacople de Pase Diario y Caja (FRD-001 v3 / FRD-004 v2.2). | El cierre de caja **NO** expira los pases diarios (`daily_passes`). Solo bloquea operaciones transaccionales monetarias. Los empleados pueden permanecer en el sistema en modo lectura. |
-| **SDD_020 (Caja Multicanal)** | Estructura multicanal de balances y dualidad operativa. | Regula la arquitectura multicanal por balances segregados (`rpc_abrir_caja_multicanal`, `rpc_cerrar_caja_multicanal`). Las operaciones escalares de este SDD (`abrir_caja`, `cerrar_caja`) actúan como capa de compatibilidad física directa en producción. |
-| **SDD_007 / 007_01 (Ventas y POS)** | Bloqueo estricto del POS y contrapartidas contables. | El backend rechaza cualquier venta si `cash_sessions` no cuenta con una sesión en estado `OPEN` para la tienda. Las ventas en efectivo inyectan automáticamente contrapartidas de tipo `'ingreso'` en `cash_movements`. |
-| **SDD_022 / 026 (Gastos OPEX)** | Inmediatez absoluta y categorización obligatoria. | El registro de gastos exige sesión abierta no caducada (< 24h), selecciona una categoría de las 6 del catálogo OPEX y valida liquidez en el canal seleccionado para evitar sobregiros. |
-| **SDD_019 (Cuentas por Pagar)** | Pagos a proveedores en efectivo. | La operación `rpc_pay_supplier_invoice` inyecta egresos de tipo `'pago_proveedor'` en `cash_movements`, los cuales deben ser computados obligatoriamente en la conciliación del turno. |
+| **SDD_003_01 (Contrato Marco)** | `is_store_admin`, `assert_employee_permission`, `resolve_actor_snapshot`, Propiedad Estricta y Cierre Asistido. | Gobierna la validación centralizada de permisos, snapshot inmutable y flujo de 3 intentos en `cerrar_caja`. |
+| **SDD_001 / SDD_013 / SDD_017** | Desacople Pase Diario/Caja y continuidad nocturna `< 24h`. | El cierre de caja no revoca pases diarios vigentes. Turnos `< 24h` continúan tras 00:00; al `>= 24h` pasan a `Expirado/Bloqueado`. |
+| **SDD_020 (Caja Multicanal)** | Canales unificados `efectivo`, `nequi`, `llave_bre`. | Se erradica `'daviplata'` y `'bre'`; `cerrar_caja` y `rpc_cerrar_caja_multicanal` comparten semántica de Cierre Asistido. |
+| **SDD_007 / 007_01 (Ventas y POS)** | Turno `open` `< 24h` y Consumo Personal `$0`. | Ventas de contado (`efectivo`, `nequi`, `llave_bre`) inyectan `'ingreso'` en `cash_movements` con firma; `fiado` y `consumo_personal` registran `$0` en caja. |
+| **SDD_022 / 026 (Gastos OPEX)** | Gastos menores abiertos a todo usuario activo; 5 categorías OPEX sin `'Reembolso'`. | Cualquier empleado activo en turno abierto `< 24h` registra gastos en `Servicios`, `Nomina`, `Transporte`, `Mantenimiento` o `Insumos` con firma y sin sobregiro. |
+| **SDD_006_02 (Reembolsos POS)** | Reembolso separado de OPEX, con permiso `canManageRefunds`. | Los reembolsos a clientes se ejecutan desde el POS (`rpc_procesar_reembolso_item`), validan fondos del canal y no usan la categoría OPEX `'Reembolso'`. |
+| **SDD_019 (Cuentas por Pagar)** | Exclusividad Admin y `"pago externo / fuera de caja"`. | Solo el Administrador paga facturas de proveedores; si es interno debita canal de caja, si es externo registra `$0` en POS. |
 
 ### 0.3 Auditoría de BD contra Realidad (Deuda Técnica Declarada bajo Regla 7)
 *Evidencia de esquema obtenida de Supabase Producción (`ihtjocmhzuliwwvdzfnz`) mediante consultas a `information_schema` y `pg_proc`:*
@@ -53,7 +56,7 @@
 - **Turno Activo:** Sesión en estado `open` con antigüedad menor a 24 horas.
 - **Arqueo Ciego:** Mecanismo de control donde el usuario reporta el dinero real contado en mano sin conocer previamente el cálculo del saldo esperado generado por el servidor.
 - **Base de Apertura (Fondo de Cambio):** Monto inicial en efectivo físico colocado en la gaveta. Se asigna exclusivamente al canal Efectivo.
-- **Categoría OPEX:** Clasificación contable del gasto operativo (`Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos`, `Reembolso`).
+- **Categoría OPEX:** Clasificación contable del gasto operativo (`Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos` — excluyendo `'Reembolso'`).
 - **Bitácora Forense de Caja (`audit_caja`):** Registro inmutable generado automáticamente por triggers (`fn_audit_cash_opened`, `fn_audit_cash_closed`) que asienta marcas forenses de apertura y cierre con metadatos de saldos.
 - **Turno Olvidado / Caducado:** Sesión de caja abierta cuya antigüedad supera las 24 horas (`opened_at < NOW() - INTERVAL '24 hours'`), requiriendo cierre forzado antes de permitir nuevas ventas.
 
@@ -275,13 +278,17 @@ stateDiagram-v2
     "p_actual_balance": "NUMERIC >= 0 (Obligatorio, dinero real contado en mano)"
   }
   ```
-- **Salida Exitosa:**
+- **Salida Exitosa (Cajero / Sellado Blindado):**
   ```json
   {
     "success": true,
-    "expected_balance": 150000.00,
-    "actual_balance": 148000.00,
-    "difference": -2000.00
+    "data": {
+      "session_id": "UUID",
+      "status": "closed",
+      "sealed_with_alert": false,
+      "closed_by_name": "Laura Cajera",
+      "closed_by_role": "employee"
+    }
   }
   ```
 - **Catálogo de Errores:**
@@ -301,7 +308,7 @@ stateDiagram-v2
     "p_session_id": "UUID (Obligatorio)",
     "p_amount": "NUMERIC > 0 (Obligatorio)",
     "p_payment_method": "TEXT (Obligatorio: 'efectivo', 'nequi', 'llave_bre')",
-    "p_category": "TEXT (Obligatorio: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos', 'Reembolso')",
+    "p_category": "TEXT (Obligatorio: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos')",
     "p_description": "TEXT (Obligatorio, longitud >= 3)"
   }
   ```

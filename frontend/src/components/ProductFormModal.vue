@@ -557,7 +557,7 @@ watch(
               </div>
 
               <!-- Costo y Precio -->
-              <div v-if="authStore.isAdmin" class="col-span-6">
+              <div v-if="authStore.canManageInventory || authStore.isAdmin" class="col-span-6">
                 <BaseInput
                   v-model="formData.cost"
                   label="Costo ($)"

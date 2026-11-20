@@ -18,25 +18,25 @@ Este documento detalla la política arquitectónica para el manejo de los "Fiado
 ## Casos de Uso
 
 **Caso A: Venta a Crédito (El Fiado)**
-- **Actor:** Usuario Operativo.
-- **Precondición:** Un cliente solicita llevar productos comprometiéndose a pagar en el futuro.
+- **Actor:** Administrador o Empleado con permiso **`Fiar y cobrar abonos`** (`FRD-003-01`).
+- **Precondición:** Un cliente activo solicita llevar productos dentro de su cupo disponible comprometiéndose a pagar en el futuro.
 - **Flujo Principal:**
-  1. El usuario registra los productos y selecciona la modalidad de crédito.
-  2. El servidor descuenta los productos de la bodega.
+  1. El usuario autorizado registra los productos y selecciona la modalidad de crédito (Fiado).
+  2. El servidor verifica el permiso `Fiar y cobrar abonos`, descuenta los productos de la bodega y estampa la **firma individual** del usuario.
   3. El servidor anota el monto adeudado en el historial de cuentas por cobrar del cliente.
-  4. El servidor finaliza la transacción sin enviar ninguna notificación de ingreso al módulo de caja del día actual.
-- **Flujo Alternativo:** Ninguno.
-- **Postcondición:** El inventario se actualiza, la deuda del cliente queda registrada como recordatorio, y la caja diaria se mantiene intacta, reflejando únicamente el dinero real.
+  4. El servidor finaliza la transacción sin enviar ninguna notificación de ingreso a la Caja Dedicada POS ($0 en caja).
+- **Flujo Alternativo:** Si el usuario no tiene el permiso `Fiar y cobrar abonos` o el monto supera el cupo disponible, el servidor rechaza la operación.
+- **Postcondición:** El inventario se actualiza, la deuda del cliente queda registrada con firma individual, y la Caja Dedicada POS se mantiene intacta.
 
 **Caso B: Recepción de Abono**
-- **Actor:** Usuario Operativo.
-- **Precondición:** Un cliente con deuda previa se acerca al establecimiento y entrega efectivo para reducir su saldo pendiente.
+- **Actor:** Administrador o Empleado con permiso **`Fiar y cobrar abonos`** (`FRD-003-01`).
+- **Precondición:** Un cliente con deuda previa se acerca al establecimiento y entrega dinero por cualquiera de los canales válidos (**Efectivo, Nequi o Llave BRE**) con Caja Dedicada POS abierta.
 - **Flujo Principal:**
-  1. El usuario busca la cuenta del cliente y registra la recepción del abono.
-  2. El servidor deduce el monto entregado de la libreta de apuntes del cliente.
-  3. El servidor inyecta el valor del abono como un ingreso real y tangible en el turno de caja que se encuentra abierto.
-- **Flujo Alternativo:** Ninguno.
-- **Postcondición:** La deuda del cliente disminuye y el dinero ingresa formalmente al ecosistema financiero del establecimiento.
+  1. El usuario autorizado busca la cuenta del cliente y registra la recepción del abono seleccionando el canal de ingreso.
+  2. El servidor deduce el monto entregado de la libreta de apuntes del cliente con la **firma individual** del usuario.
+  3. El servidor inyecta el valor del abono como un ingreso real y tangible en el canal seleccionado del turno de Caja Dedicada POS que se encuentra abierto.
+- **Flujo Alternativo:** Si la caja está cerrada o el usuario no posee el permiso `Fiar y cobrar abonos`, el servidor aborta la operación.
+- **Postcondición:** La deuda del cliente disminuye y el dinero ingresa formalmente al canal correspondiente del turno activo.
 
 ---
 

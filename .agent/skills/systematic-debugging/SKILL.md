@@ -8,6 +8,18 @@ date_added: "2026-02-27"
 
 # Systematic Debugging
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 4 — Diagnóstico Mecánico y Corrección de Bugs (Inicio de Ruta C)
+- **Rama permitida:** `fix/*` (nacida desde `master`; **PROHIBIDO** aplicar fixes directos en `master`).
+- **Entrada requerida (Gate In):** Reporte de bug, fallo de test o comportamiento inesperado + ejecución obligatoria de `node scripts/scan-impact.mjs <entidad_rpc_o_store>` (Regla 10).
+- **Límite estricto:** Prohibido proponer o editar código sin antes imprimir el cuadro de 4 líneas de la Regla 10.1 (Origen Real, Contratos RVC, Radio de Explosión, Semáforo de Frontera). Si el fallo es de dato/cálculo, prohibido parchar en `.vue`/`.ts` (Muro 1).
+- **🛑 Freno de Emergencia (Hard Stop):** Si 3 intentos de fix fallan (Fase 4.5) o el fix requiere tocar `.agent/LOCKFILE.md` → DETENERSE y escalar al usuario.
+- **➡️ Siguiente eslabón:** Aplicar fix en la capa de autoridad (`data` o `ux`) ➔ `test-expert` ➔ `code-reviewer` ➔ `verification-before-completion` ➔ `commit` ➔ `push-sync`.
+  - **En Modo AUTO:** Tras imprimir el diagnóstico mecánico y reproducir la causa raíz, aplica el fix y continúa hacia `test-expert` sin preguntar.
+  - **En Modo PAUSADO:** Presenta el cuadro diagnóstico de 4 líneas (Fase A) y las opciones de solución (Fase B), y espera confirmación antes de editar archivos.
+
+---
+
 ## Overview
 
 Random fixes waste time and create new bugs. Quick patches mask underlying issues.

@@ -1,51 +1,52 @@
 # SDD-003: Gestión de Empleados y Permisos
 
 > **Módulo:** Personal / Seguridad / RBAC Operativo  
-> **Versión:** 2.1 (PAC-SDD v2.0 — Cero Código Fuente, Estructura Canónica 0–7)  
-> **Fase del Plan:** 🌊 Ola 5: Sesiones, Autenticación y Offline (Ítem 1)  
-> **Estado:** 🟢 Aprobado y Certificado en BD (Migración Ola 5 Aplicada con Evidencia)
-> **Asociado a:** [FRD-003](../FRD/FRD_003_GESTION_EMPLEADOS.md)
-> **Última Actualización:** 2026-10-31
-> **FRD Asociado:** [FRD-003: Gestión de Empleados y Permisos](../FRD/FRD_003_GESTION_EMPLEADOS.md)  
-> **Fecha de Certificación:** 2026-10-31  
+> **Versión:** 3.0 (Alineada con `SDD-003-01` — 4 Permisos Cerrados, Capacidades Base y Snapshot Inmutable)  
+> **Fase del Plan:** 🌊 Ola 5: Sesiones, Autenticación y Offline (Actualización Fase 3 pendiente)  
+> **Estado:** 🟠 Actualizado Documentalmente (Brechas `B-01`, `B-05`, `B-06` de `SDD-003-01` pendientes en SQL/UI)  
+> **Asociado a:** [FRD-003](../FRD/FRD_003_GESTION_EMPLEADOS.md)  
+> **Contrato Marco Vinculante:** [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) (`ARQ-002` v1.4)  
+> **Última Actualización:** 2026-11-19  
 
 ---
 
 ## 0. Contexto y Restricciones Aplicables
 
-### 0.1 Políticas Globales Activadas (ARQ-002)
+### 0.1 Políticas Globales Activadas (ARQ-002 v1.4)
 
 | Política | Nombre de la Política | Aplicación Específica en este SDD |
 | :--- | :--- | :--- |
-| **POL-AUTH-01** | Aislamiento Multi-tenant Estricto | Todo RPC administrativo de empleados (`crear_empleado`, `toggle_empleado_activo`, `actualizar_pin_empleado`, `rpc_obtener_empleados`) DEBE ejecutar `assert_store_access(p_store_id)` como su **instrucción #1**. A nivel de base de datos, la tabla `employees` está blindada mediante políticas RLS gobernadas por `store_id = get_current_store_id()`. |
-| **POL-SEC-01** | Seguridad RBAC en Servidor | La creación, edición, reseteo de PIN y conmutación de estado de empleados están reservadas exclusivamente a identidades con rol administrativo en `admin_profiles` (`owner` o `admin`). El personal operativo (`employees`) carece de facultades administrativas y de auto-gestión de permisos. |
-| **POL-SEC-02** | Cero Confianza Diaria (Zero Trust Daily) | La posesión de un PIN y un registro en `employees` NO confiere acceso operativo por sí sola. Todo empleado operativo DEBE obtener diariamente un Pase Diario aprobado (`daily_passes` con `pass_date = CURRENT_DATE` y `status = 'approved'`) mediante `is_authorized_employee()`. |
-| **POL-SEG-03** | Control de Acceso Granular por Toggles | El acceso a operaciones privilegiadas se controla estrictamente mediante banderas booleanas independientes en el campo `permissions` (JSONB) del perfil. Prohibidas las jerarquías implícitas o escalamientos no autorizados. |
-| **SPEC-006** | Erradicación del PIN de Caja Secundario | Se erradica cualquier requerimiento de un segundo PIN para operar la caja. La apertura y cierre de caja se gobierna exclusivamente por el permiso `canOpenCloseCash` y el PIN personal de 4 dígitos del empleado. |
-| **POL-AUD-01** | Inviolabilidad Contable y Soft-Delete | Prohibición absoluta de eliminación física (`DELETE`) sobre registros de `employees`. La baja de personal es estrictamente lógica (`is_active = false`), preservando la integridad referencial en `sales.employee_id`, `cash_sessions.opened_by`, `inventory_movements.created_by` y `client_ledger.created_by`. |
+| **POL-AUTH-01** | Aislamiento Multi-tenant Estricto | Todo RPC administrativo de empleados (`crear_empleado`, `toggle_empleado_activo`, `actualizar_pin_empleado`, `rpc_obtener_empleados`, `rpc_actualizar_permisos_empleado`) DEBE ejecutar `assert_store_access(p_store_id)` + `assert_store_admin(p_store_id)`. A nivel de base de datos, la tabla `employees` está blindada mediante políticas RLS gobernadas por `store_id = get_current_store_id()`. |
+| **POL-SEC-01** | Seguridad RBAC y Dispositivo Único | La creación, edición, reseteo de PIN, gestión de permisos y conmutación de estado de empleados están reservadas exclusivamente a identidades con rol en `admin_profiles` (`'owner'` o `'manager'`). Rige la regla de **1 dispositivo por cuenta** (prohibido el cambio rápido por PIN en una misma sesión). |
+| **POL-SEC-02** | Cero Confianza Diaria (`<24h`) | Todo empleado operativo DEBE contar con Pase Diario aprobado en `daily_passes` para `v_today` (o `v_today - 1` mientras exista un turno abierto `<24h` según `FRD-017`). |
+| **POL-SEG-03** | Esquema Cerrado de 4 Permisos + 5 Capacidades Base | Todo empleado operativo activo posee **5 capacidades base sin toggle** (vender en POS con caja abierta, gastos menores en Caja POS, mermas y consumo del negocio `$0`, consumo/retiro personal desde carrito POS asignado a su propio perfil, y consulta exclusiva de sus propios movimientos del turno actual). La delegación se controla estrictamente con **4 interruptores booleanos independientes** (`false` por defecto): `canManageInventory`, `canFiar`, `canOpenCloseCash`, `canManageRefunds`. Se eliminan `canViewReports` y `canViewInventory`. |
+| **SPEC-006** | Erradicación del PIN de Caja Secundario | Se erradica todo PIN secundario en caja. La operación de caja se rige por `canOpenCloseCash`, la **propiedad estricta del turno** (`opened_by` o Admin) y el **Cierre Asistido (3 intentos)**. |
+| **POL-AUD-01** | Inviolabilidad, Soft-Delete y Fotografía Histórica Inmutable | Prohibición absoluta de `DELETE` sobre `employees`. La baja es lógica (`is_active = false`). Además, toda transacción en tablas operativas y de auditoría estampa una **fotografía histórica inmutable (`actor_name`, `actor_role`)** del actor en el instante del evento, preservando la trazabilidad aunque el nombre se edite o el empleado se desactive. |
 
 ### 0.2 Contratos Vecinos que Delimitan este SDD
 
-- **`SDD_001_SEGURIDAD_DIARIA.md` (Pase Diario Zero Trust):** Subordina la vigencia operativa diaria del empleado a un pase aprobado en `daily_passes`. Al conmutar `is_active = false`, se revoca de inmediato cualquier pase diario activo.
-- **`SDD_002_REGISTRO_ADMIN.md` / `SDD_002_1_CAMBIO_CONTRASENA.md`:** Delimita la autoridad jerárquica del dueño/administrador (`admin_profiles`), quien es el único actor autorizado para dar de alta, desactivar o modificar credenciales de empleados.
-- **`SDD_004_CONTROL_DE_CAJA.md` / `SDD_020_CAJA_MULTICANAL.md`:** Gobierna la interacción con el turno de caja. Si el empleado tiene el toggle `canOpenCloseCash = true`, puede invocar `abrir_caja` y `cerrar_caja`. Si el turno de caja está cerrado, la capacidad de venta se degrada a "Solo Lectura".
-- **`SDD_006_NUCLEO_INVENTARIO_PADRE.md` / `SDD_006_01_01_MOVIMIENTOS_ENTRADA.md` / `SDD_006_02_GESTOR_REEMBOLSOS.md`:** Requiere `canManageInventory = true` para crear productos, registrar entradas de mercancía o emitir reembolsos, y `canViewInventory = true` para consultar stock. Registra la autoría en `inventory_movements.created_by`.
-- **`SDD_007_NUCLEO_VENTAS_PADRE.md` / `SDD_007_01_NUCLEO_POS.md` / `SDD_007_02_TICKET_DE_VENTA.md`:** Asigna de forma inmutable `sales.employee_id = get_employee_id_from_session()` en cada venta procesada (`rpc_procesar_venta_v3`) e imprime la identificación del cajero en el comprobante fiscal.
-- **`SDD_009_CLIENTES.md` / `SDD_024_POLITICA_FIADOS.md`:** Requiere el toggle `canFiar = true` para habilitar el método de pago a crédito en el POS. Asienta la autoría de recaudos en `client_ledger.created_by`.
-- **`SDD_018_CONTROL_OPERACIONAL.md` / `SDD_027_01_REPORTES_CAJA.md`:** El toggle `canViewReports = true` faculta la visualización del reporte ciego del turno activo. En `SDD_018`, el Pilar 4 analiza la productividad, ticket promedio, descuadres y anulaciones filtrando opcionalmente por `p_employee_id`.
-- **`SDD_005_AUDITORIA_TRAZABILIDAD.md`:** Inviolabilidad contable y auditoría forense de mutaciones de perfil y seguridad (`audit_logs`, `audit_seguridad`).
+- **`SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md` (Contrato Marco):** Fuente autoritativa única para el esquema cerrado de 4 permisos, 5 capacidades base, funciones centralizadas (`assert_store_admin`, `assert_employee_permission`, `resolve_actor_snapshot`), propiedad estricta del turno y fotografía histórica inmutable.
+- **`SDD_001_SEGURIDAD_DIARIA.md` / `SDD_015_GESTION_DISPOSITIVOS.md`:** Subordinan el acceso diario a `daily_passes` con continuidad `<24h` en turno nocturno abierto y regla de 1 dispositivo por cuenta. Al desactivar (`is_active = false`), `toggle_empleado_activo` debe revocar tanto `pass_date = v_today` como `v_today - 1` si aplica turno `<24h` (Brecha `B-06`).
+- **`SDD_002_REGISTRO_ADMIN.md` / `SDD_002_1_CAMBIO_CONTRASENA.md`:** Delimita la autoridad exclusiva de `admin_profiles` (`'owner'`, `'manager'`).
+- **`SDD_004_CONTROL_DE_CAJA.md` / `SDD_020_CAJA_MULTICANAL.md`:** Si el empleado tiene `canOpenCloseCash = true`, puede abrir caja y cerrar **únicamente el turno que él mismo abrió** bajo Cierre Asistido (3 intentos). Sin caja abierta, la venta POS se bloquea pero las tareas base logísticas (`merma`, `consumo_negocio`) e inventario (`canManageInventory`) continúan activas.
+- **`SDD_006_NUCLEO_INVENTARIO_PADRE.md` / `SDD_006_01_01` / `SDD_006_01_02` / `SDD_006_02`:** `canManageInventory` habilita catálogo completo, baja lógica, costos de adquisición, Kardex, entradas, ajustes por conteo físico (`+/-`) y devoluciones físicas a proveedor (`$0` en caja). `canManageRefunds` habilita reembolsos desde el POS (con etiqueta `"merma"` o reingreso vendible). Mermas y Consumo del Negocio están abiertos a todo empleado activo sin mostrar costos.
+- **`SDD_007_01_NUCLEO_POS.md`:** Todo empleado activo puede vender en POS (capacidad base) y registrar Consumo/Retiro Personal (`$0` caja, asignado automáticamente a su propio perfil). Estampa `actor_name`/`actor_role` en `sales`.
+- **`SDD_009_CLIENTES.md` / `SDD_024_POLITICA_FIADOS.md`:** Exigen `canFiar = true` para fiar en POS, cobrar abonos y consultar ficha/estado de cuenta de cliente activo. CRUD y cupos son 100% Admin-only. Estampa `actor_name`/`actor_role` en `client_ledger`.
+- **`SDD_005_AUDITORIA_TRAZABILIDAD.md` / `SDD_008_REPORTES.md` / `SDD_018_CONTROL_OPERACIONAL.md` / `SDD_027_01_REPORTES_CAJA.md`:** Se **elimina** `canViewReports`. Todos los reportes, métricas financieras y Evidence Hub son **100% exclusivos del Administrador**. El empleado solo consulta **sus propios movimientos del turno actual** (`rpc_obtener_mis_movimientos_turno`).
 
 ---
 
-### 0.3 Auditoría de BD contra Realidad (Deudas Técnicas Cerradas en Ola 5)
+### 0.3 Auditoría de BD contra Realidad (Deudas Técnicas Cerradas y Pendientes Fase 3)
 
-| ID | Hallazgo / Componente | Estado en BD Real | Evidencia de Cierre en Ola 5 |
+| ID | Hallazgo / Componente | Estado en BD Real | Evidencia de Cierre en Ola 5 / Estado Fase 3 |
 | :--- | :--- | :--- | :--- |
 | **D-1** | Filtros y Búsqueda en Directorio (`rpc_obtener_empleados` - H14) | 🟢 Resuelto | Implementado y verificado en `20261017134000_wave5_daily_security_devices_and_employees.sql` con máscara segura de PIN (`pin = ''`). |
-| **D-2** | Revocación Reactiva al Desactivar (`toggle_empleado_activo`) | 🟢 Resuelto | Al conmutar `is_active = false`, actualiza atómicamente `daily_passes.status = 'rejected'` para pases aprobados del día actual. |
+| **D-2** | Revocación Reactiva al Desactivar (`toggle_empleado_activo`) | 🟠 Pendiente `<24h` | Hoy revoca `pass_date = v_today`; debe ampliarse a `pass_date IN (v_today, v_today - 1)` cuando exista turno abierto `<24h` (Brecha `B-06` de `SDD-003-01`). |
 | **D-3** | Unicidad Global de `username` | 🟢 Resuelto | Verificado con constraint `employees_username_key` y validación en `crear_empleado`. |
 | **D-4** | **Tope de Personal excluye al Propietario (`crear_empleado` / `toggle_empleado_activo`).** | 🟢 Resuelto | Verificado con filtro `AND NOT EXISTS (SELECT 1 FROM public.admin_profiles ap WHERE ap.id = e.id)`. Permite exactamente 1 Admin + 5 Colaboradores activos. |
 | **D-5** | **Resolución pgcrypto y search_path en RPCs de Personal (`crear_empleado`, `actualizar_pin_empleado`).** | 🟢 Resuelto | Implementado y verificado en `20261031140000_fix_employee_pgcrypto_search_path.sql` con `SET search_path = public, extensions`, llamadas explícitas a `extensions.crypt` y `extensions.gen_salt('bf')`, y sanitización de FK en `audit_logs`. |
+| **D-6** | Esquema Cerrado de 4 Permisos y Guardia Admin en `rpc_obtener_empleados` (`B-01`) | 🔴 Pendiente Fase 3 | `crear_empleado` aún acepta llaves legacy (`canViewReports`, `canViewInventory`) y `rpc_obtener_empleados` usa `assert_store_access` sin exigir `assert_store_admin`. Debe validar exactamente las 4 llaves canónicas y exigir `admin_profiles`. |
+| **D-7** | Fotografía Histórica Inmutable (`actor_name`, `actor_role` — `B-05`) | 🔴 Pendiente Fase 3 | Las tablas operativas y de auditoría aún carecen de columnas de snapshot histórico textual; hoy solo `client_lifecycle_audit` (`20261111173000`) las implementa. |
 
 ---
 
@@ -53,10 +54,12 @@
 
 - **Alias Numérico (`username`):** Identificador alfanumérico o numérico (cédula o teléfono) que identifica unívocamente al empleado a nivel global en todo el sistema multi-tienda. Respaldado por el constraint físico `employees_username_key` (`UNIQUE (username)`).
 - **PIN Operativo:** Código numérico confidencial de exactamente 4 dígitos gestionado por el Administrador. Se persiste exclusivamente como huella criptográfica unidireccional Blowfish (`pin_hash`) mediante `crypt(p_pin, gen_salt('bf'))`.
-- **Pase Diario (`daily_pass`):** Credencial temporal vinculada a `employees.id` requerida cada día para desbloquear el Punto de Venta bajo el principio Zero Trust (`POL-SEC-02`).
+- **Pase Diario (`daily_pass`):** Credencial temporal vinculada a `employees.id` requerida cada día para desbloquear el Punto de Venta bajo el principio Zero Trust (`POL-SEC-02`), con continuidad de medianoche mientras exista turno abierto `<24h`.
 - **Baja Lógica (Soft-Delete):** Mecanismo de revocación de acceso mediante la mutación de estado `is_active = false`. Inhabilita la autenticación e invalida sesiones vivas sin destruir las referencias foráneas transaccionales.
 - **Límite de Equipo (`P_MAX_EMPLOYEES_PER_STORE`):** Parámetro de gobernanza que restringe a un máximo de 5 empleados operativos activos simultáneos por tienda (excluyendo el perfil del propietario en `admin_profiles`), evaluado a nivel de motor de base de datos (`1 Admin + 5 Empleados`).
-- **Toggles de Permisos (`permissions`):** Documento JSONB estructurado que contiene banderas booleanas independientes (`canManageInventory`, `canViewInventory`, `canFiar`, `canOpenCloseCash`, `canViewReports`) según `POL-SEG-03`.
+- **Capacidades Operativas Base (5):** Acciones implícitas de todo empleado activo con pase vigente, sin requerir interruptores: (1) vender en POS (caja abierta), (2) gastos menores desde Caja POS, (3) mermas y consumo del negocio (`$0` caja), (4) consumo/retiro personal en carrito POS sobre su propio perfil, y (5) ver sus propios movimientos del turno actual.
+- **Toggles de Permisos (`permissions`):** Documento JSONB cerrado con exactamente **4 llaves booleanas independientes** (`false` por defecto): `canManageInventory`, `canFiar`, `canOpenCloseCash` y `canManageRefunds` según `POL-SEG-03` y `SDD-003-01`. Quedan eliminados `canViewInventory` y `canViewReports`.
+- **Fotografía Histórica Inmutable (Snapshot de Firma):** Almacenamiento de `actor_name` y `actor_role` dentro de cada registro transaccional/auditoría para garantizar trazabilidad fiel aunque el perfil se edite o desactive después (`FRD-003` R6).
 - **Degradación por Caja Cerrada:** Restricción operacional en la cual un empleado activo con pase diario ve bloqueada la capacidad de cobro en el POS mientras no exista una sesión de caja abierta en la tienda.
 
 ---
@@ -313,13 +316,12 @@ En estricto apego al Contrato de Interfaz Global, todas las mutaciones retornan 
       "type": "object",
       "properties": {
         "canManageInventory": { "type": "boolean", "default": false },
-        "canViewInventory": { "type": "boolean", "default": false },
         "canFiar": { "type": "boolean", "default": false },
         "canOpenCloseCash": { "type": "boolean", "default": false },
-        "canViewReports": { "type": "boolean", "default": false }
+        "canManageRefunds": { "type": "boolean", "default": false }
       },
       "additionalProperties": false,
-      "description": "Matriz de permisos granulares RBAC (POL-SEG-03)"
+      "description": "Esquema cerrado de 4 permisos delegables RBAC (POL-SEG-03 / SDD-003-01)"
     }
   },
   "additionalProperties": false
@@ -540,12 +542,12 @@ En estricto apego al Contrato de Interfaz Global, todas las mutaciones retornan 
           "is_active": { "type": "boolean" },
           "permissions": {
             "type": "object",
+            "required": ["canManageInventory", "canFiar", "canOpenCloseCash", "canManageRefunds"],
             "properties": {
               "canManageInventory": { "type": "boolean" },
-              "canViewInventory": { "type": "boolean" },
               "canFiar": { "type": "boolean" },
               "canOpenCloseCash": { "type": "boolean" },
-              "canViewReports": { "type": "boolean" }
+              "canManageRefunds": { "type": "boolean" }
             },
             "additionalProperties": false
           },
@@ -641,7 +643,7 @@ En cumplimiento riguroso de la **Regla 7 de AGENTS.md**, se formalizan explícit
 - **Condición de revisión futura:** Permanente / Invariante físico del esquema de base de datos.
 
 #### 2. D-2 (H-2): Estandarización de Permisos Granulares (POL-SEG-03 / `permissions` JSONB)
-- **Qué se decidió:** Consolidar las 5 llaves canónicas en camelCase (`canManageInventory`, `canViewInventory`, `canFiar`, `canOpenCloseCash`, `canViewReports`) dentro de la columna física `permissions` (JSONB) con estructura plana y valores booleanos por defecto `false`.
+- **Qué se decidió:** Consolidar las **4 llaves canónicas** en camelCase (`canManageInventory`, `canFiar`, `canOpenCloseCash`, `canManageRefunds`) dentro de la columna física `permissions` (JSONB) con estructura plana y valores booleanos por defecto `false` (erradicando `canViewInventory` y `canViewReports`).
 - **Por qué (Trade-off):** Otorga extensibilidad horizontal para incorporar futuros permisos funcionales sin requerir alteraciones DDL en la tabla `employees`, garantizando compatibilidad inmediata con la interfaz Vue.
 - **Condición de revisión futura:** Si el volumen transaccional de auditoría requiere indexación especializada por permiso, evaluar migración a columnas booleanas nativas en la versión 3.0.
 

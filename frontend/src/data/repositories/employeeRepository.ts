@@ -27,14 +27,19 @@ export const employeeMapper: RepositoryMappers<EmployeeDB, Employee> = {
         // Safe casting of permissions JSON to Interface
         // Default permissions if null
         const defaultPermissions: EmployeePermissions = {
-            canSell: false,
-            canViewInventory: false,
-            canViewReports: false,
+            canManageInventory: false,
             canFiar: false,
-            canOpenCloseCash: false
+            canOpenCloseCash: false,
+            canManageRefunds: false
         };
 
-        const perms = (row.permissions as unknown as EmployeePermissions) || defaultPermissions;
+        const rawPerms = (row.permissions as unknown as Partial<EmployeePermissions>) || {};
+        const perms: EmployeePermissions = {
+            canManageInventory: Boolean(rawPerms.canManageInventory),
+            canFiar: Boolean(rawPerms.canFiar),
+            canOpenCloseCash: Boolean(rawPerms.canOpenCloseCash),
+            canManageRefunds: Boolean(rawPerms.canManageRefunds)
+        };
 
         return {
             id: row.id,
@@ -98,18 +103,16 @@ const baseRepository = createSupabaseRepository<Employee, EmployeeDB>(
 export const employeeRepository: EmployeeRepository = {
     getAll: async (storeId: string): Promise<Employee[]> => {
         if (isSupabaseConfigured() && navigator.onLine) {
-            try {
-                const supabase = getSupabaseClient()!;
-                const { data, error } = await supabase.rpc('rpc_obtener_empleados', {
-                    p_store_id: storeId
-                });
-                if (!error && data) {
-                    const list = Array.isArray(data) ? data : (data as any).data || [];
-                    return list.map(employeeMapper.toDomain);
-                }
-            } catch (e) {
-                logger.warn('[EmployeeRepo] rpc_obtener_empleados fallback', e);
+            const supabase = getSupabaseClient()!;
+            const { data, error } = await supabase.rpc('rpc_obtener_empleados', {
+                p_store_id: storeId
+            });
+            if (error) {
+                logger.error('[EmployeeRepo] rpc_obtener_empleados error:', error);
+                throw new Error(error.message);
             }
+            const list = Array.isArray(data) ? data : (data as any)?.data || [];
+            return list.map(employeeMapper.toDomain);
         }
         return baseRepository.getAll(storeId);
     },
@@ -117,16 +120,46 @@ export const employeeRepository: EmployeeRepository = {
     getById: baseRepository.getById,
 
     /**
-     * Custom UPDATE method to handle PIN correctly
+     * Custom UPDATE method: valida no mutar PIN en edición y persiste permisos vía RPC cerrado
      */
     async update(id: string, data: Partial<Employee>): Promise<Employee | null> {
-        // If PIN is empty or not provided, use standard update without PIN
-        if (!data.pin || data.pin.trim() === '') {
-            const { pin, ...dataWithoutPin } = data;
-            return baseRepository.update(id, dataWithoutPin as any);
+        if (data.pin && data.pin.trim() !== '') {
+            throw new Error('No se puede cambiar el PIN durante la edición. Usa la función "Cambiar PIN" específica.');
         }
 
-        throw new Error('No se puede cambiar el PIN durante la edición. Usa la función "Cambiar PIN" específica.');
+        const { pin, permissions, ...otherFields } = data;
+        let cleanPerms: EmployeePermissions | undefined;
+
+        if (permissions) {
+            cleanPerms = {
+                canManageInventory: Boolean(permissions.canManageInventory),
+                canFiar: Boolean(permissions.canFiar),
+                canOpenCloseCash: Boolean(permissions.canOpenCloseCash),
+                canManageRefunds: Boolean(permissions.canManageRefunds)
+            };
+
+            if (isSupabaseConfigured() && navigator.onLine) {
+                const supabase = getSupabaseClient()!;
+                const { error } = await supabase.rpc('rpc_actualizar_permisos_empleado', {
+                    p_employee_id: id,
+                    p_permissions: cleanPerms as unknown as any
+                });
+                if (error) {
+                    logger.error('[EmployeeRepo] rpc_actualizar_permisos_empleado error:', error);
+                    throw new Error(error.message);
+                }
+            }
+        }
+
+        if (Object.keys(otherFields).length > 0) {
+            const updated = await baseRepository.update(id, otherFields as any);
+            if (updated && cleanPerms) {
+                return { ...updated, permissions: cleanPerms };
+            }
+            return updated;
+        }
+
+        return baseRepository.getById(id);
     },
 
     delete: (id: string) => baseRepository.delete(id),

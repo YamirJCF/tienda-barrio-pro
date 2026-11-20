@@ -1,12 +1,24 @@
 ---
 name: add-doc
-description: Agregar nuevos documentos a 01_REQUIREMENTS siguiendo el sistema de trazabilidad y autoguardado en ramas draft
+description: Agregar nuevos documentos a documentation/01_requirements siguiendo el sistema de trazabilidad y autoguardado en ramas draft
 ---
 
 # Workflow: Agregar Documentación (/add-doc)
 
+## 🧭 Control de Flujo (Pipeline)
+- **Nivel:** 1 — Trazabilidad y Autoguardado en Borrador (Ruta A)
+- **Rama permitida:** `draft/[nombre-documento]` (**PROHIBIDO** hacer push remoto desde esta skill).
+- **Entrada requerida (Gate In):** Documento nuevo o iterado en `documentation/01_requirements/` conforme a `doc-standard`.
+- **Límite estricto:** Registra en `MAPA_LOGICA_GLOBAL.md` y hace commit local en rama `draft/*`; **PROHIBIDO** tocar código de aplicación o ejecutar `git push`.
+- **🛑 Freno de Emergencia (Hard Stop):** Si falta actualizar `MAPA_LOGICA_GLOBAL.md` → Prohibido dar por cerrada la iteración.
+- **➡️ Siguiente eslabón:** `validate-policy` (si el documento es un FRD listo para formalizar).
+  - **En Modo AUTO:** Si el FRD está completo, ejecuta `validate-policy` inmediatamente después del autoguardado local.
+  - **En Modo PAUSADO:** Confirma el guardado en `draft/*` y pregunta si desea pasar al peaje `validate-policy`.
+
+---
+
 > [!CAUTION]
-> **OBLIGATORIO:** Este workflow debe ejecutarse SIEMPRE que se cree o itere un nuevo documento en `01_REQUIREMENTS/`.
+> **OBLIGATORIO:** Este workflow debe ejecutarse SIEMPRE que se cree o itere un nuevo documento en `documentation/01_requirements/`.
 
 ---
 
@@ -20,11 +32,11 @@ Antes de crear documentación, verificar:
 
 ## Pasos OBLIGATORIOS
 
-### 1. Crear o Actualizar el documento en `01_REQUIREMENTS/`
+### 1. Crear o Actualizar el documento en `documentation/01_requirements/`
 
 ```bash
 # Verificar que no existe duplicado con otro nombre
-ls 01_REQUIREMENTS/*.md | Select-String "nombre-documento"
+ls documentation/01_requirements/*.md | Select-String "nombre-documento"
 ```
 
 - Usar formato `kebab-case.md` (o la nomenclatura oficial `FRD_XXX_...`, `DSD_XXX_...`, `UXD_XXX_...`)
@@ -38,7 +50,7 @@ ls 01_REQUIREMENTS/*.md | Select-String "nombre-documento"
 > **NUNCA omitir este paso.** Según `SISTEMA_TRAZABILIDAD.md`:
 > "✅ SIEMPRE Se actualiza MAPA_LOGICA_GLOBAL.md tras un cambio exitoso"
 
-Editar `04_DEV_ORCHESTRATION/MAPA_LOGICA_GLOBAL.md`:
+Editar `documentation/04_dev_orchestration/MAPA_LOGICA_GLOBAL.md`:
 
 1. **Actualizar versión** en el encabezado (incrementar vX)
 2. **Actualizar contador** de "Módulos documentados" en Resumen Ejecutivo
@@ -78,7 +90,7 @@ git commit -m "docs(draft): iteración [nombre-documento]"
 
 Antes de notificar al usuario que terminaste esta iteración, verificar:
 
-- [ ] ✅ Documento creado/editado en `01_REQUIREMENTS/`
+- [ ] ✅ Documento creado/editado en `documentation/01_requirements/`
 - [ ] ✅ `MAPA_LOGICA_GLOBAL.md` actualizado (versión + contador + fila)
 - [ ] ✅ Referencias cruzadas agregadas (si aplica)
 - [ ] ✅ Autoguardado local completado en rama `draft/[nombre-documento]`
@@ -95,4 +107,4 @@ Antes de notificar al usuario que terminaste esta iteración, verificar:
 
 ---
 
-> **Referencia:** `04_DEV_ORCHESTRATION/SISTEMA_TRAZABILIDAD.md`
+> **Referencia:** `documentation/04_dev_orchestration/SISTEMA_TRAZABILIDAD.md`
