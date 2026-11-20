@@ -830,6 +830,7 @@ export type Database = {
           reason: string | null
           reference_invoice_id: string | null
           reference_sale_price: number | null
+          reversed_movement_id: string | null
           session_id: string | null
           supplier_id: string | null
           unit_cost: number | null
@@ -849,6 +850,7 @@ export type Database = {
           reason?: string | null
           reference_invoice_id?: string | null
           reference_sale_price?: number | null
+          reversed_movement_id?: string | null
           session_id?: string | null
           supplier_id?: string | null
           unit_cost?: number | null
@@ -868,6 +870,7 @@ export type Database = {
           reason?: string | null
           reference_invoice_id?: string | null
           reference_sale_price?: number | null
+          reversed_movement_id?: string | null
           session_id?: string | null
           supplier_id?: string | null
           unit_cost?: number | null
@@ -1141,6 +1144,7 @@ export type Database = {
           id: string
           product_id: string
           quantity: number
+          refunded_quantity: number
           sale_id: string
           subtotal: number
           unit_cost: number | null
@@ -1151,6 +1155,7 @@ export type Database = {
           id?: string
           product_id: string
           quantity: number
+          refunded_quantity: number
           sale_id: string
           subtotal: number
           unit_cost?: number | null
@@ -1547,10 +1552,23 @@ export type Database = {
       assert_store_admin: { Args: { p_store_id: string }; Returns: undefined }
       buscar_producto_pos: {
         Args: {
+          p_include_zero_stock?: boolean
           p_limit?: number
           p_offset?: number
           p_store_id: string
           p_term: string
+        }
+        Returns: Json
+      }
+      get_inventory_kardex: {
+        Args: {
+          p_actor_filter?: string
+          p_end_date?: string
+          p_limit?: number
+          p_movement_type?: string
+          p_offset?: number
+          p_product_id: string
+          p_start_date?: string
         }
         Returns: Json
       }
@@ -1737,19 +1755,51 @@ export type Database = {
         Args: { p_employee_id: string; p_permissions: Json }
         Returns: Json
       }
-      rpc_actualizar_precio_lote:
-        | {
-            Args: {
-              p_batch_id: string
-              p_cost_unit: number
-              p_sale_price: number
-            }
-            Returns: Json
-          }
-        | {
-            Args: { p_batch_id: string; p_new_sale_price: number }
-            Returns: Json
-          }
+      rpc_actualizar_precio_lote: {
+        Args: {
+          p_batch_id: string
+          p_cost_unit: number
+          p_sale_price: number
+        }
+        Returns: Json
+      }
+      rpc_buscar_ventas_para_reembolso: {
+        Args: {
+          p_limit?: number
+          p_query?: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
+      rpc_procesar_reembolso_item: {
+        Args: {
+          p_is_merma?: boolean
+          p_original_channel: string
+          p_quantity: number
+          p_reason: string
+          p_refund_channel: string
+          p_sale_item_id: string
+        }
+        Returns: Json
+      }
+      rpc_registrar_contra_movimiento: {
+        Args: {
+          p_original_movement_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      rpc_registrar_salida_logistica: {
+        Args: {
+          p_direction?: string
+          p_movement_type: string
+          p_product_id: string
+          p_quantity: number
+          p_reason: string
+          p_supplier_id?: string
+        }
+        Returns: Json
+      }
       rpc_actualizar_producto_catalogo: {
         Args: {
           p_category?: string
@@ -1962,31 +2012,20 @@ export type Database = {
         }
         Returns: Json
       }
-      rpc_registrar_entrada:
-        | {
-            Args: {
-              p_product_id: string
-              p_purchase_price: number
-              p_quantity: number
-              p_reason?: string
-              p_sale_price: number
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_invoice_reference?: string
-              p_payment_type?: string
-              p_product_id: string
-              p_purchase_price: number
-              p_quantity: number
-              p_reason?: string
-              p_reference_invoice_id?: string
-              p_sale_price: number
-              p_supplier_id?: string
-            }
-            Returns: Json
-          }
+      rpc_registrar_entrada: {
+        Args: {
+          p_invoice_reference?: string
+          p_payment_type?: string
+          p_product_id: string
+          p_purchase_price: number
+          p_quantity: number
+          p_reason?: string
+          p_reference_invoice_id?: string
+          p_sale_price: number
+          p_supplier_id?: string
+        }
+        Returns: Json
+      }
       rpc_registrar_entrada_masiva: {
         Args: { p_entries: Json; p_store_id: string }
         Returns: Json

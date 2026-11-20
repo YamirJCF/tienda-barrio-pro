@@ -78,6 +78,85 @@ function mapSaleRpcError(rawMessage?: string): { message: string; code?: string 
     return { message: raw || 'Error procesando operación de venta' };
 }
 
+export interface RefundCandidateItem {
+    sale_item_id: string;
+    product_id: string;
+    product_name: string;
+    plu?: string | null;
+    current_stock: number;
+    is_weighable: boolean;
+    measurement_unit?: string | null;
+    quantity: number;
+    refunded_quantity: number;
+    remaining_quantity: number;
+    unit_price: number;
+    subtotal: number;
+}
+
+export interface RefundCandidateSale {
+    sale_id: string;
+    ticket_number: number;
+    created_at: string;
+    total: number;
+    payment_method: string;
+    actor_name: string;
+    items: RefundCandidateItem[];
+}
+
+export interface ProcessRefundPayload {
+    saleItemId: string;
+    quantity: number;
+    refundChannel: 'efectivo' | 'nequi' | 'llave_bre';
+    originalChannel: 'efectivo' | 'nequi' | 'llave_bre' | 'fiado' | 'transferencia';
+    reason: string;
+    isMerma: boolean;
+}
+
+export interface ProcessRefundResult {
+    cashMovementId: string;
+    inventoryMovementId: string;
+    saleId: string;
+    saleItemId: string;
+    ticketNumber: number;
+    amountRefunded: number;
+    quantityRefunded: number;
+    refundChannel: string;
+    originalChannel: string;
+    isMerma: boolean;
+    newStock: number;
+    actorName: string;
+    actorRole: string;
+}
+
+function mapRefundRpcError(rawMessage?: string): { message: string; code?: string } {
+    const raw = String(rawMessage || '');
+    if (raw.includes('INSUFFICIENT_FUNDS_IN_CHANNEL')) {
+        return {
+            message: raw.replace(/^.*INSUFFICIENT_FUNDS_IN_CHANNEL:\s*/i, ''),
+            code: 'INSUFFICIENT_FUNDS_IN_CHANNEL'
+        };
+    }
+    if (raw.includes('QUANTITY_EXCEEDED')) {
+        return {
+            message: raw.replace(/^.*QUANTITY_EXCEEDED:\s*/i, ''),
+            code: 'QUANTITY_EXCEEDED'
+        };
+    }
+    if (raw.includes('SALE_ALREADY_VOIDED')) {
+        return {
+            message: 'Esta venta fue anulada y no admite reembolsos por ítem.',
+            code: 'SALE_ALREADY_VOIDED'
+        };
+    }
+    if (raw.includes('SALE_HAS_PARTIAL_REFUNDS')) {
+        return {
+            message: 'Esta venta tiene reembolsos parciales registrados y no puede anularse completa.',
+            code: 'SALE_HAS_PARTIAL_REFUNDS'
+        };
+    }
+    return mapSaleRpcError(rawMessage);
+}
+
 /**
  * Mapper Implementation for Sale
  * Enforces:
@@ -166,6 +245,8 @@ export interface SaleRepository extends EntityRepository<Sale> {
     getLastTicketNumber(storeId: string): Promise<number>;
     voidSale(saleId: string, reason: string): Promise<{ success: boolean; error?: string }>;
     getSaleDetail(saleId: string): Promise<any>;
+    searchRefundCandidates(storeId: string, query?: string, limit?: number): Promise<RefundCandidateSale[]>;
+    processItemRefund(payload: ProcessRefundPayload): Promise<ProcessRefundResult>;
 }
 
 // Create base repository with Mappers
@@ -569,6 +650,83 @@ export const saleRepository: SaleRepository = {
         });
         if (error) throw error;
         return data;
+    },
+
+    async searchRefundCandidates(storeId: string, query?: string, limit: number = 20): Promise<RefundCandidateSale[]> {
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Sin conexión activa con el servidor.');
+
+        const { data, error } = await supabase.rpc('rpc_buscar_ventas_para_reembolso', {
+            p_store_id: storeId,
+            p_query: query?.trim() || undefined,
+            p_limit: limit
+        });
+
+        if (error) {
+            const mapped = mapRefundRpcError(error.message);
+            const err: any = new Error(mapped.message);
+            err.code = mapped.code;
+            throw err;
+        }
+
+        const res = data as any;
+        return Array.isArray(res?.data) ? res.data : [];
+    },
+
+    async processItemRefund(payload: ProcessRefundPayload): Promise<ProcessRefundResult> {
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Sin conexión activa con el servidor.');
+
+        const { data, error } = await supabase.rpc('rpc_procesar_reembolso_item', {
+            p_sale_item_id: payload.saleItemId,
+            p_quantity: payload.quantity,
+            p_refund_channel: payload.refundChannel,
+            p_original_channel: payload.originalChannel,
+            p_reason: payload.reason,
+            p_is_merma: payload.isMerma
+        });
+
+        if (error) {
+            const mapped = mapRefundRpcError(error.message);
+            const err: any = new Error(mapped.message);
+            err.code = mapped.code;
+            throw err;
+        }
+
+        const res = data as any;
+        if (!res || res.success === false || !res.data) {
+            const mapped = mapRefundRpcError(res?.error || 'Error procesando reembolso');
+            const err: any = new Error(mapped.message);
+            err.code = mapped.code;
+            throw err;
+        }
+
+        const d = res.data;
+        try {
+            const inventoryStore = useInventoryStore();
+            if (payload.isMerma === false && typeof d.new_stock === 'number') {
+                // Re-sincronizar stock del producto reembolsado en memoria desde la verdad del servidor
+                await inventoryStore.fetchProducts(undefined);
+            }
+        } catch (syncErr) {
+            logger.warn('[SaleRepo] No se pudo refrescar inventario tras reembolso:', syncErr);
+        }
+
+        return {
+            cashMovementId: d.cash_movement_id,
+            inventoryMovementId: d.inventory_movement_id,
+            saleId: d.sale_id,
+            saleItemId: d.sale_item_id,
+            ticketNumber: Number(d.ticket_number),
+            amountRefunded: Number(d.amount_refunded),
+            quantityRefunded: Number(d.quantity_refunded),
+            refundChannel: d.refund_channel,
+            originalChannel: d.original_channel,
+            isMerma: Boolean(d.is_merma),
+            newStock: Number(d.new_stock),
+            actorName: d.actor_name,
+            actorRole: d.actor_role
+        };
     }
 };
 

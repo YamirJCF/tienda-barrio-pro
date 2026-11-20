@@ -240,10 +240,13 @@ export const useInventoryStore = defineStore(
           // Stock inicial: usar rpc_registrar_entrada (FIFO) en lugar de INSERT directo.
           // CRÍTICO: el error NO se silencia — si falla, el producto queda inconsistente.
           if (initialStock.gt(0)) {
+            const initialCost = productData.cost
+              ? new Decimal(productData.cost).toNumber()
+              : ((productData as any).cost_price ?? 0);
             await productRepository.registerEntry(
               withDecimals.id,
               initialStock.toNumber(),
-              (productData as any).cost_price ?? 0,
+              initialCost,
               priceRounded.toNumber(),
               'Stock inicial al crear producto'
             );
@@ -404,14 +407,13 @@ export const useInventoryStore = defineStore(
       const qty = movement.quantity instanceof Decimal ? movement.quantity : new Decimal(movement.quantity);
       let newStock = product.stock;
 
-      if (['entrada', 'devolucion', 'ajuste'].includes(movement.type)) {
-        if (movement.type === 'ajuste') {
-          newStock = newStock.plus(qty);
-        } else {
-          newStock = newStock.plus(qty);
-        }
+      if (['entrada', 'devolucion'].includes(movement.type)) {
+        newStock = newStock.plus(qty);
+      } else if (movement.type === 'ajuste') {
+        // CHK-507: Los ajustes soportan signo explícito (+/-)
+        newStock = newStock.plus(qty);
       } else if (['salida', 'venta'].includes(movement.type)) {
-        newStock = newStock.minus(qty);
+        newStock = newStock.minus(qty.abs());
       }
 
       if (newStock.lt(0)) {
@@ -525,6 +527,17 @@ export const useInventoryStore = defineStore(
         product.notifiedLowStock = false;
       }
 
+      if (isSupabaseConfigured()) {
+        try {
+          const fresh = await productRepository.getById(product.id);
+          if (fresh && fresh.stock) {
+            product.stock = fresh.stock instanceof Decimal ? fresh.stock : new Decimal(fresh.stock);
+          }
+        } catch (syncErr) {
+          logger.warn('[InventoryStore] Post-movement stock sync skipped:', syncErr);
+        }
+      }
+
       return { success: true, product };
     };
 
@@ -588,6 +601,39 @@ export const useInventoryStore = defineStore(
       return result;
     };
 
+    const registerLogisticExit = async (params: {
+      productId: string;
+      movementType: 'merma' | 'consumo_negocio' | 'ajuste_conteo' | 'devolucion_proveedor';
+      quantity: number;
+      reason: string;
+      direction?: 'positive' | 'negative';
+      supplierId?: string;
+    }) => {
+      const product = products.value.find((p) => p.id === params.productId);
+      const res = await productRepository.registerLogisticExit(params);
+
+      // Sincronizar stock en memoria con la verdad autoritativa del servidor
+      if (product && typeof res.newStock === 'number') {
+        product.stock = new Decimal(res.newStock);
+        product.updatedAt = res.createdAt || new Date().toISOString();
+      }
+      return res;
+    };
+
+    const registerCounterMovement = async (
+      productId: string,
+      originalMovementId: string,
+      reason: string
+    ) => {
+      const product = products.value.find((p) => p.id === productId);
+      const res = await productRepository.registerCounterMovement(originalMovementId, reason);
+      if (product && typeof res.newStock === 'number') {
+        product.stock = new Decimal(res.newStock);
+        product.updatedAt = new Date().toISOString();
+      }
+      return res;
+    };
+
     return {
       products,
       isLoading,
@@ -607,6 +653,8 @@ export const useInventoryStore = defineStore(
       getProductByPLU,
       searchProducts,
       registerStockMovement,
+      registerLogisticExit,
+      registerCounterMovement,
       adjustStockLocal,
       updateStock,
     };

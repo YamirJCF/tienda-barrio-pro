@@ -124,13 +124,49 @@ export const productMapper: RepositoryMappers<ProductDB, Product> = {
 /**
  * Interface extending base repository with product-specific methods
  */
-interface InventoryMovementHistory {
+export interface InventoryMovementHistory {
     id: string;
     type: string;
     quantity: number;
     reason?: string;
     date: string;
     user: string;
+    actorName?: string | null;
+    actorRole?: string | null;
+    unitCost?: number | null;
+    referenceSalePrice?: number | null;
+    reversedMovementId?: string | null;
+    isReversed?: boolean;
+    supplierName?: string | null;
+}
+
+export interface KardexActorOption {
+    actorKey: string;
+    actorName: string;
+    actorRole: string;
+}
+
+export type LogisticExitType = 'merma' | 'consumo_negocio' | 'ajuste_conteo' | 'devolucion_proveedor';
+
+export interface LogisticExitParams {
+    productId: string;
+    movementType: LogisticExitType;
+    quantity: number;
+    reason: string;
+    direction?: 'positive' | 'negative';
+    supplierId?: string;
+}
+
+export interface LogisticExitResult {
+    movementId: string;
+    productId: string;
+    movementType: LogisticExitType;
+    quantity: number;
+    newStock: number;
+    unitCost: number | null;
+    actorName: string;
+    actorRole: string;
+    createdAt: string;
 }
 
 /**
@@ -149,6 +185,7 @@ export interface POSProductPageParams {
     limit?: number;
     offset?: number;
     search?: string;
+    includeZeroStock?: boolean;
 }
 
 export interface PaginatedPOSProductsResult {
@@ -204,8 +241,11 @@ export interface ProductRepository extends EntityRepository<Product> {
         paymentType?: 'contado' | 'credito';
     }): Promise<boolean>;
     getMovementHistory(productId: string, optionsOrLimit?: number | MovementHistoryFilters): Promise<InventoryMovementHistory[]>;
+    getKardexWithActors(productId: string, filters?: MovementHistoryFilters): Promise<{ movements: InventoryMovementHistory[]; actors: KardexActorOption[] }>;
     registerEntry(productId: string, quantity: number, purchasePrice: number, salePrice: number, reason?: string, supplierId?: string, paymentType?: string, invoiceRef?: string, referenceInvoiceId?: string): Promise<boolean>;
-    updateBatchPrice(batchId: string, newSalePrice: number): Promise<boolean>;
+    registerLogisticExit(params: LogisticExitParams): Promise<LogisticExitResult>;
+    registerCounterMovement(originalMovementId: string, reason: string): Promise<{ counterMovementId: string; newStock: number; quantity: number }>;
+    updateBatchPrice(batchId: string, newSalePrice: number, costUnit?: number): Promise<boolean>;
     updateCatalog(params: {
         id: string;
         name: string;
@@ -296,6 +336,7 @@ export const productRepository: ProductRepository = {
                 p_term: cleanSearch,
                 p_limit: limit,
                 p_offset: offset,
+                p_include_zero_stock: Boolean(params.includeZeroStock),
             });
 
             if (error) {
@@ -363,7 +404,7 @@ export const productRepository: ProductRepository = {
 
         const normPrefix = normalizePosPrefix(cleanSearch);
         const filtered = activeProducts
-            .filter((p) => p.stock.gt(0) && normalizePosPrefix(p.name || '').startsWith(normPrefix))
+            .filter((p) => (Boolean(params.includeZeroStock) || p.stock.gt(0)) && normalizePosPrefix(p.name || '').startsWith(normPrefix))
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
         return {
@@ -483,39 +524,36 @@ export const productRepository: ProductRepository = {
                 if (isOnline) {
                     const supabase = getSupabaseClient();
                     if (supabase) {
-                        let query = supabase
-                            .from('inventory_movements')
-                            .select('*, employees(name)')
-                            .eq('product_id', productId);
+                        const { data: rpcRes, error } = await supabase.rpc('get_inventory_kardex', {
+                            p_product_id: productId,
+                            p_movement_type: filters.movementType && filters.movementType !== 'all' ? filters.movementType : undefined,
+                            p_actor_filter: filters.createdBy && filters.createdBy !== 'all' ? filters.createdBy : undefined,
+                            p_start_date: filters.startDate || undefined,
+                            p_end_date: filters.endDate || undefined,
+                            p_limit: limit,
+                            p_offset: 0
+                        });
 
-                        if (filters.startDate) {
-                            query = query.gte('created_at', filters.startDate);
-                        }
-                        if (filters.endDate) {
-                            query = query.lte('created_at', filters.endDate);
-                        }
-                        if (filters.movementType && filters.movementType !== 'all') {
-                            query = query.eq('movement_type', filters.movementType);
-                        }
-                        if (filters.createdBy && filters.createdBy !== 'all') {
-                            query = query.eq('created_by', filters.createdBy);
-                        }
-
-                        const { data: dbData, error } = await query
-                            .order('created_at', { ascending: false })
-                            .limit(limit);
-
-                        if (!error && dbData) {
-                            remoteHistory = dbData.map((m: any): InventoryMovementHistory => ({
+                        if (!error && rpcRes) {
+                            const payload = rpcRes as any;
+                            const rows = Array.isArray(payload.data) ? payload.data : [];
+                            remoteHistory = rows.map((m: any): InventoryMovementHistory => ({
                                 id: m.id,
                                 type: m.movement_type,
-                                quantity: m.quantity,
+                                quantity: Number(m.quantity),
                                 reason: m.reason,
                                 date: m.created_at,
-                                user: m.employees?.name || 'Sistema'
+                                user: m.actor_name || 'Administrador',
+                                actorName: m.actor_name || 'Administrador',
+                                actorRole: m.actor_role || 'employee',
+                                unitCost: m.unit_cost !== null && m.unit_cost !== undefined ? Number(m.unit_cost) : null,
+                                referenceSalePrice: m.reference_sale_price !== null && m.reference_sale_price !== undefined ? Number(m.reference_sale_price) : null,
+                                reversedMovementId: m.reversed_movement_id || null,
+                                isReversed: Boolean(m.is_reversed),
+                                supplierName: m.supplier_name || null
                             }));
                         } else if (error) {
-                            logger.error('[ProductRepo] Failed to fetch history', error);
+                            logger.error('[ProductRepo] Failed to fetch kardex RPC', error);
                             throw error;
                         }
                     }
@@ -557,6 +595,59 @@ export const productRepository: ProductRepository = {
         );
 
         return data || [];
+    },
+
+    async getKardexWithActors(
+        productId: string,
+        filters: MovementHistoryFilters = {}
+    ): Promise<{ movements: InventoryMovementHistory[]; actors: KardexActorOption[] }> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            const movements = await this.getMovementHistory(productId, filters);
+            return { movements, actors: [] };
+        }
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const { data: rpcRes, error } = await supabase.rpc('get_inventory_kardex', {
+            p_product_id: productId,
+            p_movement_type: filters.movementType && filters.movementType !== 'all' ? filters.movementType : undefined,
+            p_actor_filter: filters.createdBy && filters.createdBy !== 'all' ? filters.createdBy : undefined,
+            p_start_date: filters.startDate || undefined,
+            p_end_date: filters.endDate || undefined,
+            p_limit: filters.limit || 50,
+            p_offset: 0
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Error in getKardexWithActors:', error);
+            throw error;
+        }
+
+        const payload = (rpcRes as any) || {};
+        const movements: InventoryMovementHistory[] = (Array.isArray(payload.data) ? payload.data : []).map((m: any) => ({
+            id: m.id,
+            type: m.movement_type,
+            quantity: Number(m.quantity),
+            reason: m.reason,
+            date: m.created_at,
+            user: m.actor_name || 'Administrador',
+            actorName: m.actor_name || 'Administrador',
+            actorRole: m.actor_role || 'employee',
+            unitCost: m.unit_cost !== null && m.unit_cost !== undefined ? Number(m.unit_cost) : null,
+            referenceSalePrice: m.reference_sale_price !== null && m.reference_sale_price !== undefined ? Number(m.reference_sale_price) : null,
+            reversedMovementId: m.reversed_movement_id || null,
+            isReversed: Boolean(m.is_reversed),
+            supplierName: m.supplier_name || null
+        }));
+
+        const actors: KardexActorOption[] = (Array.isArray(payload.actors) ? payload.actors : []).map((a: any) => ({
+            actorKey: a.actor_key,
+            actorName: a.actor_name,
+            actorRole: a.actor_role
+        }));
+
+        return { movements, actors };
     },
 
     /**
@@ -660,18 +751,113 @@ export const productRepository: ProductRepository = {
     },
 
     /**
-     * Update the sale price of a specific active batch
+     * CHK-503: Register a $0 logistic exit / count adjustment via rpc_registrar_salida_logistica
      */
-    async updateBatchPrice(batchId: string, newSalePrice: number): Promise<boolean> {
+    async registerLogisticExit(params: LogisticExitParams): Promise<LogisticExitResult> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            throw new Error('OFFLINE_NOT_ALLOWED: Las salidas de inventario requieren conexión a internet.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const { data, error } = await supabase.rpc('rpc_registrar_salida_logistica', {
+            p_product_id: params.productId,
+            p_movement_type: params.movementType,
+            p_quantity: params.quantity,
+            p_reason: params.reason,
+            p_direction: params.direction || 'negative',
+            p_supplier_id: params.supplierId || undefined
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to register logistic exit', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (!res || res.success === false || !res.data) {
+            throw new Error(res?.error || 'Error al registrar salida logística');
+        }
+
+        systemCacheManager.invalidateNamespace(`kardex:${params.productId}`);
+
+        const d = res.data;
+        return {
+            movementId: d.movement_id,
+            productId: d.product_id,
+            movementType: d.movement_type,
+            quantity: Number(d.quantity),
+            newStock: Number(d.new_stock),
+            unitCost: d.unit_cost !== null && d.unit_cost !== undefined ? Number(d.unit_cost) : null,
+            actorName: d.actor_name,
+            actorRole: d.actor_role,
+            createdAt: d.created_at
+        };
+    },
+
+    /**
+     * CHK-503 / CHK-510: Register compensating counter-movement in Kardex
+     */
+    async registerCounterMovement(
+        originalMovementId: string,
+        reason: string
+    ): Promise<{ counterMovementId: string; newStock: number; quantity: number }> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            throw new Error('OFFLINE_NOT_ALLOWED: Los contra-movimientos requieren conexión a internet.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const { data, error } = await supabase.rpc('rpc_registrar_contra_movimiento', {
+            p_original_movement_id: originalMovementId,
+            p_reason: reason
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to register counter movement', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (!res || res.success === false || !res.data) {
+            throw new Error(res?.error || 'Error registrando contra-movimiento');
+        }
+
+        return {
+            counterMovementId: res.data.counter_movement_id,
+            newStock: Number(res.data.new_stock),
+            quantity: Number(res.data.quantity)
+        };
+    },
+
+    /**
+     * Update the cost & sale price of a specific active batch (3-arg canonical RPC)
+     */
+    async updateBatchPrice(batchId: string, newSalePrice: number, costUnit?: number): Promise<boolean> {
         const isOnline = isSupabaseConfigured() && navigator.onLine;
         if (!isOnline) throw new Error('OFFLINE_NOT_ALLOWED: Actualizar precios requiere conexión a internet.');
 
         const supabase = getSupabaseClient();
         if (!supabase) throw new Error('Supabase client not available');
 
+        let resolvedCost = costUnit;
+        if (resolvedCost === undefined) {
+            const { data: batchRow } = await supabase
+                .from('inventory_batches')
+                .select('cost_unit')
+                .eq('id', batchId)
+                .single();
+            resolvedCost = Number(batchRow?.cost_unit ?? 0);
+        }
+
         const { data, error } = await supabase.rpc('rpc_actualizar_precio_lote', {
             p_batch_id: batchId,
-            p_new_sale_price: newSalePrice
+            p_cost_unit: resolvedCost,
+            p_sale_price: newSalePrice
         });
 
         if (error) {

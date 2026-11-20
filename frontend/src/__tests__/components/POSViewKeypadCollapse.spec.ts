@@ -221,15 +221,17 @@ describe('POSView - Tarjetas Compactas y Teclado Plegable (Opción C)', () => {
     expect((panel.element as HTMLElement).style.display).toBe('none');
   });
 
-  it('muestra únicamente el botón Buscar a ancho completo y elimina el botón Nota', () => {
+  it('muestra el botón Buscar (junto a Reembolsos para Admin/autorizados) y elimina el botón Nota', () => {
     const { wrapper } = mountPOSView();
     const panel = wrapper.find('[data-testid="pos-keypad-panel"]');
     const buttons = panel.findAll('button');
     const searchBtn = buttons.find((btn) => btn.text().includes('Buscar'));
+    const refundsBtn = panel.find('[data-testid="pos-refunds-btn"]');
     const noteBtn = buttons.find((btn) => btn.text().includes('Nota'));
 
     expect(searchBtn?.exists()).toBe(true);
-    expect(searchBtn?.classes()).toContain('w-full');
+    expect(searchBtn?.classes()).toContain('flex-1');
+    expect(refundsBtn.exists()).toBe(true);
     expect(noteBtn).toBeUndefined();
   });
 });

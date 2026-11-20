@@ -98,7 +98,7 @@
 
               <!-- Actions Column -->
               <td class="px-4 py-3 text-center">
-                <div v-if="batch.quantity_remaining > 0" class="flex justify-center gap-2">
+                <div v-if="batch.quantity_remaining > 0 && canManageInventory" class="flex justify-center gap-2">
                   <template v-if="editingBatchId === batch.id">
                     <button @click="saveEdit" :disabled="batchStore.isLoading" class="text-emerald-600 hover:text-emerald-800 disabled:opacity-50">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
@@ -144,6 +144,7 @@
 import { computed, ref, watch } from 'vue';
 import { useBatchStore } from '../../stores/batches';
 import { useInventoryStore } from '../../stores/inventory';
+import { useAuthStore } from '../../stores/auth';
 import BaseModal from '../ui/BaseModal.vue';
 import BaseButton from '../ui/BaseButton.vue';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
@@ -159,6 +160,8 @@ const emit = defineEmits(['update:modelValue']);
 
 const batchStore = useBatchStore();
 const inventoryStore = useInventoryStore();
+const authStore = useAuthStore();
+const canManageInventory = computed(() => authStore.canManageInventory || authStore.isAdmin);
 const { formatCurrency } = useCurrencyFormat();
 const { showError, showSuccess } = useNotifications();
 

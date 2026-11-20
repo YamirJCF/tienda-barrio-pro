@@ -86,7 +86,7 @@ export interface OwnShiftMovementsResponse {
 export interface MultichannelCashHistoryItem {
     id: string;
     session_id: string;
-    movement_type: 'ingreso' | 'gasto' | 'pago_proveedor';
+    movement_type: 'ingreso' | 'gasto' | 'pago_proveedor' | 'reembolso';
     origin_type: 'venta' | 'abono' | 'gasto_opex' | 'abono_proveedor' | 'reembolso';
     amount: number;
     payment_method: 'efectivo' | 'nequi' | 'llave_bre';

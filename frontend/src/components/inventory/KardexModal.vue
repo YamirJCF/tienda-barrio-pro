@@ -26,8 +26,22 @@
           </div>
 
           <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium text-slate-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700/60">
-            LRU Nivel 5
+            Kardex Seguro
           </span>
+        </div>
+
+        <!-- Row 1b: Actor Filter (CHK-510) -->
+        <div class="flex items-center gap-2">
+          <label class="text-[11px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Responsable:</label>
+          <select
+            v-model="selectedActorFilter"
+            class="flex-1 h-8 px-2.5 rounded-lg text-xs font-medium bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:ring-primary focus:border-primary"
+          >
+            <option value="all">Todos los responsables</option>
+            <option v-for="actor in actorOptions" :key="actor.actorKey" :value="actor.actorKey">
+              {{ actor.actorName }} ({{ actor.actorRole === 'owner' || actor.actorRole === 'manager' ? 'Admin' : 'Empleado' }})
+            </option>
+          </select>
         </div>
 
         <!-- Row 2: Scrollable Movement Type Ribbon -->
@@ -95,24 +109,79 @@
           <div class="flex-1 min-w-0">
             <div class="flex justify-between items-start gap-2">
               <div>
-                <p class="text-sm font-bold text-slate-900 dark:text-white capitalize">{{ move.type }}</p>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <p class="text-sm font-bold text-slate-900 dark:text-white">{{ formatTypeLabel(move.type) }}</p>
+                  <span
+                    v-if="move.reversedMovementId"
+                    class="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                  >
+                    Contra-movimiento
+                  </span>
+                  <span
+                    v-else-if="move.isReversed"
+                    class="px-1.5 py-0.5 text-[10px] font-bold uppercase rounded bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                  >
+                    Revertido
+                  </span>
+                </div>
                 <p class="text-xs text-slate-400">{{ formatDate(move.date) }}</p>
               </div>
               <div class="text-right shrink-0">
-                <span 
+                <span
                   class="font-mono font-bold text-sm block"
-                  :class="getQuantityColor(move.type)"
+                  :class="getQuantityColor(move.type, move.quantity)"
                 >
                   {{ formatQuantity(move.type, move.quantity) }}
                 </span>
-                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-mono uppercase tracking-wide">{{ move.user }}</p>
+                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-mono uppercase tracking-wide">
+                  {{ move.actorName || move.user }} · {{ move.actorRole === 'owner' || move.actorRole === 'manager' ? 'Admin' : 'Empleado' }}
+                </p>
               </div>
             </div>
-            
+
             <!-- Reason / Details -->
             <p v-if="move.reason" class="mt-2 text-xs text-slate-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-gray-100 dark:border-slate-800/80 italic">
               "{{ move.reason }}"
             </p>
+
+            <!-- Action Contra-Movimiento (CHK-510) -->
+            <div v-if="canCounterMove(move)" class="mt-2 flex items-center justify-end gap-2">
+              <div v-if="reversingMovementId === move.id" class="w-full space-y-2 pt-1 border-t border-gray-100 dark:border-slate-700/60">
+                <input
+                  v-model="reverseReason"
+                  type="text"
+                  placeholder="Motivo obligatorio del contra-movimiento (mín. 5 caracteres)..."
+                  class="w-full h-8 px-2.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-white"
+                />
+                <div class="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    @click="cancelCounterMove"
+                    :disabled="isReversing"
+                    class="px-2.5 py-1 text-xs rounded-lg text-slate-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    @click="confirmCounterMove(move.id)"
+                    :disabled="isReversing || reverseReason.trim().length < 5"
+                    class="px-3 py-1 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {{ isReversing ? 'Aplicando...' : 'Confirmar Contra-movimiento' }}
+                  </button>
+                </div>
+              </div>
+              <button
+                v-else
+                type="button"
+                @click="startCounterMove(move.id)"
+                class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors cursor-pointer"
+              >
+                <RotateCcw :size="12" />
+                Contra-movimiento
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -123,7 +192,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import BaseModal from '../ui/BaseModal.vue';
-import { productRepository, MovementHistoryFilters } from '../../data/repositories/productRepository';
+import { useInventoryStore } from '../../stores/inventory';
+import { useAuthStore } from '../../stores/auth';
+import { useToast } from 'vue-toastification';
+import {
+  productRepository,
+  MovementHistoryFilters,
+  type InventoryMovementHistory,
+  type KardexActorOption
+} from '../../data/repositories/productRepository';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -133,7 +210,10 @@ import {
   Sliders,
   Wrench,
   HelpCircle,
-  History
+  History,
+  Coffee,
+  UserCheck,
+  Truck
 } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -151,13 +231,24 @@ const isOpen = computed({
   set: (val) => emit('update:modelValue', val)
 });
 
+const inventoryStore = useInventoryStore();
+const authStore = useAuthStore();
+const toast = useToast();
+
 const loading = ref(false);
 const errorMessage = ref<string | null>(null);
-const movements = ref<any[]>([]);
+const movements = ref<InventoryMovementHistory[]>([]);
+const actorOptions = ref<KardexActorOption[]>([]);
 
 // Filter states
 const selectedMovementType = ref('all');
+const selectedActorFilter = ref('all');
 const datePreset = ref<'7d' | '30d' | 'all'>('7d');
+
+// Counter-movement modal state
+const reversingMovementId = ref<string | null>(null);
+const reverseReason = ref('');
+const isReversing = ref(false);
 
 const datePresets = [
   { value: '7d', label: '7 días' },
@@ -168,11 +259,15 @@ const datePresets = [
 const movementTypes = [
   { value: 'all', label: 'Todos' },
   { value: 'entrada', label: 'Entradas' },
-  { value: 'salida', label: 'Salidas' },
   { value: 'venta', label: 'Ventas' },
   { value: 'merma', label: 'Mermas' },
-  { value: 'ajuste', label: 'Ajustes' },
-  { value: 'devolucion', label: 'Devoluciones' },
+  { value: 'consumo_negocio', label: 'Consumo Negocio' },
+  { value: 'consumo_personal', label: 'Retiro Personal' },
+  { value: 'devolucion_proveedor', label: 'Dev. Proveedor' },
+  { value: 'ajuste_conteo', label: 'Ajuste Conteo' },
+  { value: 'devolucion', label: 'Reembolso Cliente' },
+  { value: 'salida', label: 'Salidas Legacy' },
+  { value: 'ajuste', label: 'Ajustes Legacy' },
   { value: 'CORRECCION_SISTEMA', label: 'Correcciones' }
 ];
 
@@ -197,12 +292,14 @@ const loadHistory = async () => {
   try {
     const filters: MovementHistoryFilters = {
       movementType: selectedMovementType.value !== 'all' ? selectedMovementType.value : undefined,
+      createdBy: selectedActorFilter.value !== 'all' ? selectedActorFilter.value : undefined,
       startDate: calculateStartDate(datePreset.value),
       limit: 50
     };
 
-    const history = await productRepository.getMovementHistory(props.productId, filters);
-    movements.value = history;
+    const res = await productRepository.getKardexWithActors(props.productId, filters);
+    movements.value = res.movements;
+    actorOptions.value = res.actors;
   } catch (e: any) {
     errorMessage.value = e?.message || 'Error al recuperar movimientos de Kardex';
     console.error('Error loading history', e);
@@ -214,15 +311,67 @@ const loadHistory = async () => {
 // Re-fetch when modal opens or filters change
 watch(() => props.modelValue, (val) => {
   if (val && props.productId) {
+    reversingMovementId.value = null;
+    reverseReason.value = '';
     loadHistory();
   }
-});
+}, { immediate: true });
 
-watch([selectedMovementType, datePreset], () => {
+watch([selectedMovementType, selectedActorFilter, datePreset], () => {
   if (props.modelValue && props.productId) {
     loadHistory();
   }
 });
+
+const canCounterMove = (move: InventoryMovementHistory): boolean => {
+  if (!authStore.canManageInventory && !authStore.isAdmin) return false;
+  if (move.isReversed || move.reversedMovementId) return false;
+  if (['venta', 'consumo_personal'].includes(move.type)) return false;
+  if (move.type === 'merma' && String(move.reason || '').startsWith('[REEMBOLSO-MERMA]')) return false;
+  return true;
+};
+
+const startCounterMove = (moveId: string) => {
+  reversingMovementId.value = moveId;
+  reverseReason.value = '';
+};
+
+const cancelCounterMove = () => {
+  reversingMovementId.value = null;
+  reverseReason.value = '';
+};
+
+const confirmCounterMove = async (moveId: string) => {
+  if (!props.productId || reverseReason.value.trim().length < 5) return;
+  isReversing.value = true;
+  try {
+    await inventoryStore.registerCounterMovement(props.productId, moveId, reverseReason.value.trim());
+    toast.success('Contra-movimiento registrado en Kardex');
+    cancelCounterMove();
+    await loadHistory();
+  } catch (err: any) {
+    toast.error(err?.message || 'No se pudo registrar el contra-movimiento');
+  } finally {
+    isReversing.value = false;
+  }
+};
+
+const formatTypeLabel = (type: string): string => {
+  const labels: Record<string, string> = {
+    entrada: 'Entrada de Mercancía',
+    venta: 'Venta POS',
+    merma: 'Merma / Daño',
+    consumo_negocio: 'Consumo del Negocio',
+    consumo_personal: 'Retiro Personal',
+    devolucion_proveedor: 'Devolución a Proveedor',
+    ajuste_conteo: 'Ajuste por Conteo',
+    devolucion: 'Reembolso (Vendible)',
+    salida: 'Salida Legacy',
+    ajuste: 'Ajuste Legacy',
+    CORRECCION_SISTEMA: 'Corrección del Sistema'
+  };
+  return labels[type] || type;
+};
 
 // Helpers
 const formatDate = (dateStr: string) => {
@@ -238,7 +387,11 @@ const getTypeLucideIcon = (type: string) => {
     case 'venta': return ShoppingCart;
     case 'devolucion': return RotateCcw;
     case 'merma': return Trash2;
-    case 'ajuste': return Sliders;
+    case 'consumo_negocio': return Coffee;
+    case 'consumo_personal': return UserCheck;
+    case 'devolucion_proveedor': return Truck;
+    case 'ajuste':
+    case 'ajuste_conteo': return Sliders;
     case 'CORRECCION_SISTEMA': return Wrench;
     default: return HelpCircle;
   }
@@ -247,11 +400,15 @@ const getTypeLucideIcon = (type: string) => {
 const getTypeBgColor = (type: string) => {
   switch (type) {
     case 'entrada': return 'bg-emerald-500/15';
-    case 'salida': return 'bg-rose-500/15';
+    case 'salida':
+    case 'devolucion_proveedor': return 'bg-rose-500/15';
     case 'venta': return 'bg-blue-500/15';
     case 'devolucion': return 'bg-purple-500/15';
-    case 'merma': return 'bg-orange-500/15';
-    case 'ajuste': return 'bg-amber-500/15';
+    case 'merma':
+    case 'consumo_negocio': return 'bg-orange-500/15';
+    case 'consumo_personal': return 'bg-indigo-500/15';
+    case 'ajuste':
+    case 'ajuste_conteo': return 'bg-amber-500/15';
     case 'CORRECCION_SISTEMA': return 'bg-cyan-500/15';
     default: return 'bg-gray-500/15';
   }
@@ -260,25 +417,33 @@ const getTypeBgColor = (type: string) => {
 const getTypeIconColor = (type: string) => {
   switch (type) {
     case 'entrada': return 'text-emerald-500';
-    case 'salida': return 'text-rose-500';
+    case 'salida':
+    case 'devolucion_proveedor': return 'text-rose-500';
     case 'venta': return 'text-blue-500';
     case 'devolucion': return 'text-purple-500';
-    case 'merma': return 'text-orange-500';
-    case 'ajuste': return 'text-amber-500';
+    case 'merma':
+    case 'consumo_negocio': return 'text-orange-500';
+    case 'consumo_personal': return 'text-indigo-500';
+    case 'ajuste':
+    case 'ajuste_conteo': return 'text-amber-500';
     case 'CORRECCION_SISTEMA': return 'text-cyan-500';
     default: return 'text-gray-500';
   }
 };
 
-const getQuantityColor = (type: string) => {
+const getQuantityColor = (type: string, qty: number) => {
   if (type === 'entrada' || type === 'devolucion') return 'text-emerald-600 dark:text-emerald-400';
-  if (type === 'salida' || type === 'venta' || type === 'merma') return 'text-rose-600 dark:text-rose-400';
-  return 'text-amber-600 dark:text-amber-400';
+  if (['salida', 'venta', 'merma', 'consumo_negocio', 'consumo_personal', 'devolucion_proveedor'].includes(type)) {
+    return 'text-rose-600 dark:text-rose-400';
+  }
+  return qty >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
 };
 
 const formatQuantity = (type: string, qty: number) => {
-  const sign = (type === 'entrada' || type === 'devolucion') ? '+' : '-';
-  if (type === 'ajuste' || type === 'CORRECCION_SISTEMA') return qty > 0 ? `+${qty}` : `${qty}`;
-  return `${sign}${qty}`;
+  if (type === 'entrada' || type === 'devolucion') return `+${Math.abs(qty)}`;
+  if (['salida', 'venta', 'merma', 'consumo_negocio', 'consumo_personal', 'devolucion_proveedor'].includes(type)) {
+    return `-${Math.abs(qty)}`;
+  }
+  return qty > 0 ? `+${qty}` : `${qty}`;
 };
 </script>

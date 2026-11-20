@@ -19,6 +19,7 @@ import { useHeartbeat } from '../composables/useHeartbeat'; // Presence & Pause 
 import { logger } from '../utils/logger';
 import { Decimal } from 'decimal.js';
 import CheckoutModal from '../components/sales/CheckoutModal.vue';
+import RefundModal from '../components/sales/RefundModal.vue';
 import ProductSearchModal from '../components/ProductSearchModal.vue';
 import WeightCalculatorModal from '../components/WeightCalculatorModal.vue';
 import ForceSaleModal from '../components/ForceSaleModal.vue';
@@ -37,7 +38,8 @@ import {
   Timer,
   Check,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  RotateCcw
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -65,6 +67,8 @@ const isInventoryEmpty = computed(() => inventoryStore.totalProducts === 0);
 // Permisos del usuario
 const canSell = computed(() => authStore.canSell);
 const canFiar = computed(() => authStore.canFiar);
+const canManageRefunds = computed(() => authStore.canManageRefunds || authStore.isAdmin);
+const showRefundModal = ref(false);
 
 // WO-005: Estado de bloqueo consolidado
 const blockingState = computed(() => {
@@ -476,17 +480,32 @@ onUnmounted(() => {
 
       <div class="px-3 pt-2 pb-3 flex flex-col gap-1.5">
         <div v-show="!isKeypadCollapsed" data-testid="pos-keypad-panel" class="flex flex-col gap-1.5">
-          <!-- Extra Toolbar -->
-          <BaseButton
-            variant="secondary"
-            class="w-full h-9 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
-            @click="showSearch = true"
-          >
-            <div class="flex items-center gap-2">
-              <Search :size="16" :stroke-width="1.5" />
-              Buscar
-            </div>
-          </BaseButton>
+          <!-- Extra Toolbar: Buscar + Reembolsos (CHK-509) -->
+          <div class="flex gap-1.5">
+            <BaseButton
+              variant="secondary"
+              class="h-9 text-sm font-medium border border-gray-200 dark:border-gray-700 active:scale-95"
+              :class="canManageRefunds ? 'flex-1' : 'w-full'"
+              @click="showSearch = true"
+            >
+              <div class="flex items-center gap-2">
+                <Search :size="16" :stroke-width="1.5" />
+                Buscar
+              </div>
+            </BaseButton>
+            <BaseButton
+              v-if="canManageRefunds"
+              data-testid="pos-refunds-btn"
+              variant="secondary"
+              class="h-9 px-3 text-sm font-semibold border border-rose-200 dark:border-rose-800/60 text-rose-600 dark:text-rose-400 active:scale-95 shrink-0"
+              @click="showRefundModal = true"
+            >
+              <div class="flex items-center gap-1.5">
+                <RotateCcw :size="15" :stroke-width="1.75" />
+                Reembolsos
+              </div>
+            </BaseButton>
+          </div>
 
           <!-- Numpad Grid -->
           <POSNumpad 
@@ -543,6 +562,8 @@ onUnmounted(() => {
     />
 
     <ProductSearchModal v-model="showSearch" @select="addProductFromSearch" />
+
+    <RefundModal v-model="showRefundModal" />
 
     <WeightCalculatorModal v-model="showWeightCalculator" :product="selectedWeighableProduct"
       @confirm="handleWeightCalculatorConfirm" />

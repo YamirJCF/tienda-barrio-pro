@@ -150,10 +150,13 @@ onMounted(() => {
         <section class="flex flex-col gap-3">
           <!-- Ventas Totales (Hero) -->
           <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ventas Totales</p>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ingresos Netos del Período</p>
             <h2 class="text-4xl font-black text-slate-900 dark:text-white tracking-tight">
               $ {{ formatCurrency(store.summary.revenue) }}
             </h2>
+            <p v-if="(store.summary.refunds_total || 0) > 0" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+              Bruto: ${{ formatCurrency(store.summary.gross_sales || store.summary.revenue) }} − Reembolsos: ${{ formatCurrency(store.summary.refunds_total || 0) }}
+            </p>
           </div>
           <!-- Sub-KPIs: Flujo Financiero -->
           <div class="grid grid-cols-2 gap-3">
@@ -254,6 +257,76 @@ onMounted(() => {
             <!-- Client Ledger Widget (Snapshot) injected into Liquidity Section -->
             <div class="col-span-3 mt-2">
               <ClientLedgerWidget :ledger="store.clientLedger" :isLoading="store.isLoadingSnapshots" />
+            </div>
+          </div>
+
+          <!-- Desglose OPEX P&L al Costo (CHK-512) -->
+          <div v-if="store.summary.opex_breakdown" class="mt-4 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-2.5">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Desglose OPEX del Período (Cero Doble Conteo)
+              </h4>
+              <span class="text-xs font-bold font-mono text-rose-600 dark:text-rose-400">
+                ${{ formatCurrency(store.summary.opex_breakdown.total) }}
+              </span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60">
+                <span class="text-[10px] text-slate-400 block">Gastos en Caja</span>
+                <strong class="font-mono text-slate-800 dark:text-white">${{ formatCurrency(store.summary.opex_breakdown.cash_expenses) }}</strong>
+              </div>
+              <div class="p-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/30">
+                <span class="text-[10px] text-orange-600 dark:text-orange-400 block">Mermas (Costo)</span>
+                <strong class="font-mono text-orange-700 dark:text-orange-300">${{ formatCurrency(store.summary.opex_breakdown.merma_cost) }}</strong>
+              </div>
+              <div class="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/30">
+                <span class="text-[10px] text-sky-600 dark:text-sky-400 block">Consumo Negocio</span>
+                <strong class="font-mono text-sky-700 dark:text-sky-300">${{ formatCurrency(store.summary.opex_breakdown.consumo_negocio_cost) }}</strong>
+              </div>
+              <div class="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/30">
+                <span class="text-[10px] text-indigo-600 dark:text-indigo-400 block">Consumo Personal</span>
+                <strong class="font-mono text-indigo-700 dark:text-indigo-300">${{ formatCurrency(store.summary.opex_breakdown.consumo_personal_cost) }}</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Módulo Exclusivo Admin: Consumos / Retiros Personales (CHK-512) -->
+          <div v-if="store.summary.personal_consumptions_summary" class="mt-4 bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Consumos / Retiros Personales (Consolidado & Perfil)
+              </h4>
+              <div class="flex items-center gap-3 text-xs">
+                <span class="text-slate-500">
+                  Costo P&L: <strong class="font-mono text-indigo-600 dark:text-indigo-400">${{ formatCurrency(store.summary.personal_consumptions_summary.total_cost) }}</strong>
+                </span>
+                <span class="text-slate-500">
+                  Val. Ref. Venta: <strong class="font-mono text-slate-800 dark:text-slate-200">${{ formatCurrency(store.summary.personal_consumptions_summary.total_reference_sale_price) }}</strong>
+                </span>
+              </div>
+            </div>
+
+            <div v-if="store.summary.personal_consumptions_summary.by_profile.length === 0" class="text-xs text-slate-400 italic py-2">
+              No se registran consumos personales en el período.
+            </div>
+            <div v-else class="divide-y divide-slate-100 dark:divide-slate-700/70">
+              <div
+                v-for="prof in store.summary.personal_consumptions_summary.by_profile"
+                :key="prof.profile_key"
+                class="py-2 flex items-center justify-between text-xs gap-2"
+              >
+                <div>
+                  <span class="font-bold text-slate-800 dark:text-slate-100">{{ prof.profile_name }}</span>
+                  <span class="ml-1.5 text-[10px] uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">
+                    {{ prof.profile_role === 'owner' || prof.profile_role === 'manager' ? 'Admin' : 'Empleado' }}
+                  </span>
+                  <span class="text-[11px] text-slate-400 ml-2">{{ prof.movements_count }} retiros</span>
+                </div>
+                <div class="text-right font-mono">
+                  <span class="font-bold text-indigo-600 dark:text-indigo-400">${{ formatCurrency(prof.total_cost) }}</span>
+                  <span class="text-[10px] text-slate-400 block">Ref: ${{ formatCurrency(prof.total_reference_sale_price) }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>

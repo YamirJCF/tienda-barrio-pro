@@ -15,48 +15,44 @@
 
     <main class="flex-1 overflow-y-auto w-full p-4 space-y-6">
       <div class="max-w-3xl mx-auto space-y-6">
-      <!-- Movement Type & Reason -->
-      <section class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50 flex flex-col md:flex-row gap-4">
-        <div class="flex-1 space-y-1">
-          <label class="text-xs text-gray-400">Tipo de Movimiento</label>
-          <div class="flex bg-gray-900 p-1 rounded-lg">
-             <button 
-               v-for="type in ['entrada', 'salida', 'ajuste']" 
-               :key="type"
-               @click="movementType = type"
-               class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-all capitalize"
-               :class="movementType === type ? getTypeColor(type) : 'text-gray-400 hover:text-white'"
-             >
-               {{ type }}
-             </button>
-          </div>
-        </div>
-        
-        <div class="flex-1 space-y-1">
-           <label class="text-xs text-gray-400">Motivo</label>
-           <select 
+      <!-- Movement Reason & Link to Salidas -->
+      <section class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50 flex flex-col md:flex-row gap-4 items-start md:items-end">
+        <div class="flex-1 space-y-1 w-full">
+           <label class="text-xs text-gray-400">Motivo de Entrada (Compra / Reposición)</label>
+           <select
              v-model="reason"
-             class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white outline-none focus:ring-2 focus:ring-blue-500"
+             class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white outline-none focus:ring-2 focus:ring-emerald-500"
            >
              <option v-for="r in availableReasons" :key="r" :value="r">{{ r }}</option>
            </select>
         </div>
+
+        <button
+          type="button"
+          @click="router.push('/stock-outputs')"
+          class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-gray-900 text-amber-300 border border-amber-500/30 hover:bg-gray-700 transition-colors shrink-0 cursor-pointer"
+        >
+          ¿Mermas, consumos o conteo? Ir a Salidas ($0) →
+        </button>
       </section>
 
-      <!-- Supplier Section (Entry or Devolution) -->
-      <section v-if="movementType === 'entrada' || (movementType === 'salida' && reason === 'Devolución Proveedor')" class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50">
-        <h2 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">Datos del Proveedor</h2>
+      <!-- Supplier Section (Strictly informational, decoupled from CxP per CHK-502/CHK-505) -->
+      <section class="bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-700/50">
+        <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Datos del Proveedor (Opcional)</h2>
+          <span class="text-[11px] text-gray-400">Registro logístico independiente de Cuentas por Pagar</span>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="space-y-1">
+          <div class="space-y-1">
             <label class="text-xs text-gray-400 block mb-1">Proveedor</label>
             <select
               v-model="selectedSupplierId"
               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">-- Sin asignar --</option>
-              <option 
-                v-for="supplier in suppliers" 
-                :key="supplier.id" 
+              <option
+                v-for="supplier in suppliers"
+                :key="supplier.id"
                 :value="supplier.id"
               >
                 {{ supplier.name }}
@@ -65,42 +61,11 @@
           </div>
           <div class="space-y-1">
             <BaseInput
-              v-if="movementType === 'entrada'"
               v-model="invoiceRef"
-              label="Ref. Factura (Opcional)"
-              placeholder="Ej: FAC-2024-001"
+              label="Ref. Remisión / Factura (Informativo)"
+              placeholder="Ej: REM-2026-001"
             />
-            <div v-else-if="movementType === 'salida' && reason === 'Devolución Proveedor' && selectedSupplierId">
-              <label class="text-xs text-gray-400 block mb-1">¿A qué factura corresponde esta devolución? (Opcional)</label>
-              <select
-                v-model="referenceInvoiceId"
-                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Sin factura --</option>
-                <option 
-                  v-for="invoice in availableInvoices" 
-                  :key="invoice.id" 
-                  :value="invoice.id"
-                >
-                  F-{{ invoice.invoice_number }} (Saldo: {{ formatCurrency(invoice.total_amount - invoice.amount_paid) }})
-                </option>
-              </select>
-              <p class="text-[10px] text-gray-500 mt-1">Si se deja vacío, se deducirá de la deuda más antigua.</p>
-            </div>
           </div>
-        </div>
-
-        <!-- Payment Toggle -->
-        <div v-if="movementType === 'entrada'" class="mt-4 flex bg-gray-900 p-1 rounded-lg">
-          <button 
-            v-for="type in ['contado', 'credito']" 
-            :key="type"
-            @click="paymentType = type"
-            class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-all capitalize"
-            :class="paymentType === type ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'"
-          >
-            {{ type }}
-          </button>
         </div>
       </section>
 
@@ -149,14 +114,14 @@
                  />
               </div>
 
-              <!-- Cost visible only for Entry -->
-              <div v-if="movementType === 'entrada'" class="space-y-1">
+              <!-- Cost -->
+              <div class="space-y-1">
                 <label class="text-[10px] text-gray-400 uppercase">Costo Unit.</label>
                 <div class="relative">
                   <span class="absolute left-2 top-1.5 text-gray-500 text-xs">$</span>
-                  <input 
+                  <input
                     v-model.number="item.unitCost"
-                    type="number" 
+                    type="number"
                     min="0"
                     step="50"
                     class="w-full bg-gray-900 border border-gray-700 rounded-lg pl-5 pr-2 py-1.5 text-right text-white font-mono focus:ring-1 focus:ring-blue-500 outline-none"
@@ -164,14 +129,14 @@
                 </div>
               </div>
 
-              <!-- Sale Price visible only for Entry -->
-              <div v-if="movementType === 'entrada'" class="space-y-1">
+              <!-- Sale Price -->
+              <div class="space-y-1">
                 <label class="text-[10px] text-gray-400 uppercase">Precio Venta</label>
                 <div class="relative">
                   <span class="absolute left-2 top-1.5 text-gray-500 text-xs">$</span>
-                  <input 
+                  <input
                     v-model.number="item.salePrice"
-                    type="number" 
+                    type="number"
                     min="0"
                     step="50"
                     class="w-full bg-gray-900 border border-gray-700 rounded-lg pl-5 pr-2 py-1.5 text-right text-white font-mono focus:ring-1 focus:ring-emerald-500 outline-none"
@@ -261,7 +226,6 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useInventoryStore } from '../stores/inventory';
 import { useAuthStore } from '../stores/auth';
-import { usePayablesStore } from '../stores/payables';
 import { Decimal } from 'decimal.js';
 import type { Product } from '../types';
 import { useSuppliersStore } from '../stores/suppliers';
@@ -276,27 +240,25 @@ const router = useRouter();
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
 const suppliersStore = useSuppliersStore();
-const payablesStore = usePayablesStore();
 const { formatCurrency } = useCurrencyFormat();
 const { execute: executeSave, isLoading: isSaving } = useAsyncAction();
 const { showSuccess, showWarning, showError } = useNotifications();
 
-const loadSuppliersAndInvoices = async () => {
+const loadSuppliers = async () => {
   const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
   if (storeId) {
     await suppliersStore.fetchSuppliers(storeId);
-    await payablesStore.fetchInvoices();
   }
 };
 
 // Fetch suppliers on mount
 onMounted(async () => {
-  await loadSuppliersAndInvoices();
+  await loadSuppliers();
 });
 
 watch(() => authStore.currentUser?.storeId || authStore.currentStore?.id, async (newStoreId) => {
   if (newStoreId) {
-    await loadSuppliersAndInvoices();
+    await loadSuppliers();
   }
 });
 
@@ -306,9 +268,7 @@ const suppliers = computed(() => suppliersStore.suppliers);
 // State
 const selectedSupplierId = ref('');
 const invoiceRef = ref('');
-const referenceInvoiceId = ref('');
-const paymentType = ref('contado');
-const movementType = ref('entrada');
+const movementType = ref<'entrada'>('entrada');
 const reason = ref('Compra');
 const searchQuery = ref('');
 const searchResults = ref<Product[]>([]);
@@ -338,43 +298,12 @@ const totalInvoice = computed(() => {
   return entryItems.value.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
 });
 
-const availableReasons = computed(() => {
-  switch(movementType.value) {
-    case 'entrada': return ['Compra', 'Devolución Cliente', 'Ajuste Positivo'];
-    case 'salida': return ['Devolución Proveedor', 'Pérdida/Merma', 'Consumo Interno', 'Ajuste Negativo'];
-    case 'ajuste': return ['Inventario Físico'];
-    default: return [];
-  }
-});
-
-// Watch for type change to reset reason
-watch(movementType, (newVal) => {
-  if (availableReasons.value.length > 0) {
-    reason.value = availableReasons.value[0];
-  }
-});
-
-const availableInvoices = computed(() => {
-  if (!selectedSupplierId.value) return [];
-  return payablesStore.invoices.filter(
-    (inv) => inv.supplier_id === selectedSupplierId.value && inv.status !== 'pagada'
-  );
-});
+const availableReasons = computed(() => ['Compra', 'Reposición de Proveedor']);
 
 // FIX: Búsqueda reactiva inmediata (001)
 watch(searchQuery, () => {
   handleSearch();
 });
-
-// Methods
-const getTypeColor = (type: string) => {
-  switch(type) {
-    case 'entrada': return 'bg-emerald-600 text-white shadow-sm';
-    case 'salida': return 'bg-rose-600 text-white shadow-sm';
-    case 'ajuste': return 'bg-amber-600 text-white shadow-sm';
-    default: return 'bg-gray-700';
-  }
-};
 
 const handleSearch = () => {
   if (!searchQuery.value) {
@@ -414,34 +343,25 @@ const removeItem = (index: number) => {
 };
 
 const saveEntry = async () => {
-  // Validación: Si hay proveedor seleccionado, debe haber tipo de pago
-  if (movementType.value === 'entrada' && selectedSupplierId.value && !paymentType.value) {
-    showWarning('Cuando indicas un proveedor, debes especificar si es Contado o Crédito');
-    return;
-  }
-  
   if (entryItems.value.length === 0) return;
-  
+
   await executeSave(async () => {
     let successCount = 0;
     const failedItems: string[] = [];
-    
-    // Perform updates
+
     for (const item of entryItems.value) {
       const qty = new Decimal(item.quantity);
       if (qty.gt(0)) {
         const result = await inventoryStore.registerStockMovement({
           productId: item.productId,
-          type: movementType.value as any, 
+          type: 'entrada',
           quantity: qty,
           reason: reason.value,
           expirationDate: item.expirationDate,
           unitCost: item.unitCost,
           salePrice: item.salePrice,
           supplierId: selectedSupplierId.value || undefined,
-          invoiceRef: invoiceRef.value || undefined,
-          referenceInvoiceId: referenceInvoiceId.value || undefined,
-          paymentType: paymentType.value as 'contado' | 'credito'
+          invoiceRef: invoiceRef.value || undefined
         });
         
         if (result.success) {

@@ -125,6 +125,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/stock-outputs',
+    name: 'stock-outputs',
+    component: () => import('../views/StockOutputsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/cash-control',
     name: 'cash-control',
     component: () => import('../views/CashControlView.vue'),

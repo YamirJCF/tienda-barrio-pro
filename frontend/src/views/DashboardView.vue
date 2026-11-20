@@ -21,6 +21,7 @@ import {
   Users,
   Calculator,
   Package,
+  PackageMinus,
   ClipboardList
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
@@ -432,6 +433,24 @@ const navigateToNotifications = () => {
             <ChevronRight :size="20" class="text-slate-400" />
           </button>
              
+          <!-- Salidas Logísticas y Mermas ($0 - Abierto a todo usuario activo por CHK-504) -->
+          <button
+            @click="navigateTo('/stock-outputs')"
+            class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+              >
+                <PackageMinus :size="20" />
+              </div>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-200"
+                >Mermas y Salidas ($0)</span
+              >
+            </div>
+            <ChevronRight :size="20" class="text-slate-400" />
+          </button>
+
           <!-- Clientes (Solo si tiene canFiar) -->
           <button
             v-if="authStore.canFiar"

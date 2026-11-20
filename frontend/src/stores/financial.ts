@@ -5,19 +5,57 @@ import { useAuthStore } from './auth';
 
 // --- Interfaces matching RPC payloads ---
 
+export interface OpexBreakdown {
+    cash_expenses: number;
+    servicios: number;
+    nomina: number;
+    transporte: number;
+    mantenimiento: number;
+    insumos: number;
+    otros: number;
+    merma_cost: number;
+    consumo_negocio_cost: number;
+    consumo_personal_cost: number;
+    total: number;
+}
+
+export interface PersonalConsumptionProfileItem {
+    profile_id: string | null;
+    profile_key: string;
+    profile_name: string;
+    profile_role: string;
+    total_cost: number;
+    total_reference_sale_price: number;
+    movements_count: number;
+    items_count: number;
+}
+
+export interface PersonalConsumptionsSummary {
+    total_cost: number;
+    total_reference_sale_price: number;
+    movements_count: number;
+    by_profile: PersonalConsumptionProfileItem[];
+}
+
 export interface FinancialReportPayload {
     period: { start: string; end: string };
+    gross_sales?: number;
+    refunds_total?: number;
     revenue: number;
     cogs: number;
     gross_profit: number;
     gross_margin: number;
     operational_expenses: number;
     net_profit: number;
+    opex_breakdown?: OpexBreakdown;
+    personal_consumptions_summary?: PersonalConsumptionsSummary;
     inventory_value: number;
     payment_breakdown: {
         cash: number;
         transfer: number;
         credit: number;
+        efectivo?: number;
+        fiado?: number;
         nequi?: number;
         llave_bre?: number;
     };
