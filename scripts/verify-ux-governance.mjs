@@ -6,7 +6,7 @@
  *   node scripts/verify-ux-governance.mjs --pre-commit
  *   node scripts/verify-ux-governance.mjs --commit-msg <archivo_mensaje>
  *   node scripts/verify-ux-governance.mjs --ci [--base origin/master]
- *   node scripts/verify-ux-governance.mjs --simulate --files <csv> [--msg "<texto>"] [--adr-valid true|false] [--debt-increased true|false]
+ *   node scripts/verify-ux-governance.mjs --simulate --files <csv> [--msg "<texto>"] [--adr-valid true|false] [--debt-increased true|false] [--adr-mismatch true|false] [--adr-empty-section true|false] [--fitness-count-drop true|false] [--adr-deleted true|false]
  */
 
 import fs from 'node:fs';
@@ -25,7 +25,7 @@ const ARCH_DOC_PATH = 'documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md'
 const ADR_LOG_PATH = 'documentation/03_ui_ux_design/UX_ADR_LOG.md';
 const FITNESS_TEST_PATH = 'frontend/src/__tests__/architecture/ux-fitness.spec.ts';
 
-const GOVERNANCE_UX_FILES = new Set([MANIFEST_PATH, ARCH_DOC_PATH]);
+const GOVERNANCE_UX_FILES = new Set([MANIFEST_PATH, ARCH_DOC_PATH, ADR_LOG_PATH]);
 
 const GUARDRAIL_EXACT_FILES = new Set([
   FITNESS_TEST_PATH,
@@ -130,32 +130,77 @@ function parseNameStatus(output) {
     .filter((entry) => entry.file.length > 0);
 }
 
+const MIN_ADR_SECTION_CHARS = 15;
+
+function extractAdrIds(text) {
+  if (!text) return [];
+  return Array.from(text.matchAll(/^##\s+(UX-ADR-\d{3,})\b/gm)).map((m) => m[1]);
+}
+
+function checkHistoricalAdrsPreserved(baseAdrContent, newAdrContent, adrStatus = 'M') {
+  if (adrStatus === 'D' || newAdrContent === null) {
+    return [`Prohibido eliminar ${ADR_LOG_PATH}.`];
+  }
+  if (baseAdrContent === null) return [];
+  const baseIds = extractAdrIds(baseAdrContent);
+  const newIds = new Set(extractAdrIds(newAdrContent));
+  const missing = baseIds.filter((id) => !newIds.has(id));
+  if (missing.length > 0) {
+    return [
+      `Prohibido eliminar encabezados históricos de ADR en ${ADR_LOG_PATH}: ${missing.join(', ')}.`,
+    ];
+  }
+  return [];
+}
+
 function validateAdrAddedLines(addedText) {
   const errors = [];
-  const adrHeadingMatch = addedText.match(/^##\s+(UX-ADR-\d{3,})\b/m);
-  if (!adrHeadingMatch || adrHeadingMatch.index === undefined) {
+  const adrMatches = Array.from(addedText.matchAll(/^##\s+(UX-ADR-\d{3,})\b/gm));
+  if (adrMatches.length === 0) {
     errors.push(
       `Debe agregarse una nueva entrada '## UX-ADR-XXX: ...' en ${ADR_LOG_PATH}.`
     );
-    return errors;
+    return { errors, addedAdrIds: [] };
   }
 
-  const adrBody = addedText.slice(adrHeadingMatch.index);
-
+  const addedAdrIds = [];
   const requiredSections = [
-    { label: '### 1. Contexto y Objeto (ORCA)', regex: /^###\s+1\.\s+Contexto y Objeto\b/im },
-    { label: '### 2. Verdad Contable (Read Model / Invariante)', regex: /^###\s+2\.\s+Verdad Contable\b/im },
-    { label: '### 3. Arquetipo, Señalización y Top Tasks', regex: /^###\s+3\.\s+Arquetipo\b/im },
-    { label: '### 4. Higiene de Crecimiento (Qué se consolida o elimina)', regex: /^###\s+4\.\s+Higiene de Crecimiento\b/im },
+    { label: '### 1. Contexto y Objeto (ORCA)', regex: /^###\s+1\.\s+Contexto y Objeto[^\r\n]*/im },
+    { label: '### 2. Verdad Contable (Read Model / Invariante)', regex: /^###\s+2\.\s+Verdad Contable[^\r\n]*/im },
+    { label: '### 3. Arquetipo, Señalización y Top Tasks', regex: /^###\s+3\.\s+Arquetipo[^\r\n]*/im },
+    { label: '### 4. Higiene de Crecimiento (Qué se consolida o elimina)', regex: /^###\s+4\.\s+Higiene de Crecimiento[^\r\n]*/im },
   ];
 
-  for (const sec of requiredSections) {
-    if (!sec.regex.test(adrBody)) {
-      errors.push(`Falta la sección obligatoria '${sec.label}' del Gate UX-0 en el nuevo UX-ADR.`);
+  for (let idx = 0; idx < adrMatches.length; idx++) {
+    const match = adrMatches[idx];
+    const adrId = match[1];
+    addedAdrIds.push(adrId);
+
+    const start = match.index ?? 0;
+    const end = idx + 1 < adrMatches.length ? (adrMatches[idx + 1].index ?? addedText.length) : addedText.length;
+    const adrBlock = addedText.slice(start, end);
+
+    for (const sec of requiredSections) {
+      const secMatch = sec.regex.exec(adrBlock);
+      if (!secMatch || secMatch.index === undefined) {
+        errors.push(`Falta la sección obligatoria '${sec.label}' del Gate UX-0 en ${adrId}.`);
+        continue;
+      }
+
+      const afterHeading = adrBlock.slice(secMatch.index + secMatch[0].length);
+      const nextHeadingOffset = afterHeading.search(/^\s*#{2,3}\s+/m);
+      const sectionRaw = nextHeadingOffset === -1 ? afterHeading : afterHeading.slice(0, nextHeadingOffset);
+      const cleanBody = sectionRaw.replace(/\s+/g, ' ').trim();
+
+      if (cleanBody.length < MIN_ADR_SECTION_CHARS) {
+        errors.push(
+          `La sección '${sec.label}' en ${adrId} debe tener al menos ${MIN_ADR_SECTION_CHARS} caracteres reales de contenido (actual: ${cleanBody.length}).`
+        );
+      }
     }
   }
 
-  return errors;
+  return { errors, addedAdrIds };
 }
 
 function extractAddedLinesFromDiff(diffText) {
@@ -216,7 +261,16 @@ function checkBaselineDebtMonotonicity(baseManifestRaw, newManifestRaw) {
   return errors;
 }
 
-function checkFitnessNotWeakened(content, status) {
+function countItBlocks(code) {
+  if (!code) return 0;
+  const cleaned = code
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const matches = cleaned.match(/(?:^|\n)\s*it\s*\(/g);
+  return matches ? matches.length : 0;
+}
+
+function checkFitnessNotWeakened(content, status, baseContent = null) {
   if (status === 'D' || content === null) {
     return [`Prohibido eliminar ${FITNESS_TEST_PATH}.`];
   }
@@ -225,6 +279,15 @@ function checkFitnessNotWeakened(content, status) {
     if (pattern.test(content)) {
       errors.push(
         `Prohibido debilitar ${FITNESS_TEST_PATH} con ${pattern.toString()} (.skip/.only/.todo/xit/xdescribe).`
+      );
+    }
+  }
+  if (baseContent !== null) {
+    const baseCount = countItBlocks(baseContent);
+    const newCount = countItBlocks(content);
+    if (newCount < baseCount) {
+      errors.push(
+        `Prohibido reducir la cantidad de bloques it() en ${FITNESS_TEST_PATH} (base=${baseCount}, nuevo=${newCount}).`
       );
     }
   }
@@ -252,10 +315,13 @@ function evaluateChangeSet({
   checkCommitMsg = false,
   adrAddedText = null,
   adrLogContent = null,
+  baseAdrLogContent = null,
+  adrStatus = 'M',
   baseManifestRaw = null,
   newManifestRaw = null,
   manifestExistedInBase = false,
   fitnessContent = null,
+  baseFitnessContent = null,
   fitnessStatus = 'M',
 }) {
   const errors = [];
@@ -279,16 +345,29 @@ function evaluateChangeSet({
     );
   }
 
-  // Regla 2: Todo cambio a ux-manifest.json o UX_ARQUITECTURA_SISTEMA.md exige UX-ADR-XXX completo + [UX-ARCH-APPROVED]
+  // Regla 2: Todo cambio a Zona de Gobernanza UX exige UX-ADR-XXX completo + preservación histórica + [UX-ARCH-APPROVED]
+  let addedAdrIds = [];
+  const adrEntry = entries.find((e) => e.file === ADR_LOG_PATH);
+  const adrTouched = Boolean(adrEntry);
+
+  if (adrTouched && (adrLogContent !== null || adrEntry?.status === 'D' || adrStatus === 'D')) {
+    const historyErrors = checkHistoricalAdrsPreserved(
+      baseAdrLogContent,
+      adrLogContent,
+      adrEntry?.status || adrStatus
+    );
+    for (const he of historyErrors) errors.push(`REGLA 2: ${he}`);
+  }
+
   if (govFiles.length > 0) {
-    const adrTouched = entries.some((e) => e.file === ADR_LOG_PATH);
     if (!adrTouched) {
       errors.push(
         `REGLA 2: Modificaste ${govFiles.map((e) => e.file).join(', ')} sin agregar una entrada UX-ADR-XXX en ${ADR_LOG_PATH}.`
       );
     } else if (adrAddedText !== null) {
-      const adrErrors = validateAdrAddedLines(adrAddedText);
-      for (const ae of adrErrors) errors.push(`REGLA 2: ${ae}`);
+      const adrValidation = validateAdrAddedLines(adrAddedText);
+      addedAdrIds = adrValidation.addedAdrIds;
+      for (const ae of adrValidation.errors) errors.push(`REGLA 2: ${ae}`);
     }
 
     if (newManifestRaw !== null) {
@@ -301,6 +380,11 @@ function evaluateChangeSet({
               `REGLA 2: adrVersion "${parsed.adrVersion}" en ${MANIFEST_PATH} no existe como '## ${parsed.adrVersion}' en ${ADR_LOG_PATH}.`
             );
           }
+        }
+        if (adrAddedText !== null && (!parsed.adrVersion || !addedAdrIds.includes(parsed.adrVersion))) {
+          errors.push(
+            `REGLA 2: adrVersion "${parsed.adrVersion || ''}" en ${MANIFEST_PATH} debe coincidir exactamente con el nuevo encabezado ## UX-ADR-XXX añadido en el diff actual (añadidos: ${addedAdrIds.join(', ') || 'ninguno'}).`
+          );
         }
       } catch (err) {
         errors.push(`REGLA 2: ${MANIFEST_PATH} no es JSON válido (${err.message}).`);
@@ -344,7 +428,7 @@ function evaluateChangeSet({
 
   const fitnessTouched = entries.some((e) => e.file === FITNESS_TEST_PATH);
   if (fitnessTouched && (fitnessContent !== null || fitnessStatus === 'D')) {
-    const fitErrors = checkFitnessNotWeakened(fitnessContent, fitnessStatus);
+    const fitErrors = checkFitnessNotWeakened(fitnessContent, fitnessStatus, baseFitnessContent);
     for (const fe of fitErrors) errors.push(`REGLA 3: ${fe}`);
   }
 
@@ -372,27 +456,40 @@ function handlePreCommit() {
     ? gitReadStagedFile(MANIFEST_PATH)
     : null;
 
-  const adrTouched = entries.some((e) => e.file === ADR_LOG_PATH);
+  const adrEntry = entries.find((e) => e.file === ADR_LOG_PATH);
+  const adrTouched = Boolean(adrEntry);
   const adrDiff = adrTouched
     ? runGit(['diff', '--cached', '--no-renames', '-U0', '--', ADR_LOG_PATH], true)
     : null;
   const adrAddedText = adrTouched ? extractAddedLinesFromDiff(adrDiff) : null;
-  const adrLogContent = adrTouched ? gitReadStagedFile(ADR_LOG_PATH) : null;
+  const adrLogContent =
+    adrTouched && adrEntry?.status !== 'D' ? gitReadStagedFile(ADR_LOG_PATH) : null;
+  const baseAdrLogContent =
+    adrTouched && headExists && gitFileExistsAtRef('HEAD', ADR_LOG_PATH)
+      ? gitReadFileAtRef('HEAD', ADR_LOG_PATH)
+      : null;
 
   const fitnessEntry = entries.find((e) => e.file === FITNESS_TEST_PATH);
   const fitnessContent = fitnessEntry && fitnessEntry.status !== 'D'
     ? gitReadStagedFile(FITNESS_TEST_PATH)
     : null;
+  const baseFitnessContent =
+    fitnessEntry && headExists && gitFileExistsAtRef('HEAD', FITNESS_TEST_PATH)
+      ? gitReadFileAtRef('HEAD', FITNESS_TEST_PATH)
+      : null;
 
   const result = evaluateChangeSet({
     entries,
     checkCommitMsg: false,
     adrAddedText,
     adrLogContent,
+    baseAdrLogContent,
+    adrStatus: adrEntry?.status || 'M',
     baseManifestRaw,
     newManifestRaw,
     manifestExistedInBase,
     fitnessContent,
+    baseFitnessContent,
     fitnessStatus: fitnessEntry?.status || 'M',
   });
 
@@ -445,10 +542,22 @@ function handleCommitMsg(msgFilePath) {
     ? gitReadStagedFile(MANIFEST_PATH)
     : null;
 
+  const adrEntry = entries.find((e) => e.file === ADR_LOG_PATH);
+  const adrTouched = Boolean(adrEntry);
+  const adrLogContent =
+    adrTouched && adrEntry?.status !== 'D' ? gitReadStagedFile(ADR_LOG_PATH) : null;
+  const baseAdrLogContent =
+    adrTouched && headExists && gitFileExistsAtRef('HEAD', ADR_LOG_PATH)
+      ? gitReadFileAtRef('HEAD', ADR_LOG_PATH)
+      : null;
+
   const result = evaluateChangeSet({
     entries,
     commitMessage,
     checkCommitMsg: true,
+    adrLogContent,
+    baseAdrLogContent,
+    adrStatus: adrEntry?.status || 'M',
     baseManifestRaw,
     newManifestRaw,
     manifestExistedInBase,
@@ -502,17 +611,27 @@ function handleCi(baseRef) {
       ? gitReadFileAtRef(sha, MANIFEST_PATH)
       : null;
 
-    const adrTouched = entries.some((e) => e.file === ADR_LOG_PATH);
+    const adrEntry = entries.find((e) => e.file === ADR_LOG_PATH);
+    const adrTouched = Boolean(adrEntry);
     const adrDiff = adrTouched
       ? runGit(['diff', '--no-renames', '-U0', parentRef, sha, '--', ADR_LOG_PATH], true)
       : null;
     const adrAddedText = adrTouched ? extractAddedLinesFromDiff(adrDiff) : null;
-    const adrLogContent = adrTouched ? gitReadFileAtRef(sha, ADR_LOG_PATH) : null;
+    const adrLogContent =
+      adrTouched && adrEntry?.status !== 'D' ? gitReadFileAtRef(sha, ADR_LOG_PATH) : null;
+    const baseAdrLogContent =
+      adrTouched && parentCheck && gitFileExistsAtRef(parentRef, ADR_LOG_PATH)
+        ? gitReadFileAtRef(parentRef, ADR_LOG_PATH)
+        : null;
 
     const fitnessEntry = entries.find((e) => e.file === FITNESS_TEST_PATH);
     const fitnessContent = fitnessEntry && fitnessEntry.status !== 'D'
       ? gitReadFileAtRef(sha, FITNESS_TEST_PATH)
       : null;
+    const baseFitnessContent =
+      fitnessEntry && parentCheck && gitFileExistsAtRef(parentRef, FITNESS_TEST_PATH)
+        ? gitReadFileAtRef(parentRef, FITNESS_TEST_PATH)
+        : null;
 
     const res = evaluateChangeSet({
       entries,
@@ -520,10 +639,13 @@ function handleCi(baseRef) {
       checkCommitMsg: true,
       adrAddedText,
       adrLogContent,
+      baseAdrLogContent,
+      adrStatus: adrEntry?.status || 'M',
       baseManifestRaw,
       newManifestRaw,
       manifestExistedInBase,
       fitnessContent,
+      baseFitnessContent,
       fitnessStatus: fitnessEntry?.status || 'M',
     });
 
@@ -533,14 +655,30 @@ function handleCi(baseRef) {
     }
   }
 
-  // Validación agregada <base>..HEAD sobre integridad de baselineDebt y ux-fitness.spec.ts
+  // Validación agregada <base>..HEAD sobre integridad de baselineDebt, ux-fitness.spec.ts y UX_ADR_LOG.md
   const headFitnessContent = gitReadFileAtRef('HEAD', FITNESS_TEST_PATH);
   const headFitnessExists = gitFileExistsAtRef('HEAD', FITNESS_TEST_PATH);
+  const baseFitnessAggregate = gitFileExistsAtRef(resolvedBase, FITNESS_TEST_PATH)
+    ? gitReadFileAtRef(resolvedBase, FITNESS_TEST_PATH)
+    : null;
   if (!headFitnessExists) {
     allErrors.push(`[PR Agregado] ${FITNESS_TEST_PATH} debe existir en HEAD.`);
   } else {
-    for (const fe of checkFitnessNotWeakened(headFitnessContent, 'M')) {
+    for (const fe of checkFitnessNotWeakened(headFitnessContent, 'M', baseFitnessAggregate)) {
       allErrors.push(`[PR Agregado] ${fe}`);
+    }
+  }
+
+  if (gitFileExistsAtRef(resolvedBase, ADR_LOG_PATH)) {
+    const baseAdrAggregate = gitReadFileAtRef(resolvedBase, ADR_LOG_PATH);
+    const headAdrExists = gitFileExistsAtRef('HEAD', ADR_LOG_PATH);
+    const headAdrAggregate = headAdrExists ? gitReadFileAtRef('HEAD', ADR_LOG_PATH) : null;
+    for (const he of checkHistoricalAdrsPreserved(
+      baseAdrAggregate,
+      headAdrAggregate,
+      headAdrExists ? 'M' : 'D'
+    )) {
+      allErrors.push(`[PR Agregado] ${he}`);
     }
   }
 
@@ -578,6 +716,10 @@ function handleSimulate(argv) {
   const adrValid = getArg('--adr-valid', 'false') === 'true';
   const debtIncreased = getArg('--debt-increased', 'false') === 'true';
   const hasFitnessWeakening = getArg('--fitness-weakened', 'false') === 'true';
+  const adrMismatch = getArg('--adr-mismatch', 'false') === 'true';
+  const adrEmptySection = getArg('--adr-empty-section', 'false') === 'true';
+  const fitnessCountDrop = getArg('--fitness-count-drop', 'false') === 'true';
+  const adrDeleted = getArg('--adr-deleted', 'false') === 'true';
 
   const entries = filesCsv
     .split(',')
@@ -587,21 +729,26 @@ function handleSimulate(argv) {
 
   const syntheticAdrText = adrValid
     ? [
-        '## UX-ADR-999: Simulación válida',
+        '## UX-ADR-999: Simulación válida de gobernanza',
         '### 1. Contexto y Objeto (ORCA)',
-        'Simulado',
+        'Contexto simulado para validación de gobernanza UX.',
         '### 2. Verdad Contable (Read Model / Invariante)',
-        'Simulado',
+        adrEmptySection ? '' : 'Invariante simulada respaldada por contrato SQL.',
         '### 3. Arquetipo, Señalización y Top Tasks',
-        'Simulado',
+        'Arquetipo B con señalización N1–N5 sin afectar Top Tasks.',
         '### 4. Higiene de Crecimiento (Qué se consolida o elimina)',
-        'Simulado',
+        'Consolidación verificada sin aumentar baselineDebt.',
       ].join('\n')
     : '';
 
   if (adrValid && !entries.some((e) => e.file === ADR_LOG_PATH)) {
     entries.push({ status: 'M', file: ADR_LOG_PATH });
   }
+
+  const baseAdrLogContent = '## UX-ADR-000: Base histórica\n\n## UX-ADR-001: Endurecimiento\n';
+  const fullAdrLogContent = adrDeleted
+    ? ['## UX-ADR-001: Endurecimiento', syntheticAdrText].filter(Boolean).join('\n\n')
+    : [baseAdrLogContent, syntheticAdrText].filter(Boolean).join('\n\n');
 
   const baseManifestObj = {
     adrVersion: 'UX-ADR-000',
@@ -612,7 +759,7 @@ function handleSimulate(argv) {
     },
   };
   const newManifestObj = {
-    adrVersion: adrValid ? 'UX-ADR-999' : 'UX-ADR-000',
+    adrVersion: adrValid && !adrMismatch ? 'UX-ADR-999' : 'UX-ADR-000',
     baselineDebt: {
       nativeDialogsAllowed: debtIncreased
         ? ['frontend/src/App.vue', 'frontend/src/views/NuevoAlertView.vue']
@@ -622,16 +769,28 @@ function handleSimulate(argv) {
     },
   };
 
+  const makeItBlocks = (n) =>
+    Array.from({ length: n }, (_, idx) => `it("test ${idx + 1}", () => {})`).join('\n');
+  const baseFitnessContent = makeItBlocks(7);
+  const newFitnessContent = hasFitnessWeakening
+    ? 'it.skip("x", () => {})'
+    : fitnessCountDrop
+      ? makeItBlocks(6)
+      : makeItBlocks(7);
+
   const result = evaluateChangeSet({
     entries,
     commitMessage,
     checkCommitMsg: true,
     adrAddedText: syntheticAdrText,
-    adrLogContent: syntheticAdrText || '## UX-ADR-000: Base',
+    adrLogContent: fullAdrLogContent,
+    baseAdrLogContent,
+    adrStatus: 'M',
     baseManifestRaw: JSON.stringify(baseManifestObj),
     newManifestRaw: JSON.stringify(newManifestObj),
     manifestExistedInBase: true,
-    fitnessContent: hasFitnessWeakening ? 'it.skip("x", () => {})' : 'it("x", () => {})',
+    fitnessContent: newFitnessContent,
+    baseFitnessContent,
     fitnessStatus: 'M',
   });
 

@@ -27,6 +27,7 @@ interface UxManifest {
   schemaVersion: string;
   adrVersion: string;
   authorizedToastEngine: string;
+  bottomNavRoutes: string[];
   globalOverlaysInAppVue: string[];
   routes: ManifestRoute[];
   embeddedViews: EmbeddedView[];
@@ -48,9 +49,17 @@ const REPO_ROOT = path.resolve(__dirname, '../../../..');
 const FRONTEND_SRC = path.join(REPO_ROOT, 'frontend', 'src');
 const ROUTER_FILE = path.join(FRONTEND_SRC, 'router', 'index.ts');
 const APP_VUE_FILE = path.join(FRONTEND_SRC, 'App.vue');
+const BOTTOM_NAV_FILE = path.join(FRONTEND_SRC, 'components', 'BottomNav.vue');
 const VIEWS_DIR = path.join(FRONTEND_SRC, 'views');
 const MANIFEST_FILE = path.join(REPO_ROOT, 'documentation', '03_ui_ux_design', 'ux-manifest.json');
 const ADR_LOG_FILE = path.join(REPO_ROOT, 'documentation', '03_ui_ux_design', 'UX_ADR_LOG.md');
+
+const PERMISSION_GUARD_FIELDS = new Set([
+  'isAdmin',
+  'canManageInventory',
+  'canFiar',
+  'canOpenCloseCash',
+]);
 
 function toRepoRelative(absPath: string): string {
   return path.relative(REPO_ROOT, absPath).replace(/\\/g, '/');
@@ -268,13 +277,228 @@ function parseRouterRoutes(): ParsedRoute[] {
   return parsedRoutes;
 }
 
+function unwrapParens(expr: ts.Expression): ts.Expression {
+  let current = expr;
+  while (ts.isParenthesizedExpression(current)) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function flattenLogicalAnd(expr: ts.Expression): ts.Expression[] {
+  const unwrapped = unwrapParens(expr);
+  if (
+    ts.isBinaryExpression(unwrapped) &&
+    unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+  ) {
+    return [...flattenLogicalAnd(unwrapped.left), ...flattenLogicalAnd(unwrapped.right)];
+  }
+  return [unwrapped];
+}
+
+function extractRouteNamesFromEqualityOr(expr: ts.Expression): string[] | null {
+  const unwrapped = unwrapParens(expr);
+  if (
+    ts.isBinaryExpression(unwrapped) &&
+    unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarToken
+  ) {
+    const left = extractRouteNamesFromEqualityOr(unwrapped.left);
+    const right = extractRouteNamesFromEqualityOr(unwrapped.right);
+    if (!left || !right) return null;
+    return [...left, ...right];
+  }
+
+  if (
+    ts.isBinaryExpression(unwrapped) &&
+    unwrapped.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+  ) {
+    const isToNameProp = (node: ts.Expression) =>
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'to' &&
+      node.name.text === 'name';
+
+    if (isToNameProp(unwrapped.left)) {
+      const val = extractStringLiteral(unwrapped.right);
+      return val ? [val] : null;
+    }
+    if (isToNameProp(unwrapped.right)) {
+      const val = extractStringLiteral(unwrapped.left);
+      return val ? [val] : null;
+    }
+  }
+
+  return null;
+}
+
+function extractNegatedAuthPerm(expr: ts.Expression): string | null {
+  const unwrapped = unwrapParens(expr);
+  if (
+    ts.isPrefixUnaryExpression(unwrapped) &&
+    unwrapped.operator === ts.SyntaxKind.ExclamationToken
+  ) {
+    const operand = unwrapParens(unwrapped.operand);
+    if (
+      ts.isPropertyAccessExpression(operand) &&
+      ts.isIdentifier(operand.expression) &&
+      operand.expression.text === 'authStore' &&
+      PERMISSION_GUARD_FIELDS.has(operand.name.text)
+    ) {
+      return operand.name.text;
+    }
+  }
+  return null;
+}
+
+function parseBeforeEachPermissionGuards(): Map<string, Set<string>> {
+  const sourceText = fs.readFileSync(ROUTER_FILE, 'utf8');
+  const sourceFile = ts.createSourceFile(ROUTER_FILE, sourceText, ts.ScriptTarget.Latest, true);
+  const guardsByRoute = new Map<string, Set<string>>();
+
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'router' &&
+      node.expression.name.text === 'beforeEach' &&
+      node.arguments.length >= 1
+    ) {
+      const callback = node.arguments[0];
+      const visitGuardStmt = (inner: ts.Node) => {
+        if (ts.isIfStatement(inner)) {
+          const conjuncts = flattenLogicalAnd(inner.expression);
+          const routeNames: string[] = [];
+          const perms: string[] = [];
+          let hasNonMatchingConjunct = false;
+
+          for (const part of conjuncts) {
+            const names = extractRouteNamesFromEqualityOr(part);
+            if (names) {
+              routeNames.push(...names);
+              continue;
+            }
+            const perm = extractNegatedAuthPerm(part);
+            if (perm) {
+              perms.push(perm);
+              continue;
+            }
+            hasNonMatchingConjunct = true;
+          }
+
+          if (!hasNonMatchingConjunct && routeNames.length > 0 && perms.length > 0) {
+            for (const routeName of routeNames) {
+              if (!guardsByRoute.has(routeName)) {
+                guardsByRoute.set(routeName, new Set());
+              }
+              for (const perm of perms) {
+                guardsByRoute.get(routeName)!.add(perm);
+              }
+            }
+          }
+        }
+        ts.forEachChild(inner, visitGuardStmt);
+      };
+      visitGuardStmt(callback);
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return guardsByRoute;
+}
+
+function extractComponentImportsFromAppVue(appContent: string): Set<string> {
+  const imported = new Set<string>();
+  const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = scriptRegex.exec(appContent)) !== null) {
+    const sf = ts.createSourceFile('App.vue.ts', match[1], ts.ScriptTarget.Latest, true);
+    for (const stmt of sf.statements) {
+      if (
+        ts.isImportDeclaration(stmt) &&
+        stmt.importClause?.name &&
+        ts.isStringLiteral(stmt.moduleSpecifier)
+      ) {
+        const spec = stmt.moduleSpecifier.text;
+        if (spec.startsWith('./components/') || spec.startsWith('@/components/')) {
+          imported.add(stmt.importClause.name.text);
+        }
+      }
+    }
+  }
+  return imported;
+}
+
+function extractRootDirectOverlayComponents(templateClean: string, allowedComponentImports: Set<string>): string[] {
+  const VOID_HTML_TAGS = new Set([
+    'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+    'link', 'meta', 'param', 'source', 'track', 'wbr',
+  ]);
+  const directOverlays: string[] = [];
+  let depth = 0;
+  let i = 0;
+
+  while (i < templateClean.length) {
+    const openIdx = templateClean.indexOf('<', i);
+    if (openIdx === -1) break;
+
+    // Buscar '>' de cierre respetando comillas en atributos
+    let j = openIdx + 1;
+    let quote: string | null = null;
+    while (j < templateClean.length) {
+      const ch = templateClean[j];
+      if (quote) {
+        if (ch === '\\') {
+          j += 2;
+          continue;
+        }
+        if (ch === quote) quote = null;
+      } else {
+        if (ch === '"' || ch === "'" || ch === '`') {
+          quote = ch;
+        } else if (ch === '>') {
+          break;
+        }
+      }
+      j++;
+    }
+    if (j >= templateClean.length) break;
+
+    const tagContent = templateClean.slice(openIdx + 1, j).trim();
+    i = j + 1;
+
+    if (!tagContent || tagContent.startsWith('!')) continue;
+
+    if (tagContent.startsWith('/')) {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    const nameMatch = tagContent.match(/^([A-Za-z][A-Za-z0-9_-]*)/);
+    if (!nameMatch) continue;
+    const tagName = nameMatch[1];
+    const isSelfClosing = tagContent.endsWith('/') || VOID_HTML_TAGS.has(tagName.toLowerCase());
+
+    if (depth === 1 && /^[A-Z]/.test(tagName) && tagName !== 'RouterView' && allowedComponentImports.has(tagName)) {
+      directOverlays.push(tagName);
+    }
+
+    if (!isSelfClosing) {
+      depth++;
+    }
+  }
+
+  return directOverlays;
+}
+
 describe('Architectural Fitness Functions — Gobernanza UX (WO-UX-GOV-000)', () => {
   const manifest = loadManifest();
   const productionFiles = walkFiles(FRONTEND_SRC, ['.vue', '.ts', '.js']).filter(
     (absPath) => !isTestFile(toRepoRelative(absPath))
   );
 
-  it('1. Paridad 1:1 entre frontend/src/router/index.ts y ux-manifest.json + UX-ADR registrado', () => {
+  it('1. Paridad 1:1 entre frontend/src/router/index.ts y ux-manifest.json + UX-ADR + guards de permiso', () => {
     const routerRoutes = parseRouterRoutes();
     const manifestComparable = manifest.routes.map((r) => ({
       name: r.name,
@@ -289,6 +513,26 @@ describe('Architectural Fitness Functions — Gobernanza UX (WO-UX-GOV-000)', ()
     const adrLogContent = fs.readFileSync(ADR_LOG_FILE, 'utf8');
     const adrHeadingRegex = new RegExp(`^##\\s+${manifest.adrVersion}\\b`, 'm');
     expect(adrLogContent).toMatch(adrHeadingRegex);
+
+    const routerPermissionGuards = parseBeforeEachPermissionGuards();
+    for (const route of manifest.routes) {
+      if (PERMISSION_GUARD_FIELDS.has(route.guard)) {
+        const appliedGuards = routerPermissionGuards.get(route.name);
+        expect(
+          appliedGuards?.has(route.guard),
+          `La ruta "${route.name}" declara guard "${route.guard}" en ux-manifest.json pero no está protegida con !authStore.${route.guard} en router.beforeEach`
+        ).toBe(true);
+      }
+    }
+
+    for (const [routeName, appliedGuards] of routerPermissionGuards.entries()) {
+      const manifestRoute = manifest.routes.find((r) => r.name === routeName);
+      expect(manifestRoute, `Guard en router.beforeEach para ruta desconocida "${routeName}"`).toBeDefined();
+      expect(
+        appliedGuards.has(manifestRoute!.guard),
+        `Desincronización de guard para "${routeName}": router.beforeEach aplica [${Array.from(appliedGuards).join(', ')}] vs ux-manifest="${manifestRoute!.guard}"`
+      ).toBe(true);
+    }
   });
 
   it('2. Cero vistas huérfanas en frontend/src/views/ y contexto/arquetipo válidos en manifiesto', () => {
@@ -390,17 +634,43 @@ describe('Architectural Fitness Functions — Gobernanza UX (WO-UX-GOV-000)', ()
     }
   });
 
-  it('6. Paridad exacta de overlays globales en <template> de frontend/src/App.vue', () => {
+  it('6. Paridad exacta de overlays globales hijos directos en <template> de frontend/src/App.vue', () => {
     const appVue = fs.readFileSync(APP_VUE_FILE, 'utf8');
     const templateMatch = appVue.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
     expect(templateMatch, 'App.vue debe contener bloque <template>').not.toBeNull();
 
     const templateClean = templateMatch![1].replace(/<!--[\s\S]*?-->/g, ' ');
-    const componentMatches = Array.from(templateClean.matchAll(/<([A-Z][A-Za-z0-9]*)\b/g)).map(
-      (m) => m[1]
-    );
-    const mountedOverlays = componentMatches.filter((name) => name !== 'RouterView');
+    const allowedComponentImports = extractComponentImportsFromAppVue(appVue);
+    const mountedOverlays = extractRootDirectOverlayComponents(templateClean, allowedComponentImports);
 
     expect(mountedOverlays).toEqual(manifest.globalOverlaysInAppVue);
+  });
+
+  it('7. Paridad 1:1 entre destinos router.push() de BottomNav.vue y manifest.bottomNavRoutes', () => {
+    const bottomNav = fs.readFileSync(BOTTOM_NAV_FILE, 'utf8');
+    const templateMatch = bottomNav.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    expect(templateMatch, 'BottomNav.vue debe contener bloque <template>').not.toBeNull();
+
+    const templateClean = templateMatch![1].replace(/<!--[\s\S]*?-->/g, ' ');
+    const navDestinations = Array.from(
+      templateClean.matchAll(/router\.push\(\s*['"]([^'"]+)['"]\s*\)/g)
+    ).map((m) => m[1]);
+
+    expect(navDestinations).toEqual(manifest.bottomNavRoutes);
+
+    const validPaths = new Set<string>();
+    for (const r of manifest.routes) {
+      validPaths.add(r.path);
+      for (const alias of r.aliases ?? []) {
+        validPaths.add(alias);
+      }
+    }
+
+    for (const dest of navDestinations) {
+      expect(
+        validPaths.has(dest),
+        `Destino "${dest}" en BottomNav.vue no está registrado como ruta canónica en ux-manifest.json`
+      ).toBe(true);
+    }
   });
 });
