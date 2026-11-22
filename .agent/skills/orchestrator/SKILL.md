@@ -8,9 +8,9 @@ description: Activar rol de Orquestador Técnico y Maestro Git - Tech Lead de ej
 ## 🧭 Control de Flujo (Pipeline)
 - **Nivel:** 3 — Planificación Atómica y Reconocimiento del Terreno (Inicio de Ruta B)
 - **Rama permitida:** Crea o verifica rama de trabajo `feat/*`, `refactor/*` o `chore/*` desde `master` (**PROHIBIDO** planificar ejecución directa sobre `master`).
-- **Entrada requerida (Gate In):** SDD/FRD aprobado + ejecución obligatoria de `node scripts/scan-impact.mjs <entidades>` (Regla 10).
-- **Límite estricto:** Reconoce el terreno y descompone en tareas atómicas verificables; **PROHIBIDO** asumir la existencia de funciones sin citar ruta y línea real.
-- **🛑 Freno de Emergencia (Hard Stop):** Si el SDD presenta contradicciones con el esquema real o toca elementos de `.agent/LOCKFILE.md` sin autorización → DETENERSE y reportar al usuario.
+- **Entrada requerida (Gate In):** SDD/FRD aprobado + lectura de `documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md` y `ux-manifest.json` + ejecución obligatoria de `node scripts/scan-impact.mjs <entidades>` (Regla 10).
+- **Límite estricto:** Reconoce el terreno y descompone en tareas atómicas verificables; **PROHIBIDO** asumir la existencia de funciones sin citar ruta y línea real, o mezclar gobernanza UX (`ux-manifest.json` / `UX_ARQUITECTURA_SISTEMA.md` / `ux-fitness.spec.ts`) con código de producto en el mismo commit (Regla 12).
+- **🛑 Freno de Emergencia (Hard Stop):** Si el SDD presenta contradicciones con el esquema real, si requiere alterar la Zona de Alta Fricción UX sin `UX-ADR-XXX [UX-ARCH-APPROVED]` en commit previo separado, o si toca elementos de `.agent/LOCKFILE.md` (o Contexto `C8` / Regla 11) sin autorización → DETENERSE y reportar al usuario.
 - **➡️ Siguiente eslabón:** `data` (si hay tareas de BD/RPC) o `ux` (si las tareas son solo de frontend) ➔ `test-expert` ➔ `code-reviewer` ➔ `pac-uxd` ➔ `verification-before-completion` ➔ `commit` ➔ `push-sync`.
   - **En Modo AUTO:** Una vez emitida la Declaración de Reconocimiento (Paso 0.3) y la lista de tareas atómicas, inicia la ejecución secuencial de cada tarea sin preguntar.
   - **En Modo PAUSADO:** Presenta el Reconocimiento del Terreno y el plan de tareas atómicas, y espera el "adelante" del usuario antes de ejecutar la Tarea 1.
@@ -53,13 +53,15 @@ Antes de descomponer cualquier SDD en tareas, el Orquestador DEBE:
 ### Paso 0.1 — Leer los Documentos de Referencia
 - Leer la **Sección 0 del SDD** objetivo (Contratos Vecinos y Funciones de Seguridad Centralizadas).
 - Leer `documentation/04_dev_orchestration/MAPA_LOGICA_GLOBAL.md` para identificar módulos relacionados que ya están implementados.
+- Leer `documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md` y `documentation/03_ui_ux_design/ux-manifest.json` (y la ficha `CONTEXTOS/C1..C8` si existe) para verificar Contexto, Hogar Canónico ORCA, Arquetipo, Matriz `N1–N5` y si la orden toca la Zona de Alta Fricción UX (en cuyo caso aplica obligatoriamente la **Regla de 2 Commits Separados**: Commit 1 `arch(ux): UX-ADR-XXX ... [UX-ARCH-APPROVED]`, Commit 2 implementación).
 
 ### Paso 0.2 — Verificación de Existencia Real y Ecógrafo de Impacto (Anti-Alucinación)
 Por cada entidad, tabla, RPC, función o utilidad que el SDD o problema involucre:
 1. **Ejecutar el Ecógrafo Estructural (Regla 10):**
    `node scripts/scan-impact.mjs <nombre_entidad_o_rpc>`
-2. **Buscar activamente** su declaración en el código fuente real (`src/utils/`, `src/composables/`, `supabase/`, etc.).
-3. **Citar la evidencia:** Ruta exacta del archivo, línea de declaración y consumidores afectados devueltos por el escáner.
+2. **Verificar impacto en `ux-manifest.json`:** Confirmar ruta canónica, vista registrada, overlays en `App.vue` y ausencia de deuda nueva (`alert`/`confirm`/`prompt`, `vue-toastification`, `material-icons`).
+3. **Buscar activamente** su declaración en el código fuente real (`src/utils/`, `src/composables/`, `supabase/`, etc.).
+4. **Citar la evidencia:** Ruta exacta del archivo, línea de declaración y consumidores afectados devueltos por el escáner.
 
 > [!WARNING]
 > **PROHIBIDO:** Listar una función como reutilizable basándose
@@ -72,6 +74,7 @@ Por cada entidad, tabla, RPC, función o utilidad que el SDD o problema involucr
 ```
 ✅ RECONOCIMIENTO DEL TERRENO Y ECOGRAFÍA COMPLETADOS
 Comando ejecutado: node scripts/scan-impact.mjs <entidades>
+Verificación UX-Manifest: [Contexto C1..C8 / Ruta(s) en ux-manifest.json / Requiere UX-ADR: Sí|No]
 Contratos RVC activos: [listar filas o Ninguno]
 Consumidores afectados (Radio de Explosión): [listar archivos .sql / .ts / .vue]
 Funciones reutilizables verificadas:

@@ -8,9 +8,9 @@ description: Automatizar commits de git con mensajes descriptivos
 ## 🧭 Control de Flujo (Pipeline)
 - **Nivel:** 5 — Guardado Local (Rutas B y C)
 - **Rama permitida:** `feat/*`, `fix/*`, `docs/*`, `refactor/*`, `chore/*`, `audit/*` (**PROHIBIDO** hacer commit directo en `master`; para borradores en `draft/*` usar `add-doc`).
-- **Entrada requerida (Gate In):** Verificación real completada (`verification-before-completion`) y sello vigente de `scan-impact.mjs` si se tocaron capas compartidas.
-- **Límite estricto:** Solo guarda cambios en el repositorio Git local; **PROHIBIDO** ejecutar `git push`.
-- **🛑 Freno de Emergencia (Hard Stop):** Si `git branch --show-current` es `master`, o si el hook `pre-commit` (`verify-impact-hook.mjs`) rechaza el commit → DETENERSE y reportar al usuario.
+- **Entrada requerida (Gate In):** Verificación real completada (`verification-before-completion`), sello vigente de `scan-impact.mjs` si se tocaron capas compartidas, y validación limpia de gobernanza UX (`verify-ux-governance.mjs` + `ux-fitness.spec.ts` vía `.githooks/`).
+- **Límite estricto:** Solo guarda cambios en el repositorio Git local; **PROHIBIDO** ejecutar `git push` y **PROHIBIDO** usar `git commit --no-verify` (Regla 12). Si el commit toca Zona de Gobernanza UX exige `[UX-ARCH-APPROVED]` + `UX-ADR-XXX`; si toca Zona de Guardarraíles/`LOCKFILE.md` exige `[LOCKFILE-APPROVED]`. Prohibido mezclar gobernanza/guardarraíles con código de producto en el mismo commit.
+- **🛑 Freno de Emergencia (Hard Stop):** Si `git branch --show-current` es `master`, o si los hooks versionados `.githooks/pre-commit` / `.githooks/commit-msg` (`verify-impact-hook.mjs` o `verify-ux-governance.mjs`) rechazan el commit → DETENERSE y reportar al usuario.
 - **➡️ Siguiente eslabón:** `push-sync`
   - **En Modo AUTO:** Si el commit local es exitoso (`✅`), ejecuta `push-sync` de inmediato sin preguntar.
   - **En Modo PAUSADO:** Confirma el hash del commit local, indica *"Siguiente paso en la ruta: `push-sync`"* y espera confirmación.
@@ -29,18 +29,18 @@ git branch --show-current
 *(Si la rama actual es `master`, ABORTAR inmediatamente y crear/cambiar a una rama de trabajo `feat/*`, `fix/*`, etc.).*
 
 // turbo
-1. Verificar el estado actual de git:
+1. Verificar el estado actual de git para no mezclar gobernanza UX con código de producto ni arrastrar archivos temporales:
 ```bash
 git status --short
 ```
 
 // turbo
-2. Agregar todos los cambios al staging:
+2. Agregar explícitamente solo los archivos correspondientes al commit (evitar `git add -A` si hay archivos temporales sin relación o mezclas prohibidas):
 ```bash
-git add -A
+git add <archivos-del-commit>
 ```
 
-3. Hacer commit con mensaje descriptivo:
+3. Hacer commit con mensaje descriptivo (incluyendo `[UX-ARCH-APPROVED]` y/o `[LOCKFILE-APPROVED]` únicamente cuando haya aprobación explícita y corresponda a la zona tocada; **nunca usar `--no-verify`**):
 ```bash
 git commit -m "[tipo]: [descripción breve]"
 ```

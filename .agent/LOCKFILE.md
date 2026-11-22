@@ -1,7 +1,7 @@
 # 🔒 LOCKFILE: Funcionalidades Protegidas
 
-**Versión:** 1.0  
-**Fecha:** 2026-01-16  
+**Versión:** 1.1  
+**Fecha:** 2026-11-21  
 **Autoridad:** Solo el USUARIO puede aprobar cambios a estas funcionalidades
 
 ---
@@ -52,6 +52,15 @@ Antes de modificar **cualquier** función, archivo o componente listado en este 
 |----|---------------|------------|-------|
 | LF-012 | DEMO_ACCOUNT constante | `auth.ts` → DEMO_ACCOUNT | Testing estable |
 
+### E. Arquitectura UX y Guardarraíles
+
+| ID | Funcionalidad | Archivo(s) | Razón |
+|----|---------------|------------|-------|
+| LF-013 | Mapa y Manifiesto UX | `documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md`, `ux-manifest.json`, `UX_ADR_LOG.md` | Fuente única de flujos, 8 contextos (`C1–C8`), señalización (`N1–N5`) y `baselineDebt` congelado |
+| LF-014 | Shell, Router y Navegación Global | `frontend/src/router/index.ts`, `frontend/src/App.vue`, `frontend/src/components/BottomNav.vue`, altas/bajas en `frontend/src/views/**` | Evitar rutas huérfanas, overlays sin arbitraje o ruptura de Top Tasks *(requiere `UX-ADR-XXX` previo y `[UX-ARCH-APPROVED]`)* |
+| LF-015 | Tests Estructurales de Arquitectura UX | `frontend/src/__tests__/architecture/ux-fitness.spec.ts` | Fitness functions anti-deriva (paridad router, cero vistas huérfanas, higiene `N1–N5`) |
+| LF-016 | Hooks, Verificadores, CI y Contratos | `.githooks/**`, `scripts/verify-*.mjs`, `.github/workflows/architecture-guard.yml`, `.github/CODEOWNERS`, `.agent/AGENTS.md`, `.agent/LOCKFILE.md` | Blindaje mecánico anti-bypass local y remoto |
+
 ---
 
 ## 📋 Registro de Aprobaciones
@@ -59,6 +68,7 @@ Antes de modificar **cualquier** función, archivo o componente listado en este 
 | Fecha | LF-ID | Cambio Propuesto | Aprobado Por | Commit |
 |-------|-------|------------------|--------------|--------|
 | 2026-11-19 | LF-008, LF-010 | Fase 3 Ola 1: Esquema cerrado de 4 permisos en `EmployeePermissions` (eliminando `canViewReports`/`canViewInventory`) + políticas RLS/helpers centralizados (`is_store_admin`, `assert_store_admin`, `assert_employee_permission`) y continuidad `<24h` | Usuario (Sesión Fase 3 Ola 1) | `[LOCKFILE-APPROVED]` (rama `feat/fase3-ola1-cimientos-rbac-canales`) |
+| 2026-11-21 | LF-013..LF-016 | WO-UX-GOV-000 (Ola 0): Blindaje UX en 5 anillos, actualización de `LOCKFILE.md` y Regla 12 en `AGENTS.md` | Usuario (Aprobación explícita Ola 0) | `[LOCKFILE-APPROVED] [UX-ARCH-APPROVED]` (rama `chore/ux-governance-ola0`) |
 
 ---
 
@@ -74,9 +84,11 @@ Si un agente modifica una funcionalidad protegida SIN aprobación:
 
 ## ✅ Funcionalidades NO Protegidas (Libre Modificación)
 
-- Estilos CSS y animaciones
-- Textos y labels de UI
-- Orden de elementos visuales
-- Nuevos componentes que no afecten los bloqueados
-- Documentación
-- Tests
+Aplica **únicamente a cambios internos dentro de vistas ya registradas en `ux-manifest.json`** (sin alterar rutas, `App.vue`, `BottomNav.vue`, `baselineDebt` ni crear vistas nuevas):
+
+- Estilos CSS y animaciones dentro de vistas existentes
+- Textos y labels de UI (sin introducir `alert()`, `confirm()`, `prompt()`, `vue-toastification` ni `material-icons`)
+- Orden de elementos visuales internos que no afecten `App.vue`, `BottomNav.vue` ni las Top Tasks
+- Subcomponentes internos nuevos dentro de un Contexto existente que no alteren los elementos protegidos (`LF-001` a `LF-016`)
+- Documentación fuera de `LF-013` y `.agent/`
+- Tests unitarios y de integración fuera de `LF-015`

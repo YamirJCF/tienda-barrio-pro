@@ -11,9 +11,9 @@ date_added: "2026-02-27"
 ## 🧭 Control de Flujo (Pipeline)
 - **Nivel:** 4 — Compuerta Obligatoria de Evidencia antes de Guardar (Rutas B y C)
 - **Rama permitida:** `feat/*`, `fix/*`, `refactor/*`, `chore/*`, `docs/*`
-- **Entrada requerida (Gate In):** Implementación + `test-expert` + `code-reviewer` (y `pac-uxd` si aplica) completados.
+- **Entrada requerida (Gate In):** Implementación + `test-expert` + `code-reviewer` (y `pac-uxd` si aplica) completados. Si se tocaron archivos de `frontend/`, UX o gobernanza (Regla 12), incluye obligatoriamente `cd frontend && npx vitest run src/__tests__/architecture/ux-fitness.spec.ts` y `node scripts/verify-ux-governance.mjs --pre-commit`.
 - **Límite estricto:** Exige evidencia real de ejecución en consola (Regla 5 de `AGENTS.md`) y conteo mecánico de hallazgos (Regla 9); **PROHIBIDO** marcar `✅` con frases como "debería funcionar" o "el código se ve bien".
-- **🛑 Freno de Emergencia (Hard Stop):** Si un comando de verificación (`npm run test`, `npm run build`, consulta SQL) falla o no se ejecutó en este turno → Prohibido avanzar a `commit`.
+- **🛑 Freno de Emergencia (Hard Stop):** Si un comando de verificación (`npm run test`, `ux-fitness.spec.ts`, `verify-ux-governance.mjs --pre-commit`, `npm run build`, consulta SQL) falla o no se ejecutó en este turno → Prohibido avanzar a `commit`.
 - **➡️ Siguiente eslabón:** `commit` ➔ `push-sync`
   - **En Modo AUTO:** Con la evidencia real impresa y en verde (`✅`), ejecuta `commit` de inmediato sin preguntar.
   - **En Modo PAUSADO:** Presenta el resumen de evidencias reales ejecutadas, indica *"Siguiente paso en la ruta: `commit`"* y espera confirmación.

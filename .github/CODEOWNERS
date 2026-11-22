@@ -1,0 +1,15 @@
+# Zona de Alta Fricción — Arquitectura UX y Gobernanza (WO-UX-GOV-000)
+/documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md @YamirJCF
+/documentation/03_ui_ux_design/ux-manifest.json @YamirJCF
+/documentation/03_ui_ux_design/UX_ADR_LOG.md @YamirJCF
+/frontend/src/router/index.ts @YamirJCF
+/frontend/src/App.vue @YamirJCF
+/frontend/src/components/BottomNav.vue @YamirJCF
+/frontend/src/views/ @YamirJCF
+/frontend/src/__tests__/architecture/ @YamirJCF
+/.githooks/ @YamirJCF
+/scripts/verify-ux-governance.mjs @YamirJCF
+/scripts/verify-impact-hook.mjs @YamirJCF
+/.github/workflows/architecture-guard.yml @YamirJCF
+/.github/CODEOWNERS @YamirJCF
+/.agent/ @YamirJCF
