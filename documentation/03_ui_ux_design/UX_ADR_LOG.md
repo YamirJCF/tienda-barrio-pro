@@ -65,3 +65,22 @@ Se protegen los 5 accesos directos de `BottomNav.vue` (Top Tasks de mostrador) e
 
 ### 4. Higiene de Crecimiento (Qué se consolida o elimina)
 Se cierran 4 vectores de bypass detectados tras el despliegue inicial de Ola 0: reutilizar un `adrVersion` obsoleto en `ux-manifest.json`, dejar secciones vacías en nuevos `UX-ADR-XXX`, reducir silenciosamente bloques `it(` en `ux-fitness.spec.ts` y eliminar encabezados `## UX-ADR-XXX` históricos en `UX_ADR_LOG.md`, manteniendo congelado el `baselineDebt` sin agregar deuda nueva.
+
+---
+
+## UX-ADR-002: Consolidación de Contexto C2 en Workspace /cash-control y Gastos OPEX Exclusivos Admin
+- **Fecha:** 2026-11-24
+- **Estado:** Aprobado (`[UX-ARCH-APPROVED]` `[LOCKFILE-APPROVED]`)
+- **Contexto(s) / Rutas afectadas:** `C2` (`/cash-control`; retiro de `/expenses` y `/my-shift-movements`)
+
+### 1. Contexto y Objeto (ORCA)
+Unifica el objeto `Turno de Caja` y sus relaciones `1:N` (`Gasto OPEX`, `Movimiento Propio del Turno`) en un solo Hogar Canónico `/cash-control` (`?tab=shift|expenses|movements`). Define acceso `requiresAuth` en router con pestañas segregadas por rol: `Turno` (`Admin` o `canOpenCloseCash`), `Gastos` (estrictamente `Admin`), `Mis Movimientos` (todos los autenticados).
+
+### 2. Verdad Contable (Read Model / Invariante)
+Blindaje en servidor con `assert_store_admin` en `rpc_registrar_gasto_v2` y nuevo RPC de lectura `rpc_obtener_gastos_turno` que devuelve la lista OPEX limpia (`movement_type = 'gasto'`) y `total_opex_expenses` calculado por PostgreSQL (cero `.reduce()` en cliente). Corrección del mapeo de `source === 'refund'` en `cashRegister.ts`, conectividad online obligatoria (`checkConnectivity: true`) y error inicial `N3` fail-closed.
+
+### 3. Arquetipo, Señalización y Top Tasks
+Mantiene Arquetipo `B/D` (Workspace + Hoja Transaccional `BaseModal` para gasto OPEX + Arquetipo `E` en tab `Mis Movimientos` + Compuerta `F` prioritaria en `+24h`/forzados). Validaciones de campo pasan a `N1` inline; éxito a `N2` (`ToastNotification.vue`); errores de sincronización/propiedad/intentos a `N3` persistente; cero fricción adicional a la Top Task #2 (abrir/cerrar caja).
+
+### 4. Higiene de Crecimiento (Qué se consolida o elimina)
+Se retiran 2 rutas y 2 vistas redundantes: `/expenses` (`ExpensesView.vue`, `LF-003`) y `/my-shift-movements` (`MyShiftMovementsView.vue`). Se eliminan violaciones de `DESIGN.md` en `C2` (emoji `⚠️`, `bg-gray-50`, `border-2`, modal custom, spinner genérico) sin aumentar `baselineDebt`.

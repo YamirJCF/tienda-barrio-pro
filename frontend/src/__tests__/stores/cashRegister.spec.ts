@@ -21,8 +21,17 @@ import type { CashSession } from '../../types';
 vi.mock('../../data/repositories/cashRepository', () => ({
     cashRepository: {
         registerEvent: vi.fn().mockResolvedValue({ success: true, data: { session_id: 'test-session-id' } }),
-        getStoreStatus: vi.fn().mockResolvedValue({ isOpen: false, openingAmount: 0 })
+        getStoreStatus: vi.fn().mockResolvedValue({ isOpen: false, openingAmount: 0 }),
+        getSessionTransactions: vi.fn().mockResolvedValue([]),
+        getOwnShiftMovements: vi.fn().mockResolvedValue({ data: [], count: 0, has_open_shift: false, shift_id: null, shift_opened_at: null }),
+        getSessionOpexExpenses: vi.fn().mockResolvedValue({ success: true, session_id: 'test-session-id', session_status: 'open', total_opex_expenses: 0, count: 0, data: [] }),
+        addMovement: vi.fn().mockResolvedValue({ success: true })
     }
+}));
+
+vi.mock('../../data/supabaseClient', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../data/supabaseClient')>()),
+    isSupabaseConfigured: () => true,
 }));
 
 describe('CashRegister Store - Bridge Validation', () => {
@@ -295,6 +304,115 @@ describe('CashRegister Store - Bridge Validation', () => {
 
             expect(store.isOpen).toBe(false);
             expect(store.currentSession).toBeNull();
+        });
+    });
+
+    // =========================================================
+    // 7. WO-OLA2-C2-001 (C2-H1 & C2-H2): Mapeo refund + throwOnError
+    // =========================================================
+    describe('C2-H1 & C2-H2 - Mapeo limpio y sincronización fail-closed', () => {
+        it('mapea source === "refund" a movementType: "reembolso" (nunca "gasto") y distingue abono vs proveedor', async () => {
+            const { cashRepository } = await import('../../data/repositories/cashRepository');
+            const { useAuthStore } = await import('../../stores/auth');
+            const authStore = useAuthStore();
+            authStore.currentUser = {
+                id: 'emp-1',
+                employeeId: 'emp-1',
+                name: 'Cajero',
+                type: 'employee',
+                storeId: 'store-1',
+                permissions: { canManageInventory: false, canFiar: false, canOpenCloseCash: true, canManageRefunds: false },
+            } as any;
+
+            Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+            vi.mocked(cashRepository.getStoreStatus).mockResolvedValueOnce({
+                isOpen: true,
+                openingAmount: 50000,
+                sessionId: 'sess-1',
+                openedByName: 'Cajero',
+                openedByRole: 'employee',
+                lastEvent: {
+                    store_id: 'store-1',
+                    type: 'open',
+                    amount_declared: 50000,
+                    authorized_by_id: 'emp-1',
+                    authorized_by_name: 'Cajero',
+                    authorized_by_type: 'employee',
+                    created_at: new Date().toISOString(),
+                },
+            });
+            vi.mocked(cashRepository.getOwnShiftMovements).mockResolvedValueOnce({
+                data: [
+                    {
+                        id: 'mov-refund',
+                        source: 'refund',
+                        payment_method: 'efectivo',
+                        amount: 7000,
+                        description: 'DEVOLUCIÓN #12',
+                        category: 'reembolso',
+                        created_at: new Date().toISOString(),
+                        actor_name: 'Cajero',
+                        actor_role: 'employee',
+                    },
+                    {
+                        id: 'mov-abono',
+                        source: 'payment',
+                        payment_method: 'efectivo',
+                        amount: 15000,
+                        description: 'Abono cliente Rosa',
+                        category: 'Abono / Ingreso',
+                        created_at: new Date().toISOString(),
+                        actor_name: 'Cajero',
+                        actor_role: 'employee',
+                    },
+                    {
+                        id: 'mov-prov',
+                        source: 'payment',
+                        payment_method: 'efectivo',
+                        amount: 20000,
+                        description: 'PAGO PROVEEDOR Panadería',
+                        category: 'Pago a Proveedor',
+                        created_at: new Date().toISOString(),
+                        actor_name: 'Admin',
+                        actor_role: 'owner',
+                    },
+                ],
+                count: 3,
+                has_open_shift: true,
+                shift_id: 'sess-1',
+                shift_opened_at: new Date().toISOString(),
+            });
+
+            const synced = await store.syncFromBackend('store-1', { throwOnError: true });
+            expect(synced).toBe(true);
+            expect(store.lastSyncError).toBeNull();
+
+            const txs = store.currentSession?.transactions || [];
+            const refundTx = txs.find((t) => t.id === 'mov-refund');
+            const abonoTx = txs.find((t) => t.id === 'mov-abono');
+            const provTx = txs.find((t) => t.id === 'mov-prov');
+
+            expect(refundTx?.type).toBe('expense');
+            expect(refundTx?.movementType).toBe('reembolso');
+            expect(abonoTx?.type).toBe('income');
+            expect(abonoTx?.movementType).toBe('ingreso');
+            expect(provTx?.type).toBe('expense');
+            expect(provTx?.movementType).toBe('pago_proveedor');
+        });
+
+        it('guarda lastSyncError y relanza error cuando throwOnError: true', async () => {
+            const { cashRepository } = await import('../../data/repositories/cashRepository');
+            Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+            vi.mocked(cashRepository.getStoreStatus).mockRejectedValueOnce(new Error('SERVER_DOWN'));
+
+            await expect(store.syncFromBackend('store-1', { throwOnError: true })).rejects.toThrow('SERVER_DOWN');
+            expect(store.lastSyncError).toBe('SERVER_DOWN');
+
+            // Recuperación limpia lastSyncError
+            vi.mocked(cashRepository.getStoreStatus).mockResolvedValueOnce({ isOpen: false, openingAmount: 0 });
+            const res = await store.syncFromBackend('store-1', { throwOnError: true });
+            expect(res).toBe(false);
+            expect(store.lastSyncError).toBeNull();
         });
     });
 });

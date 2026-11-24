@@ -1,34 +1,34 @@
 # Contexto C2 — Tesorería Diaria (Caja & Turnos)
 
-> **Estado:** Cartografía Ola 1 (`Lote 1A` — solo documentación)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-001`)  
+> **Estado:** Consolidado Ola 2 (`UX-ADR-002` — `WO-OLA2-C2-001`)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-002`)  
 > **Restricción de conectividad:** **Online obligatorio** para toda operación de Caja y Turnos ([`PRODUCT.md`](../../../PRODUCT.md#L38)).  
-> **Invariantes de seguridad (`POL-SEG-01` / `POL-SEG-03`):** **Arqueo Ciego** (prohibido exponer `expected_balance` o `difference` al cajero/empleado) y **propiedad estricta del turno** (solo quien abrió el turno o el Admin pueden cerrarlo; cierre asistido de 3 intentos; compuerta `+24h` y reconciliación forzada).
+> **Invariantes de seguridad (`POL-SEG-01` / `POL-SEG-03`):** **Arqueo Ciego** (prohibido exponer `expected_balance` o `difference` al cajero/empleado), **propiedad estricta del turno** (solo quien abrió el turno o el Admin pueden cerrarlo; cierre asistido de 3 intentos; compuerta `+24h` y reconciliación forzada) y **gastos OPEX 100% exclusivos del Administrador (`assert_store_admin`)**.
 
 ---
 
 ## §1. Frontera del Contexto
 
 ### 1.1 Propósito Delimitado
-Gobernar el ciclo de vida completo de cada turno operativo de caja: apertura con base inicial, registro de gastos OPEX del turno, consulta de movimientos propios del actor y cierre ciego / asistido o reconciliación de cierres forzados (`+24h`).
+Gobernar el ciclo de vida completo de cada turno operativo de caja en un único Workspace (`/cash-control`): apertura con base inicial, registro/consulta de gastos OPEX del turno (exclusivo Admin), consulta de movimientos propios del actor y cierre ciego / asistido o reconciliación de cierres forzados (`+24h`).
 
-### 1.2 Rutas Actuales vs. Objetivo Canónico
+### 1.2 Rutas Actuales (Consolidadas en `UX-ADR-002`)
 
-| Ruta | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Destino Objetivo (Ola 2) |
+| Ruta | Vista / Subcomponente (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Implementación Canónica |
 |---|---|---|---|---|
-| `/cash-control` | [`CashControlView.vue`](../../../frontend/src/views/CashControlView.vue) | `canonica` | `B/D` | **Se mantiene como único Hogar Canónico:** Workspace del Turno con **3 pestañas** (`Turno / Arqueo \| Gastos del Turno \| Mis Movimientos`) + Compuerta `F` prioritaria en bloqueos `+24h` o turnos forzados pendientes. |
-| `/my-shift-movements` | [`MyShiftMovementsView.vue`](../../../frontend/src/views/MyShiftMovementsView.vue) | `consolidar` | `E` | **Consolidar en `/cash-control?tab=movements`** (pestaña `Mis Movimientos` dentro del Workspace del Turno). |
-| `/expenses` | [`ExpensesView.vue`](../../../frontend/src/views/ExpensesView.vue) | `consolidar` (`LF-003`) | `D` | **Consolidar en `/cash-control?tab=expenses`** (pestaña `Gastos del Turno`, manteniendo Hoja Transaccional Arquetipo `D` en `BaseModal`). |
+| `/cash-control` *(tabs `?tab=shift\|expenses\|movements`)* | [`CashControlView.vue`](../../../frontend/src/views/CashControlView.vue) + [`ShiftExpensesTab.vue`](../../../frontend/src/components/cash/ShiftExpensesTab.vue) + [`OwnShiftMovementsTab.vue`](../../../frontend/src/components/cash/OwnShiftMovementsTab.vue) | `canonica` | `B/D` *(+ `E` en tab `movements`)* | **Único Hogar Canónico del Turno:** acceso `requiresAuth` con pestañas segregadas por rol (`Turno` \| `Gastos` \| `Mis Movimientos`) y Compuerta `F` prioritaria en `+24h` / turnos forzados pendientes. |
+| `/my-shift-movements` *(retirada)* | — | Retirada en `UX-ADR-002` | — | **Consolidada en `/cash-control?tab=movements`** (`OwnShiftMovementsTab.vue`). |
+| `/expenses` *(retirada)* | — | Retirada en `UX-ADR-002` | — | **Consolidada en `/cash-control?tab=expenses`** (`ShiftExpensesTab.vue` + `BaseModal` Arquetipo `D`, exclusivo Admin). |
 
-### 1.3 Matriz de Permisos (`SDD-003-01`)
+### 1.3 Matriz de Permisos (`SDD-003-01` & Enmienda `SDD-026` / `UX-ADR-002`)
 
 | Capacidad / Acción | `Admin` | Empleado con `canOpenCloseCash` | Empleado sin `canOpenCloseCash` | Regla de Visibilidad / Seguridad |
 |---|---|---|---|---|
-| Abrir turno de caja | ✅ | ✅ | ❌ | Guard `!authStore.canOpenCloseCash` en `router/index.ts` (L357). |
-| Cerrar turno propio (Arqueo Ciego + 3 intentos) | ✅ | ✅ *(solo si es abridor)* | ❌ | Propiedad estricta; otro usuario ve banner de turno ajeno (`isShiftOwnedByOther`). |
+| Abrir turno de caja | ✅ | ✅ | ❌ | Tab `Turno` visible solo si `Admin \|\| canOpenCloseCash`. |
+| Cerrar turno propio (Arqueo Ciego + 3 intentos) | ✅ | ✅ *(solo si es abridor)* | ❌ | Propiedad estricta; otro usuario ve banner `N3` de turno ajeno (`isShiftOwnedByOther`). |
 | Cerrar / reconciliar turno de otro o forzado `+24h` | ✅ | ❌ *(solo si fue el abridor en `+24h`)* | ❌ | Guard en `router/index.ts` (L317-334) y `ForcedCloseAuditModal`. |
-| Registrar Gasto OPEX (`SDD-026`) | ✅ | ✅ | ⚠️ *(sin guard hoy en `/expenses`)* | Definir regla explícita en Ola 2 y cerrar hueco en `router/index.ts` (L146-150). |
-| Consultar Mis Movimientos del Turno | ✅ | ✅ | ✅ | Solo movimientos propios del actor (`getOwnShiftMovements`); Arqueo Ciego preservado. |
+| Registrar y consultar Gasto OPEX (`SDD-026`) | ✅ | ❌ | ❌ | **100% exclusivo Admin:** Tab `Gastos` oculto para no-Admin + `assert_store_admin` en `rpc_registrar_gasto_v2` y `rpc_obtener_gastos_turno` (`ADMIN_ONLY_ACTION`, `42501`). |
+| Consultar Mis Movimientos del Turno | ✅ | ✅ | ✅ | Todo autenticado accede a `/cash-control?tab=movements` (`OwnShiftMovementsTab.vue`, Arqueo Ciego preservado). |
 
 ---
 
@@ -42,7 +42,7 @@ Turno de Caja (1) ──< Gasto OPEX (N)  [5 categorías × 3 canales — SDD-02
                   └──< Movimiento Propio del Turno (N)  [solo lectura acotada]
 ```
 
-- **Catálogo cerrado de `Gasto OPEX` (`SDD-026` / [`ExpensesView.vue`](../../../frontend/src/views/ExpensesView.vue#L29-L34)):**
+- **Catálogo cerrado de `Gasto OPEX` (`SDD-026` / [`ShiftExpensesTab.vue`](../../../frontend/src/components/cash/ShiftExpensesTab.vue#L56-L69)):**
   - **5 categorías:** `Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos`.
   - **3 canales:** `efectivo`, `nequi`, `llave_bre` (+ comprobante opcional cuando no es efectivo).
 
@@ -52,9 +52,9 @@ Turno de Caja (1) ──< Gasto OPEX (N)  [5 categorías × 3 canales — SDD-02
 |---|---|---|---|---|
 | **Abrir `Turno de Caja`** | `Admin`, `canOpenCloseCash` | Online | `/cash-control` | `/cash-control` → Tab **Turno / Arqueo** |
 | **Cerrar / Reconciliar `Turno de Caja`** | `Admin` o abridor con `canOpenCloseCash` | Online | `/cash-control` + `ForcedCloseAuditModal` | `/cash-control` → Tab **Turno / Arqueo** (y Compuerta `F` si `+24h`/forzado) |
-| **Registrar `Gasto OPEX`** | Según política `SDD-003-01` / `SDD-026` | Online | `/expenses` (ruta aislada sin vínculo desde Caja) | `/cash-control?tab=expenses` → botón abre **Hoja Transaccional Arquetipo `D` (`BaseModal`)** |
-| **Consultar `Gasto OPEX` del Turno** | Según política / actor | Online | `/expenses` (contaminado con `refund` para no-Admin) | `/cash-control?tab=expenses` (payload limpio y total calculado por backend) |
-| **Consultar `Movimiento Propio del Turno`** | Todo usuario autenticado | Online | `/my-shift-movements` (botón Atrás fijo a `/`) | `/cash-control?tab=movements` (pestaña `Mis Movimientos`, Arquetipo `E`) |
+| **Registrar `Gasto OPEX`** | **Estrictamente `Admin`** (`assert_store_admin`) | Online | `/expenses` (retirada) | `/cash-control?tab=expenses` → botón `+ Registrar Gasto` abre **Hoja Transaccional Arquetipo `D` (`BaseModal`)** |
+| **Consultar `Gasto OPEX` del Turno** | **Estrictamente `Admin`** (`rpc_obtener_gastos_turno`) | Online | `/expenses` (retirada) | `/cash-control?tab=expenses` (payload limpio `movement_type = 'gasto'` y `total_opex_expenses` calculado en SQL) |
+| **Consultar `Movimiento Propio del Turno`** | Todo usuario autenticado | Online | `/my-shift-movements` (retirada) | `/cash-control?tab=movements` (pestaña `Mis Movimientos`, Arquetipo `E`) |
 
 > **🔒 Nota Obligatoria de Gobernanza (`LOCKFILE.md`):** Tanto `ExpensesView.vue` / `expenses.ts` (**`LF-003`**) como los RPCs de control de caja (**`LF-004`**) están protegidos en [`.agent/LOCKFILE.md`](../../../.agent/LOCKFILE.md#L29-L30). Ninguna modificación de Ola 2 sobre esos archivos puede ejecutarse sin autorización explícita del usuario y marcador `[LOCKFILE-APPROVED]` en el commit.
 
@@ -120,13 +120,13 @@ Turno de Caja (1) ──< Gasto OPEX (N)  [5 categorías × 3 canales — SDD-02
 
 ---
 
-## §5. Hotspots Contables y de Dominio Verificados para Ola 2 (`FRD/SDD/SQL` antes de UI)
+## §5. Hotspots Contables y de Dominio — Estado de Resolución en Ola 2 (`WO-OLA2-C2-001`)
 
-> Todos los hallazgos fueron verificados directamente en código fuente (Regla 9.3). La corrección en Ola 2 inicia en `SDD/SQL/Store` antes de consolidar la vista y exige `[LOCKFILE-APPROVED]` para `LF-003` / `LF-004`.
+> Todos los hallazgos fueron verificados directamente en código fuente (Regla 9.3) y resueltos en **PR 2.1A (`WO-OLA2-C2-001`)** bajo `[UX-ARCH-APPROVED]` y `[LOCKFILE-APPROVED]` (`LF-003`, `LF-004`, `LF-013`, `LF-014`).
 
-| ID | Severidad | Evidencia Verificada en Código | Brecha Contable / Seguridad / UX | Acción Requerida en Ola 2 |
+| ID | Severidad | Evidencia Previa | Brecha Contable / Seguridad / UX | Resolución Implementada en Ola 2 |
 |---|---|---|---|---|
-| **C2-H1** | 🔴 **CRÍTICO** | [`cashRegister.ts`](../../../frontend/src/stores/cashRegister.ts#L180-L185); [`ExpensesView.vue`](../../../frontend/src/views/ExpensesView.vue#L43-L49) | 1) Para empleados no-Admin, `cashRegister.ts` mapea `m.source === 'refund'` a `type: 'expense'` y **`movementType: 'gasto'`**, contaminando `currentExpenses` en `ExpensesView.vue` (que filtra `movementType === 'gasto'`).<br>2) `totalExpenses` se calcula en cliente con `.reduce()` (violando `SPEC_001` Backend Authority y `POL-FIN-04`). | Corregir mapeo de `source === 'refund'` (`movementType: 'reembolso'`) en store y exponer `totalExpenses` calculado desde backend/RPC (`[LOCKFILE-APPROVED]` `LF-003`). |
-| **C2-H2** | 🟠 **ALTO** | [`CashControlView.vue`](../../../frontend/src/views/CashControlView.vue#L152-L154) y L283 | 1) `onMounted` atrapa errores en `catch (e)` solo con `console.error(...)`, dejando la pantalla sin aviso visual ni botón Reintentar (riesgo de fallo silencioso, Regla 3).<br>2) La operación principal usa `checkConnectivity: false` (L283), contradiciendo el requisito online obligatorio de Caja (`PRODUCT.md` L38). | Exponer estado de error `N3` con botón Reintentar en carga inicial y exigir `checkConnectivity: true` en operaciones de Caja. |
-| **C2-H3** | 🟠 **ALTO** | [`router/index.ts`](../../../frontend/src/router/index.ts#L146-L150); [`ExpensesView.vue`](../../../frontend/src/views/ExpensesView.vue#L107) | 1) La ruta `/expenses` solo exige `requiresAuth: true` sin guard explícito de permiso.<br>2) `ExpensesView.vue` muestra la etiqueta ambigua `"Total Salidas (Sesión)"` que induce a confundir gastos OPEX con devoluciones/pagos. | Definir permiso canónico en `SDD-003-01` al consolidar en `/cash-control?tab=expenses` y corregir etiqueta a `"Total Gastos OPEX del Turno"`. |
-| **C2-H4** | 🟡 **MEDIO** | [`CashControlView.vue`](../../../frontend/src/views/CashControlView.vue#L183); [`ExpensesView.vue`](../../../frontend/src/views/ExpensesView.vue#L84) y L142-205; [`MyShiftMovementsView.vue`](../../../frontend/src/views/MyShiftMovementsView.vue#L143-L199) | 1) Emoji `⚠️` en título de `CashControlView.vue` (L183).<br>2) `bg-gray-50 dark:bg-gray-900` (`ExpensesView.vue` L84) y `border-2` (`MyShiftMovementsView.vue` L144) fuera de tokens `DESIGN.md`.<br>3) Modal custom manual en `ExpensesView.vue` (L142-205) en vez de `BaseModal`.<br>4) Ausencia de `tabular-nums` en montos y spinner genérico en lugar de `BaseListSkeleton` en `MyShiftMovementsView.vue` (L143-199). | Migrar a tokens de `DESIGN.md`, reemplazar modal custom por `BaseModal`, usar `BaseListSkeleton`, `tabular-nums` e íconos Lucide sin emojis. |
+| **C2-H1** | 🟢 **RESUELTO** *(antes CRÍTICO)* | `cashRegister.ts` (L180-195); `ExpensesView.vue` (retirada) | Mapeo erróneo de `m.source === 'refund'` a `movementType: 'gasto'` y suma `totalExpenses` con `.reduce()` en cliente. | ✅ Corregido `source === 'refund'` → `movementType: 'reembolso'` en `cashRegister.ts`; nuevo RPC `rpc_obtener_gastos_turno` entrega lista OPEX limpia y `total_opex_expenses` calculado por PostgreSQL (cero `.reduce()` en UI). |
+| **C2-H2** | 🟢 **RESUELTO** *(antes ALTO)* | `CashControlView.vue` (L152-154, L283) | `onMounted` ocultaba fallo de `syncFromBackend` en `console.error` (fallo silencioso Regla 3) y mutación usaba `checkConnectivity: false`. | ✅ `syncFromBackend(storeId, { throwOnError: true })` + `lastSyncError` + `BaseListSkeleton` + banner `N3` persistente con **Reintentar** y bloqueo fail-closed; `checkConnectivity: true` obligatorio en mutaciones. |
+| **C2-H3** | 🟢 **RESUELTO** *(antes ALTO)* | `router/index.ts` (L146-150); `ExpensesView.vue` (retirada) | `/expenses` carecía de control por rol y mostraba título ambiguo `"Total Salidas (Sesión)"`. | ✅ Retiradas `/expenses` y `/my-shift-movements`; Workspace `/cash-control` (`requiresAuth`) con pestañas segregadas por rol (`Gastos` solo `Admin`), `assert_store_admin` en ambos RPCs (`ADMIN_ONLY_ACTION`) y título `"Total Gastos OPEX del Turno"`. |
+| **C2-H4** | 🟢 **RESUELTO** *(antes MEDIO)* | `CashControlView.vue`, `ExpensesView.vue`, `MyShiftMovementsView.vue` | Emoji `⚠️`, `bg-gray-50`, `border-2`, modal custom, spinner `border-2` y ausencia de `tabular-nums`. | ✅ Tokens `DESIGN.md` (`bg-background-*`, `bg-surface-*`, `border` `1px`), íconos Lucide, `BaseModal` en gasto OPEX y cierre sellado, `BaseListSkeleton`, `font-mono tabular-nums` y validaciones `N1` inline. |

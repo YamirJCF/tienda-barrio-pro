@@ -1,9 +1,9 @@
 # SDD-026: Política de Gastos Generales (OPEX Inmediato)
 
-> **Asociado a:** [FRD-026](../FRD/FRD_026_POLITICA_GASTOS_INMEDIATOS.md), [FRD-022](../FRD/FRD_022_GASTOS_MULTICANAL.md) y Contrato Marco [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
-> **Fase del Plan:** Ola 1 — Cimientos de Caja y Gastos (Alineación `ARQ-002` v1.4)  
-> **Estado:** 🟢 Alineado a Contrato Marco `SDD-003-01` (Pendiente migración Fase 3)  
-> **Última Actualización:** 2026-11-19  
+> **Asociado a:** [FRD-026](../FRD/FRD_026_POLITICA_GASTOS_INMEDIATOS.md), [FRD-022](../FRD/FRD_022_GASTOS_MULTICANAL.md), Contrato Marco [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) y [`UX-ADR-002`](../../03_ui_ux_design/UX_ADR_LOG.md#ux-adr-002-consolidación-de-contexto-c2-en-workspace-cash-control-y-gastos-opex-exclusivos-admin)  
+> **Fase del Plan:** Ola 2 (`WO-OLA2-C2-001` — Enmienda `POL-SEG-03` y Read Model OPEX)  
+> **Estado:** 🟢 Vigente (`UX-ADR-002` — Gastos OPEX 100% exclusivos del Administrador)  
+> **Última Actualización:** 2026-11-24  
 
 ---
 
@@ -14,25 +14,28 @@
 |-------------|---------|------------------------------|
 | **POL-FIN-01** | Financiero | **Inmediatez Absoluta y `"pago externo / fuera de caja"`:** Prohibido registrar gastos "por pagar". Todo desembolso fuera de Caja Dedicada POS se marca **"pago externo / fuera de caja"** (100% Admin-only) con `$0` impacto en caja. |
 | **POL-FIN-02** | Financiero | **Segregación Estricta (`efectivo`, `nequi`, `llave_bre`):** Se elimina `'daviplata'` y `'bre'`. **Todo gasto digital (Nequi o Llave BRE) descuenta únicamente de su respectivo canal digital y jamás afecta el efectivo físico en gaveta.** Prohibido el sobregiro (`INSUFFICIENT_CHANNEL_FUNDS`). |
-| **POL-SEG-03** | Seguridad | **Acceso Abierto a Gastos Menores POS:** Todo usuario activo (Administrador o empleado con Pase Diario vigente) puede registrar gastos menores de turno con caja abierta `< 24h`. |
-| **POL-AUD-01 / 02** | Auditoría | **Inmutabilidad y Fotografía de Firma (`actor_name`, `actor_role`):** Movimientos `append-only` en `cash_movements` con categoría OPEX cerrada (5 categorías, sin `'Reembolso'`), motivo obligatorio (`>= 3` chars) y firma histórica inmutable. |
-| **SPEC-010 / 011** | Financiero | Enteros COP en `NUMERIC` sin coma flotante. |
+| **POL-SEG-03** | Seguridad | **Enmienda `UX-ADR-002` — Gastos OPEX Exclusivos Admin (`assert_store_admin`):** El registro (`rpc_registrar_gasto_v2`) y la consulta (`rpc_obtener_gastos_turno`) de gastos OPEX de caja son **estrictamente exclusivos del Administrador**. Ningún empleado tiene permiso delegable para registrar o consultar gastos OPEX; la UI oculta la pestaña `Gastos` a no-Admin y el backend aborta con `ADMIN_ONLY_ACTION` (`42501`). |
+| **POL-AUD-01 / 02** | Auditoría | **Inmutabilidad y Fotografía de Firma (`actor_name`, `actor_role`):** Movimientos `append-only` en `cash_movements` con categoría OPEX cerrada (5 categorías, sin `'Reembolso'`), motivo obligatorio (`>= 3` chars), `p_voucher_ref` opcional y firma histórica inmutable. |
+| **SPEC-010 / 011** | Financiero | Enteros COP en `NUMERIC` sin coma flotante; `total_opex_expenses` calculado por PostgreSQL (cero `.reduce()` en cliente). |
 
 ### 0.2 Contratos Vecinos que Limitan el Diseño
-- **`SDD_003_01` / `SDD_004` / `SDD_020`:** Gasto menor es Capacidad Base de todo usuario activo en turno `'open'` `< 24h`.
+- **`SDD_003_01` / `UX-ADR-002`:** El registro y consulta de gastos OPEX no forma parte de los permisos delegables de empleado; exige `assert_store_admin(v_session.store_id)`.
 - **`SDD_022` / `SDD_019`:** Pagos a proveedores y `"pago externo / fuera de caja"` son 100% Admin-only (`movement_type = 'pago_proveedor'` o `$0` POS).
 - **`SDD_006_02`:** Los reembolsos a clientes ya no pertenecen al catálogo OPEX de gastos; se procesan en el POS bajo permiso `canManageRefunds`.
-- **`SDD_018` / `SDD_021`:** P&L computa `movement_type = 'gasto'` en OPEX; empleados consultan solo sus gastos propios del turno actual (`rpc_obtener_mis_movimientos_turno`).
+- **`SDD_018` / `SDD_021`:** P&L computa `movement_type = 'gasto'` en OPEX; empleados consultan solo sus movimientos propios del turno actual (`rpc_obtener_mis_movimientos_turno`) en `/cash-control?tab=movements`.
 
-### 0.3 Auditoría de BD contra Realidad (`SDD-003-01 §0.3`)
-- En `database.types.ts` (L319–332), `cash_movements` ya dispone de `category`, `payment_method`, `voucher_ref` y `actor_id`.
-- Brechas pendientes Fase 3: retirar `'daviplata'`/`'bre'` dejando `('efectivo', 'nequi', 'llave_bre')`, restringir OPEX a **5 categorías** (retirando `'Reembolso'`) y añadir snapshot `actor_name`/`actor_role`.
+### 0.3 Auditoría de BD y Trade-off Explícito (Regla 7)
+- **Esquema real verificado (`supabase_db_prueba`):** `cash_movements` tiene 13 columnas (`id`, `session_id`, `movement_type`, `amount`, `description`, `sale_id`, `created_at`, `payment_method`, `category`, `voucher_ref`, `actor_id`, `actor_name`, `actor_role`) y `cash_sessions` 18 columnas (incluyendo `opening_balance`, `status`, `opened_at`, `closing_attempts`, `forced_close_without_count`).
+- **Trade-off formal (Regla 7 — Política OPEX 100% Admin):**
+  - **Qué se decidió:** Restringir tanto el registro (`rpc_registrar_gasto_v2`) como la consulta (`rpc_obtener_gastos_turno`) de gastos OPEX estrictamente al Administrador (`assert_store_admin`), sin crear un 5.º permiso delegable en `EmployeePermissions`.
+  - **Por qué (trade-off):** Garantiza una distribución simple y clara de responsabilidad financiera en tienda de barrio, evitando proliferación de permisos en `SDD-003-01` y previniendo fugas de caja por egresos operativos no supervisados.
+  - **Condición de revisión futura:** Si en una fase posterior tiendas multi-turno operan 100% de forma autónoma sin Administrador presencial y requieren delegar egresos menores de turno, se evaluará introducir un permiso explícito `canRegisterExpenses` auditable con tope diario por turno.
 
 ---
 
 ## 1. Glosario Local
 
-- **Gasto General (OPEX Inmediato):** Desembolso de liquidez operativo corriente desde Caja Dedicada POS ejecutado por cualquier usuario activo en turno abierto `< 24h`.
+- **Gasto General (OPEX Inmediato):** Desembolso de liquidez operativo corriente desde Caja Dedicada POS ejecutado exclusivamente por el **Administrador** en turno abierto `< 24h`.
 - **Pago Externo / Fuera de Caja:** Desembolso exclusivo del Administrador con fondos propios ajenos al cajón POS (`$0` impacto en caja).
 - **Canal de Pago (`payment_method`):** Exclusivamente `'efectivo'`, `'nequi'`, `'llave_bre'`.
 - **Catálogo Cerrado de Categorías OPEX (5 categorías — sin `'Reembolso'`):**
@@ -53,29 +56,32 @@
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Usuario as 👤 Cajero / Admin
+    actor Administrador as 👤 Administrador
     participant UI as 📱 Tienda Barrio Client
     participant RPC as ⚙️ rpc_registrar_gasto_v2
-    participant Auth as 🔒 assert_store_access
+    participant Auth as 🔒 assert_store_access + assert_store_admin
     participant CS as 📦 cash_sessions
     participant CM as 💸 cash_movements
 
-    Usuario->>UI: Ingresa Monto, Canal, Categoría OPEX y Motivo
-    UI->>RPC: POST (session_id, amount, payment_method, category, description)
+    Administrador->>UI: Ingresa Monto, Canal, Categoría OPEX y Motivo
+    UI->>RPC: POST (session_id, amount, payment_method, category, description, voucher_ref)
     
     activate RPC
-    RPC->>CS: SELECT store_id, status, opened_at FROM cash_sessions WHERE id = p_session_id FOR UPDATE
+    RPC->>CS: SELECT * FROM cash_sessions WHERE id = p_session_id FOR UPDATE
     alt Sesión Inexistente
         RPC-->>UI: RAISE EXCEPTION 'NO_OPEN_SESSION'
     end
 
-    RPC->>Auth: assert_store_access(v_session.store_id)
-    Auth-->>RPC: Acceso Aprobado
+    RPC->>Auth: assert_store_access(v_session.store_id) + assert_store_admin(v_session.store_id)
+    alt No es Administrador
+        Auth-->>UI: RAISE EXCEPTION 'ADMIN_ONLY_ACTION' (42501)
+    end
+    Auth-->>RPC: Acceso Admin Aprobado
 
     alt Sesión Cerrada
         RPC-->>UI: RAISE EXCEPTION 'NO_OPEN_SESSION'
     else Antigüedad > 24 Horas
-        RPC-->>UI: RAISE EXCEPTION 'SESSION_EXPIRED'
+        RPC-->>UI: RAISE EXCEPTION 'SHIFT_EXPIRED_24H'
     end
 
     alt Monto <= 0 o Nulo
@@ -90,15 +96,14 @@ sequenceDiagram
 
     RPC->>CM: Calcular Liquidez Disponible en Canal (Base + Ingresos - Egresos)
     alt Saldo Disponible < p_amount
-        RPC-->>UI: RAISE EXCEPTION 'INSUFFICIENT_FUNDS'
+        RPC-->>UI: RAISE EXCEPTION 'INSUFFICIENT_CHANNEL_FUNDS'
     end
 
-    RPC->>CM: INSERT INTO cash_movements (session_id, movement_type='gasto', amount=p_amount, description, created_at)
-    Note right of CM: Descripción: [CATEGORIA] [CANAL:metodo] Motivo
+    RPC->>CM: INSERT INTO cash_movements (session_id, movement_type='gasto', amount=p_amount, description=TRIM(p_description), payment_method, category, voucher_ref, actor_id, actor_name, actor_role)
 
-    RPC-->>UI: 200 OK: { success: true, movement_id, session_id, amount, payment_method, category, description, movement_type: 'gasto', created_at }
+    RPC-->>UI: 200 OK: { success: true, data: { movement_id, session_id, amount, payment_method, category, description, voucher_ref, movement_type: 'gasto', remaining_channel_balance, actor_name, actor_role, created_at } }
     deactivate RPC
-    UI-->>Usuario: Desembolso Registrado y Saldo de Canal Actualizado
+    UI-->>Administrador: Desembolso Registrado y Saldo de Canal Actualizado
 ```
 
 ### 2.2 Flujo Alternativo: Rechazo por Sobregiro de Fondos
@@ -106,20 +111,20 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Usuario as 👤 Usuario Operativo
+    actor Administrador as 👤 Administrador
     participant UI as 📱 Tienda Barrio Client
     participant RPC as ⚙️ rpc_registrar_gasto_v2
     participant CM as 💸 cash_movements
 
-    Usuario->>UI: Intenta registrar Gasto de $50.000 COP por canal Nequi
+    Administrador->>UI: Intenta registrar Gasto de $50.000 COP por canal Nequi
     UI->>RPC: POST (p_amount: 50000, p_payment_method: 'nequi')
     activate RPC
     RPC->>CM: Verifica fondos líquidos acumulados en Nequi
     Note over RPC,CM: Saldo real disponible en Nequi = $12.000 COP
-    RPC-->>UI: RAISE EXCEPTION 'INSUFFICIENT_FUNDS'
+    RPC-->>UI: RAISE EXCEPTION 'INSUFFICIENT_CHANNEL_FUNDS'
     deactivate RPC
     Note over UI: Transacción abortada (Rollback automático)
-    UI-->>Usuario: Alerta: "Fondos insuficientes en Nequi (Disponible: $12.000). Seleccione otro canal."
+    UI-->>Administrador: Alerta: "Fondos insuficientes en Nequi (Disponible: $12.000). Seleccione otro canal."
 ```
 
 ---
@@ -168,34 +173,34 @@ stateDiagram-v2
 - **Postcondición:** La liquidez y los reportes financieros del negocio no sufren contaminación por deudas operativas no desembolsadas.
 
 ### Caso B: Ejecución y Registro del Desembolso en Efectivo (FRD-026 Caso B)
-- **Actor:** Cajero o Administrador con sesión de caja activa.
-- **Precondición:** Llega el día viernes. El encargado extrae `$65.000 COP` en efectivo del cajón físico para pagar el servicio eléctrico.
+- **Actor:** **Administrador** con sesión de caja activa.
+- **Precondición:** Llega el día viernes. El Administrador extrae `$65.000 COP` en efectivo del cajón físico para pagar el servicio eléctrico.
 - **Flujo Principal:**
-  1. El usuario accede al formulario de "Registrar Gasto".
+  1. El Administrador accede al formulario de "Registrar Gasto".
   2. Digita el monto extraído: `$65.000 COP`.
   3. Selecciona el canal de origen: `Efectivo`.
   4. Selecciona la categoría OPEX: `Servicios`.
   5. Ingresa la descripción: `"Pago de factura de energía Codensa"`.
-  6. Presiona el botón "Confirmar Gasto".
-  7. El servidor recupera la sesión, verifica permisos con `assert_store_access()` y valida que la caja esté abierta (`status = 'open'`) con antigüedad `< 24h`.
+  6. Presiona el botón "Confirmar Gasto OPEX".
+  7. El servidor recupera la sesión, verifica permisos con `assert_store_access()` + `assert_store_admin()` y valida que la caja esté abierta (`status = 'open'`) con antigüedad `< 24h`.
   8. El servidor calcula la liquidez disponible en Efectivo para el turno en curso y comprueba que `saldo_efectivo >= 65000`.
-  9. El servidor asienta el egreso en `cash_movements` con `movement_type = 'gasto'` y formatea la descripción: `[Servicios] [CANAL:efectivo] Pago de factura de energía Codensa`.
+  9. El servidor asienta el egreso en `cash_movements` con `movement_type = 'gasto'`, `category = 'Servicios'`, `payment_method = 'efectivo'` y descripción limpia `TRIM(p_description)` (`"Pago de factura de energía Codensa"`).
   10. El dinero esperado en efectivo reportado para el arqueo del turno actual disminuye inmediatamente en `$65.000 COP`.
 - **Postcondición:** Egreso asentado de forma inmutable; arqueo físico de efectivo sincronizado en tiempo real.
 
-### Caso C: Desembolso Digital (Nequi / Daviplata) con Segregación Multicanal
-- **Actor:** Administrador o Cajero autorizado.
+### Caso C: Desembolso Digital (`Nequi` / `Llave Bre-B`) con Segregación Multicanal
+- **Actor:** **Administrador**.
 - **Precondición:** Se efectúa una transferencia digital desde la cuenta Nequi de la tienda por `$30.000 COP` para comprar bolsas e insumos de aseo.
 - **Flujo Principal:**
-  1. El usuario selecciona canal `Nequi`, categoría `Insumos`, monto `$30.000 COP` y motivo `"Compra de bolsas plásticas y cinta"`.
+  1. El Administrador selecciona canal `Nequi`, categoría `Insumos`, monto `$30.000 COP`, comprobante opcional (`p_voucher_ref`) y motivo `"Compra de bolsas plásticas y cinta"`.
   2. El sistema valida la disponibilidad de saldo en el canal Nequi.
-  3. Al confirmar fondos suficientes, el servidor registra el egreso en `cash_movements` vinculando la etiqueta `[CANAL:nequi]`.
+  3. Al confirmar fondos suficientes, el servidor registra el egreso en `cash_movements` persistiendo `payment_method = 'nequi'`, `category = 'Insumos'` y descripción limpia.
   4. El saldo esperado de Nequi disminuye inmediatamente en `$30.000 COP`.
   5. El dinero físico del cajón (Efectivo) permanece estrictamente intacto.
 - **Postcondición:** Gasto digital asentado; sin afectación cruzada al efectivo en gaveta.
 
 ### Caso D: Rechazo Transaccional por Sobregiro / Fondos Insuficientes
-- **Actor:** Cajero o Administrador.
+- **Actor:** **Administrador**.
 - **Precondición:** La tienda tiene saldo disponible en Nequi de `$5.000 COP`.
 - **Flujo Principal:**
   1. El usuario intenta registrar un gasto de transporte por `$15.000 COP` por el canal `Nequi`.
@@ -209,20 +214,23 @@ stateDiagram-v2
 
 ## 5. Contrato de Interfaz
 
-### Operación: `rpc_registrar_gasto_v2`
+### Operación 1 (WRITE): `rpc_registrar_gasto_v2`
 - **Tipo:** Postgres RPC (Función Almacenada) / Acción (WRITE)
 - **Modo de Ejecución:** `SECURITY DEFINER` con Search Path seguro (`SET search_path = public, pg_temp;`).
-- **Firma de Entrada:**
+- **Firma SQL Real Verificada:**
+  `public.rpc_registrar_gasto_v2(p_session_id uuid, p_amount numeric, p_payment_method text, p_category text, p_description text, p_voucher_ref text DEFAULT NULL::text) RETURNS jsonb`
+- **Parámetros de Entrada:**
   ```json
   {
     "p_session_id": "UUID (Obligatorio — Identificador de la sesión de caja activa)",
     "p_amount": "NUMERIC (Obligatorio — Monto entero COP estrictamente positivo > 0)",
     "p_payment_method": "TEXT (Obligatorio — Valores autorizados: 'efectivo', 'nequi', 'llave_bre')",
     "p_category": "TEXT (Obligatorio — Valores autorizados: 'Servicios', 'Nomina', 'Transporte', 'Mantenimiento', 'Insumos')",
-    "p_description": "TEXT (Obligatorio — Longitud mínima 3 caracteres, sin contar prefijos)"
+    "p_description": "TEXT (Obligatorio — Longitud mínima 3 caracteres tras TRIM)",
+    "p_voucher_ref": "TEXT (Opcional DEFAULT NULL — Referencia/comprobante para pagos digitales)"
   }
   ```
-- **Payload de Respuesta Exitosa (200 OK — 8 Atributos en Paridad con SDD_022):**
+- **Payload de Respuesta Exitosa (200 OK):**
   ```json
   {
     "success": true,
@@ -232,36 +240,71 @@ stateDiagram-v2
       "amount": 65000,
       "payment_method": "efectivo",
       "category": "Servicios",
-      "description": "[Servicios] [CANAL:efectivo] Pago de factura de energía Codensa",
+      "description": "Pago de factura de energía Codensa",
+      "voucher_ref": null,
       "movement_type": "gasto",
-      "created_at": "2026-10-14T15:30:00Z"
+      "remaining_channel_balance": 35000,
+      "actor_name": "Administrador",
+      "actor_role": "owner",
+      "created_at": "2026-11-24T15:30:00Z"
     }
   }
   ```
-- **Catálogo Exhaustivo de Errores (8 Códigos Unificados):**
-  | Código de Error | Causa de Negocio | Mensaje Técnico / HINT |
-  |-----------------|------------------|------------------------|
-  | `STORE_ACCESS_DENIED` | El usuario no pertenece a la tienda de la sesión o carece de sesión válida | El usuario no tiene acceso a esta tienda |
-  | `NO_OPEN_SESSION` | La sesión indicada no existe o se encuentra en estado `'closed'` | No existe una sesión de caja activa para registrar el gasto |
-  | `SESSION_EXPIRED` | La sesión de caja abierta supera las 24 horas transcurridas desde su apertura | La sesión de caja ha expirado (> 24h) y debe reconciliarse antes de operar |
-  | `INVALID_AMOUNT` | El parámetro `p_amount` es menor o igual a cero o nulo | El monto del gasto debe ser un valor numérico estrictamente positivo |
-  | `INVALID_PAYMENT_METHOD` | Canal monetario suministrado no válido | Canal de pago no válido. Permitidos: efectivo, nequi, llave_bre |
-  | `INVALID_OPEX_CATEGORY` | La categoría no pertenece a las 5 autorizadas del catálogo cerrado | Categoría OPEX no autorizada. Permitidas: Servicios, Nomina, Transporte, Mantenimiento, Insumos |
-  | `EMPTY_DESCRIPTION` | La descripción suministrada está vacía o tiene menos de 3 caracteres | La descripción o motivo del gasto es obligatoria (mínimo 3 caracteres) |
-  | `INSUFFICIENT_FUNDS` | La liquidez disponible en el canal seleccionado es inferior al monto a desembolsar | Fondos insuficientes en el canal monetario seleccionado |
+- **Catálogo Exhaustivo de Errores (9 Códigos Unificados):**
+  | Código de Error | Causa de Negocio | Mensaje Técnico / SQLSTATE |
+  |-----------------|------------------|----------------------------|
+  | `STORE_ACCESS_DENIED` | El usuario no pertenece a la tienda de la sesión o carece de sesión válida | `assert_store_access` — El usuario no tiene acceso a esta tienda |
+  | `ADMIN_ONLY_ACTION` | Un empleado o actor sin rol de Administrador intenta registrar o consultar gastos OPEX | `42501` — `ADMIN_ONLY_ACTION: Esta acción es exclusiva del Administrador.` |
+  | `NO_OPEN_SESSION` | La sesión indicada no existe (`P0002`) o se encuentra en estado `'closed'` (`P0001`) | No existe una sesión de caja activa para registrar el gasto |
+  | `SHIFT_EXPIRED_24H` | La sesión de caja abierta supera las 24 horas transcurridas desde su apertura | `P0001` — El turno de caja superó el límite de 24 horas y pasó a Expirado/Bloqueado |
+  | `INVALID_AMOUNT` | El parámetro `p_amount` es menor o igual a cero o nulo | `22023` — El monto del gasto debe ser un valor positivo mayor a cero |
+  | `INVALID_PAYMENT_METHOD` | Canal monetario suministrado no válido | `22023` — Permitidos: `efectivo`, `nequi`, `llave_bre` |
+  | `INVALID_OPEX_CATEGORY` | La categoría no pertenece a las 5 autorizadas del catálogo cerrado | `22023` — Permitidas: `Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos` |
+  | `EMPTY_DESCRIPTION` | La descripción suministrada está vacía o tiene menos de 3 caracteres | `22023` — La descripción del gasto debe contener al menos 3 caracteres |
+  | `INSUFFICIENT_CHANNEL_FUNDS` | La liquidez disponible en el canal seleccionado es inferior al monto a desembolsar | `P0001` — Fondos insuficientes en canal seleccionado |
+
+### Operación 2 (READ MODEL): `rpc_obtener_gastos_turno`
+- **Tipo:** Postgres RPC (Función Almacenada) / Lectura Autoritativa (READ)
+- **Modo de Ejecución:** `SECURITY DEFINER` con `SET search_path = public, pg_temp;`.
+- **Firma SQL:** `public.rpc_obtener_gastos_turno(p_session_id uuid) RETURNS jsonb`
+- **Seguridad:** Verifica existencia de `v_session` en `cash_sessions` (`NO_OPEN_SESSION` si no existe), invoca `assert_store_access(v_session.store_id)` y **`assert_store_admin(v_session.store_id)`** (aborta con `ADMIN_ONLY_ACTION` / `42501` para no-Admin).
+- **Invariante Read Model:** Calcula `total_opex_expenses` en PostgreSQL mediante `COALESCE(SUM(amount), 0)` filtrando estrictamente `movement_type = 'gasto'` (excluye `'pago_proveedor'`, `'reembolso'` e `'ingreso'`), eliminando agregaciones `.reduce()` en cliente.
+- **Payload de Respuesta:**
+  ```json
+  {
+    "success": true,
+    "session_id": "<uuid>",
+    "session_status": "open|closed",
+    "total_opex_expenses": 0,
+    "count": 0,
+    "data": [
+      {
+        "id": "<uuid>",
+        "amount": 0,
+        "description": "...",
+        "category": "...",
+        "payment_method": "efectivo|nequi|llave_bre",
+        "voucher_ref": null,
+        "actor_name": "...",
+        "actor_role": "...",
+        "created_at": "..."
+      }
+    ]
+  }
+  ```
 
 ---
 
 ## 6. Análisis de Seguridad e Integridad
 
 ### 6.1 Reutilización Obligatoria de Funciones Centralizadas (Regla 4)
-- **Validación Multi-Tenant y de Tienda:**
-  Queda terminantemente prohibida cualquier comprobación de pertenencia o consulta ad-hoc manual (`WHERE store_id = ...`). La función `rpc_registrar_gasto_v2` debe invocar obligatoriamente `public.assert_store_access(v_session.store_id)` como primera instrucción tras recuperar la sesión de caja. La función centralizada `assert_store_access()` resuelve la pertenencia legítima evaluando en cascada el JWT (`app_metadata.store_id`), el perfil en `admin_profiles`, la vinculación en `employees` y los pases de turno aprobados en `daily_passes`. Si la comprobación falla, la transacción aborta arrojando la excepción `STORE_ACCESS_DENIED`.
-- **Resolución Autoritativa del Cajero / Autor:**
-  Para garantizar la autoría del desembolso y prevenir suplantaciones de identidad, la identidad del autor se resuelve mediante la función centralizada `public.get_employee_id_from_session()`. Si el usuario no está registrado en `employees` pero figura en `admin_profiles`, la función valida su acceso como administrador/propietario invocando `public.is_authorized_employee()`. Queda prohibido confiar en identificadores de cajero enviados desde el frontend o exigir PINs locales.
+- **Validación Multi-Tenant, Tienda y Rol Admin (Regla 4):**
+  Queda terminantemente prohibida cualquier comprobación de pertenencia o consulta ad-hoc manual (`WHERE store_id = ...`). Tanto `rpc_registrar_gasto_v2` como `rpc_obtener_gastos_turno` deben invocar obligatoriamente `public.assert_store_access(v_session.store_id)` y **`public.assert_store_admin(v_session.store_id)`** tras recuperar la sesión. Si el usuario no pertenece a la tienda aborta con `STORE_ACCESS_DENIED`; si no es Administrador aborta con `ADMIN_ONLY_ACTION` (`42501`).
+- **Resolución Autoritativa del Autor:**
+  La identidad del autor se resuelve mediante `public.resolve_actor_snapshot(v_session.store_id)` (almacenando `actor_id`, `actor_name`, `actor_role`). Queda prohibido confiar en identificadores enviados desde el frontend o exigir PINs locales.
 
 ### 6.2 Privilegios Base en Tablas y Funciones (Regla 8)
-Para prevenir errores de denegación de permisos `42501 (Permission Denied)` en Supabase Cloud, el diseño exige que las tablas base involucradas (`cash_movements`, `cash_sessions`) y la función RPC `rpc_registrar_gasto_v2` cuenten explícitamente con los privilegios otorgados (`GRANT ALL` y `GRANT EXECUTE`) a los roles `anon`, `authenticated` y `service_role`. La función opera con `SECURITY DEFINER` y `search_path = public, pg_temp` para blindar el contexto de ejecución.
+Para prevenir errores de denegación de permisos `42501 (Permission Denied)` en Supabase Cloud, las tablas base involucradas (`cash_movements`, `cash_sessions`) y ambos RPCs (`rpc_registrar_gasto_v2`, `rpc_obtener_gastos_turno`) cuentan explícitamente con privilegios otorgados (`GRANT ALL` / `GRANT EXECUTE`) a los roles `anon`, `authenticated` y `service_role`. Ambos RPCs operan con `SECURITY DEFINER` y `SET search_path = public, pg_temp`.
 
 ### 6.3 Políticas de Seguridad a Nivel de Fila (RLS) y Aislamiento Multi-Tenant
 La tabla `cash_movements` opera con políticas RLS estrictas y activas, garantizando aislamiento multi-tenant absoluto para roles autenticados. La política de seguridad condiciona el acceso a que la sesión vinculada (`session_id`) pertenezca a la tienda identificada autoritativamente mediante la función centralizada `public.get_current_store_id()`. Ningún usuario puede consultar, insertar ni visualizar movimientos pertenecientes a tiendas ajenas.
@@ -321,7 +364,7 @@ erDiagram
 | `session_id` | `uuid` | NO | FK `cash_sessions(id)` ON DELETE CASCADE | ✅ Existe | Sesión de caja activa a la que se imputa la erogación |
 | `movement_type` | `text` | NO | CHECK (`'ingreso'`, `'gasto'`, `'pago_proveedor'`) | ✅ Existe | Para gastos OPEX inmediatos es estrictamente `'gasto'` |
 | `amount` | `numeric` | NO | CHECK (`amount > 0`) | ✅ Existe | Monto positivo extraído en pesos colombianos |
-| `description` | `text` | NO | NOT NULL | ✅ Existe | Formato obligatorio: `[CATEGORIA] [CANAL:metodo_pago] Motivo` |
+| `description` | `text` | NO | NOT NULL | ✅ Existe | Texto limpio (`TRIM`, mínimo 3 caracteres); categoría y canal se almacenan en `category` y `payment_method` |
 | `sale_id` | `uuid` | SÍ | FK `sales(id)` | ✅ Existe | Nulo para egresos de gastos operativos |
 | `created_at` | `timestamptz` | NO | `now()` | ✅ Existe | Marca temporal del desembolso para auditoría |
 
