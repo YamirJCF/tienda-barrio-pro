@@ -7,7 +7,7 @@ import { useFinancialStore } from '../stores/financial';
 import { auditRepository } from '../data/repositories/auditRepository';
 import cashRepository from '../data/repositories/cashRepository';
 import DashboardView from '../views/DashboardView.vue';
-import MyShiftMovementsView from '../views/MyShiftMovementsView.vue';
+import OwnShiftMovementsTab from '../components/cash/OwnShiftMovementsTab.vue';
 import ShiftForensicDetailModal from '../components/history/ShiftForensicDetailModal.vue';
 import { useHistory } from '../composables/useHistory';
 
@@ -237,7 +237,7 @@ describe('Fase 3 Ola 3 — Reportes y Auditoría 100% Admin-only + Mis Movimient
     expect(history.items.value[0].user).toBe('Carlos Snapshot');
   });
 
-  it('[CHK-305 / CHK-308] MyShiftMovementsView consume rpc_obtener_mis_movimientos_turno con filtros y maneja error sin silencio', async () => {
+  it('[CHK-305 / CHK-308] OwnShiftMovementsTab consume rpc_obtener_mis_movimientos_turno con filtros y maneja error sin silencio', async () => {
     setEmployeeUser();
     mockRpc.mockResolvedValueOnce({
       data: {
@@ -273,7 +273,7 @@ describe('Fase 3 Ola 3 — Reportes y Auditoría 100% Admin-only + Mis Movimient
       error: null,
     });
 
-    const wrapper = mount(MyShiftMovementsView, {
+    const wrapper = mount(OwnShiftMovementsTab, {
       global: {
         stubs: { BaseButton: { template: '<button><slot /></button>' } },
       },

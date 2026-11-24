@@ -407,45 +407,66 @@ describe('Fase 3 Ola 2 — Control de Caja, Cierre Asistido, +24h, Notificacione
   });
 
   // =========================================================================
-  // CHK-210: ExpensesView (5 categorías, sin Reembolso ni Pago Proveedor Pan)
+  // CHK-210: ShiftExpensesTab (5 categorías, sin Reembolso ni Pago Proveedor Pan, Read Model SQL)
   //          y expenseRepository (canal real + movement_type = 'gasto')
   // =========================================================================
-  it('[CHK-210 / B2-5] ExpensesView expone solo 5 categorías OPEX sin Reembolso ni Pago Proveedor Pan y excluye pago_proveedor de gastos', async () => {
-    const ExpensesView = (await import('../views/ExpensesView.vue')).default;
-    const { useCashRegisterStore } = await import('../stores/cashRegister');
-    const cashStore = useCashRegisterStore();
-    cashStore.currentSession = {
-      id: 'sess-gastos',
+  it('[CHK-210 / B2-5] ShiftExpensesTab expone solo 5 categorías OPEX sin Reembolso ni Pago Proveedor Pan y usa rpc_obtener_gastos_turno', async () => {
+    const ShiftExpensesTab = (await import('../components/cash/ShiftExpensesTab.vue')).default;
+    const { useAuthStore } = await import('../stores/auth');
+    const authStore = useAuthStore();
+    authStore.stores = [{ id: '11111111-1111-1111-1111-111111111111', storeName: 'Tienda Test' } as any];
+    authStore.currentUser = {
+      id: 'admin-1',
+      name: 'Admin Test',
+      email: 'admin@test.local',
+      type: 'admin',
       storeId: '11111111-1111-1111-1111-111111111111',
-      employeeId: 'emp-a',
-      status: 'open',
-      openingTime: new Date().toISOString(),
-      openingBalance: new Decimal(50000),
-      transactions: [
-        { id: 'tx-gasto', type: 'expense', movementType: 'gasto', amount: new Decimal(5000), description: 'Bolsas', category: 'Insumos', timestamp: new Date().toISOString() },
-        { id: 'tx-prov', type: 'expense', movementType: 'pago_proveedor', amount: new Decimal(20000), description: 'Factura leche', category: 'Proveedor', timestamp: new Date().toISOString() },
-      ],
-    };
+      permissions: { canManageInventory: true, canFiar: true, canOpenCloseCash: true, canManageRefunds: true },
+    } as any;
 
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: '/expenses', component: ExpensesView }],
+    mockSupabaseRpc.mockResolvedValueOnce({
+      data: {
+        success: true,
+        session_id: 'sess-gastos',
+        session_status: 'open',
+        total_opex_expenses: 5000,
+        count: 1,
+        data: [
+          {
+            id: 'tx-gasto',
+            amount: 5000,
+            description: 'Bolsas',
+            category: 'Insumos',
+            payment_method: 'efectivo',
+            voucher_ref: null,
+            actor_name: 'Admin Test',
+            actor_role: 'owner',
+            created_at: new Date().toISOString(),
+          },
+        ],
+      },
+      error: null,
     });
-    await router.push('/expenses');
 
-    const wrapper = mount(ExpensesView, {
+    const wrapper = mount(ShiftExpensesTab, {
+      props: {
+        sessionId: 'sess-gastos',
+        isOpen: true,
+      },
       global: {
-        plugins: [router],
-        stubs: { FormInputCurrency: true },
+        stubs: { FormInputCurrency: true, Teleport: true },
       },
     });
+    await flushPromises();
 
     // Lista de gastos OPEX solo muestra tx-gasto ('Bolsas'), nunca 'pago_proveedor' ('Factura leche')
+    expect(wrapper.text()).toContain('Total Gastos OPEX del Turno');
     expect(wrapper.text()).toContain('Bolsas');
     expect(wrapper.text()).not.toContain('Factura leche');
 
-    // Abrir modal
-    await wrapper.find('button.fixed').trigger('click');
+    // Abrir BaseModal
+    await wrapper.find('[data-test="btn-register-expense"]').trigger('click');
+    await flushPromises();
     const text = wrapper.text();
     expect(text).toContain('Servicios');
     expect(text).toContain('Nomina');

@@ -430,8 +430,9 @@ describe('Fase 3 Ola 1 — RBAC 4 Permisos, Continuidad <24h, Snapshots y Canale
     await router.push('/stock-entry');
     expect(router.currentRoute.value.name).toBe('dashboard');
 
+    // UX-ADR-002: /cash-control permite requiresAuth (segregando internamente a 'Mis Movimientos' sin permiso canOpenCloseCash)
     await router.push('/cash-control');
-    expect(router.currentRoute.value.name).toBe('dashboard');
+    expect(router.currentRoute.value.name).toBe('cash-control');
 
     await router.push('/clients');
     expect(router.currentRoute.value.name).toBe('clients');

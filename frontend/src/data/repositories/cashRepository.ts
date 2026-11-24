@@ -166,11 +166,33 @@ export interface ShiftForensicReport {
     };
 }
 
+export interface SessionOpexExpense {
+    id: string;
+    amount: number;
+    description: string;
+    category: string;
+    payment_method: 'efectivo' | 'nequi' | 'llave_bre';
+    voucher_ref?: string | null;
+    actor_name: string;
+    actor_role: string;
+    created_at: string;
+}
+
+export interface SessionOpexExpensesResponse {
+    success: boolean;
+    session_id: string;
+    session_status: 'open' | 'closed' | string;
+    total_opex_expenses: number;
+    count: number;
+    data: SessionOpexExpense[];
+}
+
 export interface CashRepository {
     getStoreStatus(storeId: string): Promise<StoreCashStatus>;
     registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string; code?: string }>;
     getSessionTransactions(sessionId: string): Promise<CashTransaction[]>;
-    addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; error?: string }>;
+    getSessionOpexExpenses(sessionId: string): Promise<SessionOpexExpensesResponse>;
+    addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; data?: any; error?: string; code?: string }>;
     getPendingForcedSessions(storeId?: string): Promise<{ id: string; openedAt: string; channels: string[] }[]>;
     reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number | null): Promise<void>;
     getOwnShiftMovements(
@@ -425,9 +447,48 @@ export const cashRepository: CashRepository = {
     },
 
     /**
+     * Get authoritative OPEX expenses Read Model for a specific session (Admin-only)
+     */
+    async getSessionOpexExpenses(sessionId: string): Promise<SessionOpexExpensesResponse> {
+        const supabase = requireSupabase();
+        const { data, error } = await supabase.rpc('rpc_obtener_gastos_turno', {
+            p_session_id: sessionId,
+        });
+
+        if (error) {
+            logger.error('[CashRepo] rpc_obtener_gastos_turno failed:', error);
+            if (error.message?.includes('ADMIN_ONLY_ACTION') || error.code === '42501') {
+                throw new Error('ADMIN_ONLY_ACTION: Solo el Administrador puede consultar gastos OPEX.');
+            }
+            throw new Error(error.message || 'Error consultando gastos OPEX del turno');
+        }
+
+        const payload = (data || {}) as Partial<SessionOpexExpensesResponse>;
+        if (!payload.success) {
+            throw new Error('Respuesta inválida del servidor al consultar gastos OPEX');
+        }
+
+        return {
+            success: true,
+            session_id: payload.session_id || sessionId,
+            session_status: payload.session_status || 'open',
+            total_opex_expenses: Number(payload.total_opex_expenses ?? 0),
+            count: Number(payload.count ?? 0),
+            data: Array.isArray(payload.data) ? payload.data : [],
+        };
+    },
+
+    /**
      * Add a manual movement (expense or income)
      */
-    async addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; error?: string }> {
+    async addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; data?: any; error?: string; code?: string }> {
+        const extractRpcCode = (message?: string, sqlCode?: string): string | undefined => {
+            if (sqlCode === '42501' || message?.includes('ADMIN_ONLY_ACTION')) return 'ADMIN_ONLY_ACTION';
+            const prefix = (message || '').split(':')[0].trim();
+            if (/^[A-Z0-9_]{3,}$/.test(prefix)) return prefix;
+            return sqlCode || undefined;
+        };
+
         const supabase = getSupabaseClient()!;
         try {
             if (transaction.type === 'expense') {
@@ -441,13 +502,23 @@ export const cashRepository: CashRepository = {
                 });
 
                 if (error) {
-                    return { success: false, error: error.message };
+                    return {
+                        success: false,
+                        error: error.message,
+                        code: extractRpcCode(error.message, (error as any).code),
+                    };
                 }
                 const res = data as any;
                 if (res && res.success === false) {
-                    return { success: false, error: res.error || res.message || 'Error al registrar gasto' };
+                    const errMsg = res.error || res.message || 'Error al registrar gasto';
+                    return {
+                        success: false,
+                        data: res.data,
+                        error: errMsg,
+                        code: res.code || extractRpcCode(errMsg),
+                    };
                 }
-                return { success: true };
+                return { success: true, data: res?.data ?? res };
             }
 
             const movementType = 'ingreso';
@@ -464,11 +535,19 @@ export const cashRepository: CashRepository = {
                 });
 
             if (error) {
-                return { success: false, error: error.message };
+                return {
+                    success: false,
+                    error: error.message,
+                    code: extractRpcCode(error.message, (error as any).code),
+                };
             }
             return { success: true };
         } catch (e: any) {
-            return { success: false, error: e.message };
+            return {
+                success: false,
+                error: e?.message || 'Error al registrar movimiento',
+                code: extractRpcCode(e?.message, e?.code),
+            };
         }
     },
 

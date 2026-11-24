@@ -13,6 +13,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
     // State
     const currentSession = ref<CashSession | null>(null);
     const sessionHistory = ref<CashSession[]>([]);
+    const lastSyncError = ref<string | null>(null);
     const pendingForcedSessionInfo = ref<{
         sessionId: string;
         openedBy?: string;
@@ -112,12 +113,14 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
     });
 
     // Methods
-    const syncFromBackend = async (storeId: string) => {
+    const syncFromBackend = async (storeId: string, options?: { throwOnError?: boolean }) => {
+        const throwOnError = Boolean(options?.throwOnError);
         // OFFLINE-FIRST: Preserve existing session without attempting sync
         const hasExistingSession = currentSession.value?.status === 'open';
+        lastSyncError.value = null;
 
-        // If we have a session and are offline, don't even try to sync
-        if (!navigator.onLine && hasExistingSession) {
+        // If we have a session and are offline, don't even try to sync (unless caller demands fail-closed)
+        if (!navigator.onLine && hasExistingSession && !throwOnError) {
             logger.log('⚠️ [CashRegisterStore] Offline detected - preserving local session');
             return true;
         }
@@ -179,37 +182,74 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     const ownRes = await cashRepository.getOwnShiftMovements(storeId, 'all', 200, 0);
                     currentSession.value.transactions = ownRes.data
                         .filter((m) => m.source === 'expense' || m.source === 'payment' || m.source === 'refund')
-                        .map((m) => ({
-                            id: m.id,
-                            type: m.source === 'payment' ? 'income' : 'expense',
-                            movementType: m.source === 'expense' ? 'gasto' : (m.source === 'payment' ? 'pago_proveedor' : 'gasto'),
-                            amount: new Decimal(m.amount),
-                            description: m.description,
-                            timestamp: m.created_at,
-                            paymentMethod: (m.payment_method as 'efectivo' | 'nequi' | 'llave_bre') || 'efectivo',
-                            category: m.category || 'General',
-                            voucherRef: m.voucher_ref ?? null,
-                            actorName: m.actor_name,
-                            actorRole: m.actor_role,
-                        }));
+                        .map((m) => {
+                            if (m.source === 'refund') {
+                                return {
+                                    id: m.id,
+                                    type: 'expense' as const,
+                                    movementType: 'reembolso' as const,
+                                    amount: new Decimal(m.amount),
+                                    description: m.description,
+                                    timestamp: m.created_at,
+                                    paymentMethod: (m.payment_method as 'efectivo' | 'nequi' | 'llave_bre') || 'efectivo',
+                                    category: m.category || 'Reembolso',
+                                    voucherRef: m.voucher_ref ?? null,
+                                    actorName: m.actor_name,
+                                    actorRole: m.actor_role,
+                                };
+                            }
+                            if (m.source === 'expense') {
+                                return {
+                                    id: m.id,
+                                    type: 'expense' as const,
+                                    movementType: 'gasto' as const,
+                                    amount: new Decimal(m.amount),
+                                    description: m.description,
+                                    timestamp: m.created_at,
+                                    paymentMethod: (m.payment_method as 'efectivo' | 'nequi' | 'llave_bre') || 'efectivo',
+                                    category: m.category || 'General',
+                                    voucherRef: m.voucher_ref ?? null,
+                                    actorName: m.actor_name,
+                                    actorRole: m.actor_role,
+                                };
+                            }
+                            const isSupplierPayment =
+                                (m.category || '').toLowerCase().includes('proveedor') ||
+                                (m.description || '').toUpperCase().startsWith('PAGO PROVEEDOR');
+                            return {
+                                id: m.id,
+                                type: isSupplierPayment ? ('expense' as const) : ('income' as const),
+                                movementType: isSupplierPayment ? ('pago_proveedor' as const) : ('ingreso' as const),
+                                amount: new Decimal(m.amount),
+                                description: m.description,
+                                timestamp: m.created_at,
+                                paymentMethod: (m.payment_method as 'efectivo' | 'nequi' | 'llave_bre') || 'efectivo',
+                                category: m.category || (isSupplierPayment ? 'Pago a Proveedor' : 'Abono / Ingreso'),
+                                voucherRef: m.voucher_ref ?? null,
+                                actorName: m.actor_name,
+                                actorRole: m.actor_role,
+                            };
+                        });
                 }
 
+                lastSyncError.value = null;
                 return true;
             } else {
                 // Backend authoritatively says "no open session"
-                // FIX: Trust the backend when ONLINE. The old logic preserved stale local
-                // sessions even when the backend said "closed", causing cerrar_caja to fail
-                // with "Sesión no encontrada" or "La caja ya está cerrada".
-                // Offline resilience is handled in the catch block (network errors only).
                 if (hasExistingSession) {
                     console.warn('⚠️ [CashRegisterStore] Backend says closed — clearing stale local session');
                 }
                 currentSession.value = null;
+                lastSyncError.value = null;
                 return false;
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('🚫 [CashRegisterStore] Sync failed:', e);
-            // FRD-012: ALWAYS preserve existing session on error
+            lastSyncError.value = e?.message || 'Error al sincronizar el estado de la caja';
+            if (throwOnError) {
+                throw e;
+            }
+            // FRD-012: ALWAYS preserve existing session on error when resilient offline sync
             if (hasExistingSession) {
                 logger.log('✅ [CashRegisterStore] Network error - preserving existing session');
                 return true;
@@ -399,7 +439,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         paymentMethod: string = 'efectivo',
         voucherRef?: string
     ) => {
-        if (!currentSession.value) throw new Error("La caja está cerrada");
+        if (!currentSession.value) throw new Error('NO_OPEN_SESSION: La caja está cerrada');
 
         const transaction: CashTransaction = {
             id: crypto.randomUUID(),
@@ -418,10 +458,32 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
 
         if (!result.success) {
             console.error('🚫 [CashRegisterStore] Failed to persist expense:', result.error);
-            throw new Error(result.error || 'Fallo al guardar gasto');
+            const err: any = new Error(result.error || 'Fallo al guardar gasto');
+            err.code = result.code;
+            throw err;
         }
 
-        currentSession.value.transactions.push(transaction);
+        // Refrescar Read Model autoritativo desde rpc_obtener_gastos_turno (Backend Authority)
+        const opexReadModel = await cashRepository.getSessionOpexExpenses(currentSession.value.id);
+        const nonOpexTransactions = currentSession.value.transactions.filter(
+            (t) => !(t.type === 'expense' && (!t.movementType || t.movementType === 'gasto'))
+        );
+        const opexTransactions: CashTransaction[] = opexReadModel.data.map((row) => ({
+            id: row.id,
+            type: 'expense',
+            movementType: 'gasto',
+            amount: new Decimal(row.amount),
+            description: row.description,
+            category: row.category,
+            paymentMethod: row.payment_method,
+            voucherRef: row.voucher_ref ?? null,
+            actorName: row.actor_name,
+            actorRole: row.actor_role,
+            timestamp: row.created_at,
+        }));
+        currentSession.value.transactions = [...nonOpexTransactions, ...opexTransactions];
+
+        return opexReadModel;
     };
 
     const addIncome = async (amount: Decimal | number, description: string, saleId?: string) => {
@@ -473,6 +535,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         currentSession,
         sessionHistory,
         pendingForcedSessionInfo,
+        lastSyncError,
         isOpen,
         currentBalance,
         balancesByMethod,

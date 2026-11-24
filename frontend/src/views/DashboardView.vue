@@ -114,8 +114,10 @@ const storeName = computed(() => currentStore.value?.storeName || 'Mi Tiendita')
 
 // Methods
 const toggleStore = () => {
-  // CRITICAL: Always redirect to CashControlView which requires PIN
-  // Do NOT allow opening/closing without PIN validation
+  if (!authStore.canOpenCloseCash) {
+    router.push('/cash-control?tab=movements');
+    return;
+  }
   router.push('/cash-control');
 };
 
@@ -189,6 +191,7 @@ const navigateToNotifications = () => {
         </div>
 
         <button
+          v-if="authStore.canOpenCloseCash"
           @click="toggleStore"
           class="group relative flex h-16 w-full cursor-pointer items-center rounded-full p-1.5 ring-1 ring-white/10 transition-all active:scale-[0.98]"
           :class="isStoreOpen ? 'bg-green-500' : 'bg-slate-900/50'"
@@ -207,6 +210,17 @@ const navigateToNotifications = () => {
           >
              <component :is="isStoreOpen ? LockOpen : ArrowRight" :size="24" :stroke-width="2" />
           </div>
+        </button>
+
+        <button
+          v-else
+          type="button"
+          data-test="btn-status-my-movements"
+          @click="navigateTo('/cash-control?tab=movements')"
+          class="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-slate-900/60 px-4 text-sm font-semibold text-slate-200 ring-1 ring-white/15 hover:bg-slate-900 transition-colors"
+        >
+          <ClipboardList :size="18" />
+          Ver Mis Movimientos
         </button>
       </div>
 
@@ -312,13 +326,13 @@ const navigateToNotifications = () => {
             Mi Turno Actual
           </p>
           <p class="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
-            Consulta tus ventas, gastos y retiros del turno
+            Consulta tus ventas, devoluciones y retiros del turno
           </p>
         </div>
         <button
           type="button"
           data-test="btn-my-shift-movements"
-          @click="navigateTo('/my-shift-movements')"
+          @click="navigateTo('/cash-control?tab=movements')"
           class="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 transition-colors flex items-center gap-1"
         >
           <ClipboardList :size="15" />
@@ -398,7 +412,7 @@ const navigateToNotifications = () => {
 
           <!-- Mis Movimientos del Turno Actual (CHK-308) -->
           <button
-            @click="navigateTo('/my-shift-movements')"
+            @click="navigateTo('/cash-control?tab=movements')"
             class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
           >
             <div class="flex items-center gap-3">

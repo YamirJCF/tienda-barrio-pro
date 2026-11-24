@@ -137,18 +137,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/my-shift-movements',
-    name: 'my-shift-movements',
-    component: () => import('../views/MyShiftMovementsView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/expenses',
-    name: 'expenses',
-    component: () => import('../views/ExpensesView.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/notifications',
     name: 'notifications',
     component: () => import('../views/NotificationCenterView.vue'),
@@ -350,11 +338,6 @@ router.beforeEach(async (to, from, next) => {
 
   // 2b. Financial Dashboard: STRICTLY Admin only
   if (to.name === 'financial-dashboard' && !authStore.isAdmin) {
-    return next({ name: 'dashboard' });
-  }
-
-  // 3. Cash Control: Requires canOpenCloseCash (or Admin)
-  if (to.name === 'cash-control' && !authStore.canOpenCloseCash) {
     return next({ name: 'dashboard' });
   }
 

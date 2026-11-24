@@ -147,8 +147,19 @@ BEGIN
     INSERT INTO public.cash_movements (session_id, movement_type, amount, description, payment_method, actor_id, actor_name, actor_role)
     VALUES (v_sess2_id, 'ingreso', 30000, 'Venta Llave BRE', 'llave_bre', v_emp_a_id, 'Cajero A', 'employee');
 
-    -- Ahora Auxiliar Base (sin los 4 permisos) puede registrar gasto menor POS (capacidad base)
+    -- Ahora Auxiliar Base (no-Admin) DEBE ser rechazado con 42501 ADMIN_ONLY_ACTION (Enmienda UX-ADR-002)
     PERFORM set_config('request.jwt.claims', json_build_object('sub', v_emp_noperm_id, 'role', 'authenticated')::text, true);
+
+    v_err := false;
+    BEGIN
+        PERFORM public.rpc_registrar_gasto_v2(v_sess2_id, 5000, 'efectivo', 'Servicios', 'Intento empleado');
+    EXCEPTION WHEN OTHERS THEN
+        v_err := (SQLSTATE = '42501' AND SQLERRM LIKE '%ADMIN_ONLY_ACTION%');
+    END;
+    ASSERT v_err, 'CHK-206/UX-ADR-002 RECHAZO FALLÓ: Empleado debió ser bloqueado con ADMIN_ONLY_ACTION';
+
+    -- Cambiar a Administrador (Owner) para validar reglas de categorías/canales/sobregiro/éxito
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_owner_id, 'role', 'authenticated')::text, true);
 
     -- Rechazo categoría 'Reembolso'
     v_err := false;
@@ -177,10 +188,14 @@ BEGIN
     END;
     ASSERT v_err, 'CHK-206 RECHAZO FALLÓ: Nequi en $0 debió rechazar sobregiro aunque efectivo tuviera $40k';
 
-    -- Éxito con llave_bre + voucher_ref + snapshot
+    -- Éxito con llave_bre + voucher_ref + snapshot + Read Model rpc_obtener_gastos_turno
     v_res := public.rpc_registrar_gasto_v2(v_sess2_id, 12000, 'llave_bre', 'Insumos', 'Bolsas y rollos POS', 'BRE-7788');
-    ASSERT (v_res->>'success')::boolean = true AND (v_res->'data'->>'remaining_channel_balance')::numeric = 18000 AND v_res->'data'->>'actor_name' = 'Auxiliar Base',
+    ASSERT (v_res->>'success')::boolean = true AND (v_res->'data'->>'remaining_channel_balance')::numeric = 18000 AND v_res->'data'->>'actor_role' = 'owner',
         'CHK-206 ÉXITO FALLÓ: ' || v_res::text;
+
+    v_res := public.rpc_obtener_gastos_turno(v_sess2_id);
+    ASSERT (v_res->>'success')::boolean = true AND (v_res->>'total_opex_expenses')::numeric = 12000 AND (v_res->>'count')::int = 1,
+        'CHK-206/UX-ADR-002 FALLÓ: rpc_obtener_gastos_turno devolvió payload inesperado: ' || v_res::text;
 
     -- =========================================================================
     -- [CHK-204] & [CHK-205] Turno +24h Expirado/Bloqueado + Reconciliación Admin opcional NULL

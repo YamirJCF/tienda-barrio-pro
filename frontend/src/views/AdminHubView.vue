@@ -211,7 +211,7 @@ watch(() => authStore.currentUser?.storeId, (newId) => {
               <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Registrar Salida/Gasto</p>
             </div>
             <button
-              @click="navigateTo('/expenses')"
+              @click="navigateTo('/cash-control?tab=expenses')"
               class="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-700 py-3 px-4 text-sm font-bold text-slate-700 dark:text-slate-200 transition-colors hover:bg-slate-200 dark:hover:bg-slate-600 active:bg-slate-300"
             >
               <Eye :size="18" :stroke-width="1.5" />
