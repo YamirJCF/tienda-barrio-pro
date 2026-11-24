@@ -26,7 +26,7 @@ Antes de modificar **cualquier** función, archivo o componente listado en este 
 |----|---------------|------------|-------|
 | LF-001 | Procesamiento de Ventas | `procesar_venta()` en schema.sql | Integridad financiera |
 | LF-002 | Cálculo de Totales | `salesStore.ts` → computed totals | Precisión decimal |
-| LF-003 | Registro de Gastos | `expenses.ts`, `ExpensesView.vue` | Auditoría contable |
+| LF-003 | Registro de Gastos | `expenses.ts`, `ShiftExpensesTab.vue`, `rpc_registrar_gasto_v2`, `rpc_obtener_gastos_turno` | Auditoría contable |
 | LF-004 | Control de Caja RPCs | `validar_pin_admin`, `registrar_evento_caja` | Seguridad |
 
 ### B. Autenticación y Seguridad
@@ -69,6 +69,7 @@ Antes de modificar **cualquier** función, archivo o componente listado en este 
 |-------|-------|------------------|--------------|--------|
 | 2026-11-19 | LF-008, LF-010 | Fase 3 Ola 1: Esquema cerrado de 4 permisos en `EmployeePermissions` (eliminando `canViewReports`/`canViewInventory`) + políticas RLS/helpers centralizados (`is_store_admin`, `assert_store_admin`, `assert_employee_permission`) y continuidad `<24h` | Usuario (Sesión Fase 3 Ola 1) | `[LOCKFILE-APPROVED]` (rama `feat/fase3-ola1-cimientos-rbac-canales`) |
 | 2026-11-21 | LF-013..LF-016 | WO-UX-GOV-000 (Ola 0): Blindaje UX en 5 anillos, actualización de `LOCKFILE.md` y Regla 12 en `AGENTS.md` | Usuario (Aprobación explícita Ola 0) | `[LOCKFILE-APPROVED] [UX-ARCH-APPROVED]` (rama `chore/ux-governance-ola0`) |
+| 2026-11-24 | LF-003, LF-004, LF-013, LF-014 | WO-OLA2-C2-001 (UX-ADR-002): Consolidación de C2 en `/cash-control`, gastos OPEX exclusivos Admin (`assert_store_admin`) y cierre de C2-H1..C2-H4 | Usuario (Aprobación explícita WO-OLA2-C2-001) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c2-caja-turnos-gastos`) |
 
 ---
 

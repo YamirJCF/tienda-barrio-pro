@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "adrVersion": "UX-ADR-001",
+  "adrVersion": "UX-ADR-002",
   "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
   "bottomNavRoutes": [
     "/pos",
@@ -43,26 +43,8 @@
       "view": "frontend/src/views/CashControlView.vue",
       "context": "C2",
       "archetype": "B/D",
-      "guard": "canOpenCloseCash",
+      "guard": "requiresAuth",
       "status": "canonica"
-    },
-    {
-      "name": "my-shift-movements",
-      "path": "/my-shift-movements",
-      "view": "frontend/src/views/MyShiftMovementsView.vue",
-      "context": "C2",
-      "archetype": "E",
-      "guard": "requiresAuth",
-      "status": "consolidar"
-    },
-    {
-      "name": "expenses",
-      "path": "/expenses",
-      "view": "frontend/src/views/ExpensesView.vue",
-      "context": "C2",
-      "archetype": "D",
-      "guard": "requiresAuth",
-      "status": "consolidar"
     },
     {
       "name": "inventory",

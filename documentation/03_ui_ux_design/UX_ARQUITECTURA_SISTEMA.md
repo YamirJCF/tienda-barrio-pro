@@ -1,7 +1,7 @@
 # Arquitectura del Sistema UX — Tienda Barrio Pro
 
-> **Estado:** Vigente (`UX-ADR-000`)  
-> **Última actualización:** 2026-11-21  
+> **Estado:** Vigente (`UX-ADR-002`)  
+> **Última actualización:** 2026-11-24  
 > **Fuente de verdad ejecutable:** [`ux-manifest.json`](./ux-manifest.json)  
 > **Bitácora de decisiones:** [`UX_ADR_LOG.md`](./UX_ADR_LOG.md)  
 > **Invariante de seguridad:** Regla 11 de [`.agent/AGENTS.md`](../../.agent/AGENTS.md) — El contexto `C8` (Acceso, Correo/Auth y `GatekeeperPending.vue`) permanece **blindado** y solo se registra a nivel cartográfico.
@@ -12,7 +12,7 @@
 
 Este documento es el **marco maestro único de Arquitectura de Interacción y Gobernanza UX** para **Tienda Barrio Pro**. Su objetivo es erradicar la fragmentación por tickets/FRDs aislados, alinear la interfaz al modelo **"Mostrador de Precisión con Autoridad en el Servidor"** ([`PRODUCT.md`](../../PRODUCT.md)) y garantizar que ningún agente ni desarrollador introduzca rutas improvisadas, flujos redundantes o fallos silenciosos.
 
-El marco rige el **100% de la aplicación**: las **29 rutas** declaradas en [`frontend/src/router/index.ts`](../../frontend/src/router/index.ts) (28 permanentes + 1 `DEV`-only), **1 subvista embebida** (`GatekeeperPending.vue` dentro de `LoginView.vue`), los **6 overlays globales** montados en [`frontend/src/App.vue`](../../frontend/src/App.vue) y cualquier módulo futuro (`C9+`).
+El marco rige el **100% de la aplicación**: las **27 rutas** declaradas en [`frontend/src/router/index.ts`](../../frontend/src/router/index.ts) (26 permanentes + 1 `DEV`-only), **1 subvista embebida** (`GatekeeperPending.vue` dentro de `LoginView.vue`), los **6 overlays globales** montados en [`frontend/src/App.vue`](../../frontend/src/App.vue) y cualquier módulo futuro (`C9+`).
 
 ---
 
@@ -25,7 +25,7 @@ Toda pantalla, subvista y flujo pertenece a un único Contexto Delimitado con fr
 | ID | Contexto Delimitado | Propósito único | Superficies actuales (`frontend/src/views/`) |
 |---|---|---|---|
 | **C1** | **Mostrador (POS & Cobro)** | Cobro de alta velocidad en mostrador (**único contexto con cola offline**) | `POSView.vue` |
-| **C2** | **Tesorería Diaria (Caja & Turnos)** | Ciclo de vida del turno: apertura, gastos del turno, movimientos propios y cierre/reconciliación | `CashControlView.vue`, `MyShiftMovementsView.vue`, `ExpensesView.vue` |
+| **C2** | **Tesorería Diaria (Caja & Turnos)** | Ciclo de vida del turno: apertura, gastos OPEX (Admin), movimientos propios y cierre/reconciliación | `CashControlView.vue` (`/cash-control?tab=shift\|expenses\|movements`) |
 | **C3** | **Catálogo e Inventario (Stock & FIFO)** | Definición de productos, capas de lotes FIFO, recepción masiva, salidas/mermas y Kardex | `InventoryView.vue`, `StockEntryView.vue`, `StockOutputsView.vue` |
 | **C4** | **Cartera (Clientes & Fiado)** | Clientes, historial de deuda/fiado, abonos y política de cupo | `ClientListView.vue`, `ClientDetailView.vue` |
 | **C5** | **Abastecimiento (Proveedores & CxP)** | Proveedores, facturas por pagar (`CxP`), abonos a proveedor y entregas | `SuppliersView.vue`, `PayablesView.vue` |
@@ -138,43 +138,41 @@ Antes de crear o alterar rutas, vistas, modales de flujo o señalización, es ob
 
 ---
 
-## 3. Inventario Canónico Verificado 1:1 (29 Rutas + 1 Subvista Embebida)
+## 3. Inventario Canónico Verificado 1:1 (27 Rutas + 1 Subvista Embebida)
 
 Inventario extraído línea por línea de [`frontend/src/router/index.ts`](../../frontend/src/router/index.ts) y [`frontend/src/views/`](../../frontend/src/views):
 
-### 3.1 Las 29 Rutas de `frontend/src/router/index.ts`
+### 3.1 Las 27 Rutas de `frontend/src/router/index.ts`
 
-| # | Path *(Aliases)* | Name | Vista (`frontend/src/views/...`) | Contexto | Arquetipo | Guard real en router | Estado inicial |
+| # | Path *(Aliases)* | Name | Vista (`frontend/src/views/...`) | Contexto | Arquetipo | Guard real en router | Estado actual |
 |---|---|---|---|---|---|---|---|
 | 1 | `/` *(alias `/dashboard`)* | `dashboard` | `DashboardView.vue` | `Shell` | `Hub` | `requiresAuth` | `canonica` |
 | 2 | `/pos` | `pos` | `POSView.vue` | `C1` | `A` | `requiresAuth` | `canonica` |
-| 3 | `/cash-control` | `cash-control` | `CashControlView.vue` | `C2` | `B/D` | `canOpenCloseCash` | `canonica` |
-| 4 | `/my-shift-movements` | `my-shift-movements` | `MyShiftMovementsView.vue` | `C2` | `E` | `requiresAuth` | `consolidar` |
-| 5 | `/expenses` | `expenses` | `ExpensesView.vue` | `C2` | `D` | `requiresAuth` *(sin guard permiso; `LF-003`)* | `consolidar` |
-| 6 | `/inventory` | `inventory` | `InventoryView.vue` | `C3` | `B` | `canManageInventory` | `canonica` |
-| 7 | `/stock-entry` | `stock-entry` | `StockEntryView.vue` | `C3` | `C` | `canManageInventory` | `canonica` |
-| 8 | `/stock-outputs` | `stock-outputs` | `StockOutputsView.vue` | `C3` | `D` | `requiresAuth` *(control interno en vista)* | `consolidar` |
-| 9 | `/clients` | `clients` | `ClientListView.vue` | `C4` | `B` | `canFiar` | `canonica` |
-| 10 | `/clients/:id` | `client-detail` | `ClientDetailView.vue` | `C4` | `B` | `canFiar` | `canonica` |
-| 11 | `/suppliers` | `suppliers` | `SuppliersView.vue` | `C5` | `B` | `isAdmin` | `canonica` |
-| 12 | `/payables` | `payables` | `PayablesView.vue` | `C5` | `B` | `isAdmin` | `consolidar` |
-| 13 | `/reports` | `reports` | `ReportsHubView.vue` | `C6` | `E` | `isAdmin` | `canonica` |
-| 14 | `/admin/financial-dashboard` | `financial-dashboard` | `FinancialDashboardView.vue` | `C6` | `E` | `isAdmin` | `duplicada` |
-| 15 | `/history` | `history` | `HistoryView.vue` | `C6` | `E` | `isAdmin` | `duplicada` |
-| 16 | `/admin` | `admin` | `AdminHubView.vue` | `C7` | `Hub` | `isAdmin` | `canonica` |
-| 17 | `/employees` | `employees` | `EmployeeManagerView.vue` | `C7` | `B` | `isAdmin` | `canonica` |
-| 18 | `/notifications` | `notifications` | `NotificationCenterView.vue` | `N4` | `E` | `requiresAuth` | `canonica` |
-| 19 | `/daily-waiting-room` | `daily-waiting-room` | `DailyWaitingRoom.vue` | `C7` | `F` | `requiresAuth` | `canonica` |
-| 20 | `/legal/privacy` *(alias `/legal/terms`)* | `privacy-policy` | `PrivacyPolicyView.vue` | `C7` | `E` | `public` | `canonica` |
-| 21 | `/platform/legal` | `platform-legal` | `PlatformLegalAdminView.vue` | `C7` | `B` | `public` *(auditar en Ola 1)* | `canonica` |
-| 22 | `/login` | `login` | `LoginView.vue` | `C8` | `F` | `guest` | `blindada` |
-| 23 | `/register-store` | `register-store` | `RegisterStoreView.vue` | `C8` | `F` | `guest` | `blindada` |
-| 24 | `/forgot-password` | `forgot-password` | `ForgotPasswordView.vue` | `C8` | `F` | `guest` | `blindada` |
-| 25 | `/check-email` | `check-email` | `CheckEmailView.vue` | `C8` | `F` | `requiresAuth` | `blindada` |
-| 26 | `/auth/waiting-verification` | `waiting-verification` | `auth/WaitingRoomView.vue` | `C8` | `F` | `guest` | `blindada` |
-| 27 | `/update-password` | `update-password` | `auth/UpdatePasswordView.vue` | `C8` | `F` | `public` | `blindada` |
-| 28 | `/:pathMatch(.*)*` | `auth-callback` | `auth/AuthCallbackView.vue` | `C8` | `F` | `public` | `blindada` |
-| 29 | `/sys-audit` | `system-audit` | `SystemAuditView.vue` | `Dev` | `none` | `devOnly` | `dev_only` |
+| 3 | `/cash-control` | `cash-control` | `CashControlView.vue` | `C2` | `B/D` | `requiresAuth` *(pestañas/RPCs por rol: `Turno`, `Gastos` Admin-only, `Mis Movimientos`)* | `canonica` |
+| 4 | `/inventory` | `inventory` | `InventoryView.vue` | `C3` | `B` | `canManageInventory` | `canonica` |
+| 5 | `/stock-entry` | `stock-entry` | `StockEntryView.vue` | `C3` | `C` | `canManageInventory` | `canonica` |
+| 6 | `/stock-outputs` | `stock-outputs` | `StockOutputsView.vue` | `C3` | `D` | `requiresAuth` *(control interno en vista)* | `consolidar` |
+| 7 | `/clients` | `clients` | `ClientListView.vue` | `C4` | `B` | `canFiar` | `canonica` |
+| 8 | `/clients/:id` | `client-detail` | `ClientDetailView.vue` | `C4` | `B` | `canFiar` | `canonica` |
+| 9 | `/suppliers` | `suppliers` | `SuppliersView.vue` | `C5` | `B` | `isAdmin` | `canonica` |
+| 10 | `/payables` | `payables` | `PayablesView.vue` | `C5` | `B` | `isAdmin` | `consolidar` |
+| 11 | `/reports` | `reports` | `ReportsHubView.vue` | `C6` | `E` | `isAdmin` | `canonica` |
+| 12 | `/admin/financial-dashboard` | `financial-dashboard` | `FinancialDashboardView.vue` | `C6` | `E` | `isAdmin` | `duplicada` |
+| 13 | `/history` | `history` | `HistoryView.vue` | `C6` | `E` | `isAdmin` | `duplicada` |
+| 14 | `/admin` | `admin` | `AdminHubView.vue` | `C7` | `Hub` | `isAdmin` | `canonica` |
+| 15 | `/employees` | `employees` | `EmployeeManagerView.vue` | `C7` | `B` | `isAdmin` | `canonica` |
+| 16 | `/notifications` | `notifications` | `NotificationCenterView.vue` | `N4` | `E` | `requiresAuth` | `canonica` |
+| 17 | `/daily-waiting-room` | `daily-waiting-room` | `DailyWaitingRoom.vue` | `C7` | `F` | `requiresAuth` | `canonica` |
+| 18 | `/legal/privacy` *(alias `/legal/terms`)* | `privacy-policy` | `PrivacyPolicyView.vue` | `C7` | `E` | `public` | `canonica` |
+| 19 | `/platform/legal` | `platform-legal` | `PlatformLegalAdminView.vue` | `C7` | `B` | `public` *(auditar en Ola 1)* | `canonica` |
+| 20 | `/login` | `login` | `LoginView.vue` | `C8` | `F` | `guest` | `blindada` |
+| 21 | `/register-store` | `register-store` | `RegisterStoreView.vue` | `C8` | `F` | `guest` | `blindada` |
+| 22 | `/forgot-password` | `forgot-password` | `ForgotPasswordView.vue` | `C8` | `F` | `guest` | `blindada` |
+| 23 | `/check-email` | `check-email` | `CheckEmailView.vue` | `C8` | `F` | `requiresAuth` | `blindada` |
+| 24 | `/auth/waiting-verification` | `waiting-verification` | `auth/WaitingRoomView.vue` | `C8` | `F` | `guest` | `blindada` |
+| 25 | `/update-password` | `update-password` | `auth/UpdatePasswordView.vue` | `C8` | `F` | `public` | `blindada` |
+| 26 | `/:pathMatch(.*)*` | `auth-callback` | `auth/AuthCallbackView.vue` | `C8` | `F` | `public` | `blindada` |
+| 27 | `/sys-audit` | `system-audit` | `SystemAuditView.vue` | `Dev` | `none` | `devOnly` | `dev_only` |
 
 ### 3.2 Subvistas Embebidas en `frontend/src/views/` (1 Registrada)
 
