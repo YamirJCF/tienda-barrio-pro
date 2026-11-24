@@ -1,0 +1,316 @@
+{
+  "schemaVersion": "1.0.0",
+  "adrVersion": "UX-ADR-001",
+  "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
+  "bottomNavRoutes": [
+    "/pos",
+    "/inventory",
+    "/reports",
+    "/clients",
+    "/admin"
+  ],
+  "globalOverlaysInAppVue": [
+    "GlobalNetworkHandler",
+    "OfflineBanner",
+    "LegalComplianceGate",
+    "GlobalAccessRequestModal",
+    "PinUnlockModal",
+    "ToastNotification"
+  ],
+  "routes": [
+    {
+      "name": "dashboard",
+      "path": "/",
+      "aliases": ["/dashboard"],
+      "view": "frontend/src/views/DashboardView.vue",
+      "context": "Shell",
+      "archetype": "Hub",
+      "guard": "requiresAuth",
+      "status": "canonica"
+    },
+    {
+      "name": "pos",
+      "path": "/pos",
+      "view": "frontend/src/views/POSView.vue",
+      "context": "C1",
+      "archetype": "A",
+      "guard": "requiresAuth",
+      "status": "canonica"
+    },
+    {
+      "name": "cash-control",
+      "path": "/cash-control",
+      "view": "frontend/src/views/CashControlView.vue",
+      "context": "C2",
+      "archetype": "B/D",
+      "guard": "canOpenCloseCash",
+      "status": "canonica"
+    },
+    {
+      "name": "my-shift-movements",
+      "path": "/my-shift-movements",
+      "view": "frontend/src/views/MyShiftMovementsView.vue",
+      "context": "C2",
+      "archetype": "E",
+      "guard": "requiresAuth",
+      "status": "consolidar"
+    },
+    {
+      "name": "expenses",
+      "path": "/expenses",
+      "view": "frontend/src/views/ExpensesView.vue",
+      "context": "C2",
+      "archetype": "D",
+      "guard": "requiresAuth",
+      "status": "consolidar"
+    },
+    {
+      "name": "inventory",
+      "path": "/inventory",
+      "view": "frontend/src/views/InventoryView.vue",
+      "context": "C3",
+      "archetype": "B",
+      "guard": "canManageInventory",
+      "status": "canonica"
+    },
+    {
+      "name": "stock-entry",
+      "path": "/stock-entry",
+      "view": "frontend/src/views/StockEntryView.vue",
+      "context": "C3",
+      "archetype": "C",
+      "guard": "canManageInventory",
+      "status": "canonica"
+    },
+    {
+      "name": "stock-outputs",
+      "path": "/stock-outputs",
+      "view": "frontend/src/views/StockOutputsView.vue",
+      "context": "C3",
+      "archetype": "D",
+      "guard": "requiresAuth",
+      "status": "consolidar"
+    },
+    {
+      "name": "clients",
+      "path": "/clients",
+      "view": "frontend/src/views/ClientListView.vue",
+      "context": "C4",
+      "archetype": "B",
+      "guard": "canFiar",
+      "status": "canonica"
+    },
+    {
+      "name": "client-detail",
+      "path": "/clients/:id",
+      "view": "frontend/src/views/ClientDetailView.vue",
+      "context": "C4",
+      "archetype": "B",
+      "guard": "canFiar",
+      "status": "canonica"
+    },
+    {
+      "name": "suppliers",
+      "path": "/suppliers",
+      "view": "frontend/src/views/SuppliersView.vue",
+      "context": "C5",
+      "archetype": "B",
+      "guard": "isAdmin",
+      "status": "canonica"
+    },
+    {
+      "name": "payables",
+      "path": "/payables",
+      "view": "frontend/src/views/PayablesView.vue",
+      "context": "C5",
+      "archetype": "B",
+      "guard": "isAdmin",
+      "status": "consolidar"
+    },
+    {
+      "name": "reports",
+      "path": "/reports",
+      "view": "frontend/src/views/ReportsHubView.vue",
+      "context": "C6",
+      "archetype": "E",
+      "guard": "isAdmin",
+      "status": "canonica"
+    },
+    {
+      "name": "financial-dashboard",
+      "path": "/admin/financial-dashboard",
+      "view": "frontend/src/views/FinancialDashboardView.vue",
+      "context": "C6",
+      "archetype": "E",
+      "guard": "isAdmin",
+      "status": "duplicada"
+    },
+    {
+      "name": "history",
+      "path": "/history",
+      "view": "frontend/src/views/HistoryView.vue",
+      "context": "C6",
+      "archetype": "E",
+      "guard": "isAdmin",
+      "status": "duplicada"
+    },
+    {
+      "name": "admin",
+      "path": "/admin",
+      "view": "frontend/src/views/AdminHubView.vue",
+      "context": "C7",
+      "archetype": "Hub",
+      "guard": "isAdmin",
+      "status": "canonica"
+    },
+    {
+      "name": "employees",
+      "path": "/employees",
+      "view": "frontend/src/views/EmployeeManagerView.vue",
+      "context": "C7",
+      "archetype": "B",
+      "guard": "isAdmin",
+      "status": "canonica"
+    },
+    {
+      "name": "notifications",
+      "path": "/notifications",
+      "view": "frontend/src/views/NotificationCenterView.vue",
+      "context": "N4",
+      "archetype": "E",
+      "guard": "requiresAuth",
+      "status": "canonica"
+    },
+    {
+      "name": "daily-waiting-room",
+      "path": "/daily-waiting-room",
+      "view": "frontend/src/views/DailyWaitingRoom.vue",
+      "context": "C7",
+      "archetype": "F",
+      "guard": "requiresAuth",
+      "status": "canonica"
+    },
+    {
+      "name": "privacy-policy",
+      "path": "/legal/privacy",
+      "aliases": ["/legal/terms"],
+      "view": "frontend/src/views/PrivacyPolicyView.vue",
+      "context": "C7",
+      "archetype": "E",
+      "guard": "public",
+      "status": "canonica"
+    },
+    {
+      "name": "platform-legal",
+      "path": "/platform/legal",
+      "view": "frontend/src/views/PlatformLegalAdminView.vue",
+      "context": "C7",
+      "archetype": "B",
+      "guard": "public",
+      "status": "canonica"
+    },
+    {
+      "name": "login",
+      "path": "/login",
+      "view": "frontend/src/views/LoginView.vue",
+      "context": "C8",
+      "archetype": "F",
+      "guard": "guest",
+      "status": "blindada"
+    },
+    {
+      "name": "register-store",
+      "path": "/register-store",
+      "view": "frontend/src/views/RegisterStoreView.vue",
+      "context": "C8",
+      "archetype": "F",
+      "guard": "guest",
+      "status": "blindada"
+    },
+    {
+      "name": "forgot-password",
+      "path": "/forgot-password",
+      "view": "frontend/src/views/ForgotPasswordView.vue",
+      "context": "C8",
+      "archetype": "F",
+      "guard": "guest",
+      "status": "blindada"
+    },
+    {
+      "name": "check-email",
+      "path": "/check-email",
+      "view": "frontend/src/views/CheckEmailView.vue",
+      "context": "C8",
+      "archetype": "F",
+      "guard": "requiresAuth",
+      "status": "blindada"
+    },
+    {
+      "name": "waiting-verification",
+      "path": "/auth/waiting-verification",
+      "view": "frontend/src/views/auth/WaitingRoomView.vue",
+      "context": "C8",
+      "archetype": "F",
+      "guard": "guest",
+      "status": "blindada"
+    },
+    {
+      "name": "update-password",
+      "path": "/update-password",
+      "view": "frontend/src/views/auth/UpdatePasswordView.vue",
+      "context": "C8",
+      "archetype": "F",
+      "guard": "public",
+      "status": "blindada"
+    },
+    {
+      "name": "auth-callback",
+      "path": "/:pathMatch(.*)*",
+      "view": "frontend/src/views/auth/AuthCallbackView.vue",
+      "context": "C8",
+      "archetype": "F",
+      "guard": "public",
+      "status": "blindada"
+    },
+    {
+      "name": "system-audit",
+      "path": "/sys-audit",
+      "view": "frontend/src/views/SystemAuditView.vue",
+      "context": "Dev",
+      "archetype": "none",
+      "guard": "devOnly",
+      "status": "dev_only"
+    }
+  ],
+  "embeddedViews": [
+    {
+      "view": "frontend/src/views/GatekeeperPending.vue",
+      "parentRoute": "login",
+      "parentView": "frontend/src/views/LoginView.vue",
+      "context": "C8",
+      "archetype": "F",
+      "status": "blindada"
+    }
+  ],
+  "baselineDebt": {
+    "nativeDialogsAllowed": [
+      "frontend/src/App.vue",
+      "frontend/src/components/common/ConflictResolver.vue",
+      "frontend/src/views/SuppliersView.vue"
+    ],
+    "legacyToastImportsAllowed": [
+      "frontend/src/components/ProductFormModal.vue",
+      "frontend/src/components/inventory/KardexModal.vue",
+      "frontend/src/components/suppliers/PayInvoiceModal.vue",
+      "frontend/src/composables/useSessionGuard.ts",
+      "frontend/src/main.ts",
+      "frontend/src/views/CheckEmailView.vue",
+      "frontend/src/views/InventoryView.vue",
+      "frontend/src/views/auth/WaitingRoomView.vue"
+    ],
+    "materialIconsAllowed": [
+      "frontend/src/components/common/ConflictResolver.vue",
+      "frontend/src/components/common/OfflineBanner.vue"
+    ]
+  }
+}

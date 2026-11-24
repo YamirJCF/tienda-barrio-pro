@@ -8,9 +8,9 @@ description: Auditor de calidad y arquitectura que revisa el código TypeScript/
 ## 🧭 Control de Flujo (Pipeline)
 - **Nivel:** 4 — Construcción, Pruebas y Auditoría (Rutas B, C y E)
 - **Rama permitida:** `feat/*`, `fix/*`, `refactor/*`, `chore/*` (Prohibido en `master` o `draft/*`)
-- **Entrada requerida (Gate In):** Código modificado o refactorizado + tests unitarios verificados (`test-expert` / `refactor`).
+- **Entrada requerida (Gate In):** Código modificado o refactorizado + tests unitarios verificados (`test-expert` / `refactor`) + salida en verde de `npx vitest run src/__tests__/architecture/ux-fitness.spec.ts` si se tocó `frontend/src/`.
 - **Límite estricto:** Audita y corrige violaciones arquitectónicas, modos de fallo de IA y violaciones a "Los Dos Sombreros" en refactors; NO inventa nuevas reglas de negocio ni altera contratos RPC sin pasar por `data`.
-- **🛑 Freno de Emergencia (Hard Stop):** Si detecta lógica financiera/stock en frontend, fallos silenciosos (`catch` vacío / `success: false` disfrazado), alteración de tests `.spec.ts` durante un `refactor`, o edición de archivos protegidos en `.agent/LOCKFILE.md` sin aprobación → DETENERSE y reportar al usuario.
+- **🛑 Freno de Emergencia (Hard Stop):** Si detecta lógica financiera/stock en frontend, fallos silenciosos (`catch` vacío / `success: false` disfrazado), alteración de tests `.spec.ts` durante un `refactor`, debilitamiento de `ux-fitness.spec.ts`, aumento de `baselineDebt`, nuevos `alert()`/`confirm()`/`prompt()`/`vue-toastification`/`material-icons`, mezcla de gobernanza UX con código de producto, o edición de archivos protegidos en `.agent/LOCKFILE.md` sin aprobación → DETENERSE y reportar al usuario.
 - **➡️ Siguiente eslabón:**
   - Si se tocaron vistas/componentes `.vue` bajo un SDD en Ruta B: `pac-uxd`
   - Si viene de Ruta C (bugfix) o Ruta E (`refactor`): `verification-before-completion`
@@ -59,3 +59,8 @@ Al revisar un PR o archivo, verifica:
 - [ ] **Cero código muerto o especulativo (YAGNI)**: Eliminar imports no usados, variables huérfanas, flags `enable_*` / `*_mode` sin consumidor actual y comentarios que solo repiten *qué* hace la línea (conservar solo comentarios que expliquen *por qué*).
 - [ ] **Consistencia con vecinos**: Respetar el estilo de logging (`logger`), manejo de errores y estructura de los archivos vecinos antes de introducir patrones nuevos.
 - [ ] **Disciplina de Refactor**: Si la tarea es un refactor, conservar exactamente el comportamiento observable (no mezclar cambios de reglas de negocio con limpieza estructural).
+
+### 6. Gobernanza UX y Señalización (Regla 12)
+- [ ] **Paridad 1:1 con `ux-manifest.json`**: Toda ruta en `router/index.ts`, vista en `frontend/src/views/` y overlay global en `App.vue` coincide 1:1 con el manifiesto (sin vistas huérfanas ni rutas improvisadas).
+- [ ] **Higiene de Señalización (`N1–N5`)**: Cero llamadas nuevas a `alert()`/`confirm()`/`prompt()`, cero importaciones nuevas de `vue-toastification`, cero usos nuevos de `material-icons`.
+- [ ] **Integridad de Guardarraíles**: Cero debilitamiento de `ux-fitness.spec.ts` (`.skip`/`.only`/`.todo`/`xit`/`xdescribe`), cero adiciones a `baselineDebt`, y ejecución real en verde de `npx vitest run src/__tests__/architecture/ux-fitness.spec.ts`.

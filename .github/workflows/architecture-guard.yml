@@ -1,0 +1,44 @@
+name: architecture-guard
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  architecture-guard:
+    name: architecture-guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: UX Architecture Fitness Functions
+        working-directory: frontend
+        run: npx vitest run src/__tests__/architecture/ux-fitness.spec.ts
+
+      - name: UX Governance Gate (CI)
+        run: node scripts/verify-ux-governance.mjs --ci --base origin/master
+
+      - name: Full Frontend Test Suite
+        working-directory: frontend
+        run: npm run test
+
+      - name: Frontend Production Build
+        working-directory: frontend
+        run: npm run build

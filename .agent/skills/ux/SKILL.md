@@ -8,9 +8,9 @@ description: Activar rol de Diseñador de UX/UI - Estratega de Experiencia de Us
 ## 🧭 Control de Flujo (Pipeline)
 - **Nivel:** 2 y 4 — Diseño e Implementación de Experiencia e Interfaz (Rutas A y B)
 - **Rama permitida:** `draft/*` (en fase UXD/SDD) o `feat/*`, `fix/*`, `refactor/*` (en implementación `.vue`/stores; **PROHIBIDO** en `master`).
-- **Entrada requerida (Gate In):** Contrato de datos definido por `data` (SDD/RPC) + lectura obligatoria de `PRODUCT.md`, `DESIGN.md`, `.impeccable/design.json` y `impeccable`.
-- **Límite estricto:** El frontend NO calcula totales financieros ni decide permisos de seguridad (Backend Authority). Prohibido agregar campos en la UI que no existan en el esquema de `data`.
-- **🛑 Freno de Emergencia (Hard Stop):** Si falta un campo o cálculo en el backend, o si `impeccable.cmd detect` reporta violaciones de diseño, o si toca `LOCKFILE.md` → DETENERSE y reportar.
+- **Entrada requerida (Gate In):** Contrato de datos definido por `data` (SDD/RPC) + lectura obligatoria de `PRODUCT.md`, `DESIGN.md`, `.impeccable/design.json`, `documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md`, `documentation/03_ui_ux_design/ux-manifest.json` (y ficha `CONTEXTOS/C1..C8` cuando exista) e `impeccable`.
+- **Límite estricto:** El frontend NO calcula totales financieros ni decide permisos de seguridad (Backend Authority). Prohibido agregar campos en la UI que no existan en el esquema de `data`, añadir rutas/vistas/overlays sin superar **Gate UX-0** (`UX-ADR-XXX`), o introducir `alert()`/`confirm()`/`prompt()`, `vue-toastification` o `material-icons`.
+- **🛑 Freno de Emergencia (Hard Stop):** Si falta un campo o cálculo en el backend, si el cambio altera la Zona de Alta Fricción (`router/index.ts`, `App.vue`, `BottomNav.vue`, alta/baja en `views/`) sin un commit previo de `UX-ADR-XXX [UX-ARCH-APPROVED]`, si falla `npx vitest run src/__tests__/architecture/ux-fitness.spec.ts`, si `impeccable.cmd detect` reporta violaciones de diseño, o si toca `LOCKFILE.md` (o Contexto `C8` / Regla 11) → DETENERSE y reportar.
 - **➡️ Siguiente eslabón:** `test-expert` (tras implementar o modificar componentes/stores).
   - **En Modo AUTO:** Al pasar `impeccable.cmd detect --json` sin violaciones, ejecuta `test-expert` de inmediato.
   - **En Modo PAUSADO:** Muestra los cambios de UI y el resultado de `impeccable.cmd detect`, e indica *"Siguiente paso en la ruta: `test-expert`"*.
@@ -38,12 +38,14 @@ Tu tarea es recibir los documentos de **[01] PRODUCT_SPECS** y **[02] DATA_MODEL
 
 ## 🔄 Protocolo de Trabajo (Sincronía Técnica + Impeccable Design Authority)
 
-### 0. Carga Automática de Identidad (Cero Indicaciones Manuales)
+### 0. Carga Automática de Identidad y Gobernanza UX (Cero Indicaciones Manuales)
 Antes de diseñar o modificar cualquier vista/componente, **es obligatorio leer sin pedir indicaciones estéticas al usuario**:
 1. **`PRODUCT.md`** (en la raíz del proyecto): Verdad operativa del usuario, escena física de uso y restricciones de negocio.
 2. **`DESIGN.md` y `.impeccable/design.json`**: Nuestro Creative North Star (**"El Mostrador de Precisión"**), tokens normativos (`Work Sans` + `JetBrains Mono`), jerarquía y **Named Rules** (*The Money-Color Rule*, *The 10% Accent Rule*, *The Tabular Money Rule*, *The No-Eyebrow Rule*, *The No-Nested-Card Rule*).
-3. **`.agent/skills/impeccable/reference/craft-floor.md`**: Piso de calidad y prohibiciones absolutas de *AI Slop* (prohibido `Inter`, gradientes violetas, tarjetas anidadas o *eyebrows* decorativos).
-4. **Verificación Determinista**: Al finalizar cambios en archivos `.vue` o `.css`, ejecutar `.agent\skills\impeccable\scripts\impeccable.cmd detect --json <archivos>` para validar que no existan anti-patrones visuales.
+3. **`documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md` + `ux-manifest.json`** *(y ficha `CONTEXTOS/C1..C8` del dominio)*: Contexto delimitado, Matriz ORCA, Arquetipo (`A–F` / `Hub`) y Matriz de Señalización (`N1–N5`).
+4. **`.agent/skills/impeccable/reference/craft-floor.md`**: Piso de calidad y prohibiciones absolutas de *AI Slop* (prohibido `Inter`, gradientes violetas, tarjetas anidadas o *eyebrows* decorativos).
+5. **Compuerta Gate UX-0 (antes de proponer rutas, vistas o modales nuevos):** Responder obligatoriamente las 4 preguntas en `UX_ADR_LOG.md`: (1) Contexto y Objeto ORCA, (2) Read Model e invariante contable, (3) Arquetipo `A–F`, niveles `N1–N5` e impacto en las 5 Top Tasks, (4) Qué se consolida o elimina. Prohibido mezclar el commit de `UX-ADR` con código de producto.
+6. **Verificación Determinista**: Al finalizar cambios en archivos `.vue` o `.css`, ejecutar `.agent\skills\impeccable\scripts\impeccable.cmd detect --json <archivos>` y `cd frontend && npx vitest run src/__tests__/architecture/ux-fitness.spec.ts` para validar que no existan anti-patrones visuales ni deriva estructural.
 
 ### 1. Validación de Datos
 Antes de diseñar una pantalla, **consulta el esquema de la base de datos** en carpeta [02].

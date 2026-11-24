@@ -105,4 +105,21 @@ Dado que la infraestructura externa de **Correo / Auth** (despacho SMTP real, en
 ### 11.3 Compuerta de Bloqueo en Flujos Aislados
 - Si durante una tarea se detecta cualquier necesidad de tocar `auth`, envío de correos, triggers de alta de cuenta o inicialización de datos de tienda, el agente debe **detenerse y pedir autorización explícita al usuario**, manteniendo esos flujos 100% blindados y separados del resto de módulos operativos (Caja, POS, Inventario, Clientes, Reportes).
 
+## 12. Gobernanza de Arquitectura UX, Flujos y Señalización (Blindaje en 5 Anillos)
+
+Toda modificación o adición en la interfaz, rutas, modales globales o alertas se rige por [`documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md`](../documentation/03_ui_ux_design/UX_ARQUITECTURA_SISTEMA.md) y su manifiesto ejecutable [`documentation/03_ui_ux_design/ux-manifest.json`](../documentation/03_ui_ux_design/ux-manifest.json):
+
+### 12.1 Consulta Obligatoria y Gate UX-0
+- Antes de proponer o modificar flujos, rutas o modales, es obligatorio leer `UX_ARQUITECTURA_SISTEMA.md`, `ux-manifest.json` y la ficha del Contexto correspondiente (`documentation/03_ui_ux_design/CONTEXTOS/C1..C8`, cuando exista).
+- Ninguna ruta, vista nueva, overlay global en `App.vue` ni cambio a `BottomNav.vue` puede implementarse sin superar antes el **Gate UX-0** (4 preguntas obligatorias: `Contexto y Objeto ORCA`, `Verdad Contable / Read Model`, `Arquetipo A–F + Matriz N1–N5 + Top Tasks`, `Higiene de Crecimiento`) registrado en `documentation/03_ui_ux_design/UX_ADR_LOG.md`.
+
+### 12.2 Regla de 2 Commits Separados y Prohibiciones Mecánicas
+- **Separación obligatoria:** Prohibido mezclar cambios a `ux-manifest.json`, `UX_ARQUITECTURA_SISTEMA.md`, `ux-fitness.spec.ts`, `.githooks/`, `scripts/verify-*.mjs` o `.agent/` con cambios de código de producto (`frontend/src/views/**`, `components/**`, `stores/**`, `composables/**`, `data/**`, `router/**`, `App.vue`) en el mismo commit.
+- **Protocolo para cambios estructurales UX:** (1) Commit arquitectónico exclusivo con nueva entrada `UX-ADR-XXX` y marcador `[UX-ARCH-APPROVED]`; (2) Commit de implementación alineado 1:1 con `ux-manifest.json`.
+- **Prohibiciones absolutas:**
+  - Prohibido usar `git commit --no-verify` o evadir `.githooks/pre-commit` / `.githooks/commit-msg`.
+  - Prohibido debilitar `frontend/src/__tests__/architecture/ux-fitness.spec.ts` (`.skip`, `.only`, `.todo`, `xit`, `xdescribe` o eliminar aserciones).
+  - Prohibido aumentar cualquier array de `baselineDebt` en `ux-manifest.json` (solo puede reducirse o mantenerse igual).
+  - Prohibido introducir `alert()`, `confirm()`, `prompt()`, importaciones nuevas de `vue-toastification` o usos nuevos de `material-icons`.
+- **Invariante Regla 11:** Las rutas y subvistas del Contexto `C8` marcadas como `blindada` (incluyendo `GatekeeperPending.vue`) no se modifican salvo autorización explícita del usuario.
 

@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+node scripts/verify-impact-hook.mjs
+node scripts/verify-ux-governance.mjs --pre-commit
