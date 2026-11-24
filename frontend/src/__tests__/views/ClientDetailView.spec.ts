@@ -45,6 +45,17 @@ vi.mock('../../stores/auth', () => ({
   })
 }));
 
+// Mock Cash Register Store
+const mockSyncFromBackend = vi.fn().mockResolvedValue(true);
+
+vi.mock('../../stores/cashRegister', () => ({
+  useCashRegisterStore: () => ({
+    isOpen: true,
+    isStaleSession: false,
+    syncFromBackend: mockSyncFromBackend
+  })
+}));
+
 const mockShowWarning = vi.fn();
 const mockShowSuccess = vi.fn();
 const mockShowError = vi.fn();
