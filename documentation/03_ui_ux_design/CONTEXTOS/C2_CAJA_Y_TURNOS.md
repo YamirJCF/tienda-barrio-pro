@@ -42,7 +42,7 @@ Turno de Caja (1) ──< Gasto OPEX (N)  [5 categorías × 3 canales — SDD-02
                   └──< Movimiento Propio del Turno (N)  [solo lectura acotada]
 ```
 
-- **Catálogo cerrado de `Gasto OPEX` (`SDD-026` / [`ExpensesView.vue`](../../../frontend/src/views/ExpensesView.vue#L29-L34)):**
+- **Catálogo cerrado de `Gasto OPEX` (`SDD-026` / [`ShiftExpensesTab.vue`](../../../frontend/src/components/cash/ShiftExpensesTab.vue#L56-L69)):**
   - **5 categorías:** `Servicios`, `Nomina`, `Transporte`, `Mantenimiento`, `Insumos`.
   - **3 canales:** `efectivo`, `nequi`, `llave_bre` (+ comprobante opcional cuando no es efectivo).
 

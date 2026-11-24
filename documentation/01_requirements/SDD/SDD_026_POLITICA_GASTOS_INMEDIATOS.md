@@ -35,7 +35,7 @@
 
 ## 1. Glosario Local
 
-- **Gasto General (OPEX Inmediato):** Desembolso de liquidez operativo corriente desde Caja Dedicada POS ejecutado por cualquier usuario activo en turno abierto `< 24h`.
+- **Gasto General (OPEX Inmediato):** Desembolso de liquidez operativo corriente desde Caja Dedicada POS ejecutado exclusivamente por el **Administrador** en turno abierto `< 24h`.
 - **Pago Externo / Fuera de Caja:** Desembolso exclusivo del Administrador con fondos propios ajenos al cajón POS (`$0` impacto en caja).
 - **Canal de Pago (`payment_method`):** Exclusivamente `'efectivo'`, `'nequi'`, `'llave_bre'`.
 - **Catálogo Cerrado de Categorías OPEX (5 categorías — sin `'Reembolso'`):**
@@ -56,29 +56,32 @@
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Usuario as 👤 Cajero / Admin
+    actor Administrador as 👤 Administrador
     participant UI as 📱 Tienda Barrio Client
     participant RPC as ⚙️ rpc_registrar_gasto_v2
-    participant Auth as 🔒 assert_store_access
+    participant Auth as 🔒 assert_store_access + assert_store_admin
     participant CS as 📦 cash_sessions
     participant CM as 💸 cash_movements
 
-    Usuario->>UI: Ingresa Monto, Canal, Categoría OPEX y Motivo
-    UI->>RPC: POST (session_id, amount, payment_method, category, description)
+    Administrador->>UI: Ingresa Monto, Canal, Categoría OPEX y Motivo
+    UI->>RPC: POST (session_id, amount, payment_method, category, description, voucher_ref)
     
     activate RPC
-    RPC->>CS: SELECT store_id, status, opened_at FROM cash_sessions WHERE id = p_session_id FOR UPDATE
+    RPC->>CS: SELECT * FROM cash_sessions WHERE id = p_session_id FOR UPDATE
     alt Sesión Inexistente
         RPC-->>UI: RAISE EXCEPTION 'NO_OPEN_SESSION'
     end
 
-    RPC->>Auth: assert_store_access(v_session.store_id)
-    Auth-->>RPC: Acceso Aprobado
+    RPC->>Auth: assert_store_access(v_session.store_id) + assert_store_admin(v_session.store_id)
+    alt No es Administrador
+        Auth-->>UI: RAISE EXCEPTION 'ADMIN_ONLY_ACTION' (42501)
+    end
+    Auth-->>RPC: Acceso Admin Aprobado
 
     alt Sesión Cerrada
         RPC-->>UI: RAISE EXCEPTION 'NO_OPEN_SESSION'
     else Antigüedad > 24 Horas
-        RPC-->>UI: RAISE EXCEPTION 'SESSION_EXPIRED'
+        RPC-->>UI: RAISE EXCEPTION 'SHIFT_EXPIRED_24H'
     end
 
     alt Monto <= 0 o Nulo
@@ -93,15 +96,14 @@ sequenceDiagram
 
     RPC->>CM: Calcular Liquidez Disponible en Canal (Base + Ingresos - Egresos)
     alt Saldo Disponible < p_amount
-        RPC-->>UI: RAISE EXCEPTION 'INSUFFICIENT_FUNDS'
+        RPC-->>UI: RAISE EXCEPTION 'INSUFFICIENT_CHANNEL_FUNDS'
     end
 
-    RPC->>CM: INSERT INTO cash_movements (session_id, movement_type='gasto', amount=p_amount, description, created_at)
-    Note right of CM: Descripción: [CATEGORIA] [CANAL:metodo] Motivo
+    RPC->>CM: INSERT INTO cash_movements (session_id, movement_type='gasto', amount=p_amount, description=TRIM(p_description), payment_method, category, voucher_ref, actor_id, actor_name, actor_role)
 
-    RPC-->>UI: 200 OK: { success: true, movement_id, session_id, amount, payment_method, category, description, movement_type: 'gasto', created_at }
+    RPC-->>UI: 200 OK: { success: true, data: { movement_id, session_id, amount, payment_method, category, description, voucher_ref, movement_type: 'gasto', remaining_channel_balance, actor_name, actor_role, created_at } }
     deactivate RPC
-    UI-->>Usuario: Desembolso Registrado y Saldo de Canal Actualizado
+    UI-->>Administrador: Desembolso Registrado y Saldo de Canal Actualizado
 ```
 
 ### 2.2 Flujo Alternativo: Rechazo por Sobregiro de Fondos
@@ -109,20 +111,20 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Usuario as 👤 Usuario Operativo
+    actor Administrador as 👤 Administrador
     participant UI as 📱 Tienda Barrio Client
     participant RPC as ⚙️ rpc_registrar_gasto_v2
     participant CM as 💸 cash_movements
 
-    Usuario->>UI: Intenta registrar Gasto de $50.000 COP por canal Nequi
+    Administrador->>UI: Intenta registrar Gasto de $50.000 COP por canal Nequi
     UI->>RPC: POST (p_amount: 50000, p_payment_method: 'nequi')
     activate RPC
     RPC->>CM: Verifica fondos líquidos acumulados en Nequi
     Note over RPC,CM: Saldo real disponible en Nequi = $12.000 COP
-    RPC-->>UI: RAISE EXCEPTION 'INSUFFICIENT_FUNDS'
+    RPC-->>UI: RAISE EXCEPTION 'INSUFFICIENT_CHANNEL_FUNDS'
     deactivate RPC
     Note over UI: Transacción abortada (Rollback automático)
-    UI-->>Usuario: Alerta: "Fondos insuficientes en Nequi (Disponible: $12.000). Seleccione otro canal."
+    UI-->>Administrador: Alerta: "Fondos insuficientes en Nequi (Disponible: $12.000). Seleccione otro canal."
 ```
 
 ---
@@ -171,34 +173,34 @@ stateDiagram-v2
 - **Postcondición:** La liquidez y los reportes financieros del negocio no sufren contaminación por deudas operativas no desembolsadas.
 
 ### Caso B: Ejecución y Registro del Desembolso en Efectivo (FRD-026 Caso B)
-- **Actor:** Cajero o Administrador con sesión de caja activa.
-- **Precondición:** Llega el día viernes. El encargado extrae `$65.000 COP` en efectivo del cajón físico para pagar el servicio eléctrico.
+- **Actor:** **Administrador** con sesión de caja activa.
+- **Precondición:** Llega el día viernes. El Administrador extrae `$65.000 COP` en efectivo del cajón físico para pagar el servicio eléctrico.
 - **Flujo Principal:**
-  1. El usuario accede al formulario de "Registrar Gasto".
+  1. El Administrador accede al formulario de "Registrar Gasto".
   2. Digita el monto extraído: `$65.000 COP`.
   3. Selecciona el canal de origen: `Efectivo`.
   4. Selecciona la categoría OPEX: `Servicios`.
   5. Ingresa la descripción: `"Pago de factura de energía Codensa"`.
-  6. Presiona el botón "Confirmar Gasto".
-  7. El servidor recupera la sesión, verifica permisos con `assert_store_access()` y valida que la caja esté abierta (`status = 'open'`) con antigüedad `< 24h`.
+  6. Presiona el botón "Confirmar Gasto OPEX".
+  7. El servidor recupera la sesión, verifica permisos con `assert_store_access()` + `assert_store_admin()` y valida que la caja esté abierta (`status = 'open'`) con antigüedad `< 24h`.
   8. El servidor calcula la liquidez disponible en Efectivo para el turno en curso y comprueba que `saldo_efectivo >= 65000`.
-  9. El servidor asienta el egreso en `cash_movements` con `movement_type = 'gasto'` y formatea la descripción: `[Servicios] [CANAL:efectivo] Pago de factura de energía Codensa`.
+  9. El servidor asienta el egreso en `cash_movements` con `movement_type = 'gasto'`, `category = 'Servicios'`, `payment_method = 'efectivo'` y descripción limpia `TRIM(p_description)` (`"Pago de factura de energía Codensa"`).
   10. El dinero esperado en efectivo reportado para el arqueo del turno actual disminuye inmediatamente en `$65.000 COP`.
 - **Postcondición:** Egreso asentado de forma inmutable; arqueo físico de efectivo sincronizado en tiempo real.
 
-### Caso C: Desembolso Digital (Nequi / Daviplata) con Segregación Multicanal
-- **Actor:** Administrador o Cajero autorizado.
+### Caso C: Desembolso Digital (`Nequi` / `Llave Bre-B`) con Segregación Multicanal
+- **Actor:** **Administrador**.
 - **Precondición:** Se efectúa una transferencia digital desde la cuenta Nequi de la tienda por `$30.000 COP` para comprar bolsas e insumos de aseo.
 - **Flujo Principal:**
-  1. El usuario selecciona canal `Nequi`, categoría `Insumos`, monto `$30.000 COP` y motivo `"Compra de bolsas plásticas y cinta"`.
+  1. El Administrador selecciona canal `Nequi`, categoría `Insumos`, monto `$30.000 COP`, comprobante opcional (`p_voucher_ref`) y motivo `"Compra de bolsas plásticas y cinta"`.
   2. El sistema valida la disponibilidad de saldo en el canal Nequi.
-  3. Al confirmar fondos suficientes, el servidor registra el egreso en `cash_movements` vinculando la etiqueta `[CANAL:nequi]`.
+  3. Al confirmar fondos suficientes, el servidor registra el egreso en `cash_movements` persistiendo `payment_method = 'nequi'`, `category = 'Insumos'` y descripción limpia.
   4. El saldo esperado de Nequi disminuye inmediatamente en `$30.000 COP`.
   5. El dinero físico del cajón (Efectivo) permanece estrictamente intacto.
 - **Postcondición:** Gasto digital asentado; sin afectación cruzada al efectivo en gaveta.
 
 ### Caso D: Rechazo Transaccional por Sobregiro / Fondos Insuficientes
-- **Actor:** Cajero o Administrador.
+- **Actor:** **Administrador**.
 - **Precondición:** La tienda tiene saldo disponible en Nequi de `$5.000 COP`.
 - **Flujo Principal:**
   1. El usuario intenta registrar un gasto de transporte por `$15.000 COP` por el canal `Nequi`.
@@ -362,7 +364,7 @@ erDiagram
 | `session_id` | `uuid` | NO | FK `cash_sessions(id)` ON DELETE CASCADE | ✅ Existe | Sesión de caja activa a la que se imputa la erogación |
 | `movement_type` | `text` | NO | CHECK (`'ingreso'`, `'gasto'`, `'pago_proveedor'`) | ✅ Existe | Para gastos OPEX inmediatos es estrictamente `'gasto'` |
 | `amount` | `numeric` | NO | CHECK (`amount > 0`) | ✅ Existe | Monto positivo extraído en pesos colombianos |
-| `description` | `text` | NO | NOT NULL | ✅ Existe | Formato obligatorio: `[CATEGORIA] [CANAL:metodo_pago] Motivo` |
+| `description` | `text` | NO | NOT NULL | ✅ Existe | Texto limpio (`TRIM`, mínimo 3 caracteres); categoría y canal se almacenan en `category` y `payment_method` |
 | `sale_id` | `uuid` | SÍ | FK `sales(id)` | ✅ Existe | Nulo para egresos de gastos operativos |
 | `created_at` | `timestamptz` | NO | `now()` | ✅ Existe | Marca temporal del desembolso para auditoría |
 

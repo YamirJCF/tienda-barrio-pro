@@ -378,6 +378,7 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
 
     const wrapper = mountView();
     await flushPromises();
+    await flushPromises();
 
     expect(mockRpc).toHaveBeenCalledWith('rpc_obtener_gastos_turno', { p_session_id: 'sess-admin-1' });
     expect(wrapper.text()).toContain('Total Gastos OPEX del Turno');
@@ -394,7 +395,7 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     expect(wrapper.find('#expense-description-error').text()).toContain('al menos 3 caracteres');
     expect(mockRegisterExpense).not.toHaveBeenCalled();
 
-    // Llenar campos válidos y simular rechazo ADMIN_ONLY_ACTION desde servidor
+    // Llenar campos válidos y simular rechazo ADMIN_ONLY_ACTION desde servidor (sin doble alerta)
     const inputs = wrapper.findAll('[data-test="expense-create-modal"] input');
     await inputs[0].setValue('10000');
     await inputs[1].setValue('Pago internet');
@@ -406,6 +407,22 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     await flushPromises();
 
     expect(wrapper.find('[data-test="expense-submit-error"]').text()).toContain('Solo el Administrador');
+    expect(mockShowError).not.toHaveBeenCalled();
+  });
+
+  it('[C2-H2] en ?tab=expenses si syncFromBackend falla muestra sync-error-banner y NO "Caja Cerrada"', async () => {
+    authState.isAdmin = true;
+    mockRoute.query = { tab: 'expenses' };
+    mockSyncFromBackend.mockRejectedValueOnce(new Error('SYNC_FAILED_EXPENSES'));
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect(mockSyncFromBackend).toHaveBeenCalledWith('store-1', { throwOnError: true });
+    expect(wrapper.find('[data-test="sync-error-banner"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('SYNC_FAILED_EXPENSES');
+    expect(wrapper.find('[data-test="expenses-closed-banner"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Caja Cerrada');
   });
 
   it('[C2-H2] mutación en caja bloqueada en modo offline (checkConnectivity: true)', async () => {

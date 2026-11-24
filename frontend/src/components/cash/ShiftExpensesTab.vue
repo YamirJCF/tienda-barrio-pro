@@ -183,9 +183,8 @@ const handleSubmit = async () => {
         showSuccess('Gasto OPEX registrado correctamente');
         return true;
       } catch (err: any) {
-        const translated = translateExpenseError(err);
-        submitError.value = translated;
-        throw new Error(translated);
+        submitError.value = translateExpenseError(err);
+        return false;
       }
     },
     {
@@ -276,7 +275,7 @@ onMounted(() => {
         >
           <span class="flex items-center gap-1.5 text-xs font-bold">
             <Plus :size="16" />
-            + Registrar Gasto
+            Registrar Gasto
           </span>
         </BaseButton>
       </div>
@@ -291,7 +290,7 @@ onMounted(() => {
           Sin gastos OPEX en este turno
         </p>
         <p class="text-xs text-slate-500 mt-1">
-          Usa "+ Registrar Gasto" para asentar egresos operativos autorizados.
+          Usa "Registrar Gasto" para asentar egresos operativos autorizados.
         </p>
       </div>
 

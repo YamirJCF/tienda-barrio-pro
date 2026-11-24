@@ -67,8 +67,8 @@ const isReconcilingForced = ref(false);
 const forcedReconcileError = ref<string | null>(null);
 const showAuditModal = computed(() => authStore.isAdmin && pendingForcedSessions.value.length > 0);
 
-// Sync State (C2-H2: Fail-closed con skeleton y banner N3 Reintentar)
-const isLoadingWorkspace = ref(false);
+// Sync State (C2-H2: Fail-closed con skeleton desde frame 0 para no flashear ni montar tabs antes de sincronizar)
+const isLoadingWorkspace = ref(Boolean(authStore.canOpenCloseCash));
 const syncError = ref<string | null>(null);
 
 const fetchPendingForcedSessions = async () => {
@@ -455,37 +455,39 @@ const goBack = () => {
     </nav>
 
     <main class="flex-1 p-4 max-w-md mx-auto w-full flex flex-col gap-6">
-      <!-- TAB 1: TURNO / ARQUEO -->
-      <template v-if="activeTab === 'shift' && canOpenCloseCash">
-        <!-- Skeleton durante carga inicial (C2-H2: nunca flashear "Apertura de Caja") -->
-        <BaseListSkeleton v-if="isLoadingWorkspace" :count="3" type="card" data-test="workspace-loading-skeleton" />
+      <!-- TAB 3: MIS MOVIMIENTOS DEL TURNO (Arquetipo E — Independiente de syncWorkspace de Apertura/Cierre) -->
+      <OwnShiftMovementsTab v-if="activeTab === 'movements' || !canOpenCloseCash" />
 
-        <!-- Banner N3 Persistente de Error de Sincronización Inicial (Fail-Closed) -->
-        <div
-          v-else-if="syncError"
-          data-test="sync-error-banner"
-          class="bg-rose-50 dark:bg-rose-950/30 border border-rose-300 dark:border-rose-700 rounded-2xl p-4 space-y-3"
-        >
-          <div class="flex items-start gap-3">
-            <AlertTriangle :size="20" class="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-            <div>
-              <h3 class="text-sm font-bold text-rose-900 dark:text-rose-200">
-                No se pudo verificar el estado de la caja
-              </h3>
-              <p class="text-xs text-rose-800 dark:text-rose-300 mt-1 leading-relaxed">
-                {{ syncError }}
-              </p>
-            </div>
+      <!-- Skeleton durante carga inicial (C2-H2: protege tanto Turno como Gastos; nunca flashear Apertura/Caja Cerrada) -->
+      <BaseListSkeleton v-else-if="isLoadingWorkspace" :count="3" type="card" data-test="workspace-loading-skeleton" />
+
+      <!-- Banner N3 Persistente de Error de Sincronización Inicial (Fail-Closed para Turno y Gastos) -->
+      <div
+        v-else-if="syncError"
+        data-test="sync-error-banner"
+        class="bg-rose-50 dark:bg-rose-950/30 border border-rose-300 dark:border-rose-700 rounded-2xl p-4 space-y-3"
+      >
+        <div class="flex items-start gap-3">
+          <AlertTriangle :size="20" class="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+          <div>
+            <h3 class="text-sm font-bold text-rose-900 dark:text-rose-200">
+              No se pudo verificar el estado de la caja
+            </h3>
+            <p class="text-xs text-rose-800 dark:text-rose-300 mt-1 leading-relaxed">
+              {{ syncError }}
+            </p>
           </div>
-          <BaseButton size="sm" variant="outline" data-test="btn-retry-sync" @click="syncWorkspace">
-            <span class="flex items-center gap-1.5">
-              <RefreshCw :size="14" />
-              Reintentar
-            </span>
-          </BaseButton>
         </div>
+        <BaseButton size="sm" variant="outline" data-test="btn-retry-sync" @click="syncWorkspace">
+          <span class="flex items-center gap-1.5">
+            <RefreshCw :size="14" />
+            Reintentar
+          </span>
+        </BaseButton>
+      </div>
 
-        <template v-else>
+      <!-- TAB 1: TURNO / ARQUEO -->
+      <template v-else-if="activeTab === 'shift'">
           <!-- Error de Carga de Cierres Forzados (Anti-Fallo Silencioso) -->
           <div v-if="fetchForcedSessionsError" class="bg-rose-50 dark:bg-rose-900/30 border border-rose-400 dark:border-rose-600 rounded-2xl p-4 flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -629,7 +631,6 @@ const goBack = () => {
               {{ buttonText }}
             </div>
           </BaseButton>
-        </template>
       </template>
 
       <!-- TAB 2: GASTOS OPEX DEL TURNO (Estrictamente Admin) -->
@@ -638,9 +639,6 @@ const goBack = () => {
         :session-id="cashRegisterStore.currentSession?.id ?? null"
         :is-open="cashRegisterStore.isOpen"
       />
-
-      <!-- TAB 3: MIS MOVIMIENTOS DEL TURNO (Arquetipo E — Solo Lectura) -->
-      <OwnShiftMovementsTab v-else />
     </main>
 
     <!-- FRD-017 / FRD-027-02: Forced Close Audit Modal (Admin-only con conteo opcional) -->
