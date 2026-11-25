@@ -182,3 +182,23 @@ Mantiene Arquetipo `A` en `/pos` conservando `< 3` toques en Top Task #1 (`Cobra
 
 ### 4. Higiene de Crecimiento (Qué se consolida o elimina)
 Extrae `consumo_personal` fuera de `activeMethods` en `CheckoutModal.vue` hacia `PersonalWithdrawalModal.vue`, elimina el bug `:disabled="!canComplete && !isFiado"`, retira el falso bloqueo `"Sin Inventario"` ante errores de red o carga inicial en `POSView.vue`, suprime la multiplicación en plantilla de filas de ticket y mantiene `baselineDebt` en `ux-manifest.json` intacto con cero incremento.
+
+---
+
+## UX-ADR-008 — Consolidación de Rutas Duplicadas de Inteligencia y Auditoría en /reports
+- **Fecha:** 2026-11-25
+- **Estado:** Aprobado
+- **Contexto(s) / Rutas afectadas:** `C6` (`/reports?tab=dashboard|history`, aliases `/admin/financial-dashboard` y `/history`; retiro de rutas paralelas `financial-dashboard` e `history`)
+- **Aprobación:** `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (`WO-OLA2-C6-001`)
+
+### 1. Contexto y Objeto (ORCA)
+Consolida en `C6` los objetos de solo lectura `Resumen Financiero P&L` y `Registro Histórico 7 Dominios` dentro del Hogar Canónico único `/reports?tab=dashboard|history` (`ReportsHubView.vue`), manteniendo `/admin/financial-dashboard` y `/history` exclusivamente como aliases compatibles redirigidos a `/reports` y habilitando drill-down heterárquico hacia `C3` (`/inventory?productId=:id`) y `C4` (`/clients/:id` o `/clients?debt=with_debt`).
+
+### 2. Verdad Contable (Read Model / Invariante)
+Contexto de solo lectura sin mutaciones directas (salvo acción compensatoria auditada exclusiva Admin en `SaleDetailModal.vue`). Los rangos de fechas en `financial.ts` (`getDateRange`) se calculan en zona horaria `America/Bogota` evitando desfase UTC después de las 19:00 locales; se elimina el `.reduce()` residual `totalStagnantValue` en cliente (`user_global` §2.1 / `RVC` L56); `get_sale_detail` ejecuta `assert_store_access` sobre la tienda de la venta y expone `client_id` en la raíz e `items[].product_id`; y `financial.ts` / `AuditHistoryTab.vue` fallan cerrados ante modo offline con alerta `N3` explícita (Regla 3).
+
+### 3. Arquetipo, Señalización y Top Tasks
+Instancia Arquetipo `E` (`Inteligencia y Auditoría`) en `/reports` con montaje lazy `v-if` / `v-else` por pestaña para evitar la doble ráfaga simultánea de RPCs al montar `ReportsHubView.vue`. Migra las validaciones y errores de anulación en `SaleDetailModal.vue` a alertas `N1` inline (`voidError`) sin `showWarning` ni doble toast `showError`; aplica banners `N3` persistentes con botón **Reintentar** ante fallos de red o modo offline; retira emojis de KPIs, filtros y etiquetas de pago manteniendo íconos Lucide y `font-mono tabular-nums`; cero impacto en toques sobre las 5 Top Tasks.
+
+### 4. Higiene de Crecimiento (Qué se consolida o elimina)
+Elimina las 2 rutas duplicadas `financial-dashboard` (`/admin/financial-dashboard`) e `history` (`/history`), reduciendo el total de `26 → 24` rutas (23 permanentes + 1 `DEV`-only) y dejando `0` rutas en estado `duplicada` o `consolidar` en todo [`ux-manifest.json`](./ux-manifest.json). Reubica `FinancialDashboardView.vue` → `frontend/src/components/reports/FinancialDashboardTab.vue` y `HistoryView.vue` → `frontend/src/components/reports/AuditHistoryTab.vue` sin vistas huérfanas y retirando cabeceras `!isEmbedded` muertas.
