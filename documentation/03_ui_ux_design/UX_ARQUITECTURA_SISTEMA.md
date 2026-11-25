@@ -1,6 +1,6 @@
 # Arquitectura del Sistema UX — Tienda Barrio Pro
 
-> **Estado:** Vigente (`UX-ADR-002`)  
+> **Estado:** Vigente (`UX-ADR-003`)  
 > **Última actualización:** 2026-11-24  
 > **Fuente de verdad ejecutable:** [`ux-manifest.json`](./ux-manifest.json)  
 > **Bitácora de decisiones:** [`UX_ADR_LOG.md`](./UX_ADR_LOG.md)  

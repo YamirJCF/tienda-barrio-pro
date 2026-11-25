@@ -10,7 +10,7 @@ import StockEntryView from '../views/StockEntryView.vue';
 import StockOutputsView from '../views/StockOutputsView.vue';
 import POSView from '../views/POSView.vue';
 import RefundModal from '../components/sales/RefundModal.vue';
-import KardexModal from '../components/inventory/KardexModal.vue';
+import ProductKardexTab from '../components/inventory/ProductKardexTab.vue';
 import FinancialDashboardView from '../views/FinancialDashboardView.vue';
 import ProductFormModal from '../components/ProductFormModal.vue';
 
@@ -57,6 +57,7 @@ vi.mock('../composables/useNotifications', () => ({
     showSuccess: mockShowSuccess,
     showError: mockShowError,
     showWarning: mockShowWarning,
+    showInfo: vi.fn(),
     addNotification: vi.fn(),
   }),
 }));
@@ -350,7 +351,7 @@ describe('FASE 3 · OLA 5 — Inventario canManageInventory, Salidas $0, Reembol
     expect(mockShowSuccess).toHaveBeenCalled();
   });
 
-  it('CHK-510: KardexModal expone filtros de nuevos tipos, actor snapshot y botón contra-movimiento', async () => {
+  it('CHK-510: ProductKardexTab expone filtros de nuevos tipos, actor snapshot y botón contra-movimiento', async () => {
     const authStore = useAuthStore();
     setEmpSession(authStore, { canManageInventory: true }, 'Bodeguero', 'emp-inv');
 
@@ -382,9 +383,8 @@ describe('FASE 3 · OLA 5 — Inventario canManageInventory, Salidas $0, Reembol
       return { data: null, error: null };
     });
 
-    const wrapper = mount(KardexModal, {
-      props: { modelValue: true, productId: 'prod-1', productName: 'Jabón' },
-      global: { stubs: { teleport: true } },
+    const wrapper = mount(ProductKardexTab, {
+      props: { productId: 'prod-1' },
     });
     await flushPromises();
 

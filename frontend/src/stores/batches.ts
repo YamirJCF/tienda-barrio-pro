@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { getSupabaseClient } from '../data/supabaseClient';
 import { logger } from '../utils/logger';
 
@@ -12,12 +12,22 @@ export interface InventoryBatch {
     sale_price: number;
     is_active: boolean;
     created_at: string;
+    expiration_date?: string | null;
 }
 
 export const useBatchStore = defineStore('batches', () => {
     const batches = ref<InventoryBatch[]>([]);
     const isLoading = ref(false);
     const error = ref<string | null>(null);
+
+    /**
+     * Active batches (quantity_remaining > 0) ordered strictly by FIFO (created_at ASC)
+     */
+    const activeBatches = computed<InventoryBatch[]>(() =>
+        batches.value
+            .filter((b) => Number(b.quantity_remaining) > 0)
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    );
 
     /**
      * Fetch batches for a specific product, ordered by creation date (FIFO)
@@ -148,6 +158,7 @@ export const useBatchStore = defineStore('batches', () => {
 
     return {
         batches,
+        activeBatches,
         isLoading,
         error,
         fetchBatchesByProduct,
