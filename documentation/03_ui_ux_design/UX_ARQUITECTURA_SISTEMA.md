@@ -1,6 +1,6 @@
 # Arquitectura del Sistema UX — Tienda Barrio Pro
 
-> **Estado:** Vigente (`UX-ADR-008`)  
+> **Estado:** Vigente (`UX-ADR-009`)  
 > **Última actualización:** 2026-11-25  
 > **Fuente de verdad ejecutable:** [`ux-manifest.json`](./ux-manifest.json)  
 > **Bitácora de decisiones:** [`UX_ADR_LOG.md`](./UX_ADR_LOG.md)  
@@ -12,7 +12,7 @@
 
 Este documento es el **marco maestro único de Arquitectura de Interacción y Gobernanza UX** para **Tienda Barrio Pro**. Su objetivo es erradicar la fragmentación por tickets/FRDs aislados, alinear la interfaz al modelo **"Mostrador de Precisión con Autoridad en el Servidor"** ([`PRODUCT.md`](../../PRODUCT.md)) y garantizar que ningún agente ni desarrollador introduzca rutas improvisadas, flujos redundantes o fallos silenciosos.
 
-El marco rige el **100% de la aplicación**: las **24 rutas** declaradas en [`frontend/src/router/index.ts`](../../frontend/src/router/index.ts) (23 permanentes + 1 `DEV`-only), **1 subvista embebida** (`GatekeeperPending.vue` dentro de `LoginView.vue`), los **6 overlays globales** montados en [`frontend/src/App.vue`](../../frontend/src/App.vue) y cualquier módulo futuro (`C9+`).
+El marco rige el **100% de la aplicación**: las **24 rutas** declaradas en [`frontend/src/router/index.ts`](../../frontend/src/router/index.ts) (23 permanentes + 1 `DEV`-only), **1 subvista embebida** (`GatekeeperPending.vue` dentro de `LoginView.vue`), los **7 overlays globales** montados bajo árbitro de prioridad `N5` en [`frontend/src/App.vue`](../../frontend/src/App.vue) y cualquier módulo futuro (`C9+`).
 
 ---
 
@@ -74,7 +74,7 @@ Toda vista o modal operativo presente o futuro debe instanciar exactamente uno d
 ### Capa 4 — Shell Global, Navegación y Matriz de Señalización (`N1–N5`)
 
 #### 4.1 Leyes de Navegación del Shell
-1. **`BottomNav` (`frontend/src/components/BottomNav.vue`):** Reservado estrictamente para los 4–5 destinos de mayor frecuencia (*Top Tasks*), gobernado por la matriz cerrada de permisos de `SDD-003-01` (`canManageInventory`, `canFiar`, `isAdmin`) y conservando un retorno claro hacia Inicio (`/`).
+1. **`BottomNav` (`frontend/src/components/BottomNav.vue`):** Reservado estrictamente para los accesos frecuentes principales incluyendo `Inicio` (`["/", "/pos", "/inventory", "/reports", "/clients", "/admin"]`), gobernado por la matriz cerrada de permisos de `SDD-003-01` (`canManageInventory`, `canFiar`, `isAdmin`).
 2. **1 Vista = 1 Ruta Canónica:** Se prohíben rutas duplicadas para un mismo workspace (ej. `/history` y `/admin/financial-dashboard` frente a `/reports`). En Ola 2 se consolidan o redirigen limpiamente.
 3. **Heterarquía por enlaces contextuales:** Los contextos enlazan objetos relacionados preservando navegación de retorno real con fallback seguro.
 4. **Permisos como Fuente Única de Verdad:** La visibilidad en navegación, las guardias de [`frontend/src/router/index.ts`](../../frontend/src/router/index.ts) y los controles internos obedecen de forma sincronizada a `SDD-003-01` y Backend Authority.
@@ -89,18 +89,17 @@ Una superficie cumple un único trabajo; ningún flujo puede degradar errores cr
 | **N2 — Toast Efímero** | **1 solo motor unificado** (`frontend/src/components/ToastNotification.vue`) | Únicamente confirmación breve de éxito o información no crítica | Auto-cierre breve. **Prohibido** usar `vue-toastification` en código nuevo; prohibido para errores que requieran acción. |
 | **N3 — Banner de Estado Persistente** | Franja fija en Shell o vista | Estado sostenido del sistema/vista: modo offline, cola pendiente de sync, caja cerrada, fallo de carga con Reintentar | Permanece visible hasta resolverse; si permite descarte, debe reflejar estado real. |
 | **N4 — Bandeja Persistente (`/notifications`)** | `NotificationCenterView.vue` como Enrutador de Objetos | Eventos asíncronos o auditables por audiencia (`Admin` vs `Empleado`): stock bajo, cierres forzados, pases, alertas financieras | Toda notificación con `metadata` de entidad (`productId`, `clientId`, `sessionId`, etc.) debe enlazar al Hogar Canónico del objeto. |
-| **N5 — Compuerta / Modal Bloqueante** | Árbitro de overlays en `frontend/src/App.vue` (Arquetipo `F`) | Bloqueos de seguridad, integridad, sesión o cumplimiento legal | **Jerarquía estricta de prioridad:** `1. Error fatal / integridad` → `2. Sesión / Legal` → `3. Solicitud de Pase / PIN` → `4. Alerta Crítica Operativa`. **Cero `alert()`, `confirm()` o `prompt()` nativos.** |
+| **N5 — Compuerta / Modal Bloqueante** | Árbitro `activeN5Overlay` en `frontend/src/App.vue` (Arquetipo `F`) | Bloqueos de seguridad, integridad, sesión, cumplimiento legal o alertas críticas | **Jerarquía estricta de prioridad:** `1. fatal` → `2. legal` → `3. pin` → `4. access_request` → `5. critical_alert`. **Cero `alert()`, `confirm()` o `prompt()` nativos.** |
 
 #### 4.3 Overlays Globales Registrados en `frontend/src/App.vue`
-En orden exacto de montaje en `<template>` de [`frontend/src/App.vue`](../../frontend/src/App.vue):
+En orden exacto de montaje en `<template>` de [`frontend/src/App.vue`](../../frontend/src/App.vue) bajo el árbitro `activeN5Overlay`:
 1. `GlobalNetworkHandler`
 2. `OfflineBanner`
 3. `LegalComplianceGate`
 4. `GlobalAccessRequestModal`
 5. `PinUnlockModal`
-6. `ToastNotification`
-
-*(Nota técnica congelada en Ola 0: `CriticalAlertModal` permanece importado sin montar en `App.vue`; su destino definitivo se resuelve en Ola 2).*
+6. `CriticalAlertModal` *(conectado a `useCriticalAlerts` y gobernado por prioridad `5. critical_alert`, `UX-ADR-009`)*
+7. `ToastNotification`
 
 ---
 
@@ -185,5 +184,5 @@ Inventario extraído línea por línea de [`frontend/src/router/index.ts`](../..
 |---|---|---|---|
 | **Ola 0** *(actual)* | Gobernanza, fotografía real de 29+1 vistas, manifiesto y blindaje en 5 anillos | `UX_ARQUITECTURA_SISTEMA.md`, `UX_ADR_LOG.md`, `ux-manifest.json`, `ux-fitness.spec.ts`, hooks `.githooks/`, CI y reglas `.agent/` | Cero cambios a código productivo ni Auth/Regla 11 |
 | **Ola 1** | Cartografía completa de los 8 Contextos (`CONTEXTOS/C1..C8`) | 8 fichas con Matrices ORCA, Breadboards actual vs. objetivo, Matriz `N1–N5` por flujo y Hotspots Contables | Cero código nuevo hasta ver todo el mapa completo |
-| **Ola 2** | Consolidación en 3 bloques (`C3+C2`, `C5+C4+C1`, `C6+C7+Shell`) | Cerrar hotspots en `FRD/SDD/SQL`, consolidar rutas duplicadas, eliminar deuda de `baselineDebt` hasta dejarla en 0 | Un bloque por ciclo; ideas fuera de bloque van a Carril 3 |
+| **Ola 2** | Consolidación en 3 bloques (`C3+C2`, `C5+C4+C1`, `C6+C7+Shell`) | Cerrados hotspots en `FRD/SDD/SQL`, rutas duplicadas consolidadas (`UX-ADR-002..009`), árbitro `N5`, enrutador `N4` y `baselineDebt = 0` fuera de `C8` | Un bloque por ciclo; ideas fuera de bloque van a Carril 3 |
 | **Ola 3** | Crecimiento continuo (`C9+` o evoluciones) | Ciclo obligatorio `Triage → Event Storming → Gate UX-0 (Commit 1 ADR) → Implementación (Commit 2) → CI` | Prohibido saltarse el manifiesto o el verificador |
