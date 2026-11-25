@@ -11,13 +11,15 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
-const { formatCurrency } = useCurrencyFormat();
+const { formatWithSign } = useCurrencyFormat();
 
 function goToInventory() {
     router.push('/inventory');
 }
 
-const statusColor = computed(() => {
+type StatusThemeKey = 'red' | 'green' | 'emerald' | 'amber' | 'slate';
+
+const statusColor = computed<StatusThemeKey>(() => {
     if (!props.health) return 'slate';
     switch (props.health.estado) {
         case 'riesgo': return 'red';
@@ -27,6 +29,22 @@ const statusColor = computed(() => {
         default: return 'slate';
     }
 });
+
+const labelColorMap: Record<StatusThemeKey, string> = {
+    red: 'text-red-600 dark:text-red-400',
+    green: 'text-green-600 dark:text-green-400',
+    emerald: 'text-emerald-600 dark:text-emerald-400',
+    amber: 'text-amber-600 dark:text-amber-400',
+    slate: 'text-slate-600 dark:text-slate-400',
+};
+
+const metricColorMap: Record<StatusThemeKey, string> = {
+    red: 'text-red-700 dark:text-red-300',
+    green: 'text-green-700 dark:text-green-300',
+    emerald: 'text-emerald-700 dark:text-emerald-300',
+    amber: 'text-amber-700 dark:text-amber-300',
+    slate: 'text-slate-700 dark:text-slate-300',
+};
 
 const statusLabel = computed(() => {
     if (!props.health) return 'Desconocido';
@@ -68,8 +86,9 @@ const hasCriticalItems = computed(() => {
     <!-- Active Widget -->
     <button
         v-else
+        type="button"
         @click="goToInventory"
-        class="w-full text-left bg-white dark:bg-slate-800 p-5 rounded-2xl border transition-all active:scale-[0.98] shadow-sm hover:border-slate-300 dark:hover:border-slate-600 group"
+        class="w-full text-left bg-white dark:bg-slate-800 p-5 rounded-2xl border transition-all active:scale-[0.98] shadow-sm hover:border-slate-300 dark:hover:border-slate-600 group cursor-pointer"
         :class="{
             'border-red-200 dark:border-red-900/40': statusColor === 'red',
             'border-green-200 dark:border-green-900/40': statusColor === 'green' || statusColor === 'emerald',
@@ -95,7 +114,7 @@ const hasCriticalItems = computed(() => {
                 <div>
                     <h3 class="font-bold text-slate-900 dark:text-white leading-tight">Salud de Inventario</h3>
                     <p class="text-[10px] font-semibold uppercase tracking-wider mt-0.5"
-                        :class="`text-${statusColor}-600 dark:text-${statusColor}-400`">
+                        :class="labelColorMap[statusColor]">
                         {{ statusLabel }}
                     </p>
                 </div>
@@ -104,17 +123,17 @@ const hasCriticalItems = computed(() => {
         </div>
 
         <div class="mb-5">
-            <p class="text-3xl font-black tracking-tight" :class="`text-${statusColor}-700 dark:text-${statusColor}-300`">
-                {{ health.dias_inventario }} <span class="text-lg font-medium text-slate-500 dark:text-slate-400 tracking-normal ml-1">días restan</span>
+            <p class="text-3xl font-black font-mono tabular-nums tracking-tight" :class="metricColorMap[statusColor]">
+                {{ health.dias_inventario }} <span class="text-lg font-sans font-medium text-slate-500 dark:text-slate-400 tracking-normal ml-1">días restan</span>
             </p>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Stock valorado en <span class="font-bold text-slate-700 dark:text-slate-300">${{ formatCurrency(health.valor_total) }}</span>
+                Stock valorado en <span class="font-bold font-mono tabular-nums text-slate-700 dark:text-slate-300">{{ formatWithSign(health.valor_total) }}</span>
             </p>
         </div>
 
         <!-- Distribution bar -->
         <div class="space-y-2">
-            <div class="flex justify-between text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+            <div class="flex justify-between text-[10px] font-semibold text-slate-400 uppercase tracking-wide font-mono tabular-nums">
                 <span>Rápida: {{ health.distribucion_rotacion.rapida.porcentaje }}%</span>
                 <span>Normal: {{ health.distribucion_rotacion.normal.porcentaje }}%</span>
                 <span>Lenta: {{ health.distribucion_rotacion.lenta.porcentaje }}%</span>
@@ -126,9 +145,9 @@ const hasCriticalItems = computed(() => {
                 <div class="bg-amber-500 transition-all duration-500" :style="{ width: `${health.distribucion_rotacion.lenta.porcentaje}%` }"></div>
             </div>
             
-            <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400 mt-1 font-mono tabular-nums">
                 <span>{{ health.distribucion_rotacion.rapida.count }} prods</span>
-                <span v-if="hasCriticalItems" class="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap">
+                <span v-if="hasCriticalItems" class="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap font-sans">
                     <AlertTriangle :size="12" />
                     {{ health.distribucion_rotacion.lenta.count }} estancados
                 </span>

@@ -16,6 +16,7 @@ const { mockPush, mockShowSuccess, mockShowError } = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush }),
+  useRoute: () => ({ query: {} }),
 }));
 
 vi.mock('@/composables/useNotifications', () => ({

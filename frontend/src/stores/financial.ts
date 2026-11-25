@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { getSupabaseClient } from '../data/supabaseClient';
 import { useAuthStore } from './auth';
 
@@ -127,19 +127,27 @@ export const useFinancialStore = defineStore('financial', () => {
 
     // --- Helpers ---
 
+    function toBogotaDateStr(date: Date): string {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Bogota',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(date);
+    }
+
     function getDateRange(period: PeriodType): { start: string; end: string } {
-        const today = new Date();
-        const end = today.toISOString().split('T')[0]; // YYYY-MM-DD
+        const now = new Date();
+        const end = toBogotaDateStr(now); // YYYY-MM-DD en America/Bogota (RVC L50)
 
         switch (period) {
             case 'week': {
-                const weekAgo = new Date(today);
-                weekAgo.setDate(today.getDate() - 6); // Include today = 7 days
-                return { start: weekAgo.toISOString().split('T')[0], end };
+                const weekAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000); // Incluye hoy = 7 días
+                return { start: toBogotaDateStr(weekAgo), end };
             }
             case 'month': {
-                const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-                return { start: monthStart.toISOString().split('T')[0], end };
+                const [year, month] = end.split('-');
+                return { start: `${year}-${month}-01`, end };
             }
             default: // 'today'
                 return { start: end, end };
@@ -184,8 +192,13 @@ export const useFinancialStore = defineStore('financial', () => {
             error.value = 'Acceso restringido: solo administradores pueden consultar el panel financiero.';
             return;
         }
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            error.value = 'Sin conexión a internet. El Centro de Inteligencia requiere conexión en línea.';
+            return;
+        }
         if (isLoadingSnapshots.value) return;
         isLoadingSnapshots.value = true;
+        error.value = null;
         try {
             const results = await Promise.allSettled([
                 fetchInventoryHealth(),
@@ -242,6 +255,13 @@ export const useFinancialStore = defineStore('financial', () => {
             topProductsByUnits.value = [];
             return;
         }
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            activePeriod.value = period;
+            error.value = 'Sin conexión a internet. El Centro de Inteligencia requiere conexión en línea.';
+            summary.value = null;
+            topProductsByUnits.value = [];
+            return;
+        }
         if (isLoadingTimeSeries.value) return;
         activePeriod.value = period;
         isLoadingTimeSeries.value = true;
@@ -274,11 +294,6 @@ export const useFinancialStore = defineStore('financial', () => {
         }
     };
 
-    // --- Computed ---
-    const totalStagnantValue = computed(() =>
-        stagnantProducts.value.reduce((sum, p) => sum + Number(p.stock_value ?? 0), 0)
-    );
-
     return {
         // State Arrays/Objects
         inventoryHealth,
@@ -293,12 +308,10 @@ export const useFinancialStore = defineStore('financial', () => {
         error,
         activePeriod,
 
-        // Computed
-        totalStagnantValue,
-
         // Orquestadores de Negocio
         loadSnapshots,
         fetchFinancialReport,
         setPeriod,
+        getDateRange,
     };
 });

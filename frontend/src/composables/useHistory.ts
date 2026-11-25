@@ -311,6 +311,13 @@ export function useHistory() {
         // Clear search when switching type/period
         searchQuery.value = '';
 
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            isLoading.value = false;
+            items.value = [];
+            error.value = 'Sin conexión a internet. El historial de auditoría requiere conexión en línea.';
+            return;
+        }
+
         isLoading.value = true;
         error.value = null;
         items.value = [];

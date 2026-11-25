@@ -1,8 +1,8 @@
 # Contexto C6 — Inteligencia y Auditoría (Solo Lectura)
 
-> **Estado:** Cartografía Ola 1 (`Lote 1C` — solo documentación)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-001`)  
-> **Restricción de conectividad y rol:** **Online obligatorio** y **100% exclusivo para `Admin`** (`isAdmin`, [`router/index.ts`](../../../frontend/src/router/index.ts#L342-L354)).
+> **Estado:** Consolidado Ola 2 (`UX-ADR-008` — 2026-11-25)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-008`)  
+> **Restricción de conectividad y rol:** **Online obligatorio** y **100% exclusivo para `Admin`** (`isAdmin`, [`router/index.ts`](../../../frontend/src/router/index.ts#L316-L318)).
 
 ---
 
@@ -13,11 +13,9 @@ Proveer visibilidad gerencial y auditoría inmutable de solo lectura: rentabilid
 
 ### 1.2 Rutas Actuales vs. Objetivo Canónico
 
-| Ruta | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Destino Objetivo (Ola 2) |
+| Ruta *(Aliases)* | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Consolidación Aplicada (`UX-ADR-008`) |
 |---|---|---|---|---|
-| `/reports` | [`ReportsHubView.vue`](../../../frontend/src/views/ReportsHubView.vue) | `canonica` | `E` (Inteligencia) | **Único Hogar Canónico** del contexto con `?tab=dashboard \| history`. |
-| `/admin/financial-dashboard` | [`FinancialDashboardView.vue`](../../../frontend/src/views/FinancialDashboardView.vue) | `duplicada` | `E` | **Retirar / redirigir** a `/reports?tab=dashboard` en Ola 2 (`1 Vista = 1 Ruta`). |
-| `/history` | [`HistoryView.vue`](../../../frontend/src/views/HistoryView.vue) | `duplicada` | `E` | **Retirar / redirigir** a `/reports?tab=history` en Ola 2. |
+| `/reports` *(aliases `/admin/financial-dashboard`, `/history`)* | [`ReportsHubView.vue`](../../../frontend/src/views/ReportsHubView.vue) | `canonica` | `E` (Inteligencia) | **Único Hogar Canónico** con montaje lazy `v-if` / `v-else` en `?tab=dashboard \| history`. Rutas duplicadas retiradas; [`FinancialDashboardTab.vue`](../../../frontend/src/components/reports/FinancialDashboardTab.vue) y [`AuditHistoryTab.vue`](../../../frontend/src/components/reports/AuditHistoryTab.vue) viven como subcomponentes de pestaña. |
 
 ### 1.3 Matriz de Permisos (`SDD-003-01`)
 
@@ -101,10 +99,10 @@ Registro Histórico / Evidencia [7 Dominios] (Solo Lectura)
 
 ---
 
-## §5. Hotspots Contables y de Dominio Verificados para Ola 2 (`FRD/SDD/SQL` antes de UI)
+## §5. Hotspots Contables y de Dominio Verificados en Ola 2 (`FRD/SDD/SQL` + UI)
 
-| ID | Severidad | Evidencia Verificada en Código | Brecha Arquitectónica / UX | Acción Requerida en Ola 2 |
+| ID | Severidad | Evidencia Verificada en Código | Brecha Arquitectónica / UX | Estado en Ola 2 (`UX-ADR-008`) |
 |---|---|---|---|---|
-| **C6-H1** | 🟠 **ALTO** | [`router/index.ts`](../../../frontend/src/router/index.ts#L86-L90) y L165-169; [`ReportsHubView.vue`](../../../frontend/src/views/ReportsHubView.vue#L90-L95) | Coexisten las rutas duplicadas `/admin/financial-dashboard` y `/history` junto a `/reports`; además `ReportsHubView.vue` usa `v-show` montando ambas subvistas simultáneamente desde el primer render. | Retirar/redirigir rutas duplicadas a `/reports?tab=...` (con su `UX-ADR`) y cambiar `v-show` por carga lazy `v-if` en `ReportsHubView.vue`. |
-| **C6-H2** | 🟡 **MEDIO** | [`FinancialDashboardView.vue`](../../../frontend/src/views/FinancialDashboardView.vue#L40); [`ReportsHubView.vue`](../../../frontend/src/views/ReportsHubView.vue#L21) | Retornos inconsistentes (`FinancialDashboardView.vue` regresa a `/admin` vs `ReportsHubView.vue` a `/`) y modales forenses en `HistoryView.vue` sin enlaces contextuales hacia `C3` (`/inventory`) o `C4` (`/clients/:id`). | Unificar retorno contextual (`router.back()` con fallback seguro) y añadir enlaces heterárquicos en el detalle forense. |
-| **C6-H3** | 🟡 **MEDIO** | [`FinancialDashboardView.vue`](../../../frontend/src/views/FinancialDashboardView.vue#L64) (L64, L142, L155-196); [`HistoryView.vue`](../../../frontend/src/views/HistoryView.vue#L69-L75) | Emojis visibles en UI (`📊`, `📈`, `⚠️` en `FinancialDashboardView.vue`; 7 emojis en `domainOptions` de `HistoryView.vue` L69-75); KPIs sin `font-mono tabular-nums` y posible doble `$` (`$ {{ formatCurrency(...) }}`, L155-195). | Reemplazar emojis por íconos Lucide, aplicar `font-mono tabular-nums` y corregir formato monetario único con `formatCurrency`. |
+| **C6-H1** | 🟠 **ALTO** | [`router/index.ts`](../../../frontend/src/router/index.ts); [`ReportsHubView.vue`](../../../frontend/src/views/ReportsHubView.vue) | Coexistían rutas duplicadas `/admin/financial-dashboard` y `/history` junto a `/reports` y `v-show` montaba ambas pestañas al abrir. | ✅ **Cerrado (`UX-ADR-008`):** Rutas duplicadas convertidas en aliases de `/reports`, vistas reubicadas en `components/reports/` (`FinancialDashboardTab.vue`, `AuditHistoryTab.vue`) y montaje lazy `v-if` / `v-else` con normalización de alias. |
+| **C6-H2** | 🟡 **MEDIO** | [`ReportsHubView.vue`](../../../frontend/src/views/ReportsHubView.vue); [`SaleDetailModal.vue`](../../../frontend/src/components/history/SaleDetailModal.vue); [`20261125100000_ola2_c6_sale_detail_entity_links.sql`](../../../supabase/migrations/20261125100000_ola2_c6_sale_detail_entity_links.sql) | Retornos inconsistentes y modales/widgets sin enlaces heterárquicos hacia `C3` o `C4`. | ✅ **Cerrado (`UX-ADR-008`):** Retorno unificado (`?from=admin`), `get_sale_detail` expone `client_id` y `items[].product_id`, enlaces directos hacia `/clients/:id`, `/clients?debt=with_debt` e `/inventory?productId=:id`, y `voidError` `N1` inline sin doble toast. |
+| **C6-H3** | 🟡 **MEDIO** | [`FinancialDashboardTab.vue`](../../../frontend/src/components/reports/FinancialDashboardTab.vue); [`AuditHistoryTab.vue`](../../../frontend/src/components/reports/AuditHistoryTab.vue); [`financial.ts`](../../../frontend/src/stores/financial.ts) | Emojis en KPIs/filtros, clases dinámicas rotas en `InventoryHealthWidget`, posible doble `$`, zona horaria UTC y `.reduce()` en `totalStagnantValue`. | ✅ **Cerrado (`UX-ADR-008`):** Emojis reemplazados por Lucide, `font-mono tabular-nums` + `formatWithSign`, mapa estático en `InventoryHealthWidget`, fechas `America/Bogota`, `.reduce()` eliminado y bloqueo `N3` offline fail-closed. |

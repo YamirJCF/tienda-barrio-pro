@@ -65,7 +65,7 @@ const iconComponent = computed(() => {
         <!-- Amount (if exists) -->
         <span
           v-if="item.amountFormatted"
-          class="shrink-0 font-bold text-slate-900 dark:text-emerald-400 ml-2"
+          class="shrink-0 font-bold font-mono tabular-nums text-slate-900 dark:text-emerald-400 ml-2"
           :class="{ 'text-red-600 dark:text-red-400': item.type === 'expenses' }"
         >
           {{ item.type === 'expenses' ? '-' : '' }}{{ item.amountFormatted }}
