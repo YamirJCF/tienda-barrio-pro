@@ -1,7 +1,7 @@
 # Contexto C5 — Abastecimiento (Proveedores & CxP)
 
-> **Estado:** Cartografía Ola 1 (`Lote 1B` — solo documentación)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-001`)  
+> **Estado:** Consolidado en Ola 2 (`UX-ADR-005`, `WO-OLA2-C5-001`)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-005`)  
 > **Restricción de conectividad:** **Online obligatorio** para todas las operaciones ([`PRODUCT.md`](../../../PRODUCT.md#L38)).  
 > **Regla de dominio (`FRD-003-ILC`):** Independencia logística-contable respecto a `C3` — una recepción de mercancía en `/stock-entry` puede vincular proveedor sin forzar pago inmediato, y una factura CxP puede abonarse desde un canal de caja o mediante pago externo (`$0` en caja).
 
@@ -14,10 +14,9 @@ Centralizar el directorio de proveedores, la frecuencia de visitas/entrega, el r
 
 ### 1.2 Rutas Actuales vs. Objetivo Canónico
 
-| Ruta | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Destino Objetivo (Ola 2) |
+| Ruta | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Estado Consolidado (`UX-ADR-005`) |
 |---|---|---|---|---|
-| `/suppliers` | [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue) | `canonica` | `B` (Workspace Objeto) | **Se mantiene única ruta canónica:** Workspace **Proveedores & CxP** con **2 pestañas** (`Cuentas por Pagar \| Proveedores`). |
-| `/payables` | [`PayablesView.vue`](../../../frontend/src/views/PayablesView.vue) | `consolidar` | `B` (Workspace Lista) | **Consolidar en `/suppliers?tab=payables`** (redirección limpia en Ola 2 sin romper enlaces históricos). |
+| `/suppliers` *(alias `/payables`)* | [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue) | `canonica` | `B/D` (Workspace + Hoja Transaccional) | **Única ruta canónica:** Workspace **Proveedores y Cuentas por Pagar** con 2 pestañas (`?tab=suppliers\|payables`), KPIs/FK en servidor y `/payables` como alias compatible. `PayablesView.vue` eliminada. |
 
 ### 1.3 Matriz de Permisos (`SDD-003-01`)
 

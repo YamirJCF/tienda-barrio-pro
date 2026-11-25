@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "adrVersion": "UX-ADR-004",
+  "adrVersion": "UX-ADR-005",
   "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
   "bottomNavRoutes": [
     "/pos",
@@ -94,20 +94,12 @@
     {
       "name": "suppliers",
       "path": "/suppliers",
+      "aliases": ["/payables"],
       "view": "frontend/src/views/SuppliersView.vue",
       "context": "C5",
-      "archetype": "B",
+      "archetype": "B/D",
       "guard": "isAdmin",
       "status": "canonica"
-    },
-    {
-      "name": "payables",
-      "path": "/payables",
-      "view": "frontend/src/views/PayablesView.vue",
-      "context": "C5",
-      "archetype": "B",
-      "guard": "isAdmin",
-      "status": "consolidar"
     },
     {
       "name": "reports",
@@ -277,11 +269,9 @@
   "baselineDebt": {
     "nativeDialogsAllowed": [
       "frontend/src/App.vue",
-      "frontend/src/components/common/ConflictResolver.vue",
-      "frontend/src/views/SuppliersView.vue"
+      "frontend/src/components/common/ConflictResolver.vue"
     ],
     "legacyToastImportsAllowed": [
-      "frontend/src/components/suppliers/PayInvoiceModal.vue",
       "frontend/src/composables/useSessionGuard.ts",
       "frontend/src/main.ts",
       "frontend/src/views/CheckEmailView.vue",
