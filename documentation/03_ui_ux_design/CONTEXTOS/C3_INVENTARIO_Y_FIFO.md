@@ -1,7 +1,7 @@
 # Contexto C3 — Catálogo e Inventario (Stock & FIFO)
 
-> **Estado:** Ola 2 Parte 1 (`UX-ADR-003` — SQL FIFO atómico, Ficha Unificada en `/inventory`, `/stock-entry` atómico y retiro de `vue-toastification` en C3; `/inventory-count` y absorción final de `/stock-outputs` diferidos a Parte 2 `PR 2.1B-2`)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-003`)  
+> **Estado:** Ola 2 Consolidado al 100% (`UX-ADR-004` — Alta de `/inventory-count` con Compuerta de Caja Cerrada y retiro definitivo de `/stock-outputs`; cierre de `C3-H1..H4`)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-004`)  
 > **Restricción de conectividad:** **Online obligatorio** en todas las mutaciones de inventario ([`PRODUCT.md`](../../../PRODUCT.md#L38), [`productRepository.ts`](../../../frontend/src/data/repositories/productRepository.ts#L757-L760)).
 
 ---
@@ -17,7 +17,7 @@ Administrar el ciclo completo del catálogo de productos, las capas de lotes FIF
 |---|---|---|---|---|
 | `/inventory` | [`InventoryView.vue`](../../../frontend/src/views/InventoryView.vue) | `canonica` | `B` (Workspace de Objeto) | **Se mantiene canónica:** Lista buscable → Ficha/Workspace de Producto con **3 pestañas** (`Catálogo \| Lotes FIFO \| Kardex`). |
 | `/stock-entry` | [`StockEntryView.vue`](../../../frontend/src/views/StockEntryView.vue) | `canonica` | `C` (Operación Masiva) | **Se mantiene canónica:** Lienzo Bulk exclusivo para recepción de compras (`N` productos por factura). |
-| `/stock-outputs` | [`StockOutputsView.vue`](../../../frontend/src/views/StockOutputsView.vue) | `consolidar` | `D` (Hoja Transaccional) | **Se absorbe en Arquetipo `D`:** Hoja Transaccional de Movimiento por Lote invocable desde la pestaña `Lotes FIFO` de la Ficha Producto (y acceso rápido de mostrador para empleados). |
+| `/inventory-count` | [`InventoryCountView.vue`](../../../frontend/src/views/InventoryCountView.vue) | `canonica` | `C` *(precedido por Compuerta `F`)* | **Consolidado (`UX-ADR-004`):** Conteo físico de estantería masivo con caja cerrada, borrador local y cálculo de delta en servidor; reemplaza y retira `/stock-outputs` (`StockOutputsView.vue`). |
 
 ### 1.3 Matriz de Permisos (`SDD-003-01`)
 
@@ -27,7 +27,7 @@ Administrar el ciclo completo del catálogo de productos, las capas de lotes FIF
 | Crear / editar / eliminar producto | ✅ | ✅ | ❌ | Controlado en router y vista. |
 | Entrada masiva de compras (`/stock-entry`) | ✅ | ✅ | ❌ | Requiere `canManageInventory` (`router/index.ts` L362). |
 | Editar `sale_price` o `cost_unit` de lote FIFO | ✅ | ✅ | ❌ | `ProductBatchesTab.vue` (`canManageInventory`). |
-| Registrar `devolucion_proveedor` o `ajuste_conteo` | ✅ | ✅ | ❌ | Control interno `hasFullInventoryAccess` (`StockOutputsView.vue` L248). |
+| Registrar `devolucion_proveedor`, `merma`, `consumo_negocio` o `ajuste_conteo` | ✅ | ✅ | ❌ | Control en `router/index.ts`, Ficha Producto y RPCs `canManageInventory`. |
 | **Permiso único C3 (`UX-ADR-003`)** | ✅ | ✅ | ❌ | Todas las operaciones C3 (catálogo, lotes, entradas masivas, mermas/salidas y ajustes) exigen `canManageInventory` o `Admin`. |
 
 ---
@@ -55,7 +55,8 @@ Producto (1) ──< Lote FIFO (N)
 | **Eliminar (Soft Delete) `Producto`** | `Admin`, `canManageInventory` | Online | Botón Trash en tarjeta `InventoryView.vue` (L350-354) | Ficha Producto → Tab **Catálogo** (zona peligrosa con `BaseModal`) |
 | **Ver y Editar Precio/Costo de `Lote FIFO`** | `Admin`, `canManageInventory` | Online | Duplicado en `ProductFormModal.vue` (L650-704) **y** `BatchHistoryModal.vue` (L59-122) | Ficha Producto → Tab **Lotes FIFO** *(único hogar)* |
 | **Registrar `Entrada Masiva`** | `Admin`, `canManageInventory` | Online | `StockEntryView.vue` | `/stock-entry` (Arquetipo `C`) |
-| **Registrar `Merma` / `Consumo` / `Devolución` / `Ajuste`** | `Admin`, `canManageInventory` | Online | `StockOutputsView.vue` (sin selector de lote) | **Hoja Transaccional de Movimiento por Lote (`Arquetipo D`)** desde Tab **Lotes FIFO** |
+| **Registrar `Merma` / `Consumo` / `Devolución`** | `Admin`, `canManageInventory` | Online | Tab **Lotes FIFO** en `/inventory` | **Hoja Transaccional de Movimiento por Lote (`Arquetipo D`)** desde Tab **Lotes FIFO** (`p_batch_id`) |
+| **Aplicar `Inventariado Físico` masivo** | `Admin`, `canManageInventory` | Online + Caja Cerrada | Fragmentado (`StockOutputsView.vue`) | **`/inventory-count` (`InventoryCountView.vue`, Arquetipo `C` + Compuerta `F`)** |
 | **Auditar `Movimiento Kardex`** | `Admin`, `canManageInventory` | Online | `KardexModal.vue` | Ficha Producto → Tab **Kardex** *(solo lectura + contra-movimiento compensatorio)* |
 
 ### 2.3 Densidad de Atributos (Lista vs. Ficha)

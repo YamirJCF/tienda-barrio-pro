@@ -79,10 +79,10 @@
 
           <button
             type="button"
-            @click="router.push('/stock-outputs')"
+            @click="router.push('/inventory-count')"
             class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-background-light dark:bg-background-dark text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors shrink-0 cursor-pointer"
           >
-            ¿Mermas, consumos o conteo? Ir a Salidas ($0) →
+            ¿Conteo físico de estantería? Ir a Inventariado →
           </button>
         </section>
 

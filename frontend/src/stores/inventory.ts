@@ -653,6 +653,30 @@ export const useInventoryStore = defineStore(
       return result;
     };
 
+    const applyPhysicalInventoryCount = async (params: {
+      items: Array<{
+        productId: string;
+        countedQuantity: number;
+        batchId?: string | null;
+      }>;
+      notes?: string | null;
+    }) => {
+      const authStore = useAuthStore();
+      const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+      if (!storeId) {
+        throw new Error('STORE_NOT_FOUND: No hay tienda activa para aplicar el inventariado.');
+      }
+
+      const result = await productRepository.applyPhysicalInventoryCount({
+        storeId,
+        items: params.items,
+        notes: params.notes ?? null,
+      });
+
+      await fetchProducts(storeId);
+      return result;
+    };
+
     const registerCounterMovement = async (
       productId: string,
       originalMovementId: string,
@@ -687,6 +711,7 @@ export const useInventoryStore = defineStore(
       searchProducts,
       registerStockMovement,
       registerBulkStockEntry,
+      applyPhysicalInventoryCount,
       registerLogisticExit,
       registerCounterMovement,
       adjustStockLocal,

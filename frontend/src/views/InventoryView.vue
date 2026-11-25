@@ -22,6 +22,7 @@ import {
   Archive,
   EyeOff,
   ChevronRight,
+  ClipboardCheck,
 } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -202,6 +203,17 @@ const handleProductSaved = (product: { id: string }, action: 'create' | 'update'
           :options="sortOptions"
           prefix-label="Orden"
         />
+
+        <button
+          v-if="canManageInventory"
+          type="button"
+          @click="router.push('/inventory-count')"
+          data-testid="inventory-count-link-btn"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:border-emerald-400 transition-all cursor-pointer active:scale-95"
+        >
+          <ClipboardCheck :size="13" />
+          <span>Inventariado</span>
+        </button>
 
         <button
           v-if="isAdmin"

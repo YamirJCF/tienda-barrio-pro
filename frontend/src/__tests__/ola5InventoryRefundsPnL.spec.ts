@@ -7,7 +7,7 @@ import { useInventoryStore } from '../stores/inventory';
 import { useFinancialStore } from '../stores/financial';
 import { productRepository } from '../data/repositories/productRepository';
 import StockEntryView from '../views/StockEntryView.vue';
-import StockOutputsView from '../views/StockOutputsView.vue';
+import DashboardView from '../views/DashboardView.vue';
 import POSView from '../views/POSView.vue';
 import RefundModal from '../components/sales/RefundModal.vue';
 import ProductKardexTab from '../components/inventory/ProductKardexTab.vue';
@@ -131,8 +131,12 @@ describe('FASE 3 · OLA 5 — Inventario canManageInventory, Salidas $0, Reembol
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: { cost_unit: 1000 }, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       then: (cb: any) => cb({ data: [], error: null }),
     });
   });
@@ -183,42 +187,30 @@ describe('FASE 3 · OLA 5 — Inventario canManageInventory, Salidas $0, Reembol
     expect(resTooLow.success).toBe(false);
   });
 
-  it('CHK-503 & CHK-504: StockOutputsView permite Merma/Consumo Negocio a empleado básico SIN mostrar costos y bloquea Conteo/Dev. Proveedor', async () => {
+  it('CHK-503 & CHK-504 (Enmienda UX-ADR-004): DashboardView oculta Inventariado Físico sin canManageInventory y lo habilita cuando tiene permiso', async () => {
     const authStore = useAuthStore();
     setEmpSession(authStore, { canManageInventory: false }, 'Cajero Estándar', 'emp-basic');
 
-    mockRpc.mockResolvedValue({
-      data: {
-        success: true,
-        data: {
-          movement_id: 'mov-out-1',
-          product_id: 'prod-1',
-          movement_type: 'merma',
-          quantity: 1,
-          new_stock: 9,
-          unit_cost: null,
-          actor_name: 'Cajero Estándar',
-          actor_role: 'employee',
-          created_at: new Date().toISOString(),
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          BottomNav: true,
+          UserProfileSidebar: true,
+          SyncIndicator: true,
         },
       },
-      error: null,
     });
-
-    const wrapper = mount(StockOutputsView);
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Merma / Daño');
-    expect(wrapper.text()).toContain('Consumo del Negocio');
-    expect(wrapper.text()).not.toContain('Ajuste por Conteo (+/-)');
-    expect(wrapper.text()).not.toContain('Devolución a Proveedor ($0)');
+    expect(wrapper.find('[data-testid="dashboard-inventory-count-btn"]').exists()).toBe(false);
 
-    // Ahora empleado con canManageInventory sí ve las 4 modalidades
+    // Ahora empleado con canManageInventory sí ve acceso a Inventariado Físico (/inventory-count)
     setEmpSession(authStore, { canManageInventory: true }, 'Bodeguero', 'emp-inv');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Ajuste por Conteo (+/-)');
-    expect(wrapper.text()).toContain('Devolución a Proveedor ($0)');
+    const btn = wrapper.find('[data-testid="dashboard-inventory-count-btn"]');
+    expect(btn.exists()).toBe(true);
+    expect(btn.text()).toContain('Inventariado Físico');
   });
 
   it('CHK-505 & CHK-506: StockEntryView solo admite Compra/Reposición sin CxP y ProductFormModal habilita Costo para canManageInventory', async () => {

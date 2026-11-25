@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "adrVersion": "UX-ADR-003",
+  "adrVersion": "UX-ADR-004",
   "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
   "bottomNavRoutes": [
     "/pos",
@@ -65,13 +65,13 @@
       "status": "canonica"
     },
     {
-      "name": "stock-outputs",
-      "path": "/stock-outputs",
-      "view": "frontend/src/views/StockOutputsView.vue",
+      "name": "inventory-count",
+      "path": "/inventory-count",
+      "view": "frontend/src/views/InventoryCountView.vue",
       "context": "C3",
-      "archetype": "D",
-      "guard": "requiresAuth",
-      "status": "consolidar"
+      "archetype": "C",
+      "guard": "canManageInventory",
+      "status": "canonica"
     },
     {
       "name": "clients",

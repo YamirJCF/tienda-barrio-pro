@@ -125,9 +125,9 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/stock-outputs',
-    name: 'stock-outputs',
-    component: () => import('../views/StockOutputsView.vue'),
+    path: '/inventory-count',
+    name: 'inventory-count',
+    component: () => import('../views/InventoryCountView.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -341,8 +341,8 @@ router.beforeEach(async (to, from, next) => {
     return next({ name: 'dashboard' });
   }
 
-  // 3b. Inventory & Stock Entry: Requires canManageInventory (or Admin)
-  if ((to.name === 'inventory' || to.name === 'stock-entry') && !authStore.canManageInventory) {
+  // 3b. Inventory, Stock Entry & Inventory Count: Requires canManageInventory (or Admin)
+  if ((to.name === 'inventory' || to.name === 'stock-entry' || to.name === 'inventory-count') && !authStore.canManageInventory) {
     return next({ name: 'dashboard' });
   }
 

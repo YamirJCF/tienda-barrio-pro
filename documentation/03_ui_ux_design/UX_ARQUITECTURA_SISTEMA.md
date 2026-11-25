@@ -1,7 +1,7 @@
 # Arquitectura del Sistema UX — Tienda Barrio Pro
 
-> **Estado:** Vigente (`UX-ADR-003`)  
-> **Última actualización:** 2026-11-24  
+> **Estado:** Vigente (`UX-ADR-004`)  
+> **Última actualización:** 2026-11-25  
 > **Fuente de verdad ejecutable:** [`ux-manifest.json`](./ux-manifest.json)  
 > **Bitácora de decisiones:** [`UX_ADR_LOG.md`](./UX_ADR_LOG.md)  
 > **Invariante de seguridad:** Regla 11 de [`.agent/AGENTS.md`](../../.agent/AGENTS.md) — El contexto `C8` (Acceso, Correo/Auth y `GatekeeperPending.vue`) permanece **blindado** y solo se registra a nivel cartográfico.
@@ -26,7 +26,7 @@ Toda pantalla, subvista y flujo pertenece a un único Contexto Delimitado con fr
 |---|---|---|---|
 | **C1** | **Mostrador (POS & Cobro)** | Cobro de alta velocidad en mostrador (**único contexto con cola offline**) | `POSView.vue` |
 | **C2** | **Tesorería Diaria (Caja & Turnos)** | Ciclo de vida del turno: apertura, gastos OPEX (Admin), movimientos propios y cierre/reconciliación | `CashControlView.vue` (`/cash-control?tab=shift\|expenses\|movements`) |
-| **C3** | **Catálogo e Inventario (Stock & FIFO)** | Definición de productos, capas de lotes FIFO, recepción masiva, salidas/mermas y Kardex | `InventoryView.vue`, `StockEntryView.vue`, `StockOutputsView.vue` |
+| **C3** | **Catálogo e Inventario (Stock & FIFO)** | Definición de productos, capas de lotes FIFO, recepción masiva, conteo físico, salidas/mermas y Kardex | `InventoryView.vue`, `StockEntryView.vue`, `InventoryCountView.vue` |
 | **C4** | **Cartera (Clientes & Fiado)** | Clientes, historial de deuda/fiado, abonos y política de cupo | `ClientListView.vue`, `ClientDetailView.vue` |
 | **C5** | **Abastecimiento (Proveedores & CxP)** | Proveedores, facturas por pagar (`CxP`), abonos a proveedor y entregas | `SuppliersView.vue`, `PayablesView.vue` |
 | **C6** | **Inteligencia y Auditoría (Solo Lectura)** | Rentabilidad, reportes financieros y trazabilidad histórica transversal | `ReportsHubView.vue`, `FinancialDashboardView.vue`, `HistoryView.vue` |
@@ -151,7 +151,7 @@ Inventario extraído línea por línea de [`frontend/src/router/index.ts`](../..
 | 3 | `/cash-control` | `cash-control` | `CashControlView.vue` | `C2` | `B/D` | `requiresAuth` *(pestañas/RPCs por rol: `Turno`, `Gastos` Admin-only, `Mis Movimientos`)* | `canonica` |
 | 4 | `/inventory` | `inventory` | `InventoryView.vue` | `C3` | `B` | `canManageInventory` | `canonica` |
 | 5 | `/stock-entry` | `stock-entry` | `StockEntryView.vue` | `C3` | `C` | `canManageInventory` | `canonica` |
-| 6 | `/stock-outputs` | `stock-outputs` | `StockOutputsView.vue` | `C3` | `D` | `requiresAuth` *(control interno en vista)* | `consolidar` |
+| 6 | `/inventory-count` | `inventory-count` | `InventoryCountView.vue` | `C3` | `C` | `canManageInventory` | `canonica` |
 | 7 | `/clients` | `clients` | `ClientListView.vue` | `C4` | `B` | `canFiar` | `canonica` |
 | 8 | `/clients/:id` | `client-detail` | `ClientDetailView.vue` | `C4` | `B` | `canFiar` | `canonica` |
 | 9 | `/suppliers` | `suppliers` | `SuppliersView.vue` | `C5` | `B` | `isAdmin` | `canonica` |

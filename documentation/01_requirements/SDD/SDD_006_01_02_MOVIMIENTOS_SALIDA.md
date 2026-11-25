@@ -2,9 +2,9 @@
 
 > **Asociado a:** [FRD-006-01-02](../FRD/FRD_006_01_02_MOVIMIENTOS_SALIDA_INVENTARIO.md) | [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
 > **Módulo Primario:** [SDD-006: Núcleo de Inventario y Catálogo Padre](SDD_006_NUCLEO_INVENTARIO_PADRE.md)  
-> **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores (`ARQ-002` v1.4 + Enmienda `WO-OLA2-C3-001` / `UX-ADR-003`)  
-> **Estado:** 🟢 IMPLEMENTADO Y ENMENDADO (`WO-OLA2-C3-001` — Permiso único `canManageInventory`, soporte `p_batch_id` y entrada masiva atómica)  
-> **Última Actualización:** 2026-11-24  
+> **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores (`ARQ-002` v1.4 + Enmienda `WO-OLA2-C3-001` / `UX-ADR-003` + Enmienda `WO-OLA2-C3-002` / `UX-ADR-004`)  
+> **Estado:** 🟢 CONSOLIDADO (`WO-OLA2-C3-001` + `WO-OLA2-C3-002` — Salidas por Lote, Entrada Masiva Atómica e Inventariado Físico Masivo con Caja Cerrada)  
+> **Última Actualización:** 2026-11-25  
 
 ---
 
@@ -133,3 +133,23 @@ Nueva firma canónica única:
 - Se agrega `inventory_batches.expiration_date DATE` para persistir vencimientos de forma estructurada (prohibido concatenar `[Vence: ...]` dentro de `reason`).
 - Firma canónica única: `rpc_registrar_entrada_masiva(p_store_id UUID, p_items JSONB, p_reason TEXT DEFAULT 'Compra masiva', p_supplier_id UUID DEFAULT NULL, p_invoice_ref TEXT DEFAULT NULL)`.
 - Opera todo-o-nada dentro de una única transacción con bloqueo `FOR UPDATE` por producto, genera un único lote por ítem vía trigger `bridge_movement_to_batch` asignándole su `expiration_date`, actualiza precios e historial inmutable, y devuelve el total monetario calculado en PostgreSQL (`total_entry_cost`, `total_units`, `items_processed`, `created_batch_ids`).
+
+---
+
+## 9. Enmienda `WO-OLA2-C3-002` (`UX-ADR-004` — 2026-11-25): Inventariado Físico Masivo con Caja Cerrada (`/inventory-count`)
+
+### 9.1 `rpc_obtener_lotes_activos_tienda(p_store_id UUID)`
+- Valida `assert_store_access(p_store_id)` y `assert_employee_permission(p_store_id, 'canManageInventory')`.
+- Verifica en el servidor `has_open_cash_session := EXISTS (SELECT 1 FROM public.cash_sessions WHERE store_id = p_store_id AND status = 'open')`.
+- Retorna en una sola consulta todos los lotes activos (`quantity_remaining > 0`) de productos activos de la tienda ordenados por `product_id, created_at ASC`, eliminando lecturas N+1 desde la vista `/inventory-count`.
+
+### 9.2 `rpc_aplicar_inventariado_fisico(p_store_id UUID, p_items JSONB, p_notes TEXT DEFAULT NULL)`
+- **Seguridad:** `assert_store_access(p_store_id)` + `assert_employee_permission(p_store_id, 'canManageInventory')`.
+- **Candado estricto de Caja Cerrada:** Aborta con `CASH_REGISTER_MUST_BE_CLOSED` (`P0001`) si existe una sesión en `public.cash_sessions` con `status = 'open'` para `p_store_id`.
+- **Anti-deadlock:** Valida ausencia de duplicados en `p_items` y bloquea productos ordenados por `product_id::uuid ASC` (`FOR UPDATE`).
+- **Cálculo autoritativo del delta en PostgreSQL (`v_delta := counted_quantity - current_stock`):**
+  - `v_delta = 0`: suma a `unchanged_count` sin crear registros redundantes en `inventory_movements`.
+  - `v_delta < 0` (faltante): si recibe `batch_id`, descuenta hasta `LEAST(abs_delta, batch.quantity_remaining)` de ese lote usando `app.skip_bridge_movement_to_batch = 'true'` y enlaza `inventory_movement_batches`, consumiendo cualquier remanente por `consume_stock_fifo`; si `batch_id` es `NULL`, consume FIFO estándar. Asienta `movement_type = 'ajuste_conteo'` con `$0` impacto en caja y CxP.
+  - `v_delta > 0` (sobrante): si recibe `batch_id`, suma al lote indicado; si no, suma al lote activo más reciente; si el stock era `0` (sin lotes activos), crea una nueva capa FIFO con el último `cost_price` y `price` conocido del producto. Asienta `movement_type = 'ajuste_conteo'` con `$0` impacto en caja y CxP.
+- **Notificación resumen única:** Cuando `adjusted_count > 0`, inserta **1 sola notificación** para `audience = 'admin'` (`metadata.event_type = 'INVENTORY_COUNT_SUMMARY'`).
+- **Salida:** `{ success: true, data: { verified_total, unchanged_count, adjusted_count, shortages_count, surpluses_count, timestamp } }`.
