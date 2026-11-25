@@ -5,7 +5,10 @@ import { logger } from '@/utils/logger';
 import { useAuthStore } from './auth';
 import type { Database } from '@/types/database.types';
 
-type Supplier = Database['public']['Tables']['suppliers']['Row'];
+export type Supplier = Database['public']['Tables']['suppliers']['Row'] & {
+    pending_debt?: number;
+    open_invoices_count?: number;
+};
 type SupplierInsert = Database['public']['Tables']['suppliers']['Insert'];
 
 export const useSuppliersStore = defineStore(
@@ -16,10 +19,50 @@ export const useSuppliersStore = defineStore(
         const error = ref<string | null>(null);
 
         /**
-         * Fetch all suppliers for a store
+         * Fetch suppliers with server-computed pending debt and open invoices count (Admin only RPC)
+         */
+        const fetchSuppliersWithPayables = async (storeId: string) => {
+            if (!storeId) return;
+
+            isLoading.value = true;
+            error.value = null;
+
+            try {
+                const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_obtener_proveedores_con_cxp', {
+                    p_store_id: storeId,
+                });
+
+                if (rpcError) throw rpcError;
+
+                const payload = rpcData as any;
+                if (!payload?.success || !Array.isArray(payload?.data)) {
+                    throw new Error(payload?.error || 'Respuesta inválida al consultar proveedores');
+                }
+
+                suppliers.value = (payload.data as any[]).map((row) => ({
+                    ...row,
+                    pending_debt: Number(row.pending_debt ?? 0),
+                    open_invoices_count: Number(row.open_invoices_count ?? 0),
+                }));
+            } catch (e: any) {
+                logger.error('[SuppliersStore] Fetch with payables failed', e);
+                error.value = e?.message || 'Error al cargar proveedores';
+            } finally {
+                isLoading.value = false;
+            }
+        };
+
+        /**
+         * Fetch all suppliers for a store (delegates to Admin RPC when Admin; read-only select for inventory staff)
          */
         const fetchSuppliers = async (storeId: string) => {
             if (!storeId) return;
+
+            const authStore = useAuthStore();
+            if (authStore.isAdmin) {
+                await fetchSuppliersWithPayables(storeId);
+                return;
+            }
 
             isLoading.value = true;
             error.value = null;
@@ -33,10 +76,14 @@ export const useSuppliersStore = defineStore(
                     .order('name');
 
                 if (fetchError) throw fetchError;
-                suppliers.value = data || [];
+                suppliers.value = (data || []).map((row) => ({
+                    ...row,
+                    pending_debt: 0,
+                    open_invoices_count: 0,
+                }));
             } catch (e: any) {
                 logger.error('[SuppliersStore] Fetch failed', e);
-                error.value = 'Error al cargar proveedores';
+                error.value = e?.message || 'Error al cargar proveedores';
             } finally {
                 isLoading.value = false;
             }
@@ -71,16 +118,24 @@ export const useSuppliersStore = defineStore(
          */
         const updateSupplier = async (id: string, updates: Partial<Supplier>): Promise<{ success: boolean; error?: string }> => {
             try {
+                const payload: Record<string, any> = {
+                    updated_at: new Date().toISOString(),
+                };
+                if (updates.name !== undefined) payload.name = updates.name;
+                if (updates.delivery_day !== undefined) payload.delivery_day = updates.delivery_day;
+                if (updates.frequency_days !== undefined) payload.frequency_days = updates.frequency_days;
+                if (updates.lead_time_days !== undefined) payload.lead_time_days = updates.lead_time_days;
+
                 const { error: updateError } = await supabase
                     .from('suppliers')
-                    .update({ ...updates, updated_at: new Date().toISOString() })
+                    .update(payload)
                     .eq('id', id);
 
                 if (updateError) throw updateError;
 
                 const index = suppliers.value.findIndex(s => s.id === id);
                 if (index !== -1) {
-                    suppliers.value[index] = { ...suppliers.value[index], ...updates };
+                    suppliers.value[index] = { ...suppliers.value[index], ...payload };
                 }
                 return { success: true };
             } catch (e: any) {
@@ -164,6 +219,7 @@ export const useSuppliersStore = defineStore(
             isLoading,
             error,
             fetchSuppliers,
+            fetchSuppliersWithPayables,
             createSupplier,
             updateSupplier,
             deleteSupplier,

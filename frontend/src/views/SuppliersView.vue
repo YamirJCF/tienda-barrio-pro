@@ -1,313 +1,179 @@
+<template>
+  <div class="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24">
+    <header
+      class="sticky top-0 z-30 bg-surface-light/95 dark:bg-surface-dark/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800"
+    >
+      <div class="flex items-center px-4 pt-4 pb-3 justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            @click="goBack"
+            aria-label="Volver al Panel"
+            class="flex items-center justify-center -ml-2 p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <ArrowLeft :size="24" :stroke-width="1.5" />
+          </button>
+          <div class="min-w-0">
+            <h1 class="text-slate-900 dark:text-white text-lg sm:text-xl font-bold truncate">
+              Proveedores y Cuentas por Pagar
+            </h1>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+              Abastecimiento, facturas y abonos
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Segmented Tabs (ORCA: Proveedores | Cuentas por Pagar) -->
+      <div class="px-4 pb-3">
+        <div class="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-800">
+          <button
+            type="button"
+            data-testid="tab-suppliers"
+            @click="switchTab('suppliers')"
+            class="py-2 px-3 rounded-lg text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+            :class="activeTab === 'suppliers'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
+          >
+            Proveedores
+          </button>
+          <button
+            type="button"
+            data-testid="tab-payables"
+            @click="switchTab('payables')"
+            class="py-2 px-3 rounded-lg text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+            :class="activeTab === 'payables'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
+          >
+            Cuentas por Pagar
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 px-4 py-4 max-w-4xl w-full mx-auto">
+      <SupplierDirectoryTab
+        v-if="activeTab === 'suppliers'"
+        @view-payables="handleViewSupplierPayables"
+        @retry="loadSuppliersForStore"
+        @suppliers-mutated="loadSuppliersForStore"
+      />
+
+      <SupplierPayablesTab
+        v-else
+        :initialSupplierId="selectedSupplierFilter"
+        :highlightedInvoiceId="highlightedInvoiceId"
+        @supplier-filter-change="handleSupplierFilterChange"
+        @invoices-mutated="loadSuppliersForStore"
+      />
+    </main>
+
+    <BottomNav />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import { useSuppliersStore } from '../stores/suppliers';
-import { useAuthStore } from '../stores/auth';
-import BottomNav from '../components/BottomNav.vue';
-import BaseInput from '@/components/ui/BaseInput.vue';
-import BaseButton from '@/components/ui/BaseButton.vue';
-import Skeleton from '@/components/ui/Skeleton.vue';
-import { 
-  ArrowLeft, 
-  Search, 
-  Truck, 
-  Plus,
-  Pencil,
-  Trash2
-} from 'lucide-vue-next';
+import { useRoute, useRouter } from 'vue-router';
+import { useSuppliersStore } from '@/stores/suppliers';
+import { useAuthStore } from '@/stores/auth';
+import BottomNav from '@/components/BottomNav.vue';
+import SupplierDirectoryTab from '@/components/suppliers/SupplierDirectoryTab.vue';
+import SupplierPayablesTab from '@/components/suppliers/SupplierPayablesTab.vue';
+import { ArrowLeft } from 'lucide-vue-next';
 
+type SuppliersTab = 'suppliers' | 'payables';
+
+const route = useRoute();
 const router = useRouter();
 const suppliersStore = useSuppliersStore();
 const authStore = useAuthStore();
 
-const fetchSuppliersForStore = async () => {
-  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-  if (storeId) {
-    await suppliersStore.fetchSuppliers(storeId);
+const storeId = computed(() => authStore.currentUser?.storeId || authStore.currentStore?.id || '');
+
+const resolveTabFromRoute = (): SuppliersTab => {
+  if (route.path === '/payables' || route.query.tab === 'payables') {
+    return 'payables';
   }
+  return 'suppliers';
+};
+
+const activeTab = ref<SuppliersTab>(resolveTabFromRoute());
+const selectedSupplierFilter = ref<string>(typeof route.query.supplier === 'string' ? route.query.supplier : '');
+const highlightedInvoiceId = ref<string>(typeof route.query.invoice === 'string' ? route.query.invoice : '');
+
+const normalizeAliasRoute = async () => {
+  if (route.path === '/payables') {
+    activeTab.value = 'payables';
+    await router.replace({
+      path: '/suppliers',
+      query: { ...route.query, tab: 'payables' },
+    });
+  }
+};
+
+const loadSuppliersForStore = async () => {
+  if (!storeId.value) return;
+  await suppliersStore.fetchSuppliersWithPayables(storeId.value);
 };
 
 onMounted(async () => {
-  await fetchSuppliersForStore();
+  await normalizeAliasRoute();
+  await loadSuppliersForStore();
 });
 
-watch(() => authStore.currentUser?.storeId || authStore.currentStore?.id, async (newStoreId) => {
-  if (newStoreId) {
-    await suppliersStore.fetchSuppliers(newStoreId);
+watch(
+  () => [route.path, route.query.tab, route.query.supplier, route.query.invoice],
+  async ([newPath, newTab, newSup, newInv]) => {
+    if (newPath === '/payables') {
+      await normalizeAliasRoute();
+      return;
+    }
+    activeTab.value = newTab === 'payables' ? 'payables' : 'suppliers';
+    selectedSupplierFilter.value = typeof newSup === 'string' ? newSup : '';
+    highlightedInvoiceId.value = typeof newInv === 'string' ? newInv : '';
+  }
+);
+
+watch(storeId, async (newId) => {
+  if (newId) {
+    await loadSuppliersForStore();
   }
 });
 
-// State
-const searchQuery = ref('');
-const showSupplierModal = ref(false);
-const editingSupplierId = ref<string | undefined>(undefined);
+const switchTab = async (tab: SuppliersTab) => {
+  activeTab.value = tab;
+  const nextQuery: Record<string, any> = { ...route.query, tab };
+  if (tab === 'suppliers') {
+    delete nextQuery.invoice;
+  }
+  await router.replace({ path: '/suppliers', query: nextQuery });
+};
 
-// New supplier form
-const newSupplier = ref({
-  name: '',
-  deliveryDay: undefined as number | undefined,
-  frequencyDays: 7,
-  leadTimeDays: 1
-});
+const handleViewSupplierPayables = async (supplierId: string) => {
+  selectedSupplierFilter.value = supplierId;
+  activeTab.value = 'payables';
+  await router.replace({
+    path: '/suppliers',
+    query: { tab: 'payables', supplier: supplierId },
+  });
+};
 
-// Computed
-const filteredSuppliers = computed(() => {
-  if (!searchQuery.value) return suppliersStore.suppliers;
-  const query = searchQuery.value.toLowerCase();
-  return suppliersStore.suppliers.filter(s => 
-    s.name.toLowerCase().includes(query)
-  );
-});
+const handleSupplierFilterChange = async (supplierId: string) => {
+  selectedSupplierFilter.value = supplierId;
+  if (activeTab.value !== 'payables') return;
+  const nextQuery: Record<string, any> = { ...route.query, tab: 'payables' };
+  if (supplierId) {
+    nextQuery.supplier = supplierId;
+  } else {
+    delete nextQuery.supplier;
+  }
+  await router.replace({ path: '/suppliers', query: nextQuery });
+};
 
-const canManageSuppliers = computed(() => authStore.isAdmin);
-
-// Methods
-const goToDashboard = () => {
+const goBack = () => {
   router.push('/');
 };
-
-const openNewSupplier = () => {
-  newSupplier.value = {
-    name: '',
-    deliveryDay: undefined,
-    frequencyDays: 7,
-    leadTimeDays: 1
-  };
-  editingSupplierId.value = undefined;
-  showSupplierModal.value = true;
-};
-
-const handleSave = async () => {
-  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-  if (!storeId || !newSupplier.value.name.trim()) return;
-
-  const result = await suppliersStore.createSupplier({
-    store_id: storeId,
-    name: newSupplier.value.name.trim(),
-    delivery_day: newSupplier.value.deliveryDay,
-    frequency_days: newSupplier.value.frequencyDays,
-    lead_time_days: newSupplier.value.leadTimeDays,
-    is_default: false
-  });
-
-  if (result.success) {
-    showSupplierModal.value = false;
-    newSupplier.value = {
-      name: '',
-      deliveryDay: undefined,
-      frequencyDays: 7,
-      leadTimeDays: 1
-    };
-  }
-};
-
-const handleDelete = async (id: string) => {
-  if (!confirm('¿Eliminar este proveedor? Esta acción no se puede deshacer.')) return;
-  await suppliersStore.deleteSupplier(id);
-};
-
-const getDayName = (day?: number) => {
-  if (!day) return 'No especificado';
-  const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  return days[day - 1] || 'N/A';
-};
 </script>
-
-<template>
-  <div class="flex flex-col h-screen bg-background-light dark:bg-background-dark pb-24">
-    <header
-      class="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 pb-2"
-    >
-      <div class="flex items-center px-4 pt-4 pb-2 justify-between">
-        <div class="flex items-center gap-2">
-          <button
-            @click="goToDashboard"
-            aria-label="Volver al Dashboard"
-            class="flex items-center justify-center -ml-2 p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <ArrowLeft :size="24" :stroke-width="1.5" />
-          </button>
-          <h2 class="text-slate-900 dark:text-white text-xl font-bold">Proveedores</h2>
-        </div>
-        <button
-            v-if="authStore.isAdmin"
-            @click="router.push('/payables')"
-            class="text-sm font-medium bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors whitespace-nowrap ml-2"
-          >
-            Cuentas por Pagar
-        </button>
-      </div>
-      <div class="px-4 py-2">
-           <BaseInput
-             v-model="searchQuery"
-             placeholder="Buscar proveedor..."
-           >
-             <template #prefix>
-                <Search :size="18" :stroke-width="1.5" class="text-slate-400" />
-             </template>
-           </BaseInput>
-      </div>
-    </header>
-
-    <!-- Loading State -->
-    <div v-if="suppliersStore.isLoading" class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-        <div v-for="i in 4" :key="i" class="flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 border-l-[6px] border-slate-200 dark:border-slate-700">
-             <Skeleton width="48px" height="48px" border-radius="18px" />
-             <div class="flex flex-1 flex-col justify-center min-w-0 gap-2">
-                <Skeleton width="60%" height="1rem" />
-                <Skeleton width="40%" height="0.75rem" />
-             </div>
-        </div>
-    </div>
-
-    <!-- Supplier List -->
-    <main v-else-if="filteredSuppliers.length > 0" class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-      <div
-        v-for="supplier in filteredSuppliers"
-        :key="supplier.id"
-        class="relative flex items-center gap-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 border-l-[6px] border-blue-500"
-      >
-        <div
-          class="h-12 w-12 shrink-0 rounded-[18px] flex items-center justify-center bg-blue-100 dark:bg-blue-900/30"
-        >
-          <Truck :size="24" class="text-blue-600 dark:text-blue-400" />
-        </div>
-        <div class="flex flex-1 flex-col justify-center min-w-0">
-          <p class="text-slate-900 dark:text-white text-base font-bold truncate">
-            {{ supplier.name }}
-            <span v-if="supplier.is_default" class="ml-2 text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-              Por defecto
-            </span>
-          </p>
-          <p class="text-slate-500 text-xs font-medium">
-            Frecuencia: {{ supplier.frequency_days }} días | Lead: {{ supplier.lead_time_days }} días
-          </p>
-          <p class="text-[10px] text-slate-400 font-medium mt-0.5" v-if="supplier.delivery_day">
-            Entrega: {{ getDayName(supplier.delivery_day) }}
-          </p>
-        </div>
-        <div class="flex gap-2" v-if="canManageSuppliers && !supplier.is_default">
-          <button
-            @click="handleDelete(supplier.id)"
-            class="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          >
-            <Trash2 :size="18" class="text-red-500" />
-          </button>
-        </div>
-      </div>
-    </main>
-
-    <!-- Empty State -->
-    <div
-      v-else
-      class="flex-1 flex flex-col items-center justify-center px-4 text-center"
-    >
-      <Truck :size="64" :stroke-width="1" class="text-slate-300 mb-4" />
-      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
-        {{ searchQuery ? 'No se encontraron proveedores' : 'Sin proveedores' }}
-      </h3>
-      <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-        {{
-          searchQuery
-            ? 'Intenta con otro término de búsqueda'
-            : 'Agrega tu primer proveedor para rastrear entradas'
-        }}
-      </p>
-      <BaseButton
-        v-if="!searchQuery && canManageSuppliers"
-        @click="openNewSupplier"
-        class="mt-6"
-      >
-        <Plus :size="18" class="mr-2" />
-        Agregar Proveedor
-      </BaseButton>
-    </div>
-
-    <!-- FAB -->
-    <div class="absolute bottom-24 right-4 z-40">
-      <button
-        v-if="canManageSuppliers"
-        @click="openNewSupplier"
-        class="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90"
-      >
-        <Plus :size="32" :stroke-width="1.5" />
-      </button>
-    </div>
-
-    <BottomNav />
-
-    <!-- Simple Modal -->
-    <div
-      v-if="showSupplierModal"
-      class="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
-      @click.self="showSupplierModal = false"
-    >
-      <div class="bg-white dark:bg-slate-800 rounded-t-3xl w-full max-w-lg p-6 animate-slide-up">
-        <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Nuevo Proveedor</h3>
-        
-        <div class="space-y-4">
-          <BaseInput
-            v-model="newSupplier.name"
-            label="Nombre del Proveedor"
-            placeholder="Ej: Distribuidora XYZ"
-          />
-
-          <BaseInput
-            v-model.number="newSupplier.frequencyDays"
-            label="Frecuencia de entrega (días)"
-            type="number"
-            min="1"
-          />
-
-          <BaseInput
-            v-model.number="newSupplier.leadTimeDays"
-            label="Tiempo de entrega (días)"
-            type="number"
-            min="1"
-          />
-
-          <BaseInput
-            v-model.number="newSupplier.deliveryDay"
-            label="Día de entrega preferido (1=Dom, 7=Sáb)"
-            type="number"
-            min="1"
-            max="7"
-            placeholder="Opcional"
-          />
-        </div>
-
-        <div class="flex gap-3 mt-6">
-          <BaseButton
-            variant="secondary"
-            @click="showSupplierModal = false"
-            class="flex-1"
-          >
-            Cancelar
-          </BaseButton>
-          <BaseButton
-            @click="handleSave"
-            class="flex-1"
-            :disabled="!newSupplier.name.trim()"
-          >
-            Guardar
-          </BaseButton>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<style scoped>
-.animate-slide-up {
-  animation: slideUp 0.3s ease-out;
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-</style>

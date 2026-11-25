@@ -16,7 +16,7 @@ import ClientDetailView from '../views/ClientDetailView.vue';
 import ClientFormModal from '../components/ClientFormModal.vue';
 import AdminHubView from '../views/AdminHubView.vue';
 import PayInvoiceModal from '../components/suppliers/PayInvoiceModal.vue';
-import PayablesView from '../views/PayablesView.vue';
+import SuppliersView from '../views/SuppliersView.vue';
 
 const {
   mockRpc,
@@ -56,8 +56,8 @@ vi.mock('idb', () => ({
 }));
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: mockPush, back: vi.fn() }),
-  useRoute: () => ({ params: { id: 'cli-1' }, query: {} }),
+  useRouter: () => ({ push: mockPush, replace: vi.fn(), back: vi.fn() }),
+  useRoute: () => ({ path: '/suppliers', params: { id: 'cli-1' }, query: { tab: 'payables' } }),
 }));
 
 vi.mock('../data/supabaseClient', () => ({
@@ -125,7 +125,10 @@ vi.mock('../stores/cashRegister', () => ({
 vi.mock('../stores/suppliers', () => ({
   useSuppliersStore: () => ({
     suppliers: [{ id: 'sup-1', name: 'Distribuidora' }],
+    isLoading: false,
+    error: null,
     fetchSuppliers: vi.fn().mockResolvedValue([]),
+    fetchSuppliersWithPayables: vi.fn().mockResolvedValue([]),
   }),
 }));
 
@@ -448,7 +451,7 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
     expect(mockShowError).toHaveBeenCalled();
   });
 
-  it('[CHK-409][CHK-410] PayInvoiceModal valida liquidez del canal seleccionado, exige descripción interna, permite Pago externo / fuera de caja, y PayablesView crea facturas paginadas', async () => {
+  it('[CHK-409][CHK-410] PayInvoiceModal valida liquidez del canal seleccionado, exige descripción interna, permite Pago externo / fuera de caja, y SuppliersView (?tab=payables) crea facturas paginadas', async () => {
     const authStore = useAuthStore();
     setAdminSession(authStore);
 
@@ -460,6 +463,7 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
       due_date: null,
       total_amount: 50000,
       amount_paid: 0,
+      pending_balance: 50000,
       status: 'pendiente',
       store_id: STORE_ID,
     } as any;
@@ -468,6 +472,10 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
       props: { show: true, invoice },
       global: {
         stubs: {
+          BaseModal: {
+            props: ['modelValue'],
+            template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>',
+          },
           BaseInput: {
             props: ['modelValue'],
             template: '<input type="number" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))" />',
@@ -501,32 +509,58 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
       p_description: null,
     });
 
-    // PayablesView consulta rpc_obtener_cuentas_por_pagar y crea factura via rpc_crear_factura_proveedor sin due_date
+    // SuppliersView (?tab=payables) consulta rpc_obtener_cuentas_por_pagar y crea factura via rpc_crear_factura_proveedor sin due_date
     mockRpc
-      .mockResolvedValueOnce({ data: { success: true, data: [invoice], count: 1 }, error: null })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: [invoice],
+          count: 1,
+          summary: { total_debt: 50000, total_overdue: 0, pending_count: 1, overdue_count: 0 },
+        },
+        error: null,
+      })
       .mockResolvedValueOnce({ data: { success: true, data: { invoice } }, error: null })
-      .mockResolvedValueOnce({ data: { success: true, data: [invoice], count: 1 }, error: null });
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: [invoice],
+          count: 1,
+          summary: { total_debt: 95000, total_overdue: 0, pending_count: 2, overdue_count: 0 },
+        },
+        error: null,
+      });
 
-    const payablesView = mount(PayablesView, {
+    const suppliersView = mount(SuppliersView, {
       global: {
         stubs: {
           BottomNav: true,
           Skeleton: true,
+          BaseListSkeleton: true,
           PayInvoiceModal: true,
-          BaseModal: { template: '<div><slot /></div>' },
-          BaseButton: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          BaseModal: {
+            props: ['modelValue'],
+            template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>',
+          },
+          BaseButton: {
+            props: ['disabled', 'loading'],
+            template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+          },
         },
       },
     });
     await flushPromises();
     expect(mockRpc).toHaveBeenCalledWith('rpc_obtener_cuentas_por_pagar', expect.objectContaining({ p_store_id: STORE_ID }));
 
-    await payablesView.get('[data-testid="create-invoice-supplier-input"]').setValue('Panadería Norte');
-    await payablesView.get('[data-testid="create-invoice-amount-input"]').setValue(45000);
-    await payablesView.get('[data-testid="submit-create-invoice-btn"]').trigger('click');
+    await suppliersView.get('[data-testid="open-create-invoice-btn"]').trigger('click');
+    await suppliersView.get('[data-testid="toggle-new-supplier-mode"]').trigger('click');
+    await suppliersView.get('[data-testid="create-invoice-supplier-input"]').setValue('Panadería Norte');
+    await suppliersView.get('[data-testid="create-invoice-amount-input"]').setValue(45000);
+    await suppliersView.get('[data-testid="submit-create-invoice-btn"]').trigger('click');
     await flushPromises();
     expect(mockRpc).toHaveBeenCalledWith('rpc_crear_factura_proveedor', {
       p_store_id: STORE_ID,
+      p_supplier_id: null,
       p_supplier_name: 'Panadería Norte',
       p_total_amount: 45000,
       p_due_date: null,

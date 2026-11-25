@@ -414,10 +414,10 @@ watch(() => authStore.currentUser?.storeId, (newId) => {
               </div>
               <div>
                 <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  Proveedores
+                  Proveedores y Cuentas por Pagar
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
-                  Administrar catálogo de proveedores
+                  Directorio, facturas pendientes y abonos
                 </p>
               </div>
             </div>
