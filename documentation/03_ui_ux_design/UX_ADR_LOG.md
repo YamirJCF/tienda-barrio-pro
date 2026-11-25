@@ -162,3 +162,23 @@ Formaliza el Arquetipo `B/D` en `/clients/:id` (`ClientDetailView.vue`), migra v
 
 ### 4. Higiene de Crecimiento (Qué se consolida o elimina)
 Retira el formulario transaccional de cupo global incrustado en `AdminHubView.vue`, elimina `.reduce()` parcial sobre `pagedClients` en `ClientListView.vue`, retira `bg-slate-800` fijo, patrón radial inline, gradientes (`bg-gradient-to-r`) y `border-l-[6px]`, y mantiene `baselineDebt` intacto sin incremento.
+
+---
+
+## UX-ADR-007 — Consolidación de Cobro Comercial, Retiro Personal ($0), Resiliencia de Catálogo y Reembolso FIFO en C1
+- **Fecha:** 2026-11-25
+- **Estado:** Aprobado
+- **Contexto(s) / Rutas afectadas:** `C1` (`/pos` — `POSView.vue`, `CheckoutModal.vue`, `PersonalWithdrawalModal.vue`, `RefundModal.vue`)
+- **Aprobación:** `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (`WO-OLA2-C1-001`)
+
+### 1. Contexto y Objeto (ORCA)
+Consolida en `C1` la jerarquía `Venta/Ticket 1:N Línea -> Cobro Comercial | Retiro Personal ($0) | Reembolso FIFO` dentro del hogar único `/pos` (única ruta Arquetipo `A` sin `BottomNav` para preservar el teclado táctil de mostrador). Extrae `consumo_personal` (`Retiro Personal $0`) hacia el subcomponente interno `PersonalWithdrawalModal.vue` (`BaseModal` Arquetipo `D`), separándolo de los medios comerciales de `CheckoutModal.vue` sin crear rutas nuevas.
+
+### 2. Verdad Contable (Read Model / Invariante)
+En `CheckoutModal.vue`, la ecuación de cupo en Fiado evalúa `isCreditLimitExceeded` contra `amountToCredit = remainingBalance > 0 ? remainingBalance : total` (`currentDebt + amountToCredit > creditLimit`) con bloqueo duro en `canComplete`, Read Model explícito (`Cupo total | Deuda actual | Monto a fiar | Nuevo saldo previsto`) y rechazo estricto offline (`OFFLINE_NOT_ALLOWED`) en `saleRepository.processSale` para `fiado` y `consumo_personal` (manteniendo `syncQueue` exclusivo para ventas comerciales offline permitidas según `PRODUCT.md`). `cartStore` mantiene `item.subtotal` calculado en el store evitando aritmética ad-hoc en `<template>`. En PostgreSQL, `rpc_buscar_ventas_para_reembolso` (`assert_store_access` + `canManageRefunds`) expone las capas originales `fifo_batches` desde `sale_item_batches` + `inventory_batches` para mostrar el Read Model de reingreso vendible o asiento de merma antes de confirmar en `RefundModal.vue`.
+
+### 3. Arquetipo, Señalización y Top Tasks
+Mantiene Arquetipo `A` en `/pos` conservando `< 3` toques en Top Task #1 (`Cobrar venta en POS`) y modales transaccionales Arquetipo `D` (`CheckoutModal`, `PersonalWithdrawalModal`, `RefundModal`). Aplica alertas `N1` inline en `CheckoutModal`, `PersonalWithdrawalModal` y `RefundModal` eliminando `showWarning`/`showError` efímeros para errores accionables; barra `N2` `Undo` temporal (6s) con **Deshacer** tras vaciar ticket (`Clear Ticket`); y banner `N3` persistente con **Reintentar** ante fallos de carga de inventario (`pos-inventory-error-banner`) o búsqueda de reembolsos (`refund-search-error`) sin disfrazar errores de red como estados vacíos.
+
+### 4. Higiene de Crecimiento (Qué se consolida o elimina)
+Extrae `consumo_personal` fuera de `activeMethods` en `CheckoutModal.vue` hacia `PersonalWithdrawalModal.vue`, elimina el bug `:disabled="!canComplete && !isFiado"`, retira el falso bloqueo `"Sin Inventario"` ante errores de red o carga inicial en `POSView.vue`, suprime la multiplicación en plantilla de filas de ticket y mantiene `baselineDebt` en `ux-manifest.json` intacto con cero incremento.

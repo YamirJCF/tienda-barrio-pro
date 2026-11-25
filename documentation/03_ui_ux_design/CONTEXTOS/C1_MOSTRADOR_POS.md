@@ -1,8 +1,8 @@
 # Contexto C1 — Mostrador (POS & Cobro)
 
-> **Estado:** Cartografía Ola 1 (`Lote 1B` — solo documentación)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-001`)  
-> **Restricción de conectividad:** **Híbrida acotada** — único contexto con cola offline (`syncQueue`) para ventas en efectivo/transferencia; **Fiado y Reembolsos exigen conexión online obligatoria** ([`PRODUCT.md`](../../../PRODUCT.md#L38)).
+> **Estado:** Consolidado Ola 2 (`UX-ADR-007` — 2026-11-25)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-007`)  
+> **Restricción de conectividad:** **Híbrida acotada** — único contexto con cola offline (`syncQueue`) para ventas comerciales en efectivo/transferencia; **Fiado, Retiro Personal (`$0`) y Reembolsos exigen conexión online obligatoria** ([`PRODUCT.md`](../../../PRODUCT.md#L38)).
 
 ---
 
@@ -112,11 +112,11 @@ Venta / Ticket (1) ──< Línea de Carrito (N) ──> Producto / Lote FIFO [C
 
 ---
 
-## §5. Hotspots Contables y de Dominio Verificados para Ola 2 (`FRD/SDD/SQL` antes de UI)
+## §5. Hotspots Contables y de Dominio Verificados en Ola 2 (`FRD/SDD/SQL` + UI)
 
-| ID | Severidad | Evidencia Verificada en Código | Brecha Contable / UX | Acción Requerida en Ola 2 |
+| ID | Severidad | Evidencia Verificada en Código | Brecha Contable / UX | Estado en Ola 2 (`UX-ADR-007`) |
 |---|---|---|---|---|
-| **C1-H1** | 🟠 **ALTO** | [`CheckoutModal.vue`](../../../frontend/src/components/sales/CheckoutModal.vue#L69-L73) y L131-139 | `isCreditLimitExceeded` suma `props.total` completo en lugar del **saldo restante a fiar** en pagos mixtos, y `canComplete` (L135-137) devuelve `true` con `!!selectedFiadoClient.value`, sin bloquear exceso de cupo ni Fiado offline. | Corregir ecuación contra saldo pendiente a fiar (`mixto`), bloquear exceso de cupo en `canComplete` y exigir estado online para Fiado. |
-| **C1-H2** | 🟠 **ALTO** | [`CheckoutModal.vue`](../../../frontend/src/components/sales/CheckoutModal.vue#L85-L92) (869 líneas); [`POSView.vue`](../../../frontend/src/views/POSView.vue#L410) | `CheckoutModal.vue` mezcla `Retiro ($0)` (`consumo_personal`) dentro de `activeMethods` como si fuera medio de pago comercial; `POSView.vue` (L410) mantiene fallback multiplicativo en plantilla (`item.subtotal \|\| item.price.times(item.quantity)`). | Extraer `Retiro ($0)` fuera de los medios de pago comerciales, modularizar `CheckoutModal` y asegurar `item.subtotal` siempre calculado por store/RPC. |
-| **C1-H3** | 🟡 **MEDIO** | [`POSView.vue`](../../../frontend/src/views/POSView.vue#L65-L98) | `blockingState` evalúa `inventoryStore.totalProducts === 0` para renderizar `"Sin Inventario"`, disfrazando un error de carga/red como inventario vacío (riesgo de fallo silencioso, Regla 3). | Separar estado `inventoryLoadError` (Banner `N3` con Reintentar) de inventario realmente vacío confirmado por servidor. |
-| **C1-H4** | 🟡 **MEDIO** | [`POSView.vue`](../../../frontend/src/views/POSView.vue#L378-L386); [`RefundModal.vue`](../../../frontend/src/components/sales/RefundModal.vue#L66-L103) | Botón `Clear Ticket` (`Trash2`) vacía todo el carrito en 1 toque sin confirmación ni opción Undo; `RefundModal.vue` no expone la capa FIFO de reingreso al procesar la devolución. | Agregar confirmación ligera o Undo (`N2`) en `Clear Ticket` y mostrar lote/política FIFO de reingreso en `RefundModal` (alineado con `SDD/SQL`). |
+| **C1-H1** | 🟠 **ALTO** | [`CheckoutModal.vue`](../../../frontend/src/components/sales/CheckoutModal.vue); [`saleRepository.ts`](../../../frontend/src/data/repositories/saleRepository.ts) | `isCreditLimitExceeded` sumaba `props.total` completo en lugar del saldo a acreditar y `canComplete` no bloqueaba exceso de cupo ni Fiado offline. | ✅ **Cerrado (`UX-ADR-007`):** Evalúa `amountToCredit`, muestra Read Model de cupo (`Cupo total \| Deuda actual \| Monto a fiar \| Nuevo saldo previsto`), bloquea `canComplete` + footer `:disabled="!canComplete"` y rechaza `fiado` offline (`OFFLINE_NOT_ALLOWED`). |
+| **C1-H2** | 🟠 **ALTO** | [`PersonalWithdrawalModal.vue`](../../../frontend/src/components/sales/PersonalWithdrawalModal.vue); [`POSView.vue`](../../../frontend/src/views/POSView.vue); [`cart.ts`](../../../frontend/src/stores/cart.ts) | `CheckoutModal.vue` mezclaba `Retiro ($0)` dentro de `activeMethods` y `POSView.vue` multiplicaba en `<template>`. | ✅ **Cerrado (`UX-ADR-007`):** `consumo_personal` extraído a `PersonalWithdrawalModal.vue` (online-only) con acceso secundario en POS; `cartStore` mantiene `item.subtotal` actualizado. |
+| **C1-H3** | 🟡 **MEDIO** | [`POSView.vue`](../../../frontend/src/views/POSView.vue); [`inventory.ts`](../../../frontend/src/stores/inventory.ts) | `blockingState` mostraba `"Sin Inventario"` ante errores de carga/red (Regla 3). | ✅ **Cerrado (`UX-ADR-007`):** Banner `N3` `pos-inventory-error-banner` con **Reintentar**; `"Sin Inventario"` solo cuando `initialized && !isLoading && !error && totalProducts === 0`. |
+| **C1-H4** | 🟡 **MEDIO** | [`POSView.vue`](../../../frontend/src/views/POSView.vue); [`RefundModal.vue`](../../../frontend/src/components/sales/RefundModal.vue); [`20261125080000_ola2_c1_refund_candidates_fifo_read_model.sql`](../../../supabase/migrations/20261125080000_ola2_c1_refund_candidates_fifo_read_model.sql) | `Clear Ticket` sin confirmación/Undo y `RefundModal.vue` sin capa FIFO ni errores persistentes `N1/N3`. | ✅ **Cerrado (`UX-ADR-007`):** Barra `N2` `Undo` (6s) en POS + `rpc_buscar_ventas_para_reembolso` expone `fifo_batches` para Read Model FIFO y alertas persistentes `N3`/`N1` en `RefundModal.vue`. |

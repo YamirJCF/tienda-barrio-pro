@@ -30,15 +30,19 @@ export const serializeCartItem = (item: CartItem): SerializedCartItem => ({
   subtotal: fromDecimal(item.subtotal),
 });
 
-export const deserializeCartItem = (data: SerializedCartItem): CartItem => ({
-  id: data.id,
-  name: data.name,
-  price: toDecimal(data.price),
-  quantity: toDecimal(data.quantity),
-  measurementUnit: data.unit,
-  isWeighable: data.isWeighable,
-  subtotal: data.subtotal ? toDecimal(data.subtotal) : undefined,
-});
+export const deserializeCartItem = (data: SerializedCartItem): CartItem => {
+  const price = toDecimal(data.price);
+  const quantity = toDecimal(data.quantity);
+  return {
+    id: data.id,
+    name: data.name,
+    price,
+    quantity,
+    measurementUnit: data.unit,
+    isWeighable: data.isWeighable,
+    subtotal: data.subtotal ? toDecimal(data.subtotal) : price.times(quantity),
+  };
+};
 
 export const cartSerializer = {
   serialize: (state: CartState): string => {

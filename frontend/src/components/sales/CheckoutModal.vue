@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
 import type { Client } from '../../types';
@@ -18,13 +18,12 @@ import {
   Loader2,
   UserX,
   ChevronDown,
-  ExternalLink
+  ExternalLink,
+  WifiOff
 } from 'lucide-vue-next';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
-import { useNotifications } from '../../composables/useNotifications';
 import { useClientsStore } from '../../stores/clients';
 import { useConfigStore } from '../../stores/config'; // Import Config Store
-import { useEmployeesStore } from '../../stores/employees';
 import type { PaymentTransaction } from '../../types';
 
 interface Props {
@@ -44,11 +43,9 @@ const emit = defineEmits<{
 
 const router = useRouter();
 const { formatCurrency } = useCurrencyFormat();
-const { showWarning } = useNotifications();
 const authStore = useAuthStore();
 const clientsStore = useClientsStore();
 const configStore = useConfigStore(); // Use Config Store
-const employeesStore = useEmployeesStore();
 
 // State
 const payments = ref<PaymentTransaction[]>([]);
@@ -62,34 +59,36 @@ const isLoadingClientsPage = ref<boolean>(false);
 const isLoadingMoreClients = ref<boolean>(false);
 const clientsPageError = ref<string | null>(null);
 const selectedFiadoClient = ref<Client | null>(null);
-const selectedBeneficiaryEmployeeId = ref<string>('');
+const checkoutError = ref<string | null>(null);
+const isOnline = ref<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
 let activeFetchSeq = 0;
 let inFlightQueryKey = '';
 
-const isCreditLimitExceeded = computed(() => {
-  if (!selectedFiadoClient.value || !selectedFiadoClient.value.creditLimit) return false;
-  const currentDebt = selectedFiadoClient.value.totalDebt || new Decimal(0);
-  return currentDebt.plus(props.total).gt(selectedFiadoClient.value.creditLimit);
+const syncOnlineStatus = () => {
+  isOnline.value = typeof navigator !== 'undefined' ? navigator.onLine : true;
+};
+
+onMounted(() => {
+  syncOnlineStatus();
+  window.addEventListener('online', syncOnlineStatus);
+  window.addEventListener('offline', syncOnlineStatus);
 });
 
-// Computed: Dynamic Methods (Fiado requiere canFiar || isAdmin; incluye Retiro Personal $0)
+onUnmounted(() => {
+  window.removeEventListener('online', syncOnlineStatus);
+  window.removeEventListener('offline', syncOnlineStatus);
+});
+
+// Computed: Dynamic Commercial Methods (Fiado requiere canFiar || isAdmin; Retiro Personal vive en PersonalWithdrawalModal)
 const activeMethods = computed(() => {
     const canUseFiado = authStore.canFiar || authStore.isAdmin;
-    const base = configStore.activePaymentMethods
+    return configStore.activePaymentMethods
         .filter((m) => m.code !== 'fiado' || canUseFiado)
         .map((m) => ({
             code: m.code,
             name: m.name,
             allowsChange: Boolean(m.allowsChange),
         }));
-    return [
-        ...base,
-        {
-            code: 'consumo_personal',
-            name: 'Retiro ($0)',
-            allowsChange: false,
-        },
-    ];
 });
 
 const currentPaymentMethod = computed(() => {
@@ -99,7 +98,6 @@ const currentPaymentMethod = computed(() => {
 // Capabilities
 const allowsChange = computed(() => currentPaymentMethod.value?.allowsChange ?? false);
 const isFiado = computed(() => currentMethod.value === 'fiado'); // Special Business Logic
-const isPersonalWithdrawal = computed(() => currentMethod.value === 'consumo_personal');
 const isNequi = computed(() => currentMethod.value === 'nequi' || currentMethod.value === 'llave_bre'); // Canales digitales sin cambio
 
 // Total Calculations
@@ -120,6 +118,28 @@ const remainingBalance = computed(() => {
   return diff.isNegative() ? new Decimal(0) : diff;
 });
 
+// C1-H1: Ecuación de cupo evaluada sobre el monto real a acreditar (no props.total ciego)
+const amountToCredit = computed(() => {
+  return remainingBalance.value.gt(0) ? remainingBalance.value : props.total;
+});
+
+const selectedClientCreditLimit = computed(() => {
+  return selectedFiadoClient.value?.creditLimit || new Decimal(0);
+});
+
+const selectedClientCurrentDebt = computed(() => {
+  return selectedFiadoClient.value?.totalDebt || new Decimal(0);
+});
+
+const projectedClientDebt = computed(() => {
+  return selectedClientCurrentDebt.value.plus(amountToCredit.value);
+});
+
+const isCreditLimitExceeded = computed(() => {
+  if (!selectedFiadoClient.value || !selectedFiadoClient.value.creditLimit) return false;
+  return projectedClientDebt.value.gt(selectedFiadoClient.value.creditLimit);
+});
+
 const change = computed(() => {
   // Only calculate change if method allows it (Cash)
   if (!allowsChange.value) return new Decimal(0);
@@ -129,11 +149,13 @@ const change = computed(() => {
 });
 
 const canComplete = computed(() => {
-    if (isPersonalWithdrawal.value) {
-        return true;
-    }
     if (isFiado.value) {
-        return !!selectedFiadoClient.value;
+        return (
+            Boolean(selectedFiadoClient.value) &&
+            !isCreditLimitExceeded.value &&
+            isOnline.value &&
+            (authStore.canFiar || authStore.isAdmin)
+        );
     }
     return totalMoneyOnTable.value.gte(props.total);
 });
@@ -239,8 +261,6 @@ const getIconForMethod = (code: string) => {
             return Smartphone;
         case 'fiado':
             return User;
-        case 'consumo_personal':
-            return Users;
         default:
             return Banknote;
     }
@@ -285,37 +305,34 @@ const removePayment = (index: number) => {
 };
 
 const confirmTransaction = () => {
-    if (isPersonalWithdrawal.value) {
-        payments.value = [{
-            method: 'consumo_personal',
-            amount: new Decimal(0),
-        }];
-        const beneficiaryId = authStore.isAdmin && selectedBeneficiaryEmployeeId.value
-            ? selectedBeneficiaryEmployeeId.value
-            : undefined;
-        // CHK-403: Consumo personal nunca envía client_id
-        emit('complete', payments.value, new Decimal(0), undefined, beneficiaryId);
-        return;
-    }
+    syncOnlineStatus();
+    checkoutError.value = null;
 
     if (isFiado.value) {
+        if (!isOnline.value) {
+            checkoutError.value = 'Las ventas fiadas requieren conexión en línea.';
+            return;
+        }
         if (!authStore.canFiar && !authStore.isAdmin) {
-            showWarning('No tienes permiso autorizado (canFiar) para registrar ventas fiadas.');
+            checkoutError.value = 'No tienes permiso autorizado (canFiar) para registrar ventas fiadas.';
             return;
         }
         if (!selectedFiadoClient.value) {
-            showWarning('Debes seleccionar un cliente para fiar.');
+            checkoutError.value = 'Debes seleccionar un cliente para fiar.';
             return;
         }
-        const amountToCredit = remainingBalance.value.gt(0) ? remainingBalance.value : props.total;
-        
+        if (isCreditLimitExceeded.value) {
+            checkoutError.value = `El monto a fiar ($${formatCurrency(amountToCredit.value)}) supera el cupo disponible del cliente.`;
+            return;
+        }
+
         // Single Payment for Fiado
         payments.value = [{
             method: 'fiado',
-            amount: amountToCredit,
+            amount: amountToCredit.value,
         }];
 
-        const finalTotalPaid = amountToCredit;
+        const finalTotalPaid = amountToCredit.value;
         emit('complete', payments.value, finalTotalPaid, selectedFiadoClient.value.id);
         return;
     }
@@ -326,17 +343,12 @@ const confirmTransaction = () => {
         // Validation: Must cover total?
         const amount = new Decimal(inputAmount.value);
         if (amount.lt(props.total) && !allowsChange.value) {
-            showWarning('Pago parcial no soportado en este modo. Ingrese el monto completo.');
+            checkoutError.value = 'Pago parcial no soportado en este modo. Ingrese el monto completo.';
             return;
         }
         addCurrentPayment();
     } else if (payments.value.length === 0) {
-        // Implicit Full Payment (e.g. Exact Amount button used or auto-set)
-        // If nothing in payments list and no input, assume exact total?
-        // Only if exact amount was pre-set.
-        // Actually, if inputAmount is empty, check if we have a payment in list?
-        // But we just enforced Single Payment overwrites list.
-        showWarning('Ingrese el monto recibido.');
+        checkoutError.value = 'Ingrese el monto recibido.';
         return;
     }
     
@@ -347,7 +359,7 @@ const confirmTransaction = () => {
         // CHK-403 / RN-16: Ventas de contado / no fiadas nunca asocian client_id
         emit('complete', payments.value, finalTotalPaid, undefined);
     } else {
-        showWarning('El monto es insuficiente');
+        checkoutError.value = 'El monto recibido es insuficiente para cubrir el total.';
     }
 };
 
@@ -370,6 +382,7 @@ watch(clientSearch, () => {
 
 watch(() => props.modelValue, (val) => {
   if (val) {
+    syncOnlineStatus();
     payments.value = [];
     const defaultCode = activeMethods.value.length > 0 ? activeMethods.value[0].code : 'cash';
     const hasRequestedMethod = props.initialMethod && activeMethods.value.some((m) => m.code === props.initialMethod);
@@ -380,13 +393,8 @@ watch(() => props.modelValue, (val) => {
     pagedClients.value = [];
     totalClientsCount.value = 0;
     clientsPageError.value = null;
+    checkoutError.value = null;
     selectedFiadoClient.value = props.selectedClient || null;
-    selectedBeneficiaryEmployeeId.value = '';
-
-    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-    if (authStore.isAdmin && storeId && employeesStore.employees.length === 0 && typeof employeesStore.initialize === 'function') {
-      employeesStore.initialize(storeId).catch(() => {});
-    }
 
     if (currentMethod.value === 'fiado' && !selectedFiadoClient.value) {
       loadClientsPage(true);
@@ -400,17 +408,20 @@ watch(() => props.selectedClient, (client) => {
   }
 }, { immediate: true });
 
+watch([inputAmount, selectedFiadoClient], () => {
+  if (checkoutError.value) {
+    checkoutError.value = null;
+  }
+});
+
 watch(currentMethod, (newMethod) => {
+    syncOnlineStatus();
     reference.value = ''; 
     payments.value = []; 
+    checkoutError.value = null;
 
     if (newMethod !== 'fiado') {
         selectedFiadoClient.value = null;
-    }
-
-    if (newMethod === 'consumo_personal') {
-        inputAmount.value = '';
-        return;
     }
     
     const methodObj = configStore.getMethodByCode(newMethod);
@@ -446,17 +457,14 @@ watch(currentMethod, (newMethod) => {
         <!-- 1. HEADER (Total Summary) -->
         <header class="flex flex-col items-center justify-center py-2.5 bg-gray-50 dark:bg-background-dark border-b border-gray-100 dark:border-gray-800 shrink-0">
             <h3 class="text-gray-500 dark:text-gray-400 text-xs font-semibold tracking-wide uppercase mb-0.5">
-                {{ isPersonalWithdrawal ? 'Consumo / Retiro Personal ($0 en Caja)' : 'Total a Pagar' }}
+                Total a Pagar
             </h3>
             <div class="flex items-baseline gap-1">
                 <span class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">$</span>
-                <span class="text-3xl md:text-4xl font-black text-gray-900 dark:text-primary tracking-tight">
-                    {{ isPersonalWithdrawal ? '0' : formatCurrency(total) }}
+                <span class="text-3xl md:text-4xl font-black font-mono tabular-nums text-gray-900 dark:text-primary tracking-tight">
+                    {{ formatCurrency(total) }}
                 </span>
             </div>
-            <p v-if="isPersonalWithdrawal" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Valor venta ref.: ${{ formatCurrency(total) }} • Costeado en inventario
-            </p>
         </header>
 
         <!-- 2. Payment Method Tabs (Dynamic) -->
@@ -586,51 +594,21 @@ watch(currentMethod, (newMethod) => {
                 </div>
             </div>
 
-            <!-- Scenario D: Consumo / Retiro Personal ($0 en Caja) -->
-            <div v-else-if="isPersonalWithdrawal" data-testid="personal-withdrawal-panel" class="flex flex-col gap-4 py-3">
-                <div class="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-                            Consumo / Retiro Personal
-                        </span>
-                        <span class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold">
-                            $0 en Caja
-                        </span>
-                    </div>
-                    <p class="text-xs text-slate-600 dark:text-slate-300">
-                        Los productos se descuentan del inventario al costo FIFO sin sumar ingresos en la gaveta POS ni generar ventas comerciales.
-                    </p>
-                </div>
-
-                <div v-if="authStore.isAdmin" class="space-y-1.5">
-                    <label class="block text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                        Beneficiario del Retiro (Admin)
-                    </label>
-                    <select
-                        v-model="selectedBeneficiaryEmployeeId"
-                        data-testid="beneficiary-employee-select"
-                        class="w-full h-11 px-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-                    >
-                        <option value="">Administrador ({{ authStore.currentUser?.name || 'Propio' }})</option>
-                        <option
-                            v-for="emp in employeesStore.activeOperationalEmployees"
-                            :key="emp.id"
-                            :value="emp.id"
-                        >
-                            {{ emp.name }} (@{{ emp.username }})
-                        </option>
-                    </select>
-                </div>
-
-                <div v-else class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
-                    Asignado automáticamente a: <strong class="text-slate-900 dark:text-white">{{ authStore.currentUser?.name || 'Colaborador actual' }}</strong>
-                </div>
-            </div>
-
             <!-- Scenario C: Fiado w/ Inline Compact Client Selection & Lazy Loading -->
             <div v-else-if="isFiado" class="flex flex-col gap-3 flex-1 min-h-0">
+                <!-- Alerta Offline Bloqueante (N1) -->
+                <div
+                    v-if="!isOnline"
+                    role="alert"
+                    data-testid="fiado-offline-alert"
+                    class="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs font-semibold shrink-0"
+                >
+                    <WifiOff :size="15" class="shrink-0" />
+                    <span>Las ventas fiadas requieren conexión en línea. Reconecta para acreditar este saldo.</span>
+                </div>
+
                 <!-- 1A. Tarjeta Compacta de Cliente Seleccionado -->
-                <div v-if="selectedFiadoClient" class="bg-indigo-50 dark:bg-indigo-950/30 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800/60 shadow-sm space-y-2 shrink-0">
+                <div v-if="selectedFiadoClient" class="bg-indigo-50 dark:bg-indigo-950/30 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800/60 shadow-sm space-y-2.5 shrink-0">
                     <div class="flex items-center justify-between">
                         <span class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
                             Cliente Seleccionado
@@ -679,25 +657,57 @@ watch(currentMethod, (newMethod) => {
                         </div>
 
                         <div class="flex flex-col items-end shrink-0 text-right leading-tight gap-0.5">
-                            <span class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                Cupo: ${{ formatCurrency(selectedFiadoClient.creditLimit || 0) }}
+                            <span class="text-[11px] font-semibold font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+                                Cupo: ${{ formatCurrency(selectedClientCreditLimit) }}
                             </span>
                             <span
-                                class="text-[11px] font-bold"
-                                :class="selectedFiadoClient.totalDebt && selectedFiadoClient.totalDebt.gt(0) ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'"
+                                class="text-[11px] font-bold font-mono tabular-nums"
+                                :class="selectedClientCurrentDebt.gt(0) ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'"
                             >
-                                Deuda: ${{ formatCurrency(selectedFiadoClient.totalDebt || 0) }}
+                                Deuda: ${{ formatCurrency(selectedClientCurrentDebt) }}
                             </span>
                         </div>
                     </div>
 
-                    <!-- Advertencia si excede cupo disponible -->
+                    <!-- Read Model de Cupo y Saldo Previsto (Arquetipo D) -->
+                    <div
+                        data-testid="fiado-credit-read-model"
+                        class="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-xl bg-white/90 dark:bg-slate-900/70 border border-indigo-200/80 dark:border-indigo-800/60 text-xs"
+                    >
+                        <div>
+                            <span class="block text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Cupo total</span>
+                            <span class="font-bold font-mono tabular-nums text-slate-900 dark:text-white">${{ formatCurrency(selectedClientCreditLimit) }}</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Deuda actual</span>
+                            <span class="font-bold font-mono tabular-nums text-slate-900 dark:text-white">${{ formatCurrency(selectedClientCurrentDebt) }}</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Monto a fiar</span>
+                            <span class="font-bold font-mono tabular-nums text-indigo-700 dark:text-indigo-300">${{ formatCurrency(amountToCredit) }}</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Nuevo saldo previsto</span>
+                            <span
+                                class="font-black font-mono tabular-nums"
+                                :class="isCreditLimitExceeded ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'"
+                            >
+                                ${{ formatCurrency(projectedClientDebt) }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Bloqueo N1 si excede cupo disponible -->
                     <div
                         v-if="isCreditLimitExceeded"
-                        class="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-medium"
+                        role="alert"
+                        data-testid="fiado-credit-exceeded-alert"
+                        class="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs font-semibold"
                     >
-                        <AlertTriangle :size="15" class="shrink-0 text-amber-600" />
-                        <span>Esta venta (${{ formatCurrency(total) }}) superará el cupo disponible del cliente.</span>
+                        <AlertTriangle :size="15" class="shrink-0 text-rose-600 dark:text-rose-400" />
+                        <span>
+                            El monto a fiar (${{ formatCurrency(amountToCredit) }}) superará el cupo disponible (${{ formatCurrency(selectedClientCreditLimit) }}) del cliente.
+                        </span>
                     </div>
                 </div>
 
@@ -836,19 +846,31 @@ watch(currentMethod, (newMethod) => {
         </main>
 
         <!-- 4. Footer (Action) -->
-        <footer class="px-4 py-3 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800 shrink-0">
+        <footer class="px-4 py-3 bg-white dark:bg-surface-dark border-t border-gray-100 dark:border-gray-800 shrink-0 space-y-2">
+            <div
+                v-if="checkoutError"
+                role="alert"
+                data-testid="checkout-inline-error"
+                class="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs font-semibold"
+            >
+                <AlertTriangle :size="15" class="shrink-0" />
+                <span>{{ checkoutError }}</span>
+            </div>
+
             <button 
+                type="button"
+                data-testid="checkout-confirm-btn"
                 @click="confirmTransaction"
-                :disabled="!canComplete && !isFiado"
-                class="w-full h-[52px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:dark:bg-gray-800 disabled:dark:text-gray-600 rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none flex flex-col items-center justify-center transition-all duration-200"
+                :disabled="!canComplete"
+                class="w-full h-[52px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:dark:bg-gray-800 disabled:dark:text-gray-600 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none flex flex-col items-center justify-center transition-all duration-200 cursor-pointer"
             >
                 <div class="flex flex-col items-center leading-none">
                     <span class="text-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-0.5">
-                        {{ isPersonalWithdrawal ? 'Registrar Retiro Personal ($0)' : 'Completar Venta' }}
+                        Completar Venta
                     </span>
                     <div class="flex items-center gap-2">
                         <span class="text-white text-xl font-black tracking-wide">CONFIRMAR</span>
-                        <span v-if="change.gt(0)" class="bg-emerald-800/40 text-emerald-50 text-[10px] px-1.5 py-0.5 rounded font-bold ml-1">
+                        <span v-if="change.gt(0)" class="bg-emerald-800/40 text-emerald-50 text-[10px] px-1.5 py-0.5 rounded font-bold font-mono tabular-nums ml-1">
                             ${{ formatCurrency(change) }}
                         </span>
                     </div>

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import CheckoutModal from '../../components/sales/CheckoutModal.vue';
 import { useClientsStore } from '../../stores/clients';
@@ -13,12 +13,27 @@ import {
 import { Decimal } from 'decimal.js';
 import type { Client } from '../../types';
 
+const { mockShowWarning } = vi.hoisted(() => ({
+  mockShowWarning: vi.fn(),
+}));
+
+vi.mock('../../composables/useNotifications', () => ({
+  useNotifications: () => ({
+    showWarning: mockShowWarning,
+    showSuccess: vi.fn(),
+    showError: vi.fn(),
+    showInfo: vi.fn(),
+  }),
+}));
+
 const mockPush = vi.fn();
 vi.mock('vue-router', () => ({
   useRouter: () => ({
     push: mockPush,
   }),
 }));
+
+enableAutoUnmount(afterEach);
 
 describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
   const storeId = 'b63adadd-8679-4abc-af6c-d72ac3aa49e1';
@@ -92,6 +107,7 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
   });
 
   const setupStores = (dataset: Client[] = makeClientsCatalog()) => {
@@ -275,10 +291,10 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
     expect(wrapper.text()).toContain('5 de 12');
   });
 
-  it('selects client, navigates to detail on selected name click, omits Nota de Fiado, allows Cambiar, and emits complete', async () => {
+  it('selects client, navigates to detail, blocks CONFIRMAR on credit exceeded (C1-H1), and emits complete when within limit', async () => {
     const dataset = makeClientsCatalog();
     const { fetchPageSpy } = setupStores(dataset);
-    const wrapper = mountModal({ total: new Decimal(120000) }); // Exceeds MARIA's creditLimit
+    const wrapper = mountModal({ total: new Decimal(120000) }); // Exceeds MARIA's creditLimit (100.000)
 
     await switchToFiadoTab(wrapper);
 
@@ -289,11 +305,27 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
     await wrapper.findAll('[data-testid="fiado-client-card"]')[0].trigger('click');
     expect(mockPush).not.toHaveBeenCalled();
 
-    // Summary card shows selected client & credit limit warning without Nota de Fiado box
+    // Summary card shows selected client, Read Model & blocking N1 alert
     expect(wrapper.text()).toContain('Cliente Seleccionado');
-    expect(wrapper.text()).toContain('superará el cupo disponible');
+    const readModel = wrapper.find('[data-testid="fiado-credit-read-model"]');
+    expect(readModel.exists()).toBe(true);
+    expect(readModel.text()).toContain('Cupo total');
+    expect(readModel.text()).toContain('Deuda actual');
+    expect(readModel.text()).toContain('Monto a fiar');
+    expect(readModel.text()).toContain('Nuevo saldo previsto');
+    expect(readModel.text()).toContain('$120.000');
+
+    const creditAlert = wrapper.find('[data-testid="fiado-credit-exceeded-alert"]');
+    expect(creditAlert.exists()).toBe(true);
+    expect(creditAlert.text()).toContain('superará el cupo disponible');
     expect(wrapper.find('[data-testid="fiado-note-field"]').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('Nota de Fiado');
+
+    // C1-H1: Botón CONFIRMAR queda realmente deshabilitado y no emite complete si excede cupo
+    const blockedConfirmBtn = wrapper.get('[data-testid="checkout-confirm-btn"]');
+    expect((blockedConfirmBtn.element as HTMLButtonElement).disabled).toBe(true);
+    await blockedConfirmBtn.trigger('click');
+    expect(wrapper.emitted('complete')).toBeUndefined();
 
     // Clicking selected client name navigates to detail view
     const nameLink = wrapper.find('[data-testid="selected-client-name-link"]');
@@ -310,15 +342,18 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
     expect(wrapper.find('input[aria-label*="Buscar cliente"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="fiado-note-field"]').exists()).toBe(false);
 
-    // Re-select and confirm sale
+    // Con monto dentro del cupo (50.000 <= 100.000), CONFIRMAR habilita y emite complete
+    await wrapper.setProps({ total: new Decimal(50000) });
     await wrapper.findAll('[data-testid="fiado-client-card"]')[0].trigger('click');
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text().includes('CONFIRMAR'));
-    await confirmBtn!.trigger('click');
+    const confirmBtn = wrapper.get('[data-testid="checkout-confirm-btn"]');
+    expect((confirmBtn.element as HTMLButtonElement).disabled).toBe(false);
+    await confirmBtn.trigger('click');
 
     expect(wrapper.emitted('complete')).toBeDefined();
     expect(wrapper.emitted('complete')![0][0]).toEqual([
       expect.objectContaining({
         method: 'fiado',
+        amount: new Decimal(50000),
       }),
     ]);
     expect(wrapper.emitted('complete')![0][2]).toBe('c-1');
@@ -343,6 +378,42 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
       search: '',
       debtFilter: 'all',
     });
+  });
+
+  it('blocks Fiado in offline mode with N1 alert and excludes Retiro ($0) from commercial CheckoutModal', async () => {
+    const dataset = makeClientsCatalog();
+    setupStores(dataset);
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+
+    const wrapper = mountModal({
+      total: new Decimal(15000),
+      selectedClient: dataset[0],
+      initialMethod: 'fiado',
+    });
+    await flushPromises();
+
+    // Retiro ($0) ya no existe como pestaña dentro de CheckoutModal (C1-H2)
+    expect(wrapper.text()).not.toContain('Retiro ($0)');
+    expect(wrapper.find('[data-testid="personal-withdrawal-panel"]').exists()).toBe(false);
+
+    // Offline bloquea Fiado con N1 persistente y botón deshabilitado (C1-H1)
+    const offlineAlert = wrapper.find('[data-testid="fiado-offline-alert"]');
+    expect(offlineAlert.exists()).toBe(true);
+    expect(offlineAlert.text()).toContain('conexión en línea');
+    const confirmBtn = wrapper.get('[data-testid="checkout-confirm-btn"]');
+    expect((confirmBtn.element as HTMLButtonElement).disabled).toBe(true);
+    expect(mockShowWarning).not.toHaveBeenCalled();
+  });
+
+  it('uses N1 inline checkoutError instead of ephemeral showWarning on invalid payment input', async () => {
+    setupStores();
+    const wrapper = mountModal({ total: new Decimal(5000) });
+
+    // Confirmar en Efectivo sin ingresar monto (forzando disparo de método cuando estuviera habilitado o con monto parcial en Nequi)
+    await wrapper.setProps({ total: new Decimal(5000) });
+    const confirmBtn = wrapper.get('[data-testid="checkout-confirm-btn"]');
+    expect((confirmBtn.element as HTMLButtonElement).disabled).toBe(true);
+    expect(mockShowWarning).not.toHaveBeenCalled();
   });
 
   it('shows explicit loading and error states with Reintentar instead of silent empty fallback', async () => {
