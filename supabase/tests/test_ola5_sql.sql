@@ -102,37 +102,52 @@ BEGIN
     ASSERT v_inv_paid = 0, 'Entrada no debe alterar facturas existentes';
 
     -- ========================================================================
-    -- TEST 2 (CHK-503 & CHK-504): Salidas Logísticas ($0) con y sin caja / con y sin canManageInventory
+    -- TEST 2 (CHK-503 & CHK-504 + Enmienda UX-ADR-003): Salidas Logísticas ($0) exigen canManageInventory
     -- ========================================================================
-    -- Cajero Básico (SIN caja abierta, SIN canManageInventory): merma y consumo_negocio OK, unit_cost REDACTADO
+    -- Cajero Básico (SIN canManageInventory): rechazado con SQLSTATE 42501 en los 4 tipos de salida logística
     PERFORM set_config('request.jwt.claims', json_build_object('sub', v_emp_basic_id, 'role', 'authenticated')::text, true);
     PERFORM set_config('request.headers', json_build_object('x-employee-id', v_emp_basic_id::text)::text, true);
-    v_res := public.rpc_registrar_salida_logistica(v_prod_a, 'merma', 1, 'Empaque roto en estantería');
-    ASSERT (v_res->>'success')::boolean = true, 'Usuario activo debe poder registrar merma sin caja';
-    ASSERT (v_res->'data'->'unit_cost') = 'null'::jsonb, 'unit_cost debe ir redactado (NULL) para usuario sin canManageInventory';
 
-    v_res := public.rpc_registrar_salida_logistica(v_prod_a, 'consumo_negocio', 1, 'Aseo de mostrador');
-    ASSERT (v_res->>'success')::boolean = true, 'Usuario activo debe poder registrar consumo_negocio sin caja';
-    ASSERT (v_res->'data'->>'new_stock')::numeric = 8, 'Stock tras merma(1)+consumo_negocio(1) debe ser 8';
+    BEGIN
+        PERFORM public.rpc_registrar_salida_logistica(v_prod_a, 'merma', 1, 'Empaque roto en estantería');
+        RAISE EXCEPTION 'TEST_FAIL: Cajero básico sin canManageInventory pudo registrar merma';
+    EXCEPTION WHEN SQLSTATE '42501' THEN
+        NULL;
+    END;
 
-    -- Cajero Básico NO puede ajuste_conteo ni devolucion_proveedor
+    BEGIN
+        PERFORM public.rpc_registrar_salida_logistica(v_prod_a, 'consumo_negocio', 1, 'Aseo de mostrador');
+        RAISE EXCEPTION 'TEST_FAIL: Cajero básico sin canManageInventory pudo registrar consumo_negocio';
+    EXCEPTION WHEN SQLSTATE '42501' THEN
+        NULL;
+    END;
+
     BEGIN
         PERFORM public.rpc_registrar_salida_logistica(v_prod_a, 'ajuste_conteo', 1, 'Conteo manual', 'negative', NULL);
         RAISE EXCEPTION 'TEST_FAIL: Cajero básico pudo ejecutar ajuste_conteo';
-    EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM NOT LIKE '%PERMISSION_DENIED%' THEN RAISE; END IF;
+    EXCEPTION WHEN SQLSTATE '42501' THEN
+        NULL;
     END;
 
     BEGIN
         PERFORM public.rpc_registrar_salida_logistica(v_prod_a, 'devolucion_proveedor', 1, 'Cambio proveedor', 'negative', v_supplier_id);
         RAISE EXCEPTION 'TEST_FAIL: Cajero básico pudo ejecutar devolucion_proveedor';
-    EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM NOT LIKE '%PERMISSION_DENIED%' THEN RAISE; END IF;
+    EXCEPTION WHEN SQLSTATE '42501' THEN
+        NULL;
     END;
 
-    -- Bodeguero CON canManageInventory: devolucion_proveedor ($0, NO descuenta factura CxP) + ajuste_conteo (+/-) + contra-movimiento
+    -- Bodeguero CON canManageInventory (sin caja abierta): merma + consumo_negocio + devolucion_proveedor ($0) + ajuste_conteo (+/-) + contra-movimiento
     PERFORM set_config('request.jwt.claims', json_build_object('sub', v_emp_inv_id, 'role', 'authenticated')::text, true);
     PERFORM set_config('request.headers', json_build_object('x-employee-id', v_emp_inv_id::text)::text, true);
+
+    v_res := public.rpc_registrar_salida_logistica(v_prod_a, 'merma', 1, 'Empaque roto en estantería');
+    ASSERT (v_res->>'success')::boolean = true, 'Usuario con canManageInventory debe poder registrar merma sin caja';
+    ASSERT (v_res->'data'->>'unit_cost')::numeric = 1000, 'Con canManageInventory sí expone unit_cost = 1000';
+
+    v_res := public.rpc_registrar_salida_logistica(v_prod_a, 'consumo_negocio', 1, 'Aseo de mostrador');
+    ASSERT (v_res->>'success')::boolean = true, 'Usuario con canManageInventory debe poder registrar consumo_negocio sin caja';
+    ASSERT (v_res->'data'->>'new_stock')::numeric = 8, 'Stock tras merma(1)+consumo_negocio(1) debe ser 8';
+
     v_res := public.rpc_registrar_salida_logistica(v_prod_a, 'devolucion_proveedor', 1, 'Producto próximo a vencer', 'negative', v_supplier_id);
     ASSERT (v_res->'data'->>'unit_cost')::numeric = 1000, 'Con canManageInventory sí expone unit_cost = 1000';
     SELECT amount_paid INTO v_inv_paid FROM public.supplier_invoices WHERE id = v_invoice_id;
@@ -260,7 +275,7 @@ BEGIN
     -- Validar get_inventory_kardex (filtra merma y actor, con canManageInventory/Admin)
     v_res := public.get_inventory_kardex(v_prod_a, 'merma', NULL, NULL, NULL, 20, 0);
     ASSERT (v_res->>'count')::int = 1, 'Kardex prod_a filtrado por merma debe tener 1 fila';
-    ASSERT ((v_res->'data'->0->>'actor_name') = 'Cajero Básico'), 'Kardex debe preservar actor_name del Cajero Básico';
+    ASSERT ((v_res->'data'->0->>'actor_name') = 'Bodeguero Inv'), 'Kardex debe preservar actor_name del Bodeguero Inv';
 
     -- ========================================================================
     -- TEST 5 (CHK-511 & CHK-512): Reporte P&L 4 Pilares y cero doble conteo
@@ -308,6 +323,12 @@ BEGIN
 
     SELECT COUNT(*) INTO v_count FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname = 'buscar_producto_pos';
     ASSERT v_count = 1, 'buscar_producto_pos debe tener firma única (COUNT=1)';
+
+    SELECT COUNT(*) INTO v_count FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname = 'rpc_registrar_entrada_masiva';
+    ASSERT v_count = 1, 'rpc_registrar_entrada_masiva debe tener firma única (COUNT=1)';
+
+    SELECT COUNT(*) INTO v_count FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname = 'rpc_registrar_salida_logistica';
+    ASSERT v_count = 1, 'rpc_registrar_salida_logistica debe tener firma única (COUNT=1)';
 
     -- 6.2 Privilegios explícitos para authenticated (Regla 8)
     ASSERT has_table_privilege('authenticated', 'public.inventory_movements', 'SELECT'), 'Falta SELECT para authenticated en inventory_movements';

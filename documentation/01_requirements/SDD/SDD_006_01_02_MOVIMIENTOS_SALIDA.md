@@ -2,9 +2,9 @@
 
 > **Asociado a:** [FRD-006-01-02](../FRD/FRD_006_01_02_MOVIMIENTOS_SALIDA_INVENTARIO.md) | [SDD-003-01](SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
 > **Módulo Primario:** [SDD-006: Núcleo de Inventario y Catálogo Padre](SDD_006_NUCLEO_INVENTARIO_PADRE.md)  
-> **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores (Reactivado bajo `ARQ-002` v1.4)  
-> **Estado:** 🟢 REACTIVADO Y ALINEADO A `SDD-003-01` / `ARQ-002` v1.4 (Pendiente implementación SQL/Frontend Fase 3)  
-> **Última Actualización:** 2026-11-19  
+> **Fase del Plan Maestro:** Ola 2 — Inventario, Lotes y Proveedores (`ARQ-002` v1.4 + Enmienda `WO-OLA2-C3-001` / `UX-ADR-003`)  
+> **Estado:** 🟢 IMPLEMENTADO Y ENMENDADO (`WO-OLA2-C3-001` — Permiso único `canManageInventory`, soporte `p_batch_id` y entrada masiva atómica)  
+> **Última Actualización:** 2026-11-24  
 
 ---
 
@@ -111,3 +111,29 @@ sequenceDiagram
 
 ## 7. Modelo de Datos e Impacto Fase 3
 Consolida sobre `inventory_movements` (`SDD_003_01 §7`) ampliando `movement_type` y añadiendo `actor_name`, `actor_role`, `session_id`, `reversed_movement_id`, `beneficiary_employee_id` y `reference_sale_price`.
+
+---
+
+## 8. Enmienda `WO-OLA2-C3-001` (`UX-ADR-003` — 2026-11-24)
+
+### 8.1 Unificación del Permiso en Contexto C3 (`canManageInventory`) y Trade-off (Regla 7)
+Todas las operaciones de salida/merma/ajuste (`merma`, `consumo_negocio`, `devolucion_proveedor`, `ajuste_conteo`) en `rpc_registrar_salida_logistica` exigen `assert_store_access(v_store_id)` seguido incondicionalmente de `assert_employee_permission(v_store_id, 'canManageInventory')` (que autoriza automáticamente a `Admin` y exige pase diario `<24h` + `canManageInventory = true` al empleado).
+
+- **Qué se decidió (Simplificación / Trade-off Regla 7):** Restringir `merma` y `consumo_negocio` al permiso único `canManageInventory` (o `Admin`), retirando el acceso libre previo para empleados sin dicho permiso.
+- **Por qué:** Alinear 100% la autoridad del servidor con la matriz de permisos del Contexto C3 (`SDD-003-01` y `C3_INVENTARIO_Y_FIFO.md`), evitando brechas cuando las mermas se invoquen desde la Ficha de Producto (`/inventory`, protegida por `canManageInventory`) y simplificando el modelo mental del tendero: quien administra el inventario puede dar de baja unidades y visualizar el costo FIFO del lote.
+- **Condición futura de revisión:** Si una tienda con operación multi-caja requiere que un cajero sin acceso al catálogo ni a costos reporte mermas rápidas desde mostrador, se deberá crear un permiso granular dedicado (`canReportShrinkage`) con flujo restringido en C1/POS que redacte `unit_cost = NULL`.
+
+### 8.2 Soporte Explícito de Lote (`p_batch_id`) en `rpc_registrar_salida_logistica`
+Nueva firma canónica única:
+`rpc_registrar_salida_logistica(p_product_id UUID, p_movement_type TEXT, p_quantity NUMERIC, p_reason TEXT, p_direction TEXT DEFAULT 'negative', p_supplier_id UUID DEFAULT NULL, p_batch_id UUID DEFAULT NULL)`
+
+1. **Salida negativa con `p_batch_id IS NOT NULL`:** Bloquea la fila del lote con `FOR UPDATE` verificando pertenencia al producto (`BATCH_NOT_FOUND`, `P0002`) y saldo (`BATCH_STOCK_INSUFFICIENT`, `P0001`). Descuenta exactamente ese lote en `inventory_batches`, activa `app.skip_bridge_movement_to_batch = 'true'` local a la transacción para impedir doble consumo en `bridge_movement_to_batch()`, asienta `inventory_movements` con el `cost_unit` y `sale_price` reales de ese lote, y registra el enlace explícito en `inventory_movement_batches`.
+2. **Salida negativa con `p_batch_id IS NULL`:** Delega al comportamiento FIFO automático (`bridge_movement_to_batch()` → `consume_stock_fifo()`).
+3. **Ajuste positivo por sobrante (`ajuste_conteo` + `p_direction = 'positive'`):**
+   - Con `p_batch_id`: suma `+p_quantity` a `quantity_remaining` y `quantity_initial` de ese lote con skip de trigger.
+   - Sin `p_batch_id`: si existe al menos un lote activo (`quantity_remaining > 0`), suma `+p_quantity` al lote activo más reciente; si el stock actual es `0` (sin lotes activos), crea una nueva capa FIFO valorizada al último `cost_price` y `price` conocido en `products`.
+
+### 8.3 Entrada Masiva Atómica (`rpc_registrar_entrada_masiva`) y `expiration_date`
+- Se agrega `inventory_batches.expiration_date DATE` para persistir vencimientos de forma estructurada (prohibido concatenar `[Vence: ...]` dentro de `reason`).
+- Firma canónica única: `rpc_registrar_entrada_masiva(p_store_id UUID, p_items JSONB, p_reason TEXT DEFAULT 'Compra masiva', p_supplier_id UUID DEFAULT NULL, p_invoice_ref TEXT DEFAULT NULL)`.
+- Opera todo-o-nada dentro de una única transacción con bloqueo `FOR UPDATE` por producto, genera un único lote por ítem vía trigger `bridge_movement_to_batch` asignándole su `expiration_date`, actualiza precios e historial inmutable, y devuelve el total monetario calculado en PostgreSQL (`total_entry_cost`, `total_units`, `items_processed`, `created_batch_ids`).

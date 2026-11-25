@@ -608,6 +608,7 @@ export const useInventoryStore = defineStore(
       reason: string;
       direction?: 'positive' | 'negative';
       supplierId?: string;
+      batchId?: string | null;
     }) => {
       const product = products.value.find((p) => p.id === params.productId);
       const res = await productRepository.registerLogisticExit(params);
@@ -618,6 +619,38 @@ export const useInventoryStore = defineStore(
         product.updatedAt = res.createdAt || new Date().toISOString();
       }
       return res;
+    };
+
+    const registerBulkStockEntry = async (params: {
+      items: Array<{
+        productId: string;
+        quantity: number;
+        unitCost: number;
+        salePrice: number;
+        expirationDate?: string | null;
+        reason?: string;
+      }>;
+      reason?: string;
+      supplierId?: string | null;
+      invoiceRef?: string | null;
+    }) => {
+      const authStore = useAuthStore();
+      const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+      if (!storeId) {
+        throw new Error('STORE_NOT_FOUND: No hay tienda activa para registrar la entrada.');
+      }
+
+      const result = await productRepository.registerBulkEntry({
+        storeId,
+        items: params.items,
+        reason: params.reason,
+        supplierId: params.supplierId ?? null,
+        invoiceRef: params.invoiceRef ?? null,
+      });
+
+      // Revalidar catálogo autoritativo desde backend (stock, precio y costo FIFO)
+      await fetchProducts(storeId);
+      return result;
     };
 
     const registerCounterMovement = async (
@@ -653,6 +686,7 @@ export const useInventoryStore = defineStore(
       getProductByPLU,
       searchProducts,
       registerStockMovement,
+      registerBulkStockEntry,
       registerLogisticExit,
       registerCounterMovement,
       adjustStockLocal,

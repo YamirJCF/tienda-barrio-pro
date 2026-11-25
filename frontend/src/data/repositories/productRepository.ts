@@ -155,11 +155,13 @@ export interface LogisticExitParams {
     reason: string;
     direction?: 'positive' | 'negative';
     supplierId?: string;
+    batchId?: string | null;
 }
 
 export interface LogisticExitResult {
     movementId: string;
     productId: string;
+    batchId?: string | null;
     movementType: LogisticExitType;
     quantity: number;
     newStock: number;
@@ -167,6 +169,32 @@ export interface LogisticExitResult {
     actorName: string;
     actorRole: string;
     createdAt: string;
+}
+
+export interface BulkStockEntryItem {
+    productId: string;
+    quantity: number;
+    unitCost: number;
+    salePrice: number;
+    expirationDate?: string | null;
+    reason?: string;
+}
+
+export interface BulkStockEntryParams {
+    storeId: string;
+    items: BulkStockEntryItem[];
+    reason?: string;
+    supplierId?: string | null;
+    invoiceRef?: string | null;
+}
+
+export interface BulkStockEntryResult {
+    itemsProcessed: number;
+    totalUnits: number;
+    totalEntryCost: number;
+    createdBatchIds: string[];
+    actorName?: string;
+    timestamp?: string;
 }
 
 /**
@@ -768,7 +796,8 @@ export const productRepository: ProductRepository = {
             p_quantity: params.quantity,
             p_reason: params.reason,
             p_direction: params.direction || 'negative',
-            p_supplier_id: params.supplierId || undefined
+            p_supplier_id: params.supplierId || null,
+            p_batch_id: params.batchId ?? null
         });
 
         if (error) {
@@ -787,6 +816,7 @@ export const productRepository: ProductRepository = {
         return {
             movementId: d.movement_id,
             productId: d.product_id,
+            batchId: d.batch_id ?? null,
             movementType: d.movement_type,
             quantity: Number(d.quantity),
             newStock: Number(d.new_stock),
@@ -794,6 +824,61 @@ export const productRepository: ProductRepository = {
             actorName: d.actor_name,
             actorRole: d.actor_role,
             createdAt: d.created_at
+        };
+    },
+
+    /**
+     * WO-OLA2-C3-001 (UX-ADR-003): Atomic all-or-nothing bulk stock entry via rpc_registrar_entrada_masiva.
+     * Server persists expiration_date and computes authoritative total_entry_cost.
+     */
+    async registerBulkEntry(params: BulkStockEntryParams): Promise<BulkStockEntryResult> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            throw new Error('OFFLINE_NOT_ALLOWED: La entrada masiva de inventario requiere conexión a internet.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const rpcItems = params.items.map((item) => ({
+            product_id: item.productId,
+            quantity: item.quantity,
+            unit_cost: item.unitCost,
+            sale_price: item.salePrice,
+            expiration_date: item.expirationDate || null,
+            ...(item.reason ? { reason: item.reason } : {})
+        }));
+
+        const { data, error } = await supabase.rpc('rpc_registrar_entrada_masiva', {
+            p_store_id: params.storeId,
+            p_items: rpcItems,
+            p_reason: params.reason || 'Compra masiva',
+            p_supplier_id: params.supplierId || null,
+            p_invoice_ref: params.invoiceRef || null
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to register bulk entry', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (!res || res.success === false || !res.data) {
+            throw new Error(res?.error || 'Error al registrar entrada masiva');
+        }
+
+        for (const item of params.items) {
+            systemCacheManager.invalidateNamespace(`kardex:${item.productId}`);
+        }
+
+        const d = res.data;
+        return {
+            itemsProcessed: Number(d.items_processed ?? d.processed_count ?? 0),
+            totalUnits: Number(d.total_units ?? 0),
+            totalEntryCost: Number(d.total_entry_cost ?? 0),
+            createdBatchIds: Array.isArray(d.created_batch_ids) ? d.created_batch_ids : [],
+            actorName: d.actor_name,
+            timestamp: d.timestamp
         };
     },
 

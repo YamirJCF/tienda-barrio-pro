@@ -4,13 +4,14 @@ import { useInventoryStore } from '../stores/inventory';
 import { useAuthStore } from '../stores/auth';
 import type { Product } from '../types';
 import { Decimal } from 'decimal.js';
-import { useCurrencyFormat } from '../composables/useCurrencyFormat';
-import { useToast } from 'vue-toastification';
+import { useNotifications } from '../composables/useNotifications';
 import { logger } from '../utils/logger';
 import { getMarginLoss } from '../utils/currency';
 import BaseModal from './ui/BaseModal.vue';
 import BaseInput from './ui/BaseInput.vue';
 import BaseButton from './ui/BaseButton.vue';
+import ProductBatchesTab from './inventory/ProductBatchesTab.vue';
+import ProductKardexTab from './inventory/ProductKardexTab.vue';
 import {
   Search,
   LayoutGrid,
@@ -21,34 +22,41 @@ import {
   AlertTriangle,
   TrendingUp,
   Save,
-  CheckCircle,
-  Clock
+  Trash2,
+  Layers,
+  History,
+  FileText,
 } from 'lucide-vue-next';
-import { useBatchStore } from '../stores/batches';
-import productRepository from '../data/repositories/productRepository';
 
-// Props
-// WO-001: Changed productId from number to string for UUID
+export type ProductFichaTab = 'data' | 'batches' | 'kardex';
+
 interface Props {
   modelValue: boolean;
-  productId?: string; // UUID for editing existing product
+  productId?: string;
+  initialTab?: ProductFichaTab;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  initialTab: 'data',
+});
+
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
   saved: [product: Product, action: 'create' | 'update'];
+  deleted: [productId: string];
 }>();
 
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
-const batchStore = useBatchStore();
-const toast = useToast();
-// const { roundHybrid50 } = useCurrencyFormat(); // No longer needed for saving
+const { showSuccess, showError, showWarning } = useNotifications();
 
+const activeTab = ref<ProductFichaTab>('data');
 const isSubmitting = ref(false);
+const showDeleteConfirm = ref(false);
+const isDeleting = ref(false);
+const deleteError = ref<string | null>(null);
 
-// WO-003: Preservar stock original para evitar pérdida de precisión
+// Preservar stock original para evitar pérdida de precisión
 const originalStock = ref<Decimal | null>(null);
 const stockWasModified = ref(false);
 
@@ -57,22 +65,23 @@ const originalPrice = ref<number | null>(null);
 const originalName = ref<string | null>(null);
 const originalCost = ref<number | null>(null);
 
-// WO-004: Formatear cantidad a máximo 2 decimales para visualización
+const editingProduct = computed<Product | undefined>(() =>
+  props.productId ? inventoryStore.getProductById(props.productId) : undefined
+);
+
+const canManageInventory = computed(() => authStore.canManageInventory || authStore.isAdmin);
+
 const formatQuantity = (qty: number | Decimal): string => {
   const num = qty instanceof Decimal ? qty.toNumber() : Number(qty);
   return Number.isInteger(num) ? num.toString() : num.toFixed(2);
 };
 
-// UX-FIX: Conversión automática entre unidades de peso
-// Factores: 1 kg = 2.20462 lb, 1 kg = 1000 g, 1 lb = 453.592 g
 const convertStock = (
   value: number,
   fromUnit: 'kg' | 'lb' | 'g',
   toUnit: 'kg' | 'lb' | 'g',
 ): number => {
   if (fromUnit === toUnit) return value;
-
-  // Primero convertir a gramos (unidad base)
   let grams: number;
   switch (fromUnit) {
     case 'kg':
@@ -85,8 +94,6 @@ const convertStock = (
       grams = value;
       break;
   }
-
-  // Luego convertir de gramos a la unidad destino
   switch (toUnit) {
     case 'kg':
       return grams / 1000;
@@ -97,7 +104,6 @@ const convertStock = (
   }
 };
 
-// Form State
 const formData = ref({
   name: '',
   brand: '',
@@ -111,7 +117,6 @@ const formData = ref({
   minStock: '5',
 });
 
-// Computed
 const margin = computed(() => {
   if (!formData.value.cost || !formData.value.price) return 0;
   const cost = parseFloat(formData.value.cost);
@@ -120,17 +125,13 @@ const margin = computed(() => {
   return ((price - cost) / cost) * 100;
 });
 
-// BR-02: Alerta de Ineficiencia Financiera
 const marginLoss = computed(() => {
   if (!formData.value.price) return 0;
   const price = parseFloat(formData.value.price);
   if (isNaN(price) || price <= 0) return 0;
-
-  // Calculate loss per unit if paid in cash
   return getMarginLoss(price).toNumber();
 });
 
-// T-007: Validación de precio vs costo
 const isPriceBelowCost = computed(() => {
   if (!formData.value.cost || !formData.value.price) return false;
   const cost = parseFloat(formData.value.cost);
@@ -138,33 +139,22 @@ const isPriceBelowCost = computed(() => {
   return price > 0 && cost > 0 && price < cost;
 });
 
+const isPluDuplicate = computed(() => {
+  const plu = String(formData.value.plu || '').trim();
+  if (!plu) return false;
+  return inventoryStore.products.some((p) => p.plu === plu && p.id !== props.productId);
+});
+
 const isValid = computed(() => {
   const name = String(formData.value.name || '').trim();
   const price = formData.value.price;
   const priceNum = parseFloat(String(price));
   const plu = String(formData.value.plu || '').trim();
-
-  // PLU opcional (autogenerable si está vacío), o entre 1 y 10 dígitos numéricos
-  const isPluValid = plu === '' || (/^\d{1,10}$/.test(plu));
-
-  // Validación de Unicidad
-  const isDuplicate = plu !== '' && inventoryStore.products.some(p => 
-    p.plu === plu && p.id !== props.productId
-  );
-
+  const isPluValid = plu === '' || /^\d{1,10}$/.test(plu);
+  const isDuplicate = isPluDuplicate.value;
   return name !== '' && isPluValid && !isDuplicate && price !== '' && price !== null && !isNaN(priceNum) && priceNum > 0;
 });
 
-const isPluDuplicate = computed(() => {
-  const plu = String(formData.value.plu || '').trim();
-  if (!plu) return false;
-  
-  return inventoryStore.products.some(p => 
-    p.plu === plu && p.id !== props.productId
-  );
-});
-
-// UX-FIX: Categorías dinámicas basadas en productos existentes
 const existingCategories = computed(() => {
   const cats = new Set(
     inventoryStore.products.map((p) => p.category).filter((c): c is string => Boolean(c)),
@@ -172,9 +162,7 @@ const existingCategories = computed(() => {
   return Array.from(cats).sort();
 });
 
-// Methods
 const blockNonNumeric = (e: KeyboardEvent) => {
-  // Permitir teclas de control: Backspace, Delete, Tab, Escape, Enter, Flechas
   if (
     [
       'Backspace',
@@ -192,15 +180,16 @@ const blockNonNumeric = (e: KeyboardEvent) => {
   ) {
     return;
   }
-  // Bloquear si no es número
   if (!/^\d$/.test(e.key)) {
     e.preventDefault();
   }
 };
 
 const close = () => {
+  showDeleteConfirm.value = false;
+  deleteError.value = null;
   emit('update:modelValue', false);
-  setTimeout(resetForm, 300); // Reset after animation
+  setTimeout(resetForm, 300);
 };
 
 const resetForm = () => {
@@ -216,35 +205,50 @@ const resetForm = () => {
     stock: '',
     minStock: '5',
   };
-  // WO-003: Reset stock tracking
   originalStock.value = null;
   originalPrice.value = null;
   originalName.value = null;
   originalCost.value = null;
   stockWasModified.value = false;
+  activeTab.value = 'data';
+};
+
+const syncFormFromProduct = (product: Product) => {
+  originalStock.value = product.stock;
+  originalPrice.value = product.price.toNumber();
+  originalName.value = product.name;
+  originalCost.value = product.cost ? product.cost.toNumber() : null;
+  stockWasModified.value = false;
+
+  formData.value = {
+    name: product.name,
+    brand: product.brand || '',
+    category: product.category || '',
+    plu: product.plu || '',
+    saleMode: product.isWeighable ? 'weight' : 'unit',
+    measurementUnit:
+      product.measurementUnit !== 'un'
+        ? (product.measurementUnit as 'kg' | 'lb' | 'g')
+        : 'lb',
+    cost: product.cost ? Number(product.cost).toFixed(2) : '',
+    price: product.price.toString(),
+    stock: formatQuantity(product.stock),
+    minStock: product.minStock.toString(),
+  };
 };
 
 const save = async () => {
-  logger.log('[ProductForm] Save called');
-  logger.log('[ProductForm] isValid:', isValid.value);
-  logger.log('[ProductForm] formData:', formData.value);
-
-  if (!isValid.value) {
-    logger.log('[ProductForm] Form not valid, aborting');
-    return;
-  }
+  if (!isValid.value) return;
 
   isSubmitting.value = true;
   let savedProduct: Product | undefined;
 
   try {
     if (props.productId) {
-      // Update existing: SDD-028 §4.8 y Deuda D-7 (current_stock permanece intacto)
-      logger.log('[ProductForm] Updating product with Vector Snapshot Seal:', props.productId);
       const snapshot = {
         expectedOldPrice: originalPrice.value ?? new Decimal(formData.value.price).toNumber(),
         expectedName: originalName.value ?? formData.value.name.trim(),
-        expectedOldCost: originalCost.value ?? (formData.value.cost ? Number(formData.value.cost) : undefined)
+        expectedOldCost: originalCost.value ?? (formData.value.cost ? Number(formData.value.cost) : undefined),
       };
 
       const updateData = {
@@ -261,10 +265,8 @@ const save = async () => {
         storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '',
       };
 
-      savedProduct = await inventoryStore.updateProduct(props.productId, updateData, snapshot) || undefined;
+      savedProduct = (await inventoryStore.updateProduct(props.productId, updateData, snapshot)) || undefined;
     } else {
-      // Create new: incluye stock inicial para entrada por trigger
-      logger.log('[ProductForm] Creating new product');
       const createData = {
         name: formData.value.name.trim(),
         brand: formData.value.brand.trim() || undefined,
@@ -279,29 +281,25 @@ const save = async () => {
         minStock: parseInt(formData.value.minStock) || 5,
         storeId: authStore.currentUser?.storeId || authStore.currentStore?.id || '',
       };
-      savedProduct = await inventoryStore.addProduct(createData) || undefined;
+      savedProduct = (await inventoryStore.addProduct(createData)) || undefined;
     }
 
     if (savedProduct) {
-      logger.log('[ProductForm] Saved product:', savedProduct);
-      toast.success(props.productId ? 'Cambios guardados' : 'Producto creado exitosamente');
+      showSuccess(props.productId ? 'Cambios guardados' : 'Producto creado exitosamente');
       emit('saved', savedProduct, props.productId ? 'update' : 'create');
       close();
     } else {
-      toast.error('Error al guardar el producto');
+      showError('Error al guardar el producto');
     }
   } catch (err: any) {
     if (err?.code === 'CONCURRENT_MUTATION_BLOCKED') {
-      // UXD-014 §5: Bloqueo defensivo inmediato, cierre de modal y alerta de integridad
-      toast.error('Operación bloqueada. El producto fue modificado concurrentemente desde otro terminal.');
+      showError('Operación bloqueada. El producto fue modificado concurrentemente desde otro terminal.');
       close();
-      // Re-descargar catálogo de fondo para ver la verdad del servidor
       inventoryStore.initialize(authStore.currentStore?.id, true);
     } else if (err?.code === 'MUTATION_COOLDOWN_ACTIVE') {
-      toast.warning('Operación bloqueada temporalmente por cooldown de seguridad (3 segundos). Espere un momento e intente de nuevo.');
-      // El modal permanece abierto para que el usuario pueda reintentar tras el cooldown
+      showWarning('Operación bloqueada temporalmente por cooldown de seguridad (3 segundos). Espere un momento e intente de nuevo.');
     } else {
-      toast.error(err?.message || 'Error al guardar el producto');
+      showError(err?.message || 'Error al guardar el producto');
       logger.error('[ProductForm] Error saving product:', err);
     }
   } finally {
@@ -309,66 +307,62 @@ const save = async () => {
   }
 };
 
+const openDeleteModal = () => {
+  deleteError.value = null;
+  showDeleteConfirm.value = true;
+};
+
+const confirmDeleteProduct = async () => {
+  if (!props.productId) return;
+  isDeleting.value = true;
+  deleteError.value = null;
+  try {
+    const ok = await inventoryStore.deleteProduct(props.productId);
+    if (ok) {
+      const deletedId = props.productId;
+      showDeleteConfirm.value = false;
+      showSuccess('Producto eliminado correctamente');
+      emit('deleted', deletedId);
+      close();
+    } else {
+      deleteError.value = 'No se pudo eliminar el producto.';
+    }
+  } catch (e: any) {
+    deleteError.value = e?.message || 'Error al eliminar el producto.';
+  } finally {
+    isDeleting.value = false;
+  }
+};
+
+const handleStockSynced = () => {
+  if (editingProduct.value) {
+    formData.value.stock = formatQuantity(editingProduct.value.stock);
+  }
+};
+
+const handlePriceSynced = async () => {
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+  if (storeId) {
+    await inventoryStore.fetchProducts(storeId);
+  }
+  if (editingProduct.value) {
+    syncFormFromProduct(editingProduct.value);
+  }
+};
+
 const toggleSaleMode = (mode: 'unit' | 'weight') => {
   formData.value.saleMode = mode;
 };
 
-// Batch Management
-const updatingBatch = ref<string | null>(null);
-
-const saveBatchPrice = async (batchId: string, newPrice: number) => {
-  if (!newPrice || newPrice <= 0) {
-    toast.error('El precio debe ser mayor a 0');
-    return;
-  }
-  updatingBatch.value = batchId;
-  try {
-    await productRepository.updateBatchPrice(batchId, newPrice);
-    toast.success('Precio del lote actualizado');
-    // Reload batches
-    if (props.productId) {
-      await batchStore.fetchBatchesByProduct(props.productId);
-    }
-  } catch (e: any) {
-    toast.error(e.message || 'Error actualizando precio del lote');
-  } finally {
-    updatingBatch.value = null;
-  }
-};
-
-// Watch for product editing
 watch(
-  () => props.productId,
-  (id) => {
+  [() => props.modelValue, () => props.productId, () => props.initialTab],
+  ([isOpen, id, initial]) => {
+    if (!isOpen) return;
+    activeTab.value = id ? (initial || 'data') : 'data';
     if (id) {
       const product = inventoryStore.getProductById(id);
       if (product) {
-        // WO-003: Guardar stock original para preservar precisión
-        originalStock.value = product.stock;
-        originalPrice.value = product.price.toNumber();
-        originalName.value = product.name;
-        originalCost.value = product.cost ? product.cost.toNumber() : null;
-        stockWasModified.value = false;
-
-        // WO-004: Derivar saleMode de isWeighable y cargar measurementUnit
-        formData.value = {
-          name: product.name,
-          brand: product.brand || '',
-          category: product.category || '',
-          plu: product.plu || '',
-          saleMode: product.isWeighable ? 'weight' : 'unit',
-          measurementUnit:
-            product.measurementUnit !== 'un'
-              ? (product.measurementUnit as 'kg' | 'lb' | 'g')
-              : 'lb',
-          cost: product.cost ? Number(product.cost).toFixed(2) : '',
-          price: product.price.toString(),
-          stock: formatQuantity(product.stock), // WO-004: Mostrar formateado
-          minStock: product.minStock.toString(),
-        };
-
-        // WO-003: Load active batches
-        batchStore.fetchBatchesByProduct(id);
+        syncFormFromProduct(product);
       }
     } else {
       resetForm();
@@ -377,7 +371,6 @@ watch(
   { immediate: true },
 );
 
-// WO-003: Detectar modificación del stock por el usuario
 watch(
   () => formData.value.stock,
   (newVal, oldVal) => {
@@ -387,11 +380,9 @@ watch(
   },
 );
 
-// UX-FIX: Conversión automática de stock al cambiar unidad de medida
 watch(
   () => formData.value.measurementUnit,
   (newUnit, oldUnit) => {
-    // Solo convertir si estamos en modo peso y hay un valor de stock
     if (formData.value.saleMode !== 'weight') return;
     if (!formData.value.stock || formData.value.stock === '0') return;
     if (oldUnit === newUnit) return;
@@ -401,10 +392,6 @@ watch(
 
     const convertedValue = convertStock(currentValue, oldUnit, newUnit);
     formData.value.stock = formatQuantity(convertedValue);
-
-    logger.log(
-      `[ProductForm] Stock convertido: ${currentValue} ${oldUnit} → ${formatQuantity(convertedValue)} ${newUnit}`,
-    );
   },
 );
 </script>
@@ -413,319 +400,375 @@ watch(
   <BaseModal
     :model-value="modelValue"
     @update:model-value="close"
-    :title="productId ? 'Editar Producto' : 'Nuevo Producto'"
+    :title="productId ? (editingProduct?.name || 'Ficha del Producto') : 'Nuevo Producto'"
+    max-height="90vh"
   >
-    <!-- Custom Header Badge Slot if needed, or put in title with logic -->
-    <!-- Content Slot -->
     <div class="p-4 space-y-4">
-          <div class="grid grid-cols-12 gap-3 pb-4">
-              <!-- Nombre del Producto -->
-              <div class="col-span-12">
-                <BaseInput
-                  v-model="formData.name"
-                  label="Nombre del Producto"
-                  placeholder="Ej. Coca Cola 3L Original"
-                  required
-                />
-              </div>
+      <!-- Barra de 3 Pestañas (solo en modo edición / Ficha Producto) -->
+      <div
+        v-if="productId"
+        class="grid grid-cols-3 gap-1 p-1 rounded-xl bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-800"
+        role="tablist"
+        aria-label="Ficha de producto"
+      >
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'data'"
+          @click="activeTab = 'data'"
+          data-testid="ficha-tab-data"
+          class="flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
+          :class="activeTab === 'data'
+            ? 'bg-surface-light dark:bg-surface-dark text-primary shadow-sm border border-slate-200 dark:border-slate-700'
+            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'"
+        >
+          <FileText :size="14" />
+          <span>Datos</span>
+        </button>
 
-              <!-- Marca y PLU -->
-              <div class="col-span-8">
-                <BaseInput
-                  v-model="formData.brand"
-                  label="Marca"
-                  placeholder="Buscar..."
-                  :icon="Search"
-                />
-              </div>
-              <div class="col-span-4">
-                <BaseInput
-                  :model-value="formData.plu"
-                  @update:model-value="val => formData.plu = String(val).replace(/[^0-9]/g, '').slice(0, 10)"
-                  @keydown="blockNonNumeric"
-                  :error="isPluDuplicate ? 'Código en uso' : undefined"
-                  label="Cód. Rápido"
-                  placeholder="Auto"
-                  class="text-center font-medium"
-                  maxlength="10"
-                  inputmode="numeric"
-                />
-              </div>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'batches'"
+          @click="activeTab = 'batches'"
+          data-testid="ficha-tab-batches"
+          class="flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
+          :class="activeTab === 'batches'
+            ? 'bg-surface-light dark:bg-surface-dark text-primary shadow-sm border border-slate-200 dark:border-slate-700'
+            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'"
+        >
+          <Layers :size="14" />
+          <span>Lotes</span>
+        </button>
 
-              <!-- Categoría -->
-              <div class="col-span-12">
-                 <BaseInput
-                    v-model="formData.category"
-                    label="Categoría"
-                    placeholder="Ej. Bebidas, Despensa, Lácteos..."
-                    list="categories"
-                    :icon="LayoutGrid"
-                  />
-                  <datalist id="categories">
-                    <option v-for="cat in existingCategories" :key="cat" :value="cat" />
-                  </datalist>
-              </div>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === 'kardex'"
+          @click="activeTab = 'kardex'"
+          data-testid="ficha-tab-kardex"
+          class="flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
+          :class="activeTab === 'kardex'
+            ? 'bg-surface-light dark:bg-surface-dark text-primary shadow-sm border border-slate-200 dark:border-slate-700'
+            : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'"
+        >
+          <History :size="14" />
+          <span>Historial</span>
+        </button>
+      </div>
 
-              <!-- Modo de Venta (Segmented Control) -->
-              <div class="col-span-12 pt-1">
-                <div class="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex h-10 shadow-inner">
-                  <button
-                    type="button"
-                    class="flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-bold transition-all"
-                    :class="
-                      formData.saleMode === 'unit'
-                        ? 'bg-white dark:bg-gray-700 text-primary dark:text-primary-400 shadow-sm border border-gray-200 dark:border-gray-600'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                    "
-                    @click="toggleSaleMode('unit')"
-                  >
-                    <Package2
-                      class="text-[16px]"
-                      :class="formData.saleMode === 'unit' ? 'fill-current' : ''"
-                      :size="16"
-                    />
-                    Unidad
-                  </button>
-                  <button
-                    type="button"
-                    class="flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-medium transition-all"
-                    :class="
-                      formData.saleMode === 'weight'
-                        ? 'bg-white dark:bg-gray-700 text-primary dark:text-primary-400 shadow-sm border border-gray-200 dark:border-gray-600'
-                        : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                    "
-                    @click="toggleSaleMode('weight')"
-                  >
-                    <Scale
-                      class="text-[16px]"
-                      :class="formData.saleMode === 'weight' ? 'fill-current' : ''"
-                      :size="16"
-                    />
-                    Valor/Peso
-                  </button>
-                </div>
-              </div>
+      <!-- TAB 1: DATOS DE CATÁLOGO (o creación directa) -->
+      <div v-if="!productId || activeTab === 'data'" class="grid grid-cols-12 gap-3 pb-2">
+        <div class="col-span-12">
+          <BaseInput
+            v-model="formData.name"
+            label="Nombre del Producto"
+            placeholder="Ej. Coca Cola 3L Original"
+            required
+          />
+        </div>
 
-              <!-- Selector de Unidad (solo si es por peso) -->
-              <div v-if="formData.saleMode === 'weight'" class="col-span-12">
-                <label
-                  class="block text-[10px] uppercase font-bold text-primary dark:text-primary-400 tracking-wider mb-1"
-                >
-                  Unidad de Medida
-                </label>
-                <div class="flex gap-2">
-                  <button
-                    type="button"
-                    class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
-                    :class="
-                      formData.measurementUnit === 'kg'
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'
-                    "
-                    @click="formData.measurementUnit = 'kg'"
-                  >
-                    kg
-                  </button>
-                  <button
-                    type="button"
-                    class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
-                    :class="
-                      formData.measurementUnit === 'lb'
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'
-                    "
-                    @click="formData.measurementUnit = 'lb'"
-                  >
-                    Libras
-                  </button>
-                  <button
-                    type="button"
-                    class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
-                    :class="
-                      formData.measurementUnit === 'g'
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100'
-                    "
-                    @click="formData.measurementUnit = 'g'"
-                  >
-                    Gramos
-                  </button>
-                </div>
-                <p class="text-[10px] text-gray-500 mt-1">
-                  El precio y stock se manejarán en la unidad seleccionada
-                </p>
-              </div>
+        <div class="col-span-8">
+          <BaseInput
+            v-model="formData.brand"
+            label="Marca"
+            placeholder="Buscar..."
+            :icon="Search"
+          />
+        </div>
+        <div class="col-span-4">
+          <BaseInput
+            :model-value="formData.plu"
+            @update:model-value="val => formData.plu = String(val).replace(/[^0-9]/g, '').slice(0, 10)"
+            @keydown="blockNonNumeric"
+            :error="isPluDuplicate ? 'Código en uso' : undefined"
+            label="Cód. Rápido"
+            placeholder="Auto"
+            class="text-center font-medium"
+            maxlength="10"
+            inputmode="numeric"
+          />
+        </div>
 
-              <!-- Costo y Precio -->
-              <div v-if="authStore.canManageInventory || authStore.isAdmin" class="col-span-6">
-                <BaseInput
-                  v-model="formData.cost"
-                  label="Costo ($)"
-                  placeholder="0"
-                  type="number"
-                  step="0.01"
-                  :icon="DollarSign"
-                />
-              </div>
-              <div class="col-span-6">
-                 <BaseInput
-                  v-model="formData.price"
-                  label="Precio Venta ($)"
-                  placeholder="0"
-                  type="number"
-                  step="0.01"
-                  required
-                  :icon="DollarSign"
-                  class="font-bold text-emerald-600"
-                />
-              </div>
+        <div class="col-span-12">
+          <BaseInput
+            v-model="formData.category"
+            label="Categoría"
+            placeholder="Ej. Bebidas, Despensa, Lácteos..."
+            list="categories"
+            :icon="LayoutGrid"
+          />
+          <datalist id="categories">
+            <option v-for="cat in existingCategories" :key="cat" :value="cat" />
+          </datalist>
+        </div>
 
-              <!-- BR-02: Warning Fuga de Margen (Efectivo) -->
-              <div v-if="marginLoss > 0" class="col-span-12 -mt-1">
-                <div
-                  class="flex items-center gap-2 p-2.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700/50 rounded-lg"
-                >
-                  <Banknote class="text-yellow-600 dark:text-yellow-400" :size="18" />
-                  <div class="flex flex-col">
-                    <span class="text-xs font-bold text-yellow-700 dark:text-yellow-300">
-                      ⚠️ Alerta de Eficiencia
-                    </span>
-                    <span
-                      class="text-[10px] font-medium text-yellow-700 dark:text-yellow-300 leading-tight"
-                    >
-                      Perderás <b>${{ marginLoss }}</b> por unidad en ventas en efectivo debido al
-                      redondeo obligatorio.
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- T-007: Warning precio menor que costo -->
-              <div v-if="isPriceBelowCost" class="col-span-12 -mt-1">
-                <div
-                  class="flex items-center gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-lg"
-                >
-                  <AlertTriangle class="text-amber-600 dark:text-amber-400" :size="18" />
-                  <span class="text-xs font-medium text-amber-700 dark:text-amber-300"
-                    >El precio de venta es menor al costo</span
-                  >
-                </div>
-              </div>
-
-              <div class="col-span-12 flex justify-end -mt-1">
-                <span
-                  v-if="margin > 0"
-                  class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1"
-                >
-                  <TrendingUp class="text-[12px]" :size="12" />
-                  Margen estimado: {{ margin.toFixed(1) }}%
-                </span>
-              </div>
-
-              <!-- Inventario -->
-              <div class="col-span-12 border-t border-gray-100 dark:border-gray-800 my-2"></div>
-              <div class="col-span-6">
-                <BaseInput
-                  v-model="formData.stock"
-                  :label="formData.saleMode === 'weight' ? `Stock Actual (${formData.measurementUnit})` : 'Stock Actual (un)'"
-                  placeholder="0"
-                  type="number"
-                  step="any"
-                  min="0"
-                  :disabled="!!props.productId"
-                  :title="props.productId ? 'El stock de un producto existente solo puede modificarse mediante Ajustes de Inventario o Entradas.' : undefined"
-                />
-                <p v-if="props.productId" class="text-[10px] text-gray-500 mt-1">Solo modificable vía Ajustes/Entradas</p>
-              </div>
-              <div class="col-span-6">
-                <BaseInput
-                    v-model="formData.minStock"
-                    label="Stock Mínimo"
-                    placeholder="5"
-                    type="number"
-                    min="0"
-                />
-              </div>
-
-              <!-- WO-003: Lotes Activos (solo en edición) -->
-              <div v-if="props.productId" class="col-span-12 mt-4">
-                 <h3 class="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                   <Package2 :size="16" class="text-primary-400" />
-                   Lotes Activos (FIFO)
-                 </h3>
-                 
-                 <div v-if="batchStore.isLoading" class="text-center py-4 text-gray-400 text-sm">
-                   Cargando lotes...
-                 </div>
-                 <div v-else-if="batchStore.batches.filter(b => b.quantity_remaining > 0).length === 0" class="text-center py-4 text-gray-500 text-sm italic bg-gray-800/50 rounded-lg">
-                   No hay lotes con stock activo.
-                 </div>
-                 <div v-else class="space-y-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                   <div 
-                     v-for="batch in batchStore.batches.filter(b => b.quantity_remaining > 0)" 
-                     :key="batch.id"
-                     class="flex items-center justify-between p-3 bg-gray-800 border border-gray-700 rounded-lg"
-                   >
-                      <div class="flex flex-col">
-                        <span class="text-xs text-gray-400 flex items-center gap-1">
-                          <Clock :size="12" />
-                          {{ new Date(batch.created_at).toLocaleDateString() }}
-                        </span>
-                        <span class="text-sm font-bold text-white mt-0.5">
-                          Stock: {{ formatQuantity(batch.quantity_remaining) }}
-                        </span>
-                        <span class="text-xs text-gray-500">Costo: ${{ formatQuantity(batch.cost_unit) }}</span>
-                      </div>
-                      
-                      <div class="flex items-center gap-2">
-                         <div class="flex flex-col relative">
-                            <span class="text-[10px] text-gray-400 absolute -top-4 right-0">Precio Venta</span>
-                            <div class="flex items-center">
-                              <span class="bg-gray-900 border border-r-0 border-gray-700 text-gray-400 px-2 py-1.5 rounded-l-md text-sm">$</span>
-                              <input 
-                                v-model.number="batch.sale_price"
-                                type="number"
-                                class="w-24 bg-gray-900 border border-gray-700 rounded-r-md px-2 py-1.5 text-right text-white font-mono text-sm focus:ring-1 focus:ring-primary-500 outline-none"
-                              />
-                            </div>
-                         </div>
-                         <button 
-                           @click="saveBatchPrice(batch.id, batch.sale_price)"
-                           :disabled="updatingBatch === batch.id"
-                           class="p-1.5 rounded-md mt-2"
-                           :class="updatingBatch === batch.id ? 'bg-gray-700 text-gray-500' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white transition-colors'"
-                         >
-                           <Save v-if="updatingBatch !== batch.id" :size="16" />
-                           <Clock v-else class="animate-spin" :size="16" />
-                         </button>
-                      </div>
-                   </div>
-                 </div>
-              </div>
+        <div class="col-span-12 pt-1">
+          <div class="bg-slate-100 dark:bg-slate-800 p-1 rounded-lg flex h-10 shadow-inner">
+            <button
+              type="button"
+              class="flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-bold transition-all"
+              :class="
+                formData.saleMode === 'unit'
+                  ? 'bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-200 dark:border-slate-600'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+              "
+              @click="toggleSaleMode('unit')"
+            >
+              <Package2 :size="16" />
+              Unidad
+            </button>
+            <button
+              type="button"
+              class="flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-medium transition-all"
+              :class="
+                formData.saleMode === 'weight'
+                  ? 'bg-white dark:bg-slate-700 text-primary shadow-sm border border-slate-200 dark:border-slate-600'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+              "
+              @click="toggleSaleMode('weight')"
+            >
+              <Scale :size="16" />
+              Valor/Peso
+            </button>
           </div>
-    </div> 
+        </div>
+
+        <div v-if="formData.saleMode === 'weight'" class="col-span-12">
+          <label class="block text-[10px] uppercase font-bold text-primary tracking-wider mb-1">
+            Unidad de Medida
+          </label>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
+              :class="formData.measurementUnit === 'kg'
+                ? 'bg-primary text-white border-primary'
+                : 'bg-background-light dark:bg-background-dark text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'"
+              @click="formData.measurementUnit = 'kg'"
+            >
+              kg
+            </button>
+            <button
+              type="button"
+              class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
+              :class="formData.measurementUnit === 'lb'
+                ? 'bg-primary text-white border-primary'
+                : 'bg-background-light dark:bg-background-dark text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'"
+              @click="formData.measurementUnit = 'lb'"
+            >
+              Libras
+            </button>
+            <button
+              type="button"
+              class="flex-1 h-10 rounded-lg flex items-center justify-center gap-1 text-xs font-bold transition-all border"
+              :class="formData.measurementUnit === 'g'
+                ? 'bg-primary text-white border-primary'
+                : 'bg-background-light dark:bg-background-dark text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'"
+              @click="formData.measurementUnit = 'g'"
+            >
+              Gramos
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-500 mt-1">
+            El precio y stock se manejarán en la unidad seleccionada
+          </p>
+        </div>
+
+        <div v-if="canManageInventory" class="col-span-6">
+          <BaseInput
+            v-model="formData.cost"
+            label="Costo ($)"
+            placeholder="0"
+            type="number"
+            step="0.01"
+            :icon="DollarSign"
+          />
+        </div>
+        <div :class="canManageInventory ? 'col-span-6' : 'col-span-12'">
+          <BaseInput
+            v-model="formData.price"
+            label="Precio Venta ($)"
+            placeholder="0"
+            type="number"
+            step="0.01"
+            required
+            :icon="DollarSign"
+            class="font-bold text-emerald-600"
+          />
+        </div>
+
+        <div v-if="marginLoss > 0" class="col-span-12 -mt-1">
+          <div class="flex items-center gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-lg">
+            <Banknote class="text-amber-600 dark:text-amber-400 shrink-0" :size="18" />
+            <div class="flex flex-col">
+              <span class="text-xs font-bold text-amber-800 dark:text-amber-300">
+                Alerta de Eficiencia
+              </span>
+              <span class="text-[10px] font-medium text-amber-700 dark:text-amber-300 leading-tight">
+                Perderás <b>${{ marginLoss }}</b> por unidad en ventas en efectivo debido al redondeo obligatorio.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="isPriceBelowCost" class="col-span-12 -mt-1">
+          <div class="flex items-center gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-lg">
+            <AlertTriangle class="text-amber-600 dark:text-amber-400 shrink-0" :size="18" />
+            <span class="text-xs font-medium text-amber-700 dark:text-amber-300">
+              El precio de venta es menor al costo
+            </span>
+          </div>
+        </div>
+
+        <div class="col-span-12 flex justify-end -mt-1">
+          <span
+            v-if="margin > 0"
+            class="text-[11px] font-mono tabular-nums font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1"
+          >
+            <TrendingUp :size="12" />
+            Margen estimado: {{ margin.toFixed(1) }}%
+          </span>
+        </div>
+
+        <div class="col-span-12 border-t border-slate-200 dark:border-slate-800 my-1"></div>
+
+        <div class="col-span-6">
+          <BaseInput
+            v-model="formData.stock"
+            :label="formData.saleMode === 'weight' ? `Stock Actual (${formData.measurementUnit})` : 'Stock Actual (un)'"
+            placeholder="0"
+            type="number"
+            step="any"
+            min="0"
+            :disabled="!!props.productId"
+            :title="props.productId ? 'El stock de un producto existente solo puede modificarse mediante Lotes o Entradas.' : undefined"
+          />
+          <p v-if="props.productId" class="text-[10px] text-slate-500 mt-1">
+            Solo modificable vía Lotes / Entradas
+          </p>
+        </div>
+        <div class="col-span-6">
+          <BaseInput
+            v-model="formData.minStock"
+            label="Stock Mínimo"
+            placeholder="5"
+            type="number"
+            min="0"
+          />
+        </div>
+
+        <!-- Acción segura de archivo/eliminación en zona secundaria (solo edición) -->
+        <div
+          v-if="props.productId && canManageInventory"
+          class="col-span-12 mt-2 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+        >
+          <span class="text-xs text-slate-500 dark:text-slate-400">
+            Archivar producto del catálogo activo
+          </span>
+          <BaseButton
+            type="button"
+            variant="danger"
+            size="sm"
+            @click="openDeleteModal"
+            data-testid="ficha-delete-product-btn"
+          >
+            <span class="flex items-center gap-1.5">
+              <Trash2 :size="14" />
+              Eliminar
+            </span>
+          </BaseButton>
+        </div>
+      </div>
+
+      <!-- TAB 2: LOTES FIFO + MERMA/SALIDA POR LOTE -->
+      <ProductBatchesTab
+        v-else-if="productId && activeTab === 'batches' && editingProduct"
+        :product="editingProduct"
+        @stock-updated="handleStockSynced"
+        @price-updated="handlePriceSynced"
+      />
+
+      <!-- TAB 3: HISTORIAL KARDEX -->
+      <ProductKardexTab
+        v-else-if="productId && activeTab === 'kardex'"
+        :product-id="productId"
+        @stock-updated="handleStockSynced"
+      />
+    </div>
 
     <template #footer>
-        <div class="p-6 pt-2 flex gap-3 bg-white dark:bg-surface-dark">
-             <BaseButton
-                    @click="close"
-                    variant="secondary"
-                    class="flex-1"
-                >
-                    Cancelar
-                </BaseButton>
-                <BaseButton
-                    @click="save"
-                    :disabled="!isValid || isSubmitting"
-                    :loading="isSubmitting"
-                    variant="primary"
-                    class="flex-1"
-                    :icon="Save"
-                >
-                    Guardar
-                </BaseButton>
-        </div>
+      <div
+        v-if="!productId || activeTab === 'data'"
+        class="p-6 pt-2 flex gap-3 bg-surface-light dark:bg-surface-dark"
+      >
+        <BaseButton
+          type="button"
+          @click="close"
+          variant="secondary"
+          class="flex-1"
+        >
+          Cancelar
+        </BaseButton>
+        <BaseButton
+          type="button"
+          @click="save"
+          :disabled="!isValid || isSubmitting"
+          :loading="isSubmitting"
+          variant="primary"
+          class="flex-1"
+          :icon="Save"
+        >
+          Guardar
+        </BaseButton>
+      </div>
+      <div v-else class="p-6 pt-2 flex justify-end bg-surface-light dark:bg-surface-dark">
+        <BaseButton type="button" variant="secondary" @click="close">
+          Cerrar
+        </BaseButton>
+      </div>
     </template>
+
+    <!-- Confirmación de eliminación segura (N5 BaseModal) -->
+    <BaseModal v-model="showDeleteConfirm" title="¿Eliminar producto?">
+      <div class="p-6 text-center space-y-3">
+        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 mx-auto">
+          <Trash2 :size="24" :stroke-width="1.5" class="text-red-500" />
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-300">
+          <span class="font-semibold">{{ editingProduct?.name }}</span> será archivado del catálogo activo. Solo es posible si su stock total es cero.
+        </p>
+        <div
+          v-if="deleteError"
+          class="rounded-xl p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 text-left"
+        >
+          {{ deleteError }}
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="p-6 pt-0 flex gap-3">
+          <BaseButton
+            type="button"
+            variant="secondary"
+            class="flex-1"
+            :disabled="isDeleting"
+            @click="showDeleteConfirm = false"
+          >
+            Cancelar
+          </BaseButton>
+          <BaseButton
+            type="button"
+            variant="danger"
+            class="flex-1"
+            :disabled="isDeleting"
+            :loading="isDeleting"
+            @click="confirmDeleteProduct"
+          >
+            Confirmar Eliminación
+          </BaseButton>
+        </div>
+      </template>
+    </BaseModal>
   </BaseModal>
 </template>
-```
