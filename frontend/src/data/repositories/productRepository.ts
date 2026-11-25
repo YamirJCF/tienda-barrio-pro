@@ -19,6 +19,7 @@ import { createIndexedDBDataSource } from '../sources/IndexedDBDataSource';
 import type { LocalDataSource } from '../interfaces/DataSource';
 import { systemCacheManager, CacheLevel } from '../../services/systemCacheManager';
 import { getPendingMovements } from '../syncQueue';
+import type { InventoryBatch } from '../../stores/batches';
 
 // IDB Cache Layer — replaces localStorage for product data
 const productCache: LocalDataSource<Product> = createIndexedDBDataSource<Product>('products');
@@ -194,6 +195,26 @@ export interface BulkStockEntryResult {
     totalEntryCost: number;
     createdBatchIds: string[];
     actorName?: string;
+    timestamp?: string;
+}
+
+export interface StoreActiveBatchesStatus {
+    hasOpenCashSession: boolean;
+    batches: InventoryBatch[];
+}
+
+export interface PhysicalInventoryCountItem {
+    productId: string;
+    countedQuantity: number;
+    batchId?: string | null;
+}
+
+export interface PhysicalInventoryCountResult {
+    verifiedTotal: number;
+    unchangedCount: number;
+    adjustedCount: number;
+    shortagesCount: number;
+    surplusesCount: number;
     timestamp?: string;
 }
 
@@ -878,6 +899,99 @@ export const productRepository: ProductRepository = {
             totalEntryCost: Number(d.total_entry_cost ?? 0),
             createdBatchIds: Array.isArray(d.created_batch_ids) ? d.created_batch_ids : [],
             actorName: d.actor_name,
+            timestamp: d.timestamp
+        };
+    },
+
+    /**
+     * WO-OLA2-C3-002 (UX-ADR-004): Single-query active FIFO batches + open cash session check
+     */
+    async getStoreActiveBatchesStatus(storeId: string): Promise<StoreActiveBatchesStatus> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            throw new Error('OFFLINE_NOT_ALLOWED: El inventariado físico requiere conexión a internet.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const { data, error } = await supabase.rpc('rpc_obtener_lotes_activos_tienda', {
+            p_store_id: storeId
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to fetch store active batches status', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (!res || res.success === false) {
+            throw new Error(res?.error || 'Error verificando lotes activos y estado de caja');
+        }
+
+        return {
+            hasOpenCashSession: Boolean(res.has_open_cash_session),
+            batches: Array.isArray(res.batches)
+                ? res.batches.map((b: any) => ({
+                    ...b,
+                    quantity_initial: Number(b.quantity_initial ?? 0),
+                    quantity_remaining: Number(b.quantity_remaining ?? 0),
+                    cost_unit: Number(b.cost_unit ?? 0),
+                    sale_price: Number(b.sale_price ?? 0),
+                }))
+                : []
+        };
+    },
+
+    /**
+     * WO-OLA2-C3-002 (UX-ADR-004): Atomic physical inventory count via rpc_aplicar_inventariado_fisico
+     */
+    async applyPhysicalInventoryCount(params: {
+        storeId: string;
+        items: PhysicalInventoryCountItem[];
+        notes?: string | null;
+    }): Promise<PhysicalInventoryCountResult> {
+        const isOnline = isSupabaseConfigured() && navigator.onLine;
+        if (!isOnline) {
+            throw new Error('OFFLINE_NOT_ALLOWED: El inventariado físico requiere conexión a internet.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const rpcItems = params.items.map((item) => ({
+            product_id: item.productId,
+            counted_quantity: item.countedQuantity,
+            batch_id: item.batchId ?? null
+        }));
+
+        const { data, error } = await supabase.rpc('rpc_aplicar_inventariado_fisico', {
+            p_store_id: params.storeId,
+            p_items: rpcItems,
+            p_notes: params.notes || null
+        });
+
+        if (error) {
+            logger.error('[ProductRepo] Failed to apply physical inventory count', error);
+            throw error;
+        }
+
+        const res = data as any;
+        if (!res || res.success === false || !res.data) {
+            throw new Error(res?.error || 'Error aplicando el inventariado físico');
+        }
+
+        for (const item of params.items) {
+            systemCacheManager.invalidateNamespace(`kardex:${item.productId}`);
+        }
+
+        const d = res.data;
+        return {
+            verifiedTotal: Number(d.verified_total ?? 0),
+            unchangedCount: Number(d.unchanged_count ?? 0),
+            adjustedCount: Number(d.adjusted_count ?? 0),
+            shortagesCount: Number(d.shortages_count ?? 0),
+            surplusesCount: Number(d.surpluses_count ?? 0),
             timestamp: d.timestamp
         };
     },

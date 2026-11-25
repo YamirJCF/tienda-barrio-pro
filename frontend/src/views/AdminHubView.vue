@@ -20,7 +20,8 @@ import {
   KeyRound,
   AlertTriangle,
   Truck,
-  CreditCard
+  CreditCard,
+  ClipboardCheck
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 
@@ -417,6 +418,29 @@ watch(() => authStore.currentUser?.storeId, (newId) => {
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
                   Administrar catálogo de proveedores
+                </p>
+              </div>
+            </div>
+            <ChevronRight :size="20" class="text-slate-300 group-hover:text-primary transition-colors" />
+          </button>
+
+          <!-- Inventariado Físico -->
+          <button
+            @click="navigateTo('/inventory-count')"
+            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group"
+          >
+            <div class="flex items-center gap-4">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+              >
+                <ClipboardCheck :size="20" />
+              </div>
+              <div>
+                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Inventariado Físico
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  Conteo físico de estantería con caja cerrada
                 </p>
               </div>
             </div>
