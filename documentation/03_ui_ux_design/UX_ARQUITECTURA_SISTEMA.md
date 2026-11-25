@@ -1,6 +1,6 @@
 # Arquitectura del Sistema UX — Tienda Barrio Pro
 
-> **Estado:** Vigente (`UX-ADR-005`)  
+> **Estado:** Vigente (`UX-ADR-006`)  
 > **Última actualización:** 2026-11-25  
 > **Fuente de verdad ejecutable:** [`ux-manifest.json`](./ux-manifest.json)  
 > **Bitácora de decisiones:** [`UX_ADR_LOG.md`](./UX_ADR_LOG.md)  
@@ -153,7 +153,7 @@ Inventario extraído línea por línea de [`frontend/src/router/index.ts`](../..
 | 5 | `/stock-entry` | `stock-entry` | `StockEntryView.vue` | `C3` | `C` | `canManageInventory` | `canonica` |
 | 6 | `/inventory-count` | `inventory-count` | `InventoryCountView.vue` | `C3` | `C` | `canManageInventory` | `canonica` |
 | 7 | `/clients` | `clients` | `ClientListView.vue` | `C4` | `B` | `canFiar` | `canonica` |
-| 8 | `/clients/:id` | `client-detail` | `ClientDetailView.vue` | `C4` | `B` | `canFiar` | `canonica` |
+| 8 | `/clients/:id` | `client-detail` | `ClientDetailView.vue` | `C4` | `B/D` | `canFiar` | `canonica` |
 | 9 | `/suppliers` *(alias `/payables`)* | `suppliers` | `SuppliersView.vue` | `C5` | `B/D` | `isAdmin` | `canonica` |
 | 10 | `/reports` | `reports` | `ReportsHubView.vue` | `C6` | `E` | `isAdmin` | `canonica` |
 | 11 | `/admin/financial-dashboard` | `financial-dashboard` | `FinancialDashboardView.vue` | `C6` | `E` | `isAdmin` | `duplicada` |
