@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router';
 import { 
+  Home,
   Calculator, 
   Package, 
   Users, 
@@ -22,7 +23,7 @@ const showClients = computed(() => authStore.canFiar);
 
 const gridColsClass = computed(() => {
   const count =
-    1 + // Vender (capacidad base POS)
+    2 + // Inicio (/) + Vender (/pos)
     (showInventory.value ? 1 : 0) +
     (isAdmin.value ? 1 : 0) + // Reportes (100% Admin-only)
     (showClients.value ? 1 : 0) +
@@ -33,6 +34,7 @@ const gridColsClass = computed(() => {
     3: 'grid-cols-3',
     4: 'grid-cols-4',
     5: 'grid-cols-5',
+    6: 'grid-cols-6',
   };
   return map[count] || 'grid-cols-3';
 });
@@ -46,6 +48,18 @@ const gridColsClass = computed(() => {
       class="grid h-16 max-w-lg mx-auto"
       :class="gridColsClass"
     >
+      <!-- Item: Inicio -->
+      <button
+        type="button"
+        data-testid="bottom-nav-home"
+        @click="router.push('/')"
+        class="flex flex-col items-center justify-center gap-1 transition-colors"
+        :class="isActive('dashboard') ? 'text-primary' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'"
+      >
+        <Home :size="24" :stroke-width="isActive('dashboard') ? 2 : 1.5" />
+        <span class="text-[10px] font-medium tracking-wide">Inicio</span>
+      </button>
+
       <!-- Item: Vender -->
       <button
         @click="router.push('/pos')"

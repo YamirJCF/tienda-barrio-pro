@@ -10,6 +10,7 @@ import BottomNav from '../components/BottomNav.vue';
 import BaseModal from '../components/ui/BaseModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import BaseListSkeleton from '../components/ui/BaseListSkeleton.vue';
 import { 
   ArrowLeft, 
   Users, 
@@ -18,7 +19,8 @@ import {
   Lock, 
   Ban,
   AlertTriangle,
-  Plus 
+  Plus,
+  RefreshCw
 } from 'lucide-vue-next';
 
 import { useNotifications } from '../composables/useNotifications';
@@ -28,13 +30,15 @@ const authStore = useAuthStore();
 const employeesStore = useEmployeesStore();
 const { showWarning } = useNotifications();
 
-// Initialize store on mount
-onMounted(async () => {
+const loadEmployees = async () => {
   const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
   if (storeId) {
     await employeesStore.initialize(storeId);
   }
-});
+};
+
+// Initialize store on mount
+onMounted(loadEmployees);
 
 // State
 const showEmployeeModal = ref(false);
@@ -209,6 +213,17 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
 
     <!-- Main Content Area -->
     <main class="flex-1 overflow-y-auto px-4 pt-4">
+      <!-- Aviso N1 persistente de límite de personal 5/5 -->
+      <div
+        v-if="isAtEmployeeLimit"
+        role="status"
+        data-testid="employees-limit-banner"
+        class="mb-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3.5 py-2.5 flex items-center gap-2.5 text-xs font-medium text-amber-800 dark:text-amber-300"
+      >
+        <AlertTriangle :size="16" class="shrink-0" />
+        <span>Límite de 5 empleados operativos activos alcanzado (5/5). Desactiva uno existente para crear o reactivar otro.</span>
+      </div>
+
       <!-- Barra de búsqueda, filtros Activos/Inactivos y cupo 5/5 (sin contar owner_) -->
       <div v-if="hasOperationalEmployees" class="mb-4 space-y-2.5">
         <div class="flex items-center justify-between gap-2">
@@ -220,7 +235,7 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
             class="flex-1 h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
           <span
-            class="shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+            class="shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono tabular-nums"
             data-testid="active-employees-count"
           >
             {{ activeOperationalCount }}/5 activos
@@ -254,9 +269,39 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
         </div>
       </div>
 
+      <!-- Loading Skeleton -->
+      <BaseListSkeleton
+        v-if="employeesStore.loading"
+        :count="4"
+        type="card"
+        data-testid="employees-loading-skeleton"
+      />
+
+      <!-- Error Banner N3 (Fail-Closed antes del Empty State) -->
+      <div
+        v-else-if="employeesStore.error"
+        role="alert"
+        data-testid="employees-error-banner"
+        class="rounded-2xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/20 p-5 text-center space-y-3 my-6"
+      >
+        <AlertTriangle :size="32" class="mx-auto text-rose-500" />
+        <p class="text-sm font-semibold text-rose-700 dark:text-rose-300">
+          {{ employeesStore.error }}
+        </p>
+        <BaseButton
+          data-testid="employees-retry-btn"
+          variant="outline"
+          size="sm"
+          @click="loadEmployees"
+        >
+          <RefreshCw :size="14" class="mr-1.5" />
+          Reintentar
+        </BaseButton>
+      </div>
+
       <!-- Empty State -->
       <div
-        v-if="!hasOperationalEmployees"
+        v-else-if="!hasOperationalEmployees"
         class="flex flex-col items-center justify-center h-full text-center"
       >
         <div
@@ -325,7 +370,7 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
               >
                 {{ employee.name }}
               </p>
-              <p class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Empleado</p>
+              <p class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">@{{ employee.username }}</p>
             </div>
           </div>
           <div class="flex items-center gap-3 shrink-0 ml-2">

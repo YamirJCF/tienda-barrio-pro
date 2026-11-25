@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue';
-import { RouterView, useRouter } from 'vue-router';
+import { RouterView, useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from './stores/auth'; // Import Auth Store
 import { useDevicesStore } from './stores/devices'; // OT-6: Realtime admin channel
+import { useCartStore } from './stores/cart';
 import ToastNotification from './components/ToastNotification.vue';
 import GlobalAccessRequestModal from './components/GlobalAccessRequestModal.vue'; // OT-6: Blocking modal
 import { useNetworkStatus } from './composables/useNetworkStatus';
@@ -29,7 +30,7 @@ if (integrityResult.wasCorrupted) {
 useNetworkStatus();
 
 // SPEC-008: Inicializar sistema de alertas críticas
-const { currentAlert, isVisible, handlePrimary, handleSecondary, dismissAlert } =
+const { currentAlert, isVisible, handlePrimary, handleSecondary, dismissAlert, showSecurityAlert } =
   useCriticalAlerts();
 
 // Presence Monitoring (Silent Witness)
@@ -41,13 +42,39 @@ import { useSessionGuard } from './composables/useSessionGuard';
 useSessionGuard();
 
 const errorDetected = ref(false);
+const isPinModalOpen = ref(false);
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore(); // Initialize Auth Store
 const devicesStore = useDevicesStore(); // OT-6: Admin Realtime
+const cartStore = useCartStore();
 // Initialize Config Store (Global System Config)
 import { useConfigStore } from './stores/config';
 const configStore = useConfigStore();
 configStore.init();
+
+// ============================================
+// Árbitro Único de Prioridad N5 (UX-ADR-009)
+// 1. 'fatal' -> 2. 'legal' -> 3. 'pin' -> 4. 'access_request' -> 5. 'critical_alert'
+// ============================================
+const isLegalMajorGateActive = computed(() =>
+  authStore.isAuthenticated &&
+  authStore.isAdmin &&
+  authStore.legalComplianceStatus === 'requires_major_acceptance' &&
+  authStore.legalPendingMajorDocs.length > 0 &&
+  !(route.path === '/pos' && cartStore.items.length > 0)
+);
+
+const activeN5Overlay = computed<'fatal' | 'legal' | 'pin' | 'access_request' | 'critical_alert' | null>(() => {
+  if (errorDetected.value) return 'fatal';
+  if (isLegalMajorGateActive.value) return 'legal';
+  if (isPinModalOpen.value) return 'pin';
+  if (authStore.isAdmin && devicesStore.pendingRequests.length > 0 && !devicesStore.isModalMinimized) {
+    return 'access_request';
+  }
+  if (isVisible.value && currentAlert.value) return 'critical_alert';
+  return null;
+});
 
 // ============================================
 // FRD-012-R: Sync Auth Required Handler (RN-R05)
@@ -61,9 +88,11 @@ const handleSyncAuthRequired = () => {
   }
   
   console.warn('[App] sync:auth_required event received - session expired during sync');
-  // Redirect to login with message
-  alert('Tu sesión expiró. Por favor, inicia sesión nuevamente para sincronizar las ventas pendientes.');
   router.push('/login');
+  showSecurityAlert(
+    'Sesión Expirada',
+    'Tu sesión expiró. Inicia sesión nuevamente para sincronizar las ventas pendientes.'
+  );
 };
 
 // ============================================
@@ -187,11 +216,27 @@ const resetApp = () => {
     <!-- SDD-029: Cumplimiento Legal Versionado (Gate mayor o aviso menor no bloqueante) -->
     <LegalComplianceGate />
 
-    <!-- OT-6: Blocking access request modal — only active for admins -->
-    <GlobalAccessRequestModal v-if="authStore.isAdmin" />
+    <!-- OT-6: Blocking access request modal — arbitrated under N5 -->
+    <GlobalAccessRequestModal v-if="authStore.isAdmin && activeN5Overlay === 'access_request'" />
 
     <!-- Global PIN Unlock Modal for CryptoKey rehydration -->
-    <PinUnlockModal />
+    <PinUnlockModal
+      :suppressed="activeN5Overlay === 'fatal' || activeN5Overlay === 'legal'"
+      @visibility-change="isPinModalOpen = $event"
+    />
+
+    <!-- SPEC-008: Alerta crítica operativa bajo árbitro N5 -->
+    <CriticalAlertModal
+      :is-visible="activeN5Overlay === 'critical_alert'"
+      :type="currentAlert?.type ?? 'warning'"
+      :title="currentAlert?.title ?? ''"
+      :message="currentAlert?.message ?? ''"
+      :primary-action="currentAlert?.primaryAction"
+      :secondary-action="currentAlert?.secondaryAction"
+      @primary="handlePrimary"
+      @secondary="handleSecondary"
+      @dismiss="dismissAlert"
+    />
 
     <ToastNotification />
   </div>

@@ -12,25 +12,24 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useDevicesStore } from '../stores/devices';
 import { useNotifications } from '@/composables/useNotifications';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import { Hourglass, AlertCircle, BellRing } from 'lucide-vue-next';
-import { supabase } from '@/lib/supabase';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const devicesStore = useDevicesStore();
 const { showInfo, showSuccess, showError } = useNotifications();
 
 // State
 const pingCount = ref(0);
 const isPingDisabled = ref(true);
-const pingCooldown = ref(120); // 2 min initial cooldown display
+const pingCooldown = ref(60);
+const cooldownTotal = ref(60);
 const maxPings = 3;
 const isLocked = ref(false);
 
-// Realtime channel for this employee's specific pass row
-let passChannel: RealtimeChannel | null = null;
 let cooldownInterval: ReturnType<typeof setInterval> | null = null;
 
 // Messages
@@ -46,43 +45,32 @@ const subtitle = computed(() => {
     : 'Tu supervisor ha sido notificado. Por favor espera.';
 });
 
-// ─── Realtime ──────────────────────────────────────────────────────────────
+// ─── Realtime (delegado al store useDevicesStore) ──────────────────────────
 
 const subscribeToPass = (passId: string) => {
-    if (passChannel) return; // guard: already subscribed
-
-    passChannel = supabase
-        .channel(`employee_pass_${passId}`)
-        .on(
-            'postgres_changes',
-            { event: 'UPDATE', schema: 'public', table: 'daily_passes', filter: `id=eq.${passId}` },
-            (payload) => {
-                const status = (payload.new as any)?.status;
-                if (status === 'approved') {
-                    router.push('/');
-                } else if (status === 'rejected' || status === 'expired') {
-                    isLocked.value = true;
-                    cleanupChannel();
-                }
-            }
-        )
-        .subscribe();
+    devicesStore.subscribeToEmployeePass(passId, {
+        onApproved: () => {
+            router.push('/');
+        },
+        onTerminal: () => {
+            isLocked.value = true;
+        },
+    });
 };
 
 const cleanupChannel = () => {
-    if (passChannel) {
-        supabase.removeChannel(passChannel);
-        passChannel = null;
-    }
+    devicesStore.unsubscribeFromEmployeePass();
 };
 
 // ─── Cooldown display ───────────────────────────────────────────────────────
 
 const startCooldown = (seconds: number) => {
+    cooldownTotal.value = Math.max(seconds, 1);
     pingCooldown.value = seconds;
-    isPingDisabled.value = true;
+    isPingDisabled.value = seconds > 0;
 
     if (cooldownInterval) clearInterval(cooldownInterval);
+    if (seconds <= 0) return;
 
     cooldownInterval = setInterval(() => {
         if (pingCooldown.value > 0) {
@@ -190,7 +178,7 @@ const formatTime = (seconds: number) => {
                 class="w-full relative overflow-hidden"
             >
                 <span v-if="isPingDisabled" class="absolute inset-0 bg-gray-200/50 dark:bg-gray-700/50 z-10 transition-all" 
-                      :style="{ width: `${(pingCooldown / (pingCount === 0 ? 120 : 300)) * 100}%` }"></span>
+                      :style="{ width: `${Math.min(100, (pingCooldown / cooldownTotal) * 100)}%` }"></span>
                 <span class="relative z-20 flex items-center gap-2 justify-center">
                     <BellRing :size="20" :stroke-width="1.5" />
                     {{ isPingDisabled ? `Espere ${formatTime(pingCooldown)}` : '¡Sigo aquí! (Reenviar)' }}

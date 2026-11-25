@@ -30,6 +30,15 @@ export const useEmployeesStore = defineStore(
     const initialize = async (storeId: string) => {
       if (!storeId) return;
 
+      error.value = null;
+
+      // Fail-closed offline (Regla 3)
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        loading.value = false;
+        error.value = 'Sin conexión a internet. Reconecta para consultar los empleados.';
+        return;
+      }
+
       // AUTO-FIX: Clean corrupted localStorage data before loading
       try {
         const storedData = localStorage.getItem('tienda-employees');
@@ -51,7 +60,7 @@ export const useEmployeesStore = defineStore(
         employees.value = data;
       } catch (e: any) {
         logger.error('[EmployeeStore] Init failed', e);
-        error.value = 'Error al cargar empleados';
+        error.value = e?.message || 'Error al cargar empleados';
       } finally {
         loading.value = false;
       }
@@ -116,7 +125,7 @@ export const useEmployeesStore = defineStore(
       }
 
       if (data.isActive === true && !employees.value[index].isActive) {
-        if (activeEmployees.value.length >= 5) {
+        if (activeOperationalEmployees.value.length >= 5) {
           throw new Error('Límite de empleados activos alcanzado (Máx 5).');
         }
       }

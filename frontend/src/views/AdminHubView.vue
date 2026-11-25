@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useSalesStore } from '../stores/sales';
 import { useCashRegisterStore } from '../stores/cashRegister';
 import { useAuthStore } from '../stores/auth'; // Import auth store
 import { usePresenceStore } from '../stores/presence'; // New Presence Store import
+import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { 
   ArrowLeft, 
   Store, 
@@ -18,7 +18,10 @@ import {
   AlertTriangle,
   Truck,
   CreditCard,
-  ClipboardCheck
+  ClipboardCheck,
+  Activity,
+  Package,
+  BarChart3
 } from 'lucide-vue-next';
 import BottomNav from '../components/BottomNav.vue';
 
@@ -26,10 +29,10 @@ import BottomNav from '../components/BottomNav.vue';
 import UserProfileSidebar from '../components/UserProfileSidebar.vue';
 
 const router = useRouter();
-const salesStore = useSalesStore();
 const cashRegisterStore = useCashRegisterStore();
 const authStore = useAuthStore(); // Use auth store
 const presenceStore = usePresenceStore(); // Initialize
+const { formatWithSign } = useCurrencyFormat();
 
 
 
@@ -119,14 +122,9 @@ const showProfileSidebar = ref(false);
               </h4>
               <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
                 Base inicial:
-                <span class="text-slate-900 dark:text-slate-200 font-bold"
-                  >$
-                  {{
-                    (cashRegisterStore.currentSession?.openingBalance.toNumber() || 0)
-                      .toString()
-                      .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-                  }}</span
-                >
+                <span class="font-mono tabular-nums text-slate-900 dark:text-slate-200 font-bold">
+                  {{ formatWithSign(cashRegisterStore.currentSession?.openingBalance.toNumber() || 0) }}
+                </span>
               </p>
             </div>
             <button
@@ -170,7 +168,8 @@ const showProfileSidebar = ref(false);
       <!-- Widget: Personal en Vivo (Presence Monitor) -->
       <section>
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1 flex items-center gap-2">
-          <span>📡 Supervisión en Vivo</span>
+          <Activity :size="18" class="text-emerald-600 dark:text-emerald-400" />
+          <span>Supervisión en Vivo</span>
           <span 
             class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider"
           >
@@ -237,8 +236,8 @@ const showProfileSidebar = ref(false);
                      <Clock :size="10" />
                      {{ new Date(session.lastSeen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}
                      
-                     <span v-if="presenceStore.getEmployeeStatus(session.employeeId) === 'ghost'" class="text-red-500 font-bold ml-1">
-                        ⚠️ CAJA ABIERTA SIN SEÑAL
+                     <span v-if="presenceStore.getEmployeeStatus(session.employeeId) === 'ghost'" class="text-red-500 font-bold ml-1 inline-flex items-center gap-1">
+                        <AlertTriangle :size="10" /> CAJA ABIERTA SIN SEÑAL
                      </span>
                    </p>
                  </div>
@@ -260,7 +259,7 @@ const showProfileSidebar = ref(false);
 
       <!-- Equipo -->
       <section>
-        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">👥 Equipo</h3>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Equipo</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
         >
@@ -289,9 +288,39 @@ const showProfileSidebar = ref(false);
         </div>
       </section>
 
+      <!-- Reportes e Inteligencia (C6 — Admin Only) -->
+      <section v-if="isAdmin">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Reportes e Inteligencia</h3>
+        <div
+          class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700"
+        >
+          <button
+            type="button"
+            data-testid="admin-hub-reports-launcher"
+            @click="navigateTo('/reports?from=admin')"
+            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group cursor-pointer"
+          >
+            <div class="flex items-center gap-4">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                <BarChart3 :size="20" />
+              </div>
+              <div>
+                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Dashboard Financiero y Auditoría
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  Rentabilidad P&amp;L, ventas e historial transversal
+                </p>
+              </div>
+            </div>
+            <ChevronRight :size="20" class="text-slate-300 group-hover:text-primary transition-colors" />
+          </button>
+        </div>
+      </section>
+
       <!-- Cartera y Fiados (UX-ADR-006: Hub lanzador hacia C4 /clients) -->
       <section v-if="isAdmin">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">💳 Cartera y Fiados</h3>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Cartera y Fiados</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700"
         >
@@ -319,16 +348,17 @@ const showProfileSidebar = ref(false);
         </div>
       </section>
 
-      <!-- Inventario -->
-      <section>
-        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">📦 Inventario</h3>
+      <!-- Abastecimiento (C5 — Proveedores y Cuentas por Pagar) -->
+      <section v-if="isAdmin">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Abastecimiento</h3>
         <div
-          class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
+          class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700"
         >
-          <!-- Proveedores -->
           <button
+            type="button"
+            data-testid="admin-hub-suppliers-launcher"
             @click="navigateTo('/suppliers')"
-            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group"
+            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group cursor-pointer"
           >
             <div class="flex items-center gap-4">
               <div
@@ -342,6 +372,39 @@ const showProfileSidebar = ref(false);
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
                   Directorio, facturas pendientes y abonos
+                </p>
+              </div>
+            </div>
+            <ChevronRight :size="20" class="text-slate-300 group-hover:text-primary transition-colors" />
+          </button>
+        </div>
+      </section>
+
+      <!-- Inventario (C3) -->
+      <section>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Inventario</h3>
+        <div
+          class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700"
+        >
+          <!-- Catálogo e Inventario -->
+          <button
+            type="button"
+            data-testid="admin-hub-inventory-launcher"
+            @click="navigateTo('/inventory')"
+            class="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50 text-left group"
+          >
+            <div class="flex items-center gap-4">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+              >
+                <Package :size="20" />
+              </div>
+              <div>
+                <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Catálogo y Lotes FIFO
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  Productos, stock, precios y entradas de mercancía
                 </p>
               </div>
             </div>

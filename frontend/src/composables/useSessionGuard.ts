@@ -15,7 +15,7 @@ import { useNotificationsStore } from '../stores/notificationsStore';
 import { auditRepository } from '../data/repositories/auditRepository';
 import { logger } from '../utils/logger';
 import type { SessionVerificationResult } from '../data/repositories/authRepository';
-import { useToast } from 'vue-toastification';
+import { useNotifications } from './useNotifications';
 
 let activeVerificationPromise: Promise<SessionVerificationResult> | null = null;
 let lastAlertTimestamp = 0;
@@ -58,14 +58,14 @@ function showNotificationOnce(message: string, title: string, type: 'warning' | 
   lastAlertTimestamp = now;
 
   try {
-    const toast = useToast();
+    const { showError, showWarning } = useNotifications();
     if (type === 'error') {
-      toast.error(message);
+      showError(message);
     } else {
-      toast.warning(message);
+      showWarning(message);
     }
   } catch {
-    // Si toast no está disponible en este ciclo de vida, no bloquear
+    // Si el motor N2 no está disponible en este ciclo de vida, no bloquear
   }
 
   try {

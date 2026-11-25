@@ -137,6 +137,7 @@ const closeProfileSidebar = () => {
 
 const handleLogout = () => {
   profileSidebarOpen.value = false;
+  router.push('/login');
 };
 
 const navigateToNotifications = () => {
@@ -366,7 +367,7 @@ const navigateToNotifications = () => {
           </button>
 
           <button
-            @click="navigateTo('/admin?tab=gestion')"
+            @click="navigateTo('/admin')"
             class="flex w-full items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 text-left transition-colors"
           >
             <div class="flex items-center gap-3">
