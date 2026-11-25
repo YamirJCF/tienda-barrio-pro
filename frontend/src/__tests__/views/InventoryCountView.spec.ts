@@ -256,4 +256,28 @@ describe('InventoryCountView.vue — Inventariado Físico con Caja Cerrada (WO-O
     expect(wrapper.find('[data-testid="inventory-count-receipt"]').exists()).toBe(true);
     expect(mockShowSuccess).toHaveBeenCalled();
   });
+
+  it('(e) usa la verdad del servidor: si hasOpenCashSession es false pero cashStore.currentSession local seguía open, NO bloquea y reconcilia caché local', async () => {
+    const cashStore = useCashRegisterStore();
+    cashStore.currentSession = {
+      id: 'sess-stale',
+      storeId: 'store-1',
+      status: 'open',
+      openingBalance: new Decimal(50000),
+      openedAt: new Date().toISOString(),
+    } as any;
+    const syncSpy = vi.spyOn(cashStore, 'syncFromBackend').mockResolvedValue(false as any);
+
+    vi.spyOn(productRepository, 'getStoreActiveBatchesStatus').mockResolvedValue({
+      hasOpenCashSession: false,
+      batches: [],
+    });
+
+    const wrapper = mount(InventoryCountView, { global: { stubs: globalStubs } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="gate-open-cash"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="count-card-prod-1"]').exists()).toBe(true);
+    expect(syncSpy).toHaveBeenCalledWith('store-1');
+  });
 });

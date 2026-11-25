@@ -288,7 +288,7 @@
                     : 'bg-background-light dark:bg-background-dark text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-emerald-500'"
                 >
                   <Check :size="14" />
-                  <span>✓ Igual</span>
+                  <span>Igual</span>
                 </button>
 
                 <div class="flex-1 min-w-[140px]">
@@ -597,7 +597,11 @@ const verifyPreconditions = async () => {
     ]);
 
     activeBatches.value = status.batches;
-    hasOpenCashSession.value = Boolean(status.hasOpenCashSession || cashRegisterStore.isOpen);
+    hasOpenCashSession.value = Boolean(status.hasOpenCashSession);
+
+    if (!status.hasOpenCashSession && cashRegisterStore.isOpen) {
+      void cashRegisterStore.syncFromBackend(storeId.value);
+    }
 
     if (!hasOpenCashSession.value) {
       loadDraftFromStorage();
