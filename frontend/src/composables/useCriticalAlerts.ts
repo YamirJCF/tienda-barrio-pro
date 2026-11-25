@@ -18,12 +18,17 @@ export interface CriticalAlert {
 // Estado global (singleton)
 const currentAlert = ref<CriticalAlert | null>(null);
 const isVisible = ref(false);
+let dismissTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function useCriticalAlerts() {
   /**
    * Muestra una alerta crítica bloqueante
    */
   const showAlert = (alert: Omit<CriticalAlert, 'id'>): string => {
+    if (dismissTimer) {
+      clearTimeout(dismissTimer);
+      dismissTimer = null;
+    }
     const id = `alert-${Date.now()}`;
     currentAlert.value = { ...alert, id };
     isVisible.value = true;
@@ -34,9 +39,16 @@ export function useCriticalAlerts() {
    * Cierra la alerta actual
    */
   const dismissAlert = () => {
+    if (dismissTimer) {
+      clearTimeout(dismissTimer);
+      dismissTimer = null;
+    }
     isVisible.value = false;
-    setTimeout(() => {
-      currentAlert.value = null;
+    dismissTimer = setTimeout(() => {
+      if (!isVisible.value) {
+        currentAlert.value = null;
+      }
+      dismissTimer = null;
     }, 300); // Wait for animation
   };
 
