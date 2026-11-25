@@ -59,7 +59,7 @@ describe('useHistory — Historial de Caja (get_history_caja)', () => {
     expect(history.items.value).toHaveLength(1);
 
     const item = history.items.value[0];
-    expect(item.title).toBe('⚠️ Cierre Forzado (24h)');
+    expect(item.title).toBe('Cierre Forzado (24h)');
     expect(item.subtitle).toContain('Pendiente de reconciliación');
     expect(item.subtitle).not.toContain('Cuadrada');
     expect(item.amountFormatted).toContain('Esp:');
@@ -140,7 +140,7 @@ describe('useHistory — Historial de Caja (get_history_caja)', () => {
     expect(history.items.value).toHaveLength(3);
 
     const [openItem, forcedRecItem, closedOkItem] = history.items.value;
-    expect(openItem.title).toBe('🟢 Turno Abierto');
+    expect(openItem.title).toBe('Turno Abierto');
     expect(openItem.amount).toBe(70000);
     expect(openItem.badge?.text).toBe('Abierto');
 

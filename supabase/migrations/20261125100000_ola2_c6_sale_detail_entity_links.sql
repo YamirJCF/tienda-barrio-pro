@@ -3,7 +3,7 @@
 -- Fecha: 2026-11-25
 -- Alcance:
 --   Actualiza public.get_sale_detail(p_sale_id UUID) para:
---     1) Preservar PERFORM public.assert_store_access(v_sale.store_id)
+--     1) Preservar PERFORM public.assert_store_access(v_sale.store_id) y exigir assert_store_admin(v_sale.store_id) (POL-AUD-02)
 --     2) Incluir client_id en la raíz y dentro de data
 --     3) Incluir product_id en cada elemento de items[]
 --   Aplica privilegios explícitos (Regla 8): REVOKE anon/PUBLIC; GRANT authenticated/service_role.
@@ -36,8 +36,9 @@ BEGIN
         RAISE EXCEPTION 'Venta no encontrada (SALE_NOT_FOUND)' USING ERRCODE = 'P0001';
     END IF;
 
-    -- Regla 4: Aislamiento Multi-Tenant obligatorio
+    -- Regla 4 + POL-AUD-02: Aislamiento Multi-Tenant y acceso exclusivo Admin
     PERFORM public.assert_store_access(v_sale.store_id);
+    PERFORM public.assert_store_admin(v_sale.store_id);
 
     SELECT COALESCE(jsonb_agg(
         jsonb_build_object(

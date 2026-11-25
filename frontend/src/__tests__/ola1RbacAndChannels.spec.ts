@@ -367,11 +367,13 @@ describe('Fase 3 Ola 1 — RBAC 4 Permisos, Continuidad <24h, Snapshots y Canale
     const chainExpenses = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      gte: vi.fn().mockResolvedValue({
+      gte: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({
         data: [{
           id: 'mov-1',
           session_id: 'sess-1',
-          movement_type: 'expense',
+          movement_type: 'gasto',
           amount: 15000,
           description: '[Servicios] Pago agua',
           category: 'Servicios',

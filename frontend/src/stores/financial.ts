@@ -121,6 +121,7 @@ export const useFinancialStore = defineStore('financial', () => {
     const isLoadingTimeSeries = ref(false);
     const error = ref<string | null>(null);
     const activePeriod = ref<PeriodType>('today');
+    let timeSeriesSeq = 0;
 
     // Dependencies
     const authStore = useAuthStore();
@@ -222,21 +223,21 @@ export const useFinancialStore = defineStore('financial', () => {
 
     // --- Actions: TIME-SERIES (Load on Period Change) ---
 
-    const fetchFinancialReport = async (startDate: string, endDate: string) => {
+    const fetchFinancialReport = async (startDate: string, endDate: string): Promise<FinancialReportPayload | undefined> => {
         const supabase = getSupabaseClient();
-        if (!supabase || !authStore.currentUser?.storeId) return;
+        if (!supabase || !authStore.currentUser?.storeId) return undefined;
         const { data, error: rpcError } = await supabase.rpc('rpc_get_comprehensive_financial_report', {
             p_store_id: authStore.currentUser.storeId,
             p_start_date: startDate,
             p_end_date: endDate,
         });
         if (rpcError) throw rpcError;
-        summary.value = data as FinancialReportPayload;
+        return data as FinancialReportPayload;
     };
 
-    const fetchTopProductsByUnits = async (startDate: string, endDate: string, limit = 10) => {
+    const fetchTopProductsByUnits = async (startDate: string, endDate: string, limit = 10): Promise<TopProductUnit[] | undefined> => {
         const supabase = getSupabaseClient();
-        if (!supabase || !authStore.currentUser?.storeId) return;
+        if (!supabase || !authStore.currentUser?.storeId) return undefined;
         const { data, error: rpcError } = await supabase.rpc('get_top_products_by_units', {
             p_store_id: authStore.currentUser.storeId,
             p_start_date: startDate,
@@ -244,15 +245,18 @@ export const useFinancialStore = defineStore('financial', () => {
             p_limit: limit,
         });
         if (rpcError) throw rpcError;
-        topProductsByUnits.value = (data ?? []) as TopProductUnit[];
+        return (data ?? []) as TopProductUnit[];
     };
 
     /** Carga estricta de la serie de tiempo según el periodo seleccionado */
     const setPeriod = async (period: PeriodType) => {
+        const seq = ++timeSeriesSeq;
+
         if (!authStore.isAdmin) {
             error.value = 'Acceso restringido: solo administradores pueden consultar reportes financieros.';
             summary.value = null;
             topProductsByUnits.value = [];
+            isLoadingTimeSeries.value = false;
             return;
         }
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -260,37 +264,51 @@ export const useFinancialStore = defineStore('financial', () => {
             error.value = 'Sin conexión a internet. El Centro de Inteligencia requiere conexión en línea.';
             summary.value = null;
             topProductsByUnits.value = [];
+            isLoadingTimeSeries.value = false;
             return;
         }
-        if (isLoadingTimeSeries.value) return;
         activePeriod.value = period;
         isLoadingTimeSeries.value = true;
         error.value = null;
 
         try {
             const { start, end } = getDateRange(period);
-            const results = await Promise.allSettled([
+            const [reportResult, topProductsResult] = await Promise.allSettled([
                 fetchFinancialReport(start, end),
                 fetchTopProductsByUnits(start, end)
             ]);
 
-            const rejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+            if (seq !== timeSeriesSeq) return;
+
+            if (reportResult.status === 'fulfilled' && reportResult.value !== undefined) {
+                summary.value = reportResult.value;
+            }
+            if (topProductsResult.status === 'fulfilled' && topProductsResult.value !== undefined) {
+                topProductsByUnits.value = topProductsResult.value;
+            }
+
+            const rejected = [reportResult, topProductsResult].find(
+                (r): r is PromiseRejectedResult => r.status === 'rejected'
+            );
             if (rejected) {
                 const msg = rejected.reason?.message || 'Error al cargar los datos financieros del periodo';
                 console.warn('[FinancialStore] Fetch TimeSeries failed:', rejected.reason);
-                if (results.every(r => r.status === 'rejected')) {
+                if (reportResult.status === 'rejected' && topProductsResult.status === 'rejected') {
                     throw rejected.reason;
                 }
                 error.value = msg.includes('ADMIN_ONLY_ACTION') ? 'Acceso exclusivo del Administrador.' : msg;
             }
         } catch (err: any) {
+            if (seq !== timeSeriesSeq) return;
             console.error('[FinancialStore] Error loading time-series data:', err);
             const msg = err?.message || 'Error al cargar los datos financieros del periodo';
             error.value = msg.includes('ADMIN_ONLY_ACTION') ? 'Acceso exclusivo del Administrador.' : msg;
             summary.value = null;
             topProductsByUnits.value = [];
         } finally {
-            isLoadingTimeSeries.value = false;
+            if (seq === timeSeriesSeq) {
+                isLoadingTimeSeries.value = false;
+            }
         }
     };
 

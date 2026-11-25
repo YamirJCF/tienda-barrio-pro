@@ -661,7 +661,13 @@ export const saleRepository: SaleRepository = {
         const { data, error } = await supabase.rpc('get_sale_detail' as any, {
             p_sale_id: saleId
         });
-        if (error) throw error;
+        if (error) {
+            const raw = String(error.message || '');
+            if (raw.includes('ADMIN_ONLY_ACTION') || error.code === '42501') {
+                throw new Error('Acceso exclusivo del Administrador.');
+            }
+            throw error;
+        }
         return data;
     },
 

@@ -132,11 +132,21 @@ const loadDetail = async () => {
   }
 };
 
-watch(() => props.modelValue, async (open) => {
-  if (open && props.saleId) {
-    await loadDetail();
-  }
-}, { immediate: true });
+watch(
+  () => [props.modelValue, props.saleId] as const,
+  async ([open, id]) => {
+    if (open && id) {
+      await loadDetail();
+    } else if (!open) {
+      detail.value = null;
+      fetchError.value = null;
+      voidError.value = null;
+      voidReason.value = '';
+      showVoidModal.value = false;
+    }
+  },
+  { immediate: true }
+);
 
 watch(voidReason, () => {
   if (voidError.value) {
@@ -295,6 +305,24 @@ watch(voidReason, () => {
       maxHeight="500px"
     >
       <div class="p-4 space-y-4">
+        <!-- Read Model Compensatorio (Arquetipo D) -->
+        <div
+          v-if="detail"
+          data-testid="void-sale-read-model"
+          class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3 space-y-1.5 text-xs"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-900 dark:text-white">Venta #{{ detail.ticket_number }}</span>
+            <span class="font-bold font-mono tabular-nums text-sm text-rose-600 dark:text-rose-400">
+              {{ formatWithSign(detail.total) }}
+            </span>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2 text-slate-500 dark:text-slate-400">
+            <span>Canal: <strong class="text-slate-700 dark:text-slate-200">{{ paymentLabels[detail.payment_method] || detail.payment_method }}</strong></span>
+            <span v-if="detail.client_name">Cliente: <strong class="text-slate-700 dark:text-slate-200">{{ detail.client_name }}</strong></span>
+          </div>
+        </div>
+
         <div class="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 p-3 rounded-xl border border-red-200 dark:border-red-800 text-sm">
           <AlertTriangle :size="20" class="shrink-0" />
           <span>Esta acción revertirá los fondos en caja/deuda y reingresará los productos al inventario.</span>

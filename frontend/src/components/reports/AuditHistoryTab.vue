@@ -112,14 +112,26 @@ const datePresetOptions: DropdownOption[] = [
 const tempStartDate = ref('');
 const tempEndDate = ref('');
 
+const toBogotaDateStr = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+
+const shiftBogotaDays = (dateStr: string, deltaDays: number): string => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + deltaDays)).toISOString().slice(0, 10);
+};
+
 const handleDateChange = (val: string) => {
   if (val === 'custom') {
     dateFilter.value = 'custom';
     if (!tempStartDate.value) {
-      const now = new Date();
-      tempEndDate.value = now.toISOString().slice(0, 10);
-      now.setDate(now.getDate() - 7);
-      tempStartDate.value = now.toISOString().slice(0, 10);
+      const todayBogota = toBogotaDateStr(new Date());
+      tempEndDate.value = todayBogota;
+      tempStartDate.value = shiftBogotaDays(todayBogota, -7);
     }
   } else {
     fetchHistory(undefined, val as DatePreset);
@@ -570,6 +582,7 @@ onUnmounted(() => {
     <SaleDetailModal
       v-model="showSaleDetail"
       :saleId="selectedSaleId"
+      @voided="fetchHistory(currentType)"
     />
 
     <!-- Forensic Shift Report Modal (SDD-027-01 CHK-306) -->

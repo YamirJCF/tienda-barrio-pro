@@ -358,7 +358,7 @@ describe('Fase 3 Ola 3 — Reportes y Auditoría 100% Admin-only + Mis Movimient
 
     const wrapper = mount(ShiftForensicDetailModal, {
       props: { modelValue: true, sessionId: 'sess-99' },
-      global: { stubs: { BaseButton: { template: '<button><slot /></button>' } } },
+      global: { stubs: { Teleport: true, BaseButton: { template: '<button><slot /></button>' } } },
     });
     await flushPromises();
 
@@ -476,7 +476,7 @@ describe('Fase 3 Ola 3 — Reportes y Auditoría 100% Admin-only + Mis Movimient
 
     const wrapper = mount(ShiftForensicDetailModal, {
       props: { modelValue: true, sessionId: 'sess-99' },
-      global: { stubs: { BaseButton: { template: '<button><slot /></button>' } } },
+      global: { stubs: { Teleport: true, BaseButton: { template: '<button><slot /></button>' } } },
     });
     await flushPromises();
 

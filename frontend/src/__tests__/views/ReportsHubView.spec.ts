@@ -9,8 +9,11 @@ import FinancialDashboardTab from '../../components/reports/FinancialDashboardTa
 import AuditHistoryTab from '../../components/reports/AuditHistoryTab.vue';
 import ClientLedgerWidget from '../../components/reports/ClientLedgerWidget.vue';
 import SaleDetailModal from '../../components/history/SaleDetailModal.vue';
+import ShiftForensicDetailModal from '../../components/history/ShiftForensicDetailModal.vue';
+import { expenseRepository } from '../../data/repositories/expenseRepository';
 import { useFinancialStore } from '../../stores/financial';
 import { useAuthStore } from '../../stores/auth';
+import { useHistory } from '../../composables/useHistory';
 
 enableAutoUnmount(afterEach);
 
@@ -22,6 +25,7 @@ const {
   mockPush,
   mockReplace,
   mockRpc,
+  mockFrom,
   mockShowWarning,
   mockShowError,
   mockShowSuccess,
@@ -30,6 +34,7 @@ const {
   mockPush: vi.fn(),
   mockReplace: vi.fn(),
   mockRpc: vi.fn(),
+  mockFrom: vi.fn(),
   mockShowWarning: vi.fn(),
   mockShowError: vi.fn(),
   mockShowSuccess: vi.fn(),
@@ -57,6 +62,11 @@ vi.mock('../../data/supabaseClient', async (importOriginal) => {
     isSupabaseConfigured: () => true,
     getSupabaseClient: () => ({
       rpc: mockRpc,
+      from: mockFrom,
+    }),
+    requireSupabase: () => ({
+      rpc: mockRpc,
+      from: mockFrom,
     }),
   };
 });
@@ -428,5 +438,249 @@ describe('WO-OLA2-C6-001: Centro de Inteligencia y Auditoría (/reports)', () =>
     );
     expect(mockShowWarning).not.toHaveBeenCalled();
     expect(mockShowError).not.toHaveBeenCalled();
+  });
+
+  it('6. Dominio expenses en rango week/yesterday usa expenseRepository.getExpensesByDateRange (America/Bogota) y no trunca a hoy', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-26T02:00:00.000Z')); // 2026-11-25 21:00 en Bogotá
+
+    const getRangeSpy = vi.spyOn(expenseRepository, 'getExpensesByDateRange');
+    const getTodaySpy = vi.spyOn(expenseRepository, 'getTodayExpenses');
+
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'exp-yesterday-1',
+            amount: 18000,
+            description: '[Servicios] Agua ayer',
+            category: 'Servicios',
+            payment_method: 'efectivo',
+            created_at: '2026-11-24T20:00:00-05:00',
+            actor_name: 'Carlos',
+          },
+        ],
+        error: null,
+      }),
+    };
+    mockFrom.mockReturnValue(chain);
+
+    const history = useHistory();
+    await history.fetchHistory('expenses', 'yesterday');
+
+    expect(getRangeSpy).toHaveBeenCalledWith('store-001', '2026-11-24', '2026-11-24');
+    expect(getTodaySpy).not.toHaveBeenCalled();
+    expect(chain.gte).toHaveBeenCalledWith('created_at', '2026-11-24T00:00:00-05:00');
+    expect(chain.lte).toHaveBeenCalledWith('created_at', '2026-11-24T23:59:59.999-05:00');
+    expect(history.items.value).toHaveLength(1);
+    expect(history.items.value[0].id).toBe('exp-yesterday-1');
+  });
+
+  it('7. AuditHistoryTab refresca al emitir @voided desde SaleDetailModal y muestra Read Model en showVoidModal', async () => {
+    let salesFetchCount = 0;
+    mockRpc.mockImplementation(async (fnName: string) => {
+      if (fnName === 'get_history_ventas') {
+        salesFetchCount += 1;
+        return {
+          data: [
+            {
+              id: 'sale-42',
+              ticket_number: 42,
+              items_count: 1,
+              payment_method: 'fiado',
+              client_name: 'María Pérez',
+              total: 12000,
+              is_voided: salesFetchCount > 1,
+              actor_name: 'Admin Test',
+              created_at: '2026-11-25T15:00:00Z',
+            },
+          ],
+          error: null,
+        };
+      }
+      if (fnName === 'get_sale_detail') {
+        return {
+          data: {
+            success: true,
+            id: 'sale-42',
+            ticket_number: 42,
+            created_at: '2026-11-25T15:00:00Z',
+            total: 12000,
+            payment_method: 'fiado',
+            is_voided: false,
+            client_id: 'cli-99',
+            client_name: 'María Pérez',
+            employee_name: 'Cajero 1',
+            items_count: 1,
+            items: [
+              {
+                product_id: 'prod-99',
+                product_name: 'Aceite 1L',
+                quantity: 1,
+                unit_price: 12000,
+                subtotal: 12000,
+              },
+            ],
+          },
+          error: null,
+        };
+      }
+      if (fnName === 'rpc_anular_venta') {
+        return { data: { success: true }, error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    const histWrapper = mount(AuditHistoryTab, {
+      props: { initialDomain: 'sales' },
+      global: {
+        stubs: {
+          ...commonStubs,
+          HistoryItemCard: {
+            props: ['item'],
+            template: '<button data-testid="history-card-stub" @click="$emit(\'click\', item.id)">{{ item.title }}</button>',
+          },
+        },
+      },
+    });
+    await flushPromises();
+    expect(salesFetchCount).toBe(1);
+
+    await histWrapper.get('[data-testid="history-card-stub"]').trigger('click');
+    await flushPromises();
+
+    await histWrapper.get('[data-testid="open-void-panel-btn"]').trigger('click');
+    const readModel = histWrapper.get('[data-testid="void-sale-read-model"]').text();
+    expect(readModel).toContain('Venta #42');
+    expect(readModel).toContain('$ 12.000');
+    expect(readModel).toContain('Fiado');
+    expect(readModel).toContain('María Pérez');
+
+    await histWrapper.get('textarea').setValue('Anulación por corrección de prueba');
+    await histWrapper.get('[data-testid="confirm-void-sale-btn"]').trigger('click');
+    await flushPromises();
+
+    expect(salesFetchCount).toBe(2);
+  });
+
+  it('8. ShiftForensicDetailModal usa BaseModal y renderiza Gastos OPEX y Reembolsos separados sin emojis ni doble $', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          session: {
+            id: 'sess-99',
+            store_id: 'store-001',
+            opening_balance: 50000,
+            expected_balance: 120000,
+            actual_balance: 120000,
+            difference: 0,
+            closing_attempts: 1,
+            opened_by_name: 'Ana',
+            opened_by_role: 'employee',
+            closed_by_name: 'Admin',
+            forced_close: false,
+          },
+          financial_summary: {
+            total_sales_cash: 70000,
+            total_sales_nequi: 20000,
+            total_sales_llave_bre: 10000,
+            total_client_abonos: 5000,
+            total_opex_expenses: 18000,
+            total_refunds: 4500,
+            total_supplier_payments: 30000,
+          },
+          movements: [],
+          operational_noise: { voided_sales: [], security_alerts: [] },
+        },
+      },
+      error: null,
+    });
+
+    const wrapper = mount(ShiftForensicDetailModal, {
+      props: { modelValue: true, sessionId: 'sess-99' },
+      global: {
+        stubs: {
+          BaseModal: {
+            props: ['modelValue'],
+            template: '<div v-if="modelValue"><slot name="header" /><slot /><slot name="footer" /></div>',
+          },
+          BaseButton: commonStubs.BaseButton,
+        },
+      },
+    });
+    await flushPromises();
+
+    const opexText = wrapper.get('[data-testid="shift-forensic-opex"]').text();
+    const refundsText = wrapper.get('[data-testid="shift-forensic-refunds"]').text();
+    expect(opexText).toContain('Gastos OPEX');
+    expect(opexText).toContain('-$ 18.000');
+    expect(refundsText).toContain('Reembolsos');
+    expect(refundsText).toContain('-$ 4.500');
+    expect(wrapper.text()).not.toContain('22.500');
+    expect(wrapper.text()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
+  });
+
+  it('9. useFinancialStore.setPeriod con cambio rápido honra únicamente el último período seleccionado (seq)', async () => {
+    let resolveSlow!: (v: any) => void;
+    let resolveFast!: (v: any) => void;
+
+    mockRpc.mockImplementation(async (fnName: string, params: any) => {
+      if (fnName === 'rpc_get_comprehensive_financial_report') {
+        if (params.p_start_date === params.p_end_date) {
+          return await new Promise((res) => { resolveSlow = res; });
+        }
+        return await new Promise((res) => { resolveFast = res; });
+      }
+      if (fnName === 'get_top_products_by_units') {
+        return { data: [], error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    const store = useFinancialStore();
+    const slowToday = store.setPeriod('today');
+    const fastMonth = store.setPeriod('month');
+
+    await flushPromises();
+    resolveFast({
+      data: {
+        revenue: 999000,
+        cogs: 500000,
+        gross_profit: 499000,
+        gross_margin: 50,
+        operational_expenses: 50000,
+        net_profit: 449000,
+        inventory_value: 300000,
+        traffic_light: { status: 'green', message: 'Mes óptimo' },
+        payment_breakdown: { cash: 999000, transfer: 0, credit: 0 },
+      },
+      error: null,
+    });
+    await fastMonth;
+
+    resolveSlow({
+      data: {
+        revenue: 1000,
+        cogs: 500,
+        gross_profit: 500,
+        gross_margin: 50,
+        operational_expenses: 0,
+        net_profit: 500,
+        inventory_value: 300000,
+        traffic_light: { status: 'gray', message: 'Hoy obsoleto' },
+        payment_breakdown: { cash: 1000, transfer: 0, credit: 0 },
+      },
+      error: null,
+    });
+    await slowToday;
+
+    expect(store.activePeriod).toBe('month');
+    expect(store.summary?.revenue).toBe(999000);
+    expect(store.isLoadingTimeSeries).toBe(false);
   });
 });

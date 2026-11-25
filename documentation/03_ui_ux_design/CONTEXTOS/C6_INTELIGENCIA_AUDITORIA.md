@@ -9,7 +9,7 @@
 ## §1. Frontera del Contexto
 
 ### 1.1 Propósito Delimitado
-Proveer visibilidad gerencial y auditoría inmutable de solo lectura: rentabilidad financiera (`P&L` 4 Pilares, semáforo de margen, valor de inventario) y trazabilidad histórica transversal en 7 dominios (`Ventas`, `Caja`, `Compras`, `Gastos`, `Créditos`, `Precios`, `Auditoría`). Cero mutaciones destructivas directas desde este contexto.
+Proveer visibilidad gerencial y auditoría inmutable: rentabilidad financiera (`P&L` 4 Pilares, semáforo de margen, valor de inventario) y trazabilidad histórica transversal en 7 dominios (`Ventas`, `Caja`, `Compras`, `Gastos`, `Créditos`, `Precios`, `Auditoría`). Como única excepción compensatoria (`Arquetipo D`), el Administrador puede ejecutar **Anular Venta** (`rpc_anular_venta`) directamente desde [`SaleDetailModal.vue`](../../../frontend/src/components/history/SaleDetailModal.vue) previa visualización del Read Model de la venta y captura de motivo mínimo (`N1`); cualquier otro ajuste de inventario o cartera navega hacia `C3` o `C4`.
 
 ### 1.2 Rutas Actuales vs. Objetivo Canónico
 
@@ -95,7 +95,7 @@ Registro Histórico / Evidencia [7 Dominios] (Solo Lectura)
 | **N2 — Toast Efímero** | Reporte/resumen copiado o exportado correctamente | **Solo** `ToastNotification.vue`. | `Admin` |
 | **N3 — Banner Persistente** | Error al cargar snapshots P&L o historial con botón **Reintentar** (`FinancialDashboardView.vue` L43-46); modo offline bloqueado | Franja fija en la pestaña activa hasta reintentar con éxito. | `Admin` |
 | **N4 — Bandeja `/notifications`** | Alertas financieras críticas (cierre con discrepancia, pérdida neta, cierre forzado `+24h`) | Origen de navegación con deep-link hacia `/reports?tab=history` o `/reports?tab=dashboard`. | `Admin` |
-| **N5 — Compuerta** | No aplica en vistas internas (contexto 100% solo lectura sin mutaciones). | — | — |
+| **N5 — Compuerta** | Confirmación compensatoria **Anular Venta** (`Arquetipo D`) en [`SaleDetailModal.vue`](../../../frontend/src/components/history/SaleDetailModal.vue) (`showVoidModal`) | Modal de confirmación exclusiva `Admin` con Read Model visible (`Venta #ticket`, `Total`, canal y cliente), advertencia de reversión atómica y bloqueo de doble envío (`isVoiding`). | `Admin` |
 
 ---
 

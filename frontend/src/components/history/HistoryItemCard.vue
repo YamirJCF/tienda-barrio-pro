@@ -4,7 +4,7 @@ import type { HistoryItem } from '../../composables/useHistory';
 import { formatRelativeTime } from '../../composables/useRelativeTime';
 import { 
   Tag, ShoppingCart, Banknote, LogIn, Lock, Shield, 
-  ChevronRight, User, HelpCircle, Vault, Package
+  ChevronRight, User, HelpCircle, Vault, Package, CreditCard
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -28,6 +28,7 @@ const iconComponent = computed(() => {
     'shield': Shield,
     'vault': Vault,
     'package': Package,
+    'credit_card': CreditCard,
   };
   return map[props.item.icon] || HelpCircle;
 });

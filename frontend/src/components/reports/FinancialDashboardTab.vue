@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFinancialStore, type PeriodType } from '../../stores/financial';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
@@ -28,6 +28,10 @@ const store = useFinancialStore();
 const { formatWithSign } = useCurrencyFormat();
 
 const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+const sanitizedTrafficMessage = computed(() =>
+  (store.summary?.traffic_light?.message || '').replace(/^[\p{Extended_Pictographic}\uFE0F\s]+/u, '')
+);
 
 const handleOnline = () => {
   isOnline.value = true;
@@ -159,7 +163,7 @@ onUnmounted(() => {
             <BarChart3 v-else :size="24" class="text-slate-600 dark:text-slate-300" />
           </div>
           <p class="text-sm font-medium text-slate-700 dark:text-slate-300">
-            {{ store.summary.traffic_light.message }}
+            {{ sanitizedTrafficMessage }}
           </p>
         </header>
 
