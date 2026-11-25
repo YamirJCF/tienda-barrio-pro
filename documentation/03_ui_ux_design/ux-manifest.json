@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "adrVersion": "UX-ADR-006",
+  "adrVersion": "UX-ADR-007",
   "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
   "bottomNavRoutes": [
     "/pos",

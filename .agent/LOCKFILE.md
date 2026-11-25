@@ -74,6 +74,7 @@ Antes de modificar **cualquier** función, archivo o componente listado en este 
 | 2026-11-25 | LF-013, LF-014 | WO-OLA2-C3-002 (UX-ADR-004): Alta de ruta canónica `/inventory-count` (`InventoryCountView.vue`) con compuerta de caja cerrada y retiro definitivo de `/stock-outputs` (`StockOutputsView.vue`) | Usuario (Aprobación explícita WO-OLA2-C3-002) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c3-inventariado-fisico`) |
 | 2026-11-25 | LF-013, LF-014 | WO-OLA2-C5-001 (UX-ADR-005): Consolidación de C5 en `/suppliers` (alias `/payables`), retiro de `PayablesView.vue` y reducción de `baselineDebt` (`nativeDialogsAllowed` 3→2, `legacyToastImportsAllowed` 5→4) | Usuario (Aprobación explícita WO-OLA2-C5-001) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c5-proveedores-cxp`) |
 | 2026-11-25 | LF-013 | WO-OLA2-C4-001 (UX-ADR-006): Deuda global de cartera en SQL (`rpc_admin_get_clients`), reubicación de política de cupo global desde `AdminHubView` hacia `/clients`, Arquetipo `B/D` en `/clients/:id` y cierre de `C4-H1..C4-H4` | Usuario (Aprobación explícita WO-OLA2-C4-001) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c4-clientes-fiado`) |
+| 2026-11-25 | LF-013 | WO-OLA2-C1-001 (UX-ADR-007): Endurecimiento de cupo/offline en Fiado y Retiro Personal ($0), extracción de `PersonalWithdrawalModal`, resiliencia de catálogo y Read Model FIFO en `RefundModal` (`C1-H1..C1-H4`) | Usuario (Aprobación explícita WO-OLA2-C1-001) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c1-mostrador-pos`) |
 
 ---
 
