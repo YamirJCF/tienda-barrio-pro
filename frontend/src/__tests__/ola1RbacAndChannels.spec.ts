@@ -271,11 +271,18 @@ describe('Fase 3 Ola 1 — RBAC 4 Permisos, Continuidad <24h, Snapshots y Canale
           due_date: '2026-11-30',
           total_amount: 50000,
           amount_paid: 0,
+          pending_balance: 50000,
           status: 'pendiente',
           store_id: 's1',
         } as any,
       },
-      global: { stubs: { BaseInput: true, BaseButton: { template: '<button><slot /></button>' } } },
+      global: {
+        stubs: {
+          BaseModal: { props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' },
+          BaseInput: true,
+          BaseButton: { template: '<button><slot /></button>' },
+        },
+      },
     });
 
     expect(wrapper.text()).toContain('Llave Bre-B');

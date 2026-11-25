@@ -122,3 +122,23 @@ Instancia Arquetipo `C` precedido por Compuerta `F` (`N5`: bloquea si la caja es
 
 ### 4. Higiene de Crecimiento (Qué se consolida o elimina)
 Elimina la ruta `/stock-outputs` y `StockOutputsView.vue` (que tenía `bg-gray-900` fijo y carecía de lotes FIFO), retira el acceso de mermas para empleados sin `canManageInventory` en `DashboardView.vue` y mantiene `baselineDebt` sin incremento.
+
+---
+
+## UX-ADR-005 — Consolidación de Proveedores y Cuentas por Pagar en /suppliers
+- **Fecha:** 2026-11-25
+- **Estado:** Aprobado
+- **Contexto(s) / Rutas afectadas:** `C5` (`/suppliers?tab=suppliers|payables`, alias `/payables`; retiro de ruta paralela `/payables` -> `PayablesView.vue`)
+- **Aprobación:** `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (`WO-OLA2-C5-001`)
+
+### 1. Contexto y Objeto (ORCA)
+Unifica los objetos canónicos `Proveedor` y `Factura CxP` (`1:N`) dentro del hogar único `/suppliers` mediante pestañas `?tab=suppliers|payables` y deep-links `?supplier=<uuid>&invoice=<uuid>`, eliminando la fragmentación histórica entre `/suppliers` y `/payables` y manteniendo `/payables` únicamente como alias compatible redirigido a `/suppliers?tab=payables`.
+
+### 2. Verdad Contable (Read Model / Invariante)
+Los KPIs globales `summary` (`total_debt`, `total_overdue`, `pending_count`, `overdue_count`) y `pending_balance` por factura se calculan exclusivamente en PostgreSQL dentro de `rpc_obtener_cuentas_por_pagar` sobre toda la tienda (sin truncamiento por `p_limit`, `p_offset` ni filtro de estado), y la deuda agregada por proveedor proviene de `rpc_obtener_proveedores_con_cxp`. El alta de facturas en `rpc_crear_factura_proveedor` prioriza la FK relacional `p_supplier_id` validada por tienda, con `assert_store_access` y `assert_store_admin` obligatorios. `PayInvoiceModal` sincroniza liquidez real de caja al abrirse y nunca calcula restas en cliente.
+
+### 3. Arquetipo, Señalización y Top Tasks
+Instancia el Arquetipo `B/D` (Workspace de Objeto `Proveedores | Cuentas por Pagar` + Hoja Transaccional `PayInvoiceModal` sobre `BaseModal` con Read Model de liquidez por canal `C2`). Aplica señalización `N1` inline para validaciones y sobregiro de canal, `N2` unificado mediante `useNotifications()` / `ToastNotification.vue`, `N3` persistente fail-closed con Reintentar ante error o caja cerrada/`+24h` (sin `border-l-4` ni emojis), y `N5` en `BaseModal` para confirmación destructiva de eliminación; cero toques añadidos a las 5 Top Tasks.
+
+### 4. Higiene de Crecimiento (Qué se consolida o elimina)
+Elimina la ruta paralela `/payables` y el archivo `PayablesView.vue` (bajando de 27 a 26 rutas totales: 25 permanentes + 1 `DEV`-only) y reduce `baselineDebt` en `ux-manifest.json`: `nativeDialogsAllowed` pasa de `3 → 2` (se retira `SuppliersView.vue`) y `legacyToastImportsAllowed` pasa de `5 → 4` (se retira `PayInvoiceModal.vue`).

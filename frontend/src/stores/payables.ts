@@ -25,6 +25,13 @@ export interface SupplierInvoice extends SupplierInvoiceRow {
     };
 }
 
+export interface PayablesSummary {
+    totalDebt: number;
+    totalOverdue: number;
+    pendingCount: number;
+    overdueCount: number;
+}
+
 export interface FetchInvoicesOptions {
     storeId?: string;
     supplierId?: string;
@@ -51,6 +58,12 @@ function mapPayablesRpcError(rawMessage?: string): string {
     if (raw.includes('AMOUNT_EXCEEDS_PENDING')) {
         return 'El monto del abono supera el saldo pendiente de la factura.';
     }
+    if (raw.includes('SUPPLIER_NOT_FOUND')) {
+        return 'El proveedor seleccionado no existe en la tienda activa.';
+    }
+    if (raw.includes('INVALID_SUPPLIER_NAME')) {
+        return 'El nombre del proveedor es obligatorio (mínimo 2 caracteres).';
+    }
     if (raw.includes('ADMIN_ONLY_ACTION') || raw.includes('UNAUTHORIZED') || raw.includes('42501')) {
         return 'Acción restringida exclusivamente al Administrador de la tienda.';
     }
@@ -60,9 +73,17 @@ function mapPayablesRpcError(rawMessage?: string): string {
     return raw || 'Error al procesar operación de Cuentas por Pagar';
 }
 
+const EMPTY_SUMMARY: PayablesSummary = {
+    totalDebt: 0,
+    totalOverdue: 0,
+    pendingCount: 0,
+    overdueCount: 0,
+};
+
 export const usePayablesStore = defineStore('payables', () => {
     const invoices = ref<SupplierInvoice[]>([]);
     const totalCount = ref<number>(0);
+    const summary = ref<PayablesSummary>({ ...EMPTY_SUMMARY });
     const isLoading = ref(false);
     const error = ref<string | null>(null);
 
@@ -108,6 +129,14 @@ export const usePayablesStore = defineStore('payables', () => {
                 invoices.value = mapped;
             }
             totalCount.value = Number(payload.count ?? invoices.value.length);
+
+            const serverSummary = payload.summary;
+            summary.value = {
+                totalDebt: Number(serverSummary?.total_debt ?? 0),
+                totalOverdue: Number(serverSummary?.total_overdue ?? 0),
+                pendingCount: Number(serverSummary?.pending_count ?? 0),
+                overdueCount: Number(serverSummary?.overdue_count ?? 0),
+            };
         } catch (e: any) {
             logger.error('[PayablesStore] Fetch failed', e);
             error.value = mapPayablesRpcError(e?.message);
@@ -118,15 +147,18 @@ export const usePayablesStore = defineStore('payables', () => {
 
     const createInvoice = async (params: {
         storeId: string;
-        supplierName: string;
+        supplierId?: string | null;
+        supplierName?: string | null;
         totalAmount: number;
         dueDate?: string | null;
         invoiceNumber?: string | null;
     }): Promise<{ success: boolean; invoice?: SupplierInvoice; error?: string }> => {
         try {
+            const useSupplierId = Boolean(params.supplierId);
             const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_crear_factura_proveedor', {
                 p_store_id: params.storeId,
-                p_supplier_name: params.supplierName,
+                p_supplier_id: useSupplierId ? params.supplierId : null,
+                p_supplier_name: useSupplierId ? null : (params.supplierName?.trim() || null),
                 p_total_amount: params.totalAmount,
                 p_due_date: params.dueDate || null,
                 p_invoice_number: params.invoiceNumber || null,
@@ -177,6 +209,7 @@ export const usePayablesStore = defineStore('payables', () => {
     return {
         invoices,
         totalCount,
+        summary,
         isLoading,
         error,
         fetchInvoices,

@@ -2,9 +2,9 @@
 
 > **Asociado a:** [FRD-019](../FRD/FRD_019_CUENTAS_POR_PAGAR.md)  
 > **Fase del Plan:** Ola 4: Reportes, Auditoría y Cuentas por Pagar (Ítem 4)  
-> **Estado:** 🟠 Alineado a `SDD-003-01` / `ARQ-002` v1.4 (Pendiente implementación en Fase 3)  
+> **Estado:** 🟢 Implementado y consolidado en Ola 2 (`WO-OLA2-C5-001` / `UX-ADR-005`)  
 > **Contrato Marco:** [SDD-003-01](./SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md)  
-> **Última Actualización:** 2026-11-19  
+> **Última Actualización:** 2026-11-25  
 
 ---
 
@@ -965,3 +965,16 @@ A continuación se registran formalmente las seis deudas técnicas y trade-offs 
 - **Qué se decidió:** Normar que la consulta del listado de obligaciones retorne taxativamente la estructura canónica `{ data: [...], count: N }` con soporte para paginación server-side (`p_limit`, `p_offset`), búsqueda parcial por proveedor y filtros combinables de estado dinámico y rango temporal.
 - **Por qué (Trade-off):** Cumple con la Regla Global 4.1 del Contrato de Interfaz y previene sobrecargas de red o congelamiento del cliente Vue ante comercios con cientos de facturas acumuladas en el historial.
 - **Condición de revisión futura:** Permanente. Invariante arquitectural transversal para todos los endpoints de consulta de la plataforma.
+
+---
+
+## 8. Enmienda Ola 2 (`WO-OLA2-C5-001` / `UX-ADR-005`, 2026-11-25)
+
+1. **Read Model Autoritativo en `rpc_obtener_cuentas_por_pagar`:**
+   - Además de `{ success, data, count }` y `pending_balance` por factura, retorna el objeto raíz `summary: { total_debt, total_overdue, pending_count, overdue_count }` calculado en SQL sobre todas las facturas de la tienda (`America/Bogota`) sin truncamiento por `p_limit`, `p_offset` ni `p_status` (filtrable únicamente por `p_supplier_id`). Erradica cualquier `.reduce()` o resta en cliente.
+2. **Clave Foránea Relacional Prioritaria en `rpc_crear_factura_proveedor`:**
+   - Firma canónica `(p_store_id, p_supplier_id DEFAULT NULL, p_supplier_name DEFAULT NULL, p_total_amount, p_due_date DEFAULT NULL, p_invoice_number DEFAULT NULL)`. Si recibe `p_supplier_id`, valida existencia dentro de `p_store_id` o aborta con `SUPPLIER_NOT_FOUND` (`P0002`); el alta por `p_supplier_name` queda acotada a creación explícita de nuevo proveedor.
+3. **Directorio de Proveedores con Deuda en SQL (`rpc_obtener_proveedores_con_cxp`):**
+   - Retorna el catálogo de `public.suppliers` enriquecido con `pending_debt` y `open_invoices_count` bajo `assert_store_access` + `assert_store_admin`.
+4. **Consolidación UI (`UX-ADR-005`):**
+   - `/suppliers?tab=suppliers|payables` absorbe `/payables` (mantenido como alias compatible); `PayablesView.vue` es retirada y `PayInvoiceModal.vue` migra a `BaseModal`, `useNotifications()` y sincronización fresca de caja al abrir.

@@ -155,18 +155,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/HistoryView.vue'),
     meta: { requiresAuth: true }
   },
-  // Suppliers Management (Admin only)
+  // Suppliers & Payables Management (Admin only — UX-ADR-005)
   {
     path: '/suppliers',
+    alias: ['/payables'],
     name: 'suppliers',
     component: () => import('../views/SuppliersView.vue'),
-    meta: { requiresAuth: true }
-  },
-  // Payables Management (Admin only)
-  {
-    path: '/payables',
-    name: 'payables',
-    component: () => import('../views/PayablesView.vue'),
     meta: { requiresAuth: true }
   },
   // Catch-all for Supabase Auth fragments (access_token=...) and 404s
@@ -351,13 +345,8 @@ router.beforeEach(async (to, from, next) => {
     return next({ name: 'dashboard' });
   }
 
-  // 4. Suppliers: Admin only
+  // 4. Suppliers & Payables (consolidated UX-ADR-005): Admin only
   if (to.name === 'suppliers' && !authStore.isAdmin) {
-    return next({ name: 'dashboard' });
-  }
-
-  // 5. Payables: Admin only
-  if (to.name === 'payables' && !authStore.isAdmin) {
     return next({ name: 'dashboard' });
   }
 

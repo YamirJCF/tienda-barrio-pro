@@ -1,7 +1,7 @@
 # Contexto C5 — Abastecimiento (Proveedores & CxP)
 
-> **Estado:** Cartografía Ola 1 (`Lote 1B` — solo documentación)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-001`)  
+> **Estado:** Consolidado en Ola 2 (`UX-ADR-005`, `WO-OLA2-C5-001`)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-005`)  
 > **Restricción de conectividad:** **Online obligatorio** para todas las operaciones ([`PRODUCT.md`](../../../PRODUCT.md#L38)).  
 > **Regla de dominio (`FRD-003-ILC`):** Independencia logística-contable respecto a `C3` — una recepción de mercancía en `/stock-entry` puede vincular proveedor sin forzar pago inmediato, y una factura CxP puede abonarse desde un canal de caja o mediante pago externo (`$0` en caja).
 
@@ -14,16 +14,15 @@ Centralizar el directorio de proveedores, la frecuencia de visitas/entrega, el r
 
 ### 1.2 Rutas Actuales vs. Objetivo Canónico
 
-| Ruta | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Destino Objetivo (Ola 2) |
+| Ruta | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Estado Consolidado (`UX-ADR-005`) |
 |---|---|---|---|---|
-| `/suppliers` | [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue) | `canonica` | `B` (Workspace Objeto) | **Se mantiene única ruta canónica:** Workspace **Proveedores & CxP** con **2 pestañas** (`Cuentas por Pagar \| Proveedores`). |
-| `/payables` | [`PayablesView.vue`](../../../frontend/src/views/PayablesView.vue) | `consolidar` | `B` (Workspace Lista) | **Consolidar en `/suppliers?tab=payables`** (redirección limpia en Ola 2 sin romper enlaces históricos). |
+| `/suppliers` *(alias `/payables`)* | [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue) | `canonica` | `B/D` (Workspace + Hoja Transaccional) | **Única ruta canónica:** Workspace **Proveedores y Cuentas por Pagar** con 2 pestañas (`?tab=suppliers\|payables`), KPIs/FK en servidor y `/payables` como alias compatible. `PayablesView.vue` eliminada. |
 
 ### 1.3 Matriz de Permisos (`SDD-003-01`)
 
 | Capacidad / Acción | `Admin` | Empleado (cualquier permiso) | Evidencia en Código |
 |---|---|---|---|
-| Consultar `/suppliers` y `/payables` | ✅ | ❌ | Guards `!authStore.isAdmin` en [`router/index.ts`](../../../frontend/src/router/index.ts#L372-L379) |
+| Consultar `/suppliers` *(y alias `/payables`)* | ✅ | ❌ | Guard `!authStore.isAdmin` en [`router/index.ts`](../../../frontend/src/router/index.ts#L348-L351) |
 | Crear / editar / eliminar Proveedor | ✅ | ❌ | 100% `isAdmin` |
 | Crear Factura CxP / Registrar Abono (`PayInvoiceModal`) | ✅ | ❌ | 100% `isAdmin` |
 
@@ -112,11 +111,11 @@ Proveedor (1) ──< Factura CxP (N) ──< Abono a Proveedor (N)
 
 ---
 
-## §5. Hotspots Contables y de Dominio Verificados para Ola 2 (`FRD/SDD/SQL` antes de UI)
+## §5. Hotspots Contables y de Dominio Cerrados en Ola 2 (`WO-OLA2-C5-001` / `UX-ADR-005`)
 
-| ID | Severidad | Evidencia Verificada en Código | Brecha Contable / UX | Acción Requerida en Ola 2 |
+| ID | Severidad | Evidencia Original Auditada | Estado en Ola 2 | Resolución Implementada (`WO-OLA2-C5-001`) |
 |---|---|---|---|---|
-| **C5-H1** | 🔴 **CRÍTICO** | [`PayablesView.vue`](../../../frontend/src/views/PayablesView.vue#L160) y L345-355 | `totalDebt`, `totalOverdue` y el saldo pendiente (`invoice.total_amount - invoice.amount_paid`) se calculan en cliente con `.reduce()` sobre una página parcial de 50 facturas, violando `SPEC_001` (Backend Authority) y arriesgando cifras incompletas. | Exponer resumen CxP (`total_debt`, `total_overdue`, `pending_balance`) desde RPC/servidor y eliminar `.reduce()` en cliente. |
-| **C5-H2** | 🟠 **ALTO** | [`PayablesView.vue`](../../../frontend/src/views/PayablesView.vue#L232-L243); [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue#L15) y L43 | 1) `PayablesView.vue` captura el proveedor como texto libre (`newInvoiceForm.supplierName`) propiciando proveedores duplicados y huérfanos.<br>2) `SuppliersView.vue` importa `Pencil` (L15) y declara `editingSupplierId` (L43) sin flujo de edición operativo ni manejo visual de error al fallar `fetchSuppliers` (Regla 3). | Unificar en `/suppliers` con 2 pestañas, usar selector relacional de proveedor en creación de factura, completar edición de proveedor y añadir Banner `N3` de error con Reintentar. |
-| **C5-H3** | 🟠 **ALTO** | [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue#L105); [`PayInvoiceModal.vue`](../../../frontend/src/components/suppliers/PayInvoiceModal.vue#L166) | Deuda activa congelada en `ux-manifest.json` (`baselineDebt`): `confirm()` nativo en `SuppliersView.vue` (L105) e importación duplicada de `vue-toastification` en `PayInvoiceModal.vue` (L166). | Reemplazar `confirm()` por `BaseModal` (`N5`) y migrar toast a `ToastNotification.vue` (`N2`), reduciendo `baselineDebt`. |
-| **C5-H4** | 🟡 **MEDIO** | [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue#L168); [`PayablesView.vue`](../../../frontend/src/views/PayablesView.vue#L135); [`PayInvoiceModal.vue`](../../../frontend/src/components/suppliers/PayInvoiceModal.vue#L20-L60) | Violaciones a `DESIGN.md`: `border-l-[6px]` en tarjetas de `SuppliersView` (L168) y `PayablesView` (L135); `border-l-4` y emojis `ℹ️`/`🚫` en `PayInvoiceModal.vue` (L20-60); modales `div.fixed` custom y ausencia de `tabular-nums` en montos. | Migrar tarjetas/banners a tokens de `DESIGN.md`, reemplazar modales manuales por `BaseModal`, usar íconos Lucide y aplicar `font-mono tabular-nums`. |
+| **C5-H1** | ✅ **CERRADO** | `PayablesView.vue` *(retirada)* calculaba `totalDebt`, `totalOverdue` y `total_amount - amount_paid` con `.reduce()` sobre página parcial de 50 facturas | **Resuelto en SQL + Store + UI** | `rpc_obtener_cuentas_por_pagar` entrega `summary` global y `pending_balance` por factura; [`SupplierPayablesTab.vue`](../../../frontend/src/components/suppliers/SupplierPayablesTab.vue) y [`PayInvoiceModal.vue`](../../../frontend/src/components/suppliers/PayInvoiceModal.vue) consumen 100% la verdad del servidor. |
+| **C5-H2** | ✅ **CERRADO** | `PayablesView.vue` *(retirada)* capturaba proveedor en texto libre; [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue) carecía de edición y manejo `N3` | **Resuelto en SQL + Workspace `/suppliers`** | Ruta `/payables` consolidada en [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue) (`?tab=suppliers\|payables`); `rpc_crear_factura_proveedor` prioriza FK `p_supplier_id`; [`SupplierDirectoryTab.vue`](../../../frontend/src/components/suppliers/SupplierDirectoryTab.vue) completa edición en `BaseModal` y banner `N3` fail-closed. |
+| **C5-H3** | ✅ **CERRADO** | `confirm()` nativo en [`SuppliersView.vue`](../../../frontend/src/views/SuppliersView.vue) e importación de `vue-toastification` en [`PayInvoiceModal.vue`](../../../frontend/src/components/suppliers/PayInvoiceModal.vue) | **Resuelto + `baselineDebt` reducido** | Confirmación `N5` vía `BaseModal` (cero `confirm()`), notificaciones `N2` vía `useNotifications()`, `nativeDialogsAllowed` `3→2` y `legacyToastImportsAllowed` `5→4` en [`ux-manifest.json`](../ux-manifest.json). |
+| **C5-H4** | ✅ **CERRADO** | `border-l-[6px]`, `border-l-4`, emojis `ℹ️`/`🚫`, modales `div.fixed` custom y ausencia de `tabular-nums` | **Alineado a `DESIGN.md`** | Tarjetas con borde `1px`, banners con íconos Lucide (`Info`, `Ban`, `AlertTriangle`), modales sobre `BaseModal`, montos en `font-mono tabular-nums` y sincronización fail-closed de caja en [`PayInvoiceModal.vue`](../../../frontend/src/components/suppliers/PayInvoiceModal.vue). |
