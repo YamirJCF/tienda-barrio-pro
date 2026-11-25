@@ -78,6 +78,13 @@ function mapSaleRpcError(rawMessage?: string): { message: string; code?: string 
     return { message: raw || 'Error procesando operación de venta' };
 }
 
+export interface RefundCandidateFifoBatch {
+    batch_id: string;
+    quantity: number;
+    unit_cost: number;
+    created_at?: string | null;
+}
+
 export interface RefundCandidateItem {
     sale_item_id: string;
     product_id: string;
@@ -91,6 +98,7 @@ export interface RefundCandidateItem {
     remaining_quantity: number;
     unit_price: number;
     subtotal: number;
+    fifo_batches?: RefundCandidateFifoBatch[];
 }
 
 export interface RefundCandidateSale {
@@ -366,6 +374,18 @@ export const saleRepository: SaleRepository = {
         }
 
         // 2. Offline Mode (Sync Queue)
+        // PRODUCT.md / UX-ADR-007: Fiado y Retiro Personal ($0) exigen conexión en línea
+        const normalizedOfflineMethod = (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash')
+            ? 'efectivo'
+            : saleData.paymentMethod;
+        if (normalizedOfflineMethod === 'fiado' || normalizedOfflineMethod === 'consumo_personal') {
+            return {
+                success: false,
+                error: 'Las ventas fiadas y los retiros personales requieren conexión en línea.',
+                code: 'OFFLINE_NOT_ALLOWED',
+            };
+        }
+
         // FRD-012-R: Validate locally BEFORE queueing to prevent invalid sales
         try {
             // 2.1 Validate Stock Local (RN-R01)
@@ -392,28 +412,12 @@ export const saleRepository: SaleRepository = {
                 }
             }
 
-            // 2.2 Validate Credit Limit for Fiado (RN-R02)
-            if (saleData.paymentMethod === 'fiado' && saleData.clientId) {
-                const clientsStore = useClientsStore();
-                const availableCredit = clientsStore.getAvailableCredit(saleData.clientId);
-                const saleTotal = new Decimal(saleData.total);
-
-                if (saleTotal.gt(availableCredit)) {
-                    return {
-                        success: false,
-                        error: `Límite de crédito excedido. Disponible: $${availableCredit.toFixed(0)}`
-                    };
-                }
-            }
-
             // 2.3 Queue Sale
             const newId = crypto.randomUUID();
 
             // FIX: Map payment method to DB constraint values BEFORE queueing
             // DB Constraint: payment_method = ANY (ARRAY['efectivo', 'nequi', 'llave_bre', 'fiado', 'consumo_personal'])
-            const dbPaymentMethod = (saleData.paymentMethod === 'mixed' || saleData.paymentMethod === 'cash')
-                ? 'efectivo'
-                : saleData.paymentMethod;
+            const dbPaymentMethod = normalizedOfflineMethod;
 
             const enrichedPayload: Record<string, any> = {
                 id: newId,
@@ -670,7 +674,23 @@ export const saleRepository: SaleRepository = {
         }
 
         const res = data as any;
-        return Array.isArray(res?.data) ? res.data : [];
+        const rows: RefundCandidateSale[] = Array.isArray(res?.data) ? res.data : [];
+        return rows.map((sale) => ({
+            ...sale,
+            items: Array.isArray(sale.items)
+                ? sale.items.map((item) => ({
+                    ...item,
+                    fifo_batches: Array.isArray(item.fifo_batches)
+                        ? item.fifo_batches.map((b) => ({
+                            batch_id: String(b.batch_id),
+                            quantity: Number(b.quantity),
+                            unit_cost: Number(b.unit_cost),
+                            created_at: b.created_at ?? null,
+                        }))
+                        : [],
+                }))
+                : [],
+        }));
     },
 
     async processItemRefund(payload: ProcessRefundPayload): Promise<ProcessRefundResult> {

@@ -178,18 +178,22 @@ export const useCartStore = defineStore(
           const qtyToTake = Decimal.min(remainingQtyToAllocate, batchQtyRemaining);
           
           // Add to cart with batch-specific price
-          const existing = items.value.find((i) => i.id === product.id && i.price.equals(new Decimal(batch.sale_price)));
+          const batchPrice = new Decimal(batch.sale_price);
+          const existing = items.value.find((i) => i.id === product.id && i.price.equals(batchPrice));
           if (existing) {
             const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
-            existing.quantity = currentQty.plus(qtyToTake);
+            const nextQty = currentQty.plus(qtyToTake);
+            existing.quantity = nextQty;
+            existing.subtotal = existing.price.times(nextQty);
           } else {
             items.value.push({
               id: product.id,
               name: product.name,
-              price: new Decimal(batch.sale_price),
+              price: batchPrice,
               quantity: qtyToTake,
               measurementUnit: product.measurementUnit || 'un',
               isWeighable: product.isWeighable || false,
+              subtotal: batchPrice.times(qtyToTake),
             });
             // If we push a new item and it's not the first batch loop, it means we split
             if (qtyToTake.lt(new Decimal(qty))) {
@@ -206,7 +210,9 @@ export const useCartStore = defineStore(
           const existing = items.value.find((i) => i.id === product.id && i.price.equals(product.price));
           if (existing) {
             const currentQty = existing.quantity instanceof Decimal ? existing.quantity : new Decimal(existing.quantity);
-            existing.quantity = currentQty.plus(remainingQtyToAllocate);
+            const nextQty = currentQty.plus(remainingQtyToAllocate);
+            existing.quantity = nextQty;
+            existing.subtotal = existing.price.times(nextQty);
           } else {
             items.value.push({
               id: product.id,
@@ -215,6 +221,7 @@ export const useCartStore = defineStore(
               quantity: remainingQtyToAllocate,
               measurementUnit: product.measurementUnit || 'un',
               isWeighable: product.isWeighable || false,
+              subtotal: product.price.times(remainingQtyToAllocate),
             });
             if (remainingQtyToAllocate.lt(new Decimal(qty))) {
                 wasSplit = true;
@@ -329,6 +336,30 @@ export const useCartStore = defineStore(
       return forcedProducts.value.has(productId);
     };
 
+    const getLineSubtotal = (item: CartItem): Decimal => {
+      if (item.subtotal instanceof Decimal) return item.subtotal;
+      const qty = item.quantity instanceof Decimal ? item.quantity : new Decimal(item.quantity);
+      const price = item.price instanceof Decimal ? item.price : new Decimal(item.price);
+      return price.times(qty);
+    };
+
+    const restoreSnapshot = (itemsSnapshot: CartItem[], forcedIds: string[] = []) => {
+      items.value = itemsSnapshot.map((item) => {
+        const price = item.price instanceof Decimal ? new Decimal(item.price) : new Decimal(item.price);
+        const quantity = item.quantity instanceof Decimal ? new Decimal(item.quantity) : new Decimal(item.quantity);
+        const subtotal = item.subtotal instanceof Decimal
+          ? new Decimal(item.subtotal)
+          : (item.subtotal !== undefined ? new Decimal(item.subtotal as any) : price.times(quantity));
+        return {
+          ...item,
+          price,
+          quantity,
+          subtotal,
+        };
+      });
+      forcedProducts.value = new Set(forcedIds);
+    };
+
     return {
       items,
       total,
@@ -339,6 +370,8 @@ export const useCartStore = defineStore(
       addWeighableItem,
       removeItem,
       clearCart,
+      getLineSubtotal,
+      restoreSnapshot,
       hasForcedItems,
       isForcedItem,
       forcedProducts,

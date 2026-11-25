@@ -10,6 +10,7 @@ import { usePayablesStore } from '../stores/payables';
 import { saleRepository } from '../data/repositories/saleRepository';
 import { clientRepository } from '../data/repositories/clientRepository';
 import CheckoutModal from '../components/sales/CheckoutModal.vue';
+import PersonalWithdrawalModal from '../components/sales/PersonalWithdrawalModal.vue';
 import SaleDetailModal from '../components/history/SaleDetailModal.vue';
 import ClientListView from '../views/ClientListView.vue';
 import ClientDetailView from '../views/ClientDetailView.vue';
@@ -224,7 +225,7 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
     expect(deniedRes.error).toContain('canFiar');
   });
 
-  it('[CHK-402][CHK-405] CheckoutModal oculta Fiado sin canFiar, muestra Retiro ($0) y restringe selector de beneficiario a Admin', async () => {
+  it('[CHK-402][CHK-405] CheckoutModal oculta Fiado sin canFiar y excluye Retiro ($0); PersonalWithdrawalModal restringe beneficiario a Admin', async () => {
     const configStore = useConfigStore();
     configStore.paymentMethods = [
       { id: '1', name: 'Efectivo', code: 'efectivo', allowsChange: true, requiresReference: false, isActive: true },
@@ -234,49 +235,62 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
     const authStore = useAuthStore();
     setEmployeeSession(authStore, false);
 
-    const wrapperEmp = mount(CheckoutModal, {
+    const wrapperCheckoutEmp = mount(CheckoutModal, {
       props: { modelValue: true, total: new Decimal(8000) },
       global: {
         stubs: { UIBaseModal: { template: '<div><slot /></div>' } },
       },
     });
 
-    // Empleado sin canFiar NO ve pestaña Fiado, sí ve Retiro ($0)
-    expect(wrapperEmp.text()).not.toContain('Fiado');
-    expect(wrapperEmp.text()).toContain('Retiro ($0)');
+    // Empleado sin canFiar NO ve Fiado y Retiro ($0) vive fuera de CheckoutModal (UX-ADR-007)
+    expect(wrapperCheckoutEmp.text()).not.toContain('Fiado');
+    expect(wrapperCheckoutEmp.text()).not.toContain('Retiro ($0)');
 
-    const retiroTab = wrapperEmp.findAll('button').find((b) => b.text().includes('Retiro ($0)'));
-    await retiroTab!.trigger('click');
+    // Flujo separado en PersonalWithdrawalModal para empleado
+    const wrapperEmp = mount(PersonalWithdrawalModal, {
+      props: { modelValue: true, total: new Decimal(8000), itemCount: 2 },
+      global: {
+        stubs: { UIBaseModal: { template: '<div><slot /></div>' } },
+      },
+    });
+
     expect(wrapperEmp.find('[data-testid="beneficiary-employee-select"]').exists()).toBe(false);
     expect(wrapperEmp.text()).toContain('Laura Cajera');
 
-    const confirmBtn = wrapperEmp.findAll('button').find((b) => b.text().includes('CONFIRMAR'));
-    await confirmBtn!.trigger('click');
+    const confirmBtn = wrapperEmp.get('[data-testid="personal-withdrawal-confirm-btn"]');
+    await confirmBtn.trigger('click');
     const emittedEmp = wrapperEmp.emitted('complete');
     expect(emittedEmp).toBeTruthy();
     expect(emittedEmp![0][0][0].method).toBe('consumo_personal');
     expect(emittedEmp![0][2]).toBeUndefined();
     expect(emittedEmp![0][3]).toBeUndefined();
 
-    // Admin sí ve Fiado y selector de beneficiario
+    // Admin sí ve Fiado en CheckoutModal y selector de beneficiario en PersonalWithdrawalModal
     setAdminSession(authStore);
+    const wrapperCheckoutAdmin = mount(CheckoutModal, {
+      props: { modelValue: true, total: new Decimal(8000) },
+      global: {
+        stubs: { UIBaseModal: { template: '<div><slot /></div>' } },
+      },
+    });
+    expect(wrapperCheckoutAdmin.text()).toContain('Fiado');
+
     const employeesStore = useEmployeesStore();
     employeesStore.employees = [
       { id: EMP_UUID, storeId: STORE_ID, name: 'Laura Cajera', username: '1001', pin: '', isActive: true, permissions: { canManageInventory: false, canFiar: true, canOpenCloseCash: false, canManageRefunds: false }, createdAt: '', updatedAt: '' },
     ];
 
-    const wrapperAdmin = mount(CheckoutModal, {
-      props: { modelValue: true, total: new Decimal(8000), initialMethod: 'consumo_personal' },
+    const wrapperAdmin = mount(PersonalWithdrawalModal, {
+      props: { modelValue: true, total: new Decimal(8000), itemCount: 2 },
       global: {
         stubs: { UIBaseModal: { template: '<div><slot /></div>' } },
       },
     });
-    expect(wrapperAdmin.text()).toContain('Fiado');
     const selectEl = wrapperAdmin.get('[data-testid="beneficiary-employee-select"]');
     await selectEl.setValue(EMP_UUID);
 
-    const confirmAdminBtn = wrapperAdmin.findAll('button').find((b) => b.text().includes('CONFIRMAR'));
-    await confirmAdminBtn!.trigger('click');
+    const confirmAdminBtn = wrapperAdmin.get('[data-testid="personal-withdrawal-confirm-btn"]');
+    await confirmAdminBtn.trigger('click');
     const emittedAdmin = wrapperAdmin.emitted('complete');
     expect(emittedAdmin![0][3]).toBe(EMP_UUID);
   });
@@ -632,25 +646,40 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
     expect(sanitizedSample.beneficiary_employee_id).toBe(EMP_UUID);
 
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-    const offlineRes = await saleRepository.processSale(
+    // Efectivo offline sí se encola en syncQueue con origin_session_id y sin client_id
+    const offlineCashRes = await saleRepository.processSale(
+      {
+        items: [{ productId: 'prod-off-1', productName: 'Café Offline', quantity: 1, price: 5000, subtotal: 5000 }],
+        total: 5000,
+        paymentMethod: 'efectivo',
+        clientId: CLIENT_UUID, // debe quedar null fuera de fiado
+        employeeId: EMP_UUID,
+        originSessionId: SESSION_ID,
+      },
+      STORE_ID,
+    );
+
+    expect(offlineCashRes.success).toBe(true);
+    expect(idbPutSpy).toHaveBeenCalledTimes(1);
+    const queuedItem = idbPutSpy.mock.calls[0][1];
+    expect(queuedItem.type).toBe('CREATE_SALE');
+    expect(queuedItem.payload.origin_session_id).toBe(SESSION_ID);
+    expect(queuedItem.payload.client_id).toBeNull();
+
+    // UX-ADR-007: consumo_personal offline queda bloqueado explícitamente (OFFLINE_NOT_ALLOWED)
+    const offlineWithdrawalRes = await saleRepository.processSale(
       {
         items: [{ productId: 'prod-off-1', productName: 'Café Offline', quantity: 1, price: 5000, subtotal: 5000 }],
         total: 0,
         paymentMethod: 'consumo_personal',
-        clientId: CLIENT_UUID, // debe quedar null fuera de fiado
         employeeId: EMP_UUID,
         originSessionId: SESSION_ID,
         beneficiaryEmployeeId: EMP_UUID,
       },
       STORE_ID,
     );
-
-    expect(offlineRes.success).toBe(true);
+    expect(offlineWithdrawalRes.success).toBe(false);
+    expect(offlineWithdrawalRes.code).toBe('OFFLINE_NOT_ALLOWED');
     expect(idbPutSpy).toHaveBeenCalledTimes(1);
-    const queuedItem = idbPutSpy.mock.calls[0][1];
-    expect(queuedItem.type).toBe('CREATE_SALE');
-    expect(queuedItem.payload.origin_session_id).toBe(SESSION_ID);
-    expect(queuedItem.payload.beneficiary_employee_id).toBe(EMP_UUID);
-    expect(queuedItem.payload.client_id).toBeNull();
   });
 });

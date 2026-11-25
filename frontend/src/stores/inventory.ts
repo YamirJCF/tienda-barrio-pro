@@ -174,6 +174,7 @@ export const useInventoryStore = defineStore(
       }
 
       isLoading.value = true;
+      error.value = null;
       try {
         const cacheKey = `products:${effectiveStoreId}`;
         const { data: rawProducts } = await systemCacheManager.fetchSWR(

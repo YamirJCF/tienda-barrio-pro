@@ -5,6 +5,7 @@ import Decimal from 'decimal.js';
 import { useAuthStore } from '../stores/auth';
 import { useInventoryStore } from '../stores/inventory';
 import { useFinancialStore } from '../stores/financial';
+import { useCashRegisterStore } from '../stores/cashRegister';
 import { productRepository } from '../data/repositories/productRepository';
 import StockEntryView from '../views/StockEntryView.vue';
 import DashboardView from '../views/DashboardView.vue';
@@ -319,6 +320,17 @@ describe('FASE 3 · OLA 5 — Inventario canManageInventory, Salidas $0, Reembol
       }
       return { data: null, error: null };
     });
+
+    const cashRegisterStore = useCashRegisterStore();
+    cashRegisterStore.currentSession = {
+      id: 'session-open-1',
+      storeId: STORE_ID,
+      employeeId: 'emp-ref',
+      status: 'open',
+      openingTime: new Date().toISOString(),
+      openingBalance: new Decimal(100000),
+      transactions: [],
+    } as any;
 
     const refundWrapper = mount(RefundModal, {
       props: { modelValue: true },

@@ -6,6 +6,27 @@
     :show-close-button="true"
   >
     <div class="p-4 space-y-4">
+      <!-- Bloqueos N1 por conectividad / turno cerrado -->
+      <div
+        v-if="!isOnline"
+        role="alert"
+        data-testid="refund-offline-alert"
+        class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs font-semibold"
+      >
+        <WifiOff :size="16" class="shrink-0" />
+        <span>Los reembolsos requieren conexión en línea activa con el servidor.</span>
+      </div>
+
+      <div
+        v-else-if="!isCashOpen"
+        role="alert"
+        data-testid="refund-cash-closed-alert"
+        class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-semibold"
+      >
+        <AlertTriangle :size="16" class="shrink-0" />
+        <span>Debes tener un turno de caja abierto para procesar reembolsos.</span>
+      </div>
+
       <!-- Búsqueda de Venta o Producto (incluye stock = 0 por CHK-509) -->
       <div class="space-y-2">
         <label class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -22,7 +43,7 @@
               class="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
             />
           </div>
-          <BaseButton variant="primary" @click="searchTickets" :loading="isSearching">
+          <BaseButton variant="primary" @click="searchTickets" :loading="isSearching" :disabled="!isOnline">
             Buscar
           </BaseButton>
         </div>
@@ -32,6 +53,25 @@
       <div v-if="!selectedItem" class="space-y-2.5 max-h-[55vh] overflow-y-auto">
         <div v-if="isSearching" class="py-8 text-center text-xs text-slate-400">
           Consultando historial de ventas...
+        </div>
+
+        <!-- Regla 3: Error real N3 de búsqueda con Reintentar (oculta falso vacío) -->
+        <div
+          v-else-if="searchError"
+          role="alert"
+          data-testid="refund-search-error"
+          class="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex flex-col items-center text-center gap-2 text-rose-700 dark:text-rose-300 text-xs"
+        >
+          <AlertTriangle :size="20" />
+          <span class="font-semibold">{{ searchError }}</span>
+          <button
+            type="button"
+            data-testid="refund-search-retry-btn"
+            @click="searchTickets"
+            class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer transition-colors"
+          >
+            Reintentar
+          </button>
         </div>
 
         <div v-else-if="candidates.length === 0" class="py-8 text-center text-xs text-slate-400">
@@ -47,7 +87,7 @@
             <span class="font-bold text-slate-900 dark:text-white">
               Ticket #{{ sale.ticket_number }} · {{ translateOriginalChannel(sale.payment_method) }}
             </span>
-            <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+            <span class="font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
               {{ formatCurrency(sale.total) }}
             </span>
           </div>
@@ -64,7 +104,7 @@
                 </p>
                 <p class="text-[11px] text-slate-500 dark:text-slate-400">
                   Vendido: {{ item.quantity }} · Disponible reembolso:
-                  <strong>{{ item.remaining_quantity }}</strong> · Stock actual: {{ item.current_stock }}
+                  <strong class="font-mono tabular-nums">{{ item.remaining_quantity }}</strong> · Stock actual: {{ item.current_stock }}
                 </p>
               </div>
               <button
@@ -89,17 +129,62 @@
           <div>
             <p class="text-xs font-bold text-slate-500 uppercase">Ticket #{{ selectedSale?.ticket_number }}</p>
             <p class="text-sm font-bold text-slate-900 dark:text-white">{{ selectedItem.product_name }}</p>
-            <p class="text-[11px] text-slate-500">
+            <p class="text-[11px] text-slate-500 font-mono tabular-nums">
               Máximo reembolsable: {{ selectedItem.remaining_quantity }} · Precio unit.: {{ formatCurrency(selectedItem.unit_price) }}
             </p>
           </div>
           <button
             type="button"
-            @click="selectedItem = null"
+            @click="clearSelectedItem"
             class="text-xs font-semibold text-primary hover:underline cursor-pointer"
           >
             Cambiar ítem
           </button>
+        </div>
+
+        <!-- Read Model C1-H4: Trazabilidad / Reingreso FIFO -->
+        <div
+          data-testid="refund-fifo-read-model"
+          class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-2"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">
+              <Layers :size="14" class="text-indigo-500" />
+              Trazabilidad / Reingreso FIFO
+            </span>
+            <span
+              class="text-[11px] font-bold px-2 py-0.5 rounded-full"
+              :class="isMerma
+                ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300'
+                : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'"
+            >
+              {{ isMerma ? 'Sin reingreso (Merma)' : 'Reingreso vendible FIFO' }}
+            </span>
+          </div>
+
+          <div v-if="selectedItemFifoBatches.length > 0" class="space-y-1">
+            <div
+              v-for="batch in selectedItemFifoBatches"
+              :key="batch.batch_id"
+              class="flex items-center justify-between gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-700/80"
+            >
+              <span class="font-mono tabular-nums font-semibold text-slate-700 dark:text-slate-200">
+                Lote #{{ shortBatchId(batch.batch_id) }}
+              </span>
+              <span class="text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+                Cant. orig: {{ batch.quantity }} · Costo: ${{ formatCurrency(batch.unit_cost) }}
+              </span>
+            </div>
+          </div>
+          <p v-else class="text-[11px] text-slate-500 dark:text-slate-400">
+            Sin capas FIFO detalladas en esta venta; se aplicará el costo unitario registrado del ítem.
+          </p>
+
+          <p class="text-[11px] text-slate-600 dark:text-slate-300">
+            {{ isMerma
+              ? 'Asiento directo de merma en P&L (0 unidades reingresan a stock vendible).'
+              : `Reingreso a lote FIFO vendible (+${refundQty || 0} unid. al costo original).` }}
+          </p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -111,7 +196,7 @@
               :min="selectedItem.is_weighable ? 0.01 : 1"
               :max="selectedItem.remaining_quantity"
               :step="selectedItem.is_weighable ? 0.01 : 1"
-              class="w-full h-10 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono font-bold text-slate-900 dark:text-white"
+              class="w-full h-10 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-mono tabular-nums font-bold text-slate-900 dark:text-white"
             />
           </div>
 
@@ -183,13 +268,25 @@
 
         <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 flex items-center justify-between text-xs">
           <span class="text-slate-500">Monto calculado por el servidor al confirmar (~est.)</span>
-          <span class="font-mono font-bold text-base text-rose-600 dark:text-rose-400">
+          <span class="font-mono tabular-nums font-bold text-base text-rose-600 dark:text-rose-400">
             {{ formatCurrency(estimatedRefund) }}
           </span>
         </div>
 
+        <!-- Error Inline N1 de envío -->
+        <div
+          v-if="submitError"
+          role="alert"
+          data-testid="refund-submit-error"
+          class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-start gap-2 text-rose-700 dark:text-rose-300 text-xs font-semibold"
+        >
+          <AlertTriangle :size="15" class="shrink-0 mt-0.5" />
+          <span>{{ submitError }}</span>
+        </div>
+
         <BaseButton
           variant="danger"
+          data-testid="refund-confirm-btn"
           class="w-full h-11 font-bold"
           :loading="isSubmitting"
           :disabled="!canSubmitRefund || isSubmitting"
@@ -203,7 +300,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import BaseModal from '../ui/BaseModal.vue';
 import BaseButton from '../ui/BaseButton.vue';
 import { useAuthStore } from '../../stores/auth';
@@ -215,7 +312,7 @@ import {
 } from '../../data/repositories/saleRepository';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
 import { useNotifications } from '../../composables/useNotifications';
-import { Search } from 'lucide-vue-next';
+import { Search, AlertTriangle, WifiOff, Layers } from 'lucide-vue-next';
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>();
@@ -228,13 +325,33 @@ const isOpen = computed({
 const authStore = useAuthStore();
 const cashRegisterStore = useCashRegisterStore();
 const { formatCurrency } = useCurrencyFormat();
-const { showSuccess, showError } = useNotifications();
+const { showSuccess } = useNotifications();
 
 const searchQuery = ref('');
 const isSearching = ref(false);
+const searchError = ref<string | null>(null);
+const submitError = ref<string | null>(null);
 const candidates = ref<RefundCandidateSale[]>([]);
 const selectedSale = ref<RefundCandidateSale | null>(null);
 const selectedItem = ref<RefundCandidateItem | null>(null);
+const isOnline = ref<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+const syncOnlineStatus = () => {
+  isOnline.value = typeof navigator !== 'undefined' ? navigator.onLine : true;
+};
+
+onMounted(() => {
+  syncOnlineStatus();
+  window.addEventListener('online', syncOnlineStatus);
+  window.addEventListener('offline', syncOnlineStatus);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('online', syncOnlineStatus);
+  window.removeEventListener('offline', syncOnlineStatus);
+});
+
+const isCashOpen = computed(() => cashRegisterStore.isOpen);
 
 const refundQty = ref(1);
 const originalChannel = ref<'efectivo' | 'nequi' | 'llave_bre' | 'fiado' | 'transferencia'>('efectivo');
@@ -249,13 +366,21 @@ const refundChannels = [
   { value: 'llave_bre', label: 'Llave Bre-B' }
 ] as const;
 
+const selectedItemFifoBatches = computed(() => {
+  return Array.isArray(selectedItem.value?.fifo_batches) ? selectedItem.value!.fifo_batches! : [];
+});
+
+const shortBatchId = (id: string) => {
+  return String(id || '').slice(0, 8);
+};
+
 const estimatedRefund = computed(() => {
   if (!selectedItem.value) return 0;
   return Math.round((selectedItem.value.subtotal / Math.max(selectedItem.value.quantity, 0.0001)) * Number(refundQty.value || 0));
 });
 
 const canSubmitRefund = computed(() => {
-  if (!selectedItem.value) return false;
+  if (!isOnline.value || !isCashOpen.value || !selectedItem.value) return false;
   const qty = Number(refundQty.value);
   return (
     qty > 0 &&
@@ -265,13 +390,28 @@ const canSubmitRefund = computed(() => {
 });
 
 const searchTickets = async () => {
+  syncOnlineStatus();
+  searchError.value = null;
+
+  if (!isOnline.value) {
+    candidates.value = [];
+    searchError.value = 'Sin conexión en línea. Conéctate para consultar ventas reembolsables.';
+    return;
+  }
+
   const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-  if (!storeId) return;
+  if (!storeId) {
+    candidates.value = [];
+    searchError.value = 'No se identificó la tienda activa para consultar ventas.';
+    return;
+  }
+
   isSearching.value = true;
   try {
     candidates.value = await saleRepository.searchRefundCandidates(storeId, searchQuery.value);
   } catch (err: any) {
-    showError(err?.message || 'Error al buscar ventas para reembolso');
+    candidates.value = [];
+    searchError.value = err?.message || 'Error al buscar ventas para reembolso';
   } finally {
     isSearching.value = false;
   }
@@ -279,16 +419,31 @@ const searchTickets = async () => {
 
 watch(() => props.modelValue, (open) => {
   if (open) {
+    syncOnlineStatus();
     selectedSale.value = null;
     selectedItem.value = null;
     searchQuery.value = '';
+    searchError.value = null;
+    submitError.value = null;
     searchTickets();
   }
 }, { immediate: true });
 
+watch([refundQty, refundChannel, originalChannel, isMerma, refundReason], () => {
+  if (submitError.value) {
+    submitError.value = null;
+  }
+});
+
+const clearSelectedItem = () => {
+  selectedItem.value = null;
+  submitError.value = null;
+};
+
 const selectItemForRefund = (sale: RefundCandidateSale, item: RefundCandidateItem) => {
   selectedSale.value = sale;
   selectedItem.value = item;
+  submitError.value = null;
   refundQty.value = item.remaining_quantity > 1 ? 1 : item.remaining_quantity;
   const orig = ['efectivo', 'nequi', 'llave_bre', 'fiado', 'transferencia'].includes(sale.payment_method)
     ? (sale.payment_method as any)
@@ -311,7 +466,19 @@ const translateOriginalChannel = (ch: string) => {
 };
 
 const submitRefund = async () => {
+  syncOnlineStatus();
+  submitError.value = null;
+
+  if (!isOnline.value) {
+    submitError.value = 'Los reembolsos requieren conexión en línea activa.';
+    return;
+  }
+  if (!isCashOpen.value) {
+    submitError.value = 'Debes tener un turno de caja abierto para procesar reembolsos.';
+    return;
+  }
   if (!selectedItem.value || !canSubmitRefund.value || isSubmitting.value) return;
+
   isSubmitting.value = true;
   try {
     const res = await saleRepository.processItemRefund({
@@ -332,7 +499,7 @@ const submitRefund = async () => {
     );
     isOpen.value = false;
   } catch (err: any) {
-    showError(err?.message || 'No se pudo procesar el reembolso');
+    submitError.value = err?.message || 'No se pudo procesar el reembolso';
   } finally {
     isSubmitting.value = false;
   }
