@@ -83,12 +83,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/admin/financial-dashboard',
-    name: 'financial-dashboard',
-    component: () => import('../views/FinancialDashboardView.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/pos',
     name: 'pos',
     component: () => import('../views/POSView.vue'),
@@ -145,15 +139,9 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/reports',
     name: 'reports',
+    alias: ['/admin/financial-dashboard', '/history'],
     component: () => import('../views/ReportsHubView.vue'),
     meta: { requiresAuth: true },
-  },
-  // SPEC-009: Ruta de Historiales
-  {
-    path: '/history',
-    name: 'history',
-    component: () => import('../views/HistoryView.vue'),
-    meta: { requiresAuth: true }
   },
   // Suppliers & Payables Management (Admin only — UX-ADR-005)
   {
@@ -320,18 +308,13 @@ router.beforeEach(async (to, from, next) => {
     return next({ name: 'dashboard' });
   }
 
-  // 1b. Reports Hub & History: STRICTLY Admin only (SDD-003-01 / POL-AUD-02)
-  if ((to.name === 'reports' || to.name === 'history') && !authStore.isAdmin) {
+  // 1b. Reports Hub (consolidado UX-ADR-008): STRICTLY Admin only (SDD-003-01 / POL-AUD-02)
+  if (to.name === 'reports' && !authStore.isAdmin) {
     return next({ name: 'dashboard' });
   }
 
   // 2. Admin Hub: STRICTLY Admin only
   if (to.name === 'admin' && !authStore.isAdmin) {
-    return next({ name: 'dashboard' });
-  }
-
-  // 2b. Financial Dashboard: STRICTLY Admin only
-  if (to.name === 'financial-dashboard' && !authStore.isAdmin) {
     return next({ name: 'dashboard' });
   }
 

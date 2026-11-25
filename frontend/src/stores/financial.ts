@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { getSupabaseClient } from '../data/supabaseClient';
 import { useAuthStore } from './auth';
 
@@ -121,25 +121,34 @@ export const useFinancialStore = defineStore('financial', () => {
     const isLoadingTimeSeries = ref(false);
     const error = ref<string | null>(null);
     const activePeriod = ref<PeriodType>('today');
+    let timeSeriesSeq = 0;
 
     // Dependencies
     const authStore = useAuthStore();
 
     // --- Helpers ---
 
+    function toBogotaDateStr(date: Date): string {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Bogota',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(date);
+    }
+
     function getDateRange(period: PeriodType): { start: string; end: string } {
-        const today = new Date();
-        const end = today.toISOString().split('T')[0]; // YYYY-MM-DD
+        const now = new Date();
+        const end = toBogotaDateStr(now); // YYYY-MM-DD en America/Bogota (RVC L50)
 
         switch (period) {
             case 'week': {
-                const weekAgo = new Date(today);
-                weekAgo.setDate(today.getDate() - 6); // Include today = 7 days
-                return { start: weekAgo.toISOString().split('T')[0], end };
+                const weekAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000); // Incluye hoy = 7 días
+                return { start: toBogotaDateStr(weekAgo), end };
             }
             case 'month': {
-                const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-                return { start: monthStart.toISOString().split('T')[0], end };
+                const [year, month] = end.split('-');
+                return { start: `${year}-${month}-01`, end };
             }
             default: // 'today'
                 return { start: end, end };
@@ -184,8 +193,13 @@ export const useFinancialStore = defineStore('financial', () => {
             error.value = 'Acceso restringido: solo administradores pueden consultar el panel financiero.';
             return;
         }
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            error.value = 'Sin conexión a internet. El Centro de Inteligencia requiere conexión en línea.';
+            return;
+        }
         if (isLoadingSnapshots.value) return;
         isLoadingSnapshots.value = true;
+        error.value = null;
         try {
             const results = await Promise.allSettled([
                 fetchInventoryHealth(),
@@ -209,21 +223,21 @@ export const useFinancialStore = defineStore('financial', () => {
 
     // --- Actions: TIME-SERIES (Load on Period Change) ---
 
-    const fetchFinancialReport = async (startDate: string, endDate: string) => {
+    const fetchFinancialReport = async (startDate: string, endDate: string): Promise<FinancialReportPayload | undefined> => {
         const supabase = getSupabaseClient();
-        if (!supabase || !authStore.currentUser?.storeId) return;
+        if (!supabase || !authStore.currentUser?.storeId) return undefined;
         const { data, error: rpcError } = await supabase.rpc('rpc_get_comprehensive_financial_report', {
             p_store_id: authStore.currentUser.storeId,
             p_start_date: startDate,
             p_end_date: endDate,
         });
         if (rpcError) throw rpcError;
-        summary.value = data as FinancialReportPayload;
+        return data as FinancialReportPayload;
     };
 
-    const fetchTopProductsByUnits = async (startDate: string, endDate: string, limit = 10) => {
+    const fetchTopProductsByUnits = async (startDate: string, endDate: string, limit = 10): Promise<TopProductUnit[] | undefined> => {
         const supabase = getSupabaseClient();
-        if (!supabase || !authStore.currentUser?.storeId) return;
+        if (!supabase || !authStore.currentUser?.storeId) return undefined;
         const { data, error: rpcError } = await supabase.rpc('get_top_products_by_units', {
             p_store_id: authStore.currentUser.storeId,
             p_start_date: startDate,
@@ -231,53 +245,72 @@ export const useFinancialStore = defineStore('financial', () => {
             p_limit: limit,
         });
         if (rpcError) throw rpcError;
-        topProductsByUnits.value = (data ?? []) as TopProductUnit[];
+        return (data ?? []) as TopProductUnit[];
     };
 
     /** Carga estricta de la serie de tiempo según el periodo seleccionado */
     const setPeriod = async (period: PeriodType) => {
+        const seq = ++timeSeriesSeq;
+
         if (!authStore.isAdmin) {
             error.value = 'Acceso restringido: solo administradores pueden consultar reportes financieros.';
             summary.value = null;
             topProductsByUnits.value = [];
+            isLoadingTimeSeries.value = false;
             return;
         }
-        if (isLoadingTimeSeries.value) return;
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            activePeriod.value = period;
+            error.value = 'Sin conexión a internet. El Centro de Inteligencia requiere conexión en línea.';
+            summary.value = null;
+            topProductsByUnits.value = [];
+            isLoadingTimeSeries.value = false;
+            return;
+        }
         activePeriod.value = period;
         isLoadingTimeSeries.value = true;
         error.value = null;
 
         try {
             const { start, end } = getDateRange(period);
-            const results = await Promise.allSettled([
+            const [reportResult, topProductsResult] = await Promise.allSettled([
                 fetchFinancialReport(start, end),
                 fetchTopProductsByUnits(start, end)
             ]);
 
-            const rejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+            if (seq !== timeSeriesSeq) return;
+
+            if (reportResult.status === 'fulfilled' && reportResult.value !== undefined) {
+                summary.value = reportResult.value;
+            }
+            if (topProductsResult.status === 'fulfilled' && topProductsResult.value !== undefined) {
+                topProductsByUnits.value = topProductsResult.value;
+            }
+
+            const rejected = [reportResult, topProductsResult].find(
+                (r): r is PromiseRejectedResult => r.status === 'rejected'
+            );
             if (rejected) {
                 const msg = rejected.reason?.message || 'Error al cargar los datos financieros del periodo';
                 console.warn('[FinancialStore] Fetch TimeSeries failed:', rejected.reason);
-                if (results.every(r => r.status === 'rejected')) {
+                if (reportResult.status === 'rejected' && topProductsResult.status === 'rejected') {
                     throw rejected.reason;
                 }
                 error.value = msg.includes('ADMIN_ONLY_ACTION') ? 'Acceso exclusivo del Administrador.' : msg;
             }
         } catch (err: any) {
+            if (seq !== timeSeriesSeq) return;
             console.error('[FinancialStore] Error loading time-series data:', err);
             const msg = err?.message || 'Error al cargar los datos financieros del periodo';
             error.value = msg.includes('ADMIN_ONLY_ACTION') ? 'Acceso exclusivo del Administrador.' : msg;
             summary.value = null;
             topProductsByUnits.value = [];
         } finally {
-            isLoadingTimeSeries.value = false;
+            if (seq === timeSeriesSeq) {
+                isLoadingTimeSeries.value = false;
+            }
         }
     };
-
-    // --- Computed ---
-    const totalStagnantValue = computed(() =>
-        stagnantProducts.value.reduce((sum, p) => sum + Number(p.stock_value ?? 0), 0)
-    );
 
     return {
         // State Arrays/Objects
@@ -293,12 +326,10 @@ export const useFinancialStore = defineStore('financial', () => {
         error,
         activePeriod,
 
-        // Computed
-        totalStagnantValue,
-
         // Orquestadores de Negocio
         loadSnapshots,
         fetchFinancialReport,
         setPeriod,
+        getDateRange,
     };
 });

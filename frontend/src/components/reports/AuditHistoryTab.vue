@@ -1,28 +1,39 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { useHistory, type HistoryType, type DatePreset } from '../composables/useHistory';
-import { useAuthStore } from '../stores/auth';
-import { useEmployeesStore } from '../stores/employees';
-import HistoryItemCard from '../components/history/HistoryItemCard.vue';
-import SaleDetailModal from '../components/history/SaleDetailModal.vue';
-import ShiftForensicDetailModal from '../components/history/ShiftForensicDetailModal.vue';
-import type { AuditSeverity, EvidenceHubDomain } from '../data/repositories/auditRepository';
-import BaseButton from '../components/ui/BaseButton.vue';
-import BaseDropdown, { type DropdownOption } from '../components/ui/BaseDropdown.vue';
-import { 
-  ArrowLeft, 
-  SearchX, 
-  Search, 
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue';
+import { useHistory, type HistoryType, type DatePreset } from '../../composables/useHistory';
+import { useAuthStore } from '../../stores/auth';
+import { useEmployeesStore } from '../../stores/employees';
+import HistoryItemCard from '../history/HistoryItemCard.vue';
+import SaleDetailModal from '../history/SaleDetailModal.vue';
+import ShiftForensicDetailModal from '../history/ShiftForensicDetailModal.vue';
+import type { AuditSeverity, EvidenceHubDomain } from '../../data/repositories/auditRepository';
+import BaseButton from '../ui/BaseButton.vue';
+import BaseDropdown, { type DropdownOption } from '../ui/BaseDropdown.vue';
+import {
+  SearchX,
+  Search,
   X,
-  RotateCcw
+  RotateCcw,
+  WifiOff,
+  AlertTriangle,
 } from 'lucide-vue-next';
 
 const props = defineProps<{
-  isEmbedded?: boolean;
+  initialDomain?: string;
+  initialSaleId?: string | null;
+  initialSessionId?: string | null;
 }>();
 
-const router = useRouter();
+const VALID_DOMAINS: HistoryType[] = [
+  'sales',
+  'cash',
+  'inventory',
+  'expenses',
+  'credits',
+  'prices',
+  'audit',
+];
+
 const authStore = useAuthStore();
 const employeesStore = useEmployeesStore();
 const {
@@ -38,15 +49,23 @@ const {
   auditDomainFilter,
   auditSeverityFilter,
   searchQuery,
-  customStartDate,
-  customEndDate,
   activeDateLabel,
   hasActiveFilters,
   fetchHistory,
   setCustomDateRange,
   resetFilters,
-  applyShortcutQuery
+  applyShortcutQuery,
 } = useHistory();
+
+const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+const handleOnline = () => {
+  isOnline.value = true;
+};
+
+const handleOffline = () => {
+  isOnline.value = false;
+};
 
 // Employees state
 const employees = ref<{ id: string; name: string }[]>([]);
@@ -60,19 +79,19 @@ const loadEmployees = async () => {
       name: e.name,
     }));
   } catch (e) {
-    console.error('[HistoryView] Failed to load employees', e);
+    console.error('[AuditHistoryTab] Failed to load employees', e);
   }
 };
 
 // 1. Opciones de Dominio (7 dominios)
 const domainOptions: DropdownOption[] = [
-  { value: 'sales', label: '🛒 Ventas' },
-  { value: 'cash', label: '🏛️ Caja' },
-  { value: 'inventory', label: '📦 Compras' },
-  { value: 'expenses', label: '💵 Gastos' },
-  { value: 'credits', label: '📒 Créditos' },
-  { value: 'prices', label: '🏷️ Precios' },
-  { value: 'audit', label: '🛡️ Auditoría' },
+  { value: 'sales', label: 'Ventas' },
+  { value: 'cash', label: 'Caja' },
+  { value: 'inventory', label: 'Compras' },
+  { value: 'expenses', label: 'Gastos' },
+  { value: 'credits', label: 'Créditos' },
+  { value: 'prices', label: 'Precios' },
+  { value: 'audit', label: 'Auditoría' },
 ];
 
 const handleDomainChange = (val: string) => {
@@ -93,14 +112,26 @@ const datePresetOptions: DropdownOption[] = [
 const tempStartDate = ref('');
 const tempEndDate = ref('');
 
+const toBogotaDateStr = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+
+const shiftBogotaDays = (dateStr: string, deltaDays: number): string => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + deltaDays)).toISOString().slice(0, 10);
+};
+
 const handleDateChange = (val: string) => {
   if (val === 'custom') {
     dateFilter.value = 'custom';
     if (!tempStartDate.value) {
-      const now = new Date();
-      tempEndDate.value = now.toISOString().slice(0, 10);
-      now.setDate(now.getDate() - 7);
-      tempStartDate.value = now.toISOString().slice(0, 10);
+      const todayBogota = toBogotaDateStr(new Date());
+      tempEndDate.value = todayBogota;
+      tempStartDate.value = shiftBogotaDays(todayBogota, -7);
     }
   } else {
     fetchHistory(undefined, val as DatePreset);
@@ -125,13 +156,13 @@ const isPaymentMethodApplicable = computed(() => {
 const paymentOptions = computed<DropdownOption[]>(() => {
   const base: DropdownOption[] = [
     { value: 'all', label: 'Pago: Todos' },
-    { value: 'efectivo', label: '💵 Efectivo' },
-    { value: 'digital', label: '📱 Digitales (Todos)' },
-    { value: 'nequi', label: '📱 Nequi' },
-    { value: 'llave_bre', label: '🔑 Llave Bre-B' },
+    { value: 'efectivo', label: 'Efectivo' },
+    { value: 'digital', label: 'Digitales (Todos)' },
+    { value: 'nequi', label: 'Nequi' },
+    { value: 'llave_bre', label: 'Llave Bre-B' },
   ];
   if (currentType.value === 'credits') {
-    base.push({ value: 'fiado', label: '📋 Fiado' });
+    base.push({ value: 'fiado', label: 'Fiado' });
   }
   return base;
 });
@@ -276,33 +307,53 @@ const handleCardClick = (id: string) => {
   }
 };
 
-const goBack = () => router.back();
+const applyDeepLinkModal = (saleId?: string | null, sessionId?: string | null) => {
+  if (saleId) {
+    selectedSaleId.value = saleId;
+    showSaleDetail.value = true;
+  } else if (sessionId) {
+    selectedSessionId.value = sessionId;
+    showShiftDetail.value = true;
+  }
+};
+
+watch(
+  () => [props.initialDomain, props.initialSaleId, props.initialSessionId],
+  async ([domain, saleId, sessionId]) => {
+    if (domain && VALID_DOMAINS.includes(domain as HistoryType) && domain !== currentType.value) {
+      await fetchHistory(domain as HistoryType);
+    }
+    applyDeepLinkModal(saleId, sessionId);
+  }
+);
 
 onMounted(async () => {
-  await fetchHistory();
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+  }
+  const initialDomain =
+    props.initialDomain && VALID_DOMAINS.includes(props.initialDomain as HistoryType)
+      ? (props.initialDomain as HistoryType)
+      : undefined;
+  await fetchHistory(initialDomain);
   loadEmployees();
+  applyDeepLinkModal(props.initialSaleId, props.initialSessionId);
 });
 
 onUnmounted(() => {
   if (searchTimeout) clearTimeout(searchTimeout);
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+  }
 });
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-[#0f172a] flex flex-col">
-    <!-- Header -->
-    <header class="bg-white/95 dark:bg-[#1e293b]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all" :class="isEmbedded ? 'relative z-20' : 'sticky top-0 z-30'">
-      <div v-if="!isEmbedded" class="px-4 py-3 flex items-center gap-3">
-        <BaseButton @click="goBack" variant="ghost" size="icon" class="-ml-2">
-          <ArrowLeft :size="24" :stroke-width="1.5" />
-        </BaseButton>
-        <h1 class="text-lg font-bold text-slate-900 dark:text-white">
-          Historial y Auditoría
-        </h1>
-      </div>
-
-      <div v-else class="pt-3"></div>
-
+  <div class="min-h-screen bg-background-light dark:bg-background-dark flex flex-col">
+    <!-- Filter Header -->
+    <div class="relative z-20 bg-white/95 dark:bg-surface-dark backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm pt-3">
       <!-- Fila 1: Buscador con soporte de atajos silenciosos -->
       <div class="px-4 pb-2.5">
         <div class="relative">
@@ -317,6 +368,7 @@ onUnmounted(() => {
           />
           <button
             v-if="localSearch"
+            type="button"
             @click="clearSearch"
             class="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             title="Limpiar búsqueda"
@@ -326,7 +378,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Fila 2: Barra de Desplegables Compactos (Opción A) -->
+      <!-- Fila 2: Barra de Desplegables Compactos -->
       <div class="px-4 pb-3 flex items-center gap-2 flex-wrap py-0.5">
         <!-- 1. Dominio -->
         <BaseDropdown
@@ -386,6 +438,7 @@ onUnmounted(() => {
         <!-- Botón Limpiar Filtros -->
         <button
           v-if="hasActiveFilters"
+          type="button"
           @click="handleResetFilters"
           class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-900/50 transition-colors shrink-0"
           title="Restablecer filtros"
@@ -433,7 +486,7 @@ onUnmounted(() => {
           </p>
         </div>
       </div>
-    </header>
+    </div>
 
     <!-- Main Content -->
     <main class="flex-1 p-4 overflow-y-auto">
@@ -443,10 +496,20 @@ onUnmounted(() => {
         <p class="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Cargando registros...</p>
       </div>
 
-      <!-- Error State -->
-      <div v-else-if="error" class="bg-rose-50 dark:bg-rose-950/20 p-5 rounded-2xl text-center border border-rose-200 dark:border-rose-900/40 max-w-md mx-auto my-6">
-        <p class="text-rose-600 dark:text-rose-400 text-sm font-semibold pb-3">{{ error }}</p>
+      <!-- Offline / Error State (N3 Fail-Closed) -->
+      <div
+        v-else-if="!isOnline || error"
+        role="alert"
+        data-testid="history-error-banner"
+        class="bg-rose-50 dark:bg-rose-950/20 p-5 rounded-2xl text-center border border-rose-200 dark:border-rose-900/40 max-w-md mx-auto my-6 flex flex-col items-center gap-3"
+      >
+        <WifiOff v-if="!isOnline" :size="32" class="text-rose-500" />
+        <AlertTriangle v-else :size="32" class="text-rose-500" />
+        <p class="text-rose-700 dark:text-rose-300 text-sm font-semibold">
+          {{ error || 'Sin conexión a internet. Reconecta para consultar el historial.' }}
+        </p>
         <BaseButton
+          data-testid="history-retry-btn"
           @click="fetchHistory(currentType)"
           variant="outline"
           size="sm"
@@ -467,9 +530,9 @@ onUnmounted(() => {
           {{ searchQuery ? 'Sin resultados' : 'Sin registros' }}
         </h3>
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-          {{ searchQuery 
+          {{ searchQuery
             ? `No se encontraron coincidencias para "${searchQuery}"`
-            : `No se encontraron movimientos registrados en: ${activeDateLabel}.` 
+            : `No se encontraron movimientos registrados en: ${activeDateLabel}.`
           }}
         </p>
 
@@ -502,10 +565,10 @@ onUnmounted(() => {
           :item="item"
           @click="handleCardClick"
         />
-        
+
         <!-- Conteo sobrio al pie -->
         <div class="pt-4 pb-2 text-center">
-          <p class="text-xs font-medium text-slate-400 dark:text-slate-500">
+          <p class="text-xs font-medium text-slate-400 dark:text-slate-500 font-mono tabular-nums">
             Mostrando {{ filteredItems.length }} registro{{ filteredItems.length !== 1 ? 's' : '' }}
             <span v-if="searchQuery && filteredItems.length !== items.length" class="text-primary dark:text-blue-400">
               (de {{ items.length }})
@@ -519,6 +582,7 @@ onUnmounted(() => {
     <SaleDetailModal
       v-model="showSaleDetail"
       :saleId="selectedSaleId"
+      @voided="fetchHistory(currentType)"
     />
 
     <!-- Forensic Shift Report Modal (SDD-027-01 CHK-306) -->
@@ -528,13 +592,3 @@ onUnmounted(() => {
     />
   </div>
 </template>
-
-<style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

@@ -72,7 +72,7 @@ const gridColsClass = computed(() => {
         v-if="isAdmin"
         @click="router.push('/reports')"
         class="flex flex-col items-center justify-center gap-1 transition-colors"
-        :class="isActive('reports') || isActive('financial-dashboard') || isActive('history') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'"
+        :class="isActive('reports') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400'"
       >
         <BarChart3 :size="24" :stroke-width="isActive('reports') ? 2 : 1.5" />
         <span class="text-[10px] font-medium tracking-wide">Reportes</span>

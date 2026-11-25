@@ -4,7 +4,7 @@ import type { HistoryItem } from '../../composables/useHistory';
 import { formatRelativeTime } from '../../composables/useRelativeTime';
 import { 
   Tag, ShoppingCart, Banknote, LogIn, Lock, Shield, 
-  ChevronRight, User, HelpCircle, Vault, Package
+  ChevronRight, User, HelpCircle, Vault, Package, CreditCard
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -28,6 +28,7 @@ const iconComponent = computed(() => {
     'shield': Shield,
     'vault': Vault,
     'package': Package,
+    'credit_card': CreditCard,
   };
   return map[props.item.icon] || HelpCircle;
 });
@@ -65,7 +66,7 @@ const iconComponent = computed(() => {
         <!-- Amount (if exists) -->
         <span
           v-if="item.amountFormatted"
-          class="shrink-0 font-bold text-slate-900 dark:text-emerald-400 ml-2"
+          class="shrink-0 font-bold font-mono tabular-nums text-slate-900 dark:text-emerald-400 ml-2"
           :class="{ 'text-red-600 dark:text-red-400': item.type === 'expenses' }"
         >
           {{ item.type === 'expenses' ? '-' : '' }}{{ item.amountFormatted }}

@@ -75,6 +75,7 @@ const baseRepository = createSupabaseRepository<Expense, CashMovementDB>(TABLE_N
 
 export interface ExpenseRepository extends EntityRepository<Expense> {
     getTodayExpenses(storeId: string): Promise<Expense[]>;
+    getExpensesByDateRange(storeId: string, startDate: string, endDate: string): Promise<Expense[]>;
     createExpense(expense: Omit<Expense, 'id' | 'created_at'>): Promise<Expense>;
 }
 
@@ -125,6 +126,40 @@ export const expenseRepository: ExpenseRepository = {
             logger.error('[ExpenseRepo] Offline fallback failed:', e);
             return [];
         }
+    },
+
+    /**
+     * Get expenses for an arbitrary date range in America/Bogota (100% online, fail-closed Regla 3)
+     */
+    async getExpensesByDateRange(storeId: string, startDate: string, endDate: string): Promise<Expense[]> {
+        if (!navigator.onLine || !isSupabaseConfigured()) {
+            throw new Error('Sin conexión a internet. La consulta histórica de gastos requiere conexión en línea.');
+        }
+
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+            throw new Error('Sin conexión a internet. La consulta histórica de gastos requiere conexión en línea.');
+        }
+
+        const { data, error } = await supabase
+            .from('cash_movements')
+            .select('*, cash_sessions!inner(store_id)')
+            .eq('cash_sessions.store_id', storeId)
+            .eq('movement_type', 'gasto')
+            .gte('created_at', `${startDate}T00:00:00-05:00`)
+            .lte('created_at', `${endDate}T23:59:59.999-05:00`)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            logger.error('[ExpenseRepo] Range fetch failed:', error);
+            throw new Error(error.message || 'Error cargando gastos históricos del servidor');
+        }
+
+        return ((data || []) as any[]).map(row => {
+            const domain = expenseMapper.toDomain(row);
+            domain.store_id = storeId;
+            return domain;
+        });
     },
 
     /**

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useClientsStore } from '../stores/clients';
 import { useAuthStore } from '../stores/auth';
 import type { Client } from '../types';
@@ -30,6 +30,7 @@ import { useNotifications } from '../composables/useNotifications';
 const PAGE_SIZE = 20;
 
 const router = useRouter();
+const route = useRoute();
 const clientsStore = useClientsStore();
 const authStore = useAuthStore();
 const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
@@ -37,7 +38,12 @@ const { showSuccess } = useNotifications();
 
 // State
 const searchQuery = ref('');
-const debtFilter = ref<ClientDebtFilter>('all');
+const initialDebtParam = route?.query?.debt;
+const debtFilter = ref<ClientDebtFilter>(
+  initialDebtParam === 'with_debt' || initialDebtParam === 'up_to_date' || initialDebtParam === 'all'
+    ? initialDebtParam
+    : 'all'
+);
 const orderBy = ref<ClientOrderBy>('name_asc');
 const pagedClients = ref<Client[]>([]);
 const totalClientsCount = ref(0);

@@ -12,7 +12,7 @@ import DashboardView from '../views/DashboardView.vue';
 import POSView from '../views/POSView.vue';
 import RefundModal from '../components/sales/RefundModal.vue';
 import ProductKardexTab from '../components/inventory/ProductKardexTab.vue';
-import FinancialDashboardView from '../views/FinancialDashboardView.vue';
+import FinancialDashboardTab from '../components/reports/FinancialDashboardTab.vue';
 import ProductFormModal from '../components/ProductFormModal.vue';
 
 const {
@@ -476,7 +476,7 @@ describe('FASE 3 · OLA 5 — Inventario canManageInventory, Salidas $0, Reembol
     const finStore = useFinancialStore();
     finStore.summary = mockPnl as any;
 
-    const wrapper = mount(FinancialDashboardView, {
+    const wrapper = mount(FinancialDashboardTab, {
       global: {
         stubs: {
           InventoryHealthWidget: true,
@@ -489,7 +489,7 @@ describe('FASE 3 · OLA 5 — Inventario canManageInventory, Salidas $0, Reembol
     expect(wrapper.text()).toContain('Desglose OPEX del Período (Cero Doble Conteo)');
     expect(wrapper.text()).toContain('Consumos / Retiros Personales');
     expect(wrapper.text()).toContain('Carlos Cajero');
-    expect(wrapper.text()).toContain('Ref: $2.200');
+    expect(wrapper.text()).toContain('Ref: $ 2.200');
   });
 
   it('CHK-506 (B5-3): addProduct con cost y stock > 0 invoca rpc_registrar_entrada con purchasePrice = cost (no 0)', async () => {

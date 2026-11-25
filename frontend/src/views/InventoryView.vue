@@ -97,7 +97,12 @@ const resolveValidTab = (raw: unknown): ProductFichaTab => {
 };
 
 const applyDeepLink = () => {
-  const productParam = typeof route.query.product === 'string' ? route.query.product : '';
+  const productParam =
+    typeof route.query.product === 'string'
+      ? route.query.product
+      : typeof route.query.productId === 'string'
+        ? route.query.productId
+        : '';
   if (!productParam || !canManageInventory.value) return;
   const exists = inventoryStore.getProductById(productParam);
   if (!exists) return;
@@ -115,18 +120,22 @@ onMounted(async () => {
 });
 
 watch(
-  () => [route.query.product, route.query.tab, inventoryStore.products.length],
+  () => [route.query.product, route.query.productId, route.query.tab, inventoryStore.products.length],
   () => {
     applyDeepLink();
   }
 );
 
 watch(showProductModal, (isOpen) => {
-  if (!isOpen && (route.query.product !== undefined || route.query.tab !== undefined)) {
+  if (
+    !isOpen &&
+    (route.query.product !== undefined || route.query.productId !== undefined || route.query.tab !== undefined)
+  ) {
     router.replace({
       query: {
         ...route.query,
         product: undefined,
+        productId: undefined,
         tab: undefined,
       },
     });

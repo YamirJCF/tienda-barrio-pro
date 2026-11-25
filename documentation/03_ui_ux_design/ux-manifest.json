@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "adrVersion": "UX-ADR-007",
+  "adrVersion": "UX-ADR-008",
   "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
   "bottomNavRoutes": [
     "/pos",
@@ -104,29 +104,12 @@
     {
       "name": "reports",
       "path": "/reports",
+      "aliases": ["/admin/financial-dashboard", "/history"],
       "view": "frontend/src/views/ReportsHubView.vue",
       "context": "C6",
       "archetype": "E",
       "guard": "isAdmin",
       "status": "canonica"
-    },
-    {
-      "name": "financial-dashboard",
-      "path": "/admin/financial-dashboard",
-      "view": "frontend/src/views/FinancialDashboardView.vue",
-      "context": "C6",
-      "archetype": "E",
-      "guard": "isAdmin",
-      "status": "duplicada"
-    },
-    {
-      "name": "history",
-      "path": "/history",
-      "view": "frontend/src/views/HistoryView.vue",
-      "context": "C6",
-      "archetype": "E",
-      "guard": "isAdmin",
-      "status": "duplicada"
     },
     {
       "name": "admin",

@@ -491,7 +491,7 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
     await flushPromises();
 
     expect(wrapper.get('[data-testid="void-sale-error"]').text()).toContain('No se puede anular esta venta fiada');
-    expect(mockShowError).toHaveBeenCalled();
+    expect(mockShowError).not.toHaveBeenCalled();
   });
 
   it('[CHK-409][CHK-410] PayInvoiceModal valida liquidez del canal seleccionado, exige descripción interna, permite Pago externo / fuera de caja, y SuppliersView (?tab=payables) crea facturas paginadas', async () => {

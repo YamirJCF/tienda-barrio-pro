@@ -31,40 +31,39 @@ export interface HistorySummary {
     label: string;
 }
 
-function toLocalDateStr(d: Date): string {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+function toBogotaDateStr(d: Date): string {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Bogota',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(d);
+}
+
+function shiftBogotaDays(dateStr: string, deltaDays: number): string {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const utcDate = new Date(Date.UTC(year, month - 1, day + deltaDays));
+    return utcDate.toISOString().slice(0, 10);
 }
 
 /**
- * Returns {start, end} date strings for a given preset.
+ * Returns {start, end} date strings in America/Bogota for a given preset.
  * For 'custom', uses externally provided dates.
  */
 function getDateRange(preset: DatePreset, customStart?: string, customEnd?: string): { start: string; end: string } {
-    const now = new Date();
-    const todayStr = toLocalDateStr(now);
+    const todayStr = toBogotaDateStr(new Date());
 
     switch (preset) {
         case 'today':
             return { start: todayStr, end: todayStr };
         case 'yesterday': {
-            const yesterday = new Date(now);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = toLocalDateStr(yesterday);
+            const yesterdayStr = shiftBogotaDays(todayStr, -1);
             return { start: yesterdayStr, end: yesterdayStr };
         }
-        case 'week': {
-            const weekAgo = new Date(now);
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            return { start: toLocalDateStr(weekAgo), end: todayStr };
-        }
-        case 'month': {
-            const monthAgo = new Date(now);
-            monthAgo.setDate(monthAgo.getDate() - 30);
-            return { start: toLocalDateStr(monthAgo), end: todayStr };
-        }
+        case 'week':
+            return { start: shiftBogotaDays(todayStr, -7), end: todayStr };
+        case 'month':
+            return { start: shiftBogotaDays(todayStr, -30), end: todayStr };
         case 'custom': {
             return {
                 start: customStart || todayStr,
@@ -77,7 +76,7 @@ function getDateRange(preset: DatePreset, customStart?: string, customEnd?: stri
 function isDateWithinRange(dateStr?: string, startStr?: string, endStr?: string): boolean {
     if (!dateStr || !startStr || !endStr) return true;
     const itemDate = dateStr.includes('T') && !Number.isNaN(new Date(dateStr).getTime())
-        ? toLocalDateStr(new Date(dateStr))
+        ? toBogotaDateStr(new Date(dateStr))
         : dateStr.slice(0, 10);
     return itemDate >= startStr && itemDate <= endStr;
 }
@@ -311,6 +310,13 @@ export function useHistory() {
         // Clear search when switching type/period
         searchQuery.value = '';
 
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            isLoading.value = false;
+            items.value = [];
+            error.value = 'Sin conexión a internet. El historial de auditoría requiere conexión en línea.';
+            return;
+        }
+
         isLoading.value = true;
         error.value = null;
         items.value = [];
@@ -383,11 +389,11 @@ export function useHistory() {
         const rows = (data || []) as any[];
         items.value = rows.map(sale => {
             const paymentLabel: Record<string, string> = {
-                'efectivo': '💵 Efectivo',
-                'nequi': '📱 Nequi',
-                'llave_bre': '🔑 Llave Bre-B',
-                'fiado': '📋 Fiado',
-                'consumo_personal': '👤 Retiro Personal'
+                'efectivo': 'Efectivo',
+                'nequi': 'Nequi',
+                'llave_bre': 'Llave Bre-B',
+                'fiado': 'Fiado',
+                'consumo_personal': 'Retiro Personal'
             };
             return {
                 id: sale.id,
@@ -456,9 +462,9 @@ export function useHistory() {
             }
 
             const title = !isClosed
-                ? '🟢 Turno Abierto'
+                ? 'Turno Abierto'
                 : isPendingReconciliation
-                    ? '⚠️ Cierre Forzado (24h)'
+                    ? 'Cierre Forzado (24h)'
                     : isForced
                         ? 'Turno Cerrado (Reconciliado)'
                         : 'Turno Cerrado';
@@ -538,7 +544,7 @@ export function useHistory() {
             return {
                 id: mov.id,
                 type: 'inventory' as HistoryType,
-                title: `📦 ${mov.product_name}`,
+                title: mov.product_name,
                 subtitle: `+${mov.quantity} unidades${supplier}${invoice}${payment}`,
                 date: mov.created_at,
                 user: mov.actor_name || mov.created_by_name || 'Sistema',
@@ -632,7 +638,7 @@ export function useHistory() {
     // =============================================
     const fetchExpenseLogs = async (storeId: string) => {
         const { start, end } = getDateRange(dateFilter.value, customStartDate.value, customEndDate.value);
-        const expenses = await expenseRepository.getTodayExpenses(storeId);
+        const expenses = await expenseRepository.getExpensesByDateRange(storeId, start, end);
         const filtered = expenses.filter(exp => isDateWithinRange(exp.created_at, start, end));
 
         items.value = filtered.map(exp => ({
