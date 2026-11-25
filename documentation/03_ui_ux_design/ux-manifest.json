@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "adrVersion": "UX-ADR-005",
+  "adrVersion": "UX-ADR-006",
   "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
   "bottomNavRoutes": [
     "/pos",
@@ -87,7 +87,7 @@
       "path": "/clients/:id",
       "view": "frontend/src/views/ClientDetailView.vue",
       "context": "C4",
-      "archetype": "B",
+      "archetype": "B/D",
       "guard": "canFiar",
       "status": "canonica"
     },

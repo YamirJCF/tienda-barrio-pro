@@ -301,6 +301,8 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
           },
         ],
         count: 1,
+        total_portfolio_debt: 15000,
+        debtors_count: 1,
       },
       error: null,
     });
@@ -342,7 +344,7 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
     expect(mockRpc).toHaveBeenCalledWith('rpc_admin_get_clients', expect.objectContaining({ p_filter_debt: 'sin_deuda' }));
   });
 
-  it('[CHK-405][CHK-406] ClientDetailView protege Abonar/CSV con canFiar, AdminHubView actualiza cupo global y ClientFormModal lo precarga', async () => {
+  it('[CHK-405][CHK-406] ClientDetailView protege Abonar/CSV con canFiar, AdminHubView actúa como Hub lanzador, ClientListView actualiza cupo global y ClientFormModal lo precarga', async () => {
     const authStore = useAuthStore();
     setEmployeeSession(authStore, false);
     const clientsStore = useClientsStore();
@@ -362,7 +364,7 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
     });
 
     const detailEmpNoFiar = mount(ClientDetailView, {
-      global: { stubs: { BaseModal: true, BaseInput: true, BaseButton: { template: '<button><slot /></button>' }, ClientFormModal: true } },
+      global: { stubs: { BaseModal: true, BaseInput: true, BaseButton: { template: '<button><slot /></button>' }, BaseListSkeleton: true, ClientFormModal: true } },
     });
     await flushPromises();
     expect(detailEmpNoFiar.find('[data-testid="register-payment-btn"]').exists()).toBe(false);
@@ -371,27 +373,54 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
     // Con canFiar = true -> sí ve ambos
     setEmployeeSession(authStore, true);
     const detailEmpFiar = mount(ClientDetailView, {
-      global: { stubs: { BaseModal: true, BaseInput: true, BaseButton: { template: '<button><slot /></button>' }, ClientFormModal: true } },
+      global: { stubs: { BaseModal: true, BaseInput: true, BaseButton: { template: '<button><slot /></button>' }, BaseListSkeleton: true, ClientFormModal: true } },
     });
     await flushPromises();
     expect(detailEmpFiar.find('[data-testid="register-payment-btn"]').exists()).toBe(true);
     expect(detailEmpFiar.find('[data-testid="export-client-csv-btn"]').exists()).toBe(true);
 
-    // CHK-406 AdminHubView guarda cupo global y ClientFormModal precarga default_credit_limit
+    // CHK-406 / UX-ADR-006: AdminHubView es Hub lanzador (sin input incrustado) y ClientListView guarda cupo global
     setAdminSession(authStore);
+    const adminWrapper = mount(AdminHubView, {
+      global: { stubs: { BottomNav: true, UserProfileSidebar: true } },
+    });
+    await flushPromises();
+    expect(adminWrapper.find('[data-testid="global-credit-limit-input"]').exists()).toBe(false);
+    expect(adminWrapper.find('[data-testid="admin-hub-clients-launcher"]').exists()).toBe(true);
+
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: { default_credit_limit: 95000 }, error: null }),
     });
-    mockRpc.mockResolvedValueOnce({ data: { success: true, data: { default_credit_limit: 150000 } }, error: null });
+    mockRpc.mockImplementation(async (fn: string) => {
+      if (fn === 'rpc_admin_get_clients') {
+        return { data: { success: true, data: [], count: 0, total_portfolio_debt: 0, debtors_count: 0 }, error: null };
+      }
+      if (fn === 'rpc_actualizar_cupo_credito_global') {
+        return { data: { success: true, data: { default_credit_limit: 150000 } }, error: null };
+      }
+      return { data: { success: true }, error: null };
+    });
 
-    const adminWrapper = mount(AdminHubView, {
-      global: { stubs: { BottomNav: true, UserProfileSidebar: true } },
+    const listWrapper = mount(ClientListView, {
+      global: {
+        stubs: {
+          BottomNav: true,
+          ClientFormModal: true,
+          BaseInput: true,
+          BaseListSkeleton: true,
+          BaseEmptyState: true,
+          BaseModal: { props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' },
+          BaseButton: { props: ['disabled', 'loading'], template: '<button :disabled="disabled"><slot /></button>' },
+        },
+      },
     });
     await flushPromises();
-    await adminWrapper.get('[data-testid="global-credit-limit-input"]').setValue(150000);
-    await adminWrapper.get('[data-testid="save-global-credit-limit-btn"]').trigger('click');
+    await listWrapper.get('[data-testid="open-global-credit-modal-btn"]').trigger('click');
+    await flushPromises();
+    await listWrapper.get('[data-testid="global-credit-limit-input"]').setValue(150000);
+    await listWrapper.get('[data-testid="save-global-credit-limit-btn"]').trigger('click');
     await flushPromises();
     expect(mockRpc).toHaveBeenCalledWith('rpc_actualizar_cupo_credito_global', {
       p_store_id: STORE_ID,

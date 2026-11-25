@@ -142,3 +142,23 @@ Instancia el Arquetipo `B/D` (Workspace de Objeto `Proveedores | Cuentas por Pag
 
 ### 4. Higiene de Crecimiento (Qué se consolida o elimina)
 Elimina la ruta paralela `/payables` y el archivo `PayablesView.vue` (bajando de 27 a 26 rutas totales: 25 permanentes + 1 `DEV`-only) y reduce `baselineDebt` en `ux-manifest.json`: `nativeDialogsAllowed` pasa de `3 → 2` (se retira `SuppliersView.vue`) y `legacyToastImportsAllowed` pasa de `5 → 4` (se retira `PayInvoiceModal.vue`).
+
+---
+
+## UX-ADR-006 — Consolidación de Deuda Global de Cartera, Política de Cupo e Hidratación en C4
+- **Fecha:** 2026-11-25
+- **Estado:** Aprobado
+- **Contexto(s) / Rutas afectadas:** `C4` (`/clients`, `/clients/:id`) y `C7` (`/admin` — retiro de formulario transaccional de cupo)
+- **Aprobación:** `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (`WO-OLA2-C4-001`)
+
+### 1. Contexto y Objeto (ORCA)
+Consolida la jerarquía `Política de Cupo Global -> Cliente (1:N) Movimiento de Cartera` dentro del Contexto `C4` (`/clients` y `/clients/:id`). Reubica la configuración de `globalCreditLimit` desde `AdminHubView.vue` (`C7`) hacia `/clients` (modal exclusivo `isAdmin`), dejando a `AdminHubView` como lanzador puro (`Hub`).
+
+### 2. Verdad Contable (Read Model / Invariante)
+`rpc_admin_get_clients` calcula `total_portfolio_debt` y `debtors_count` en PostgreSQL sobre el 100% de los clientes activos (`is_deleted = false`) sin truncarse por paginación, búsqueda ni filtro, manteniendo acceso tanto a `Admin` como a empleados con `canFiar`. `ClientDetailView.vue` hidrata `client` y `creditAvailable` directamente desde `rpc_obtener_estado_cuenta_cliente`; el modal de abono sincroniza caja fail-closed (`throwOnError: true`) y `clientsStore.registerPayment` exige conexión online obligatoria sin escritura local optimista offline.
+
+### 3. Arquetipo, Señalización y Top Tasks
+Formaliza el Arquetipo `B/D` en `/clients/:id` (`ClientDetailView.vue`), migra validaciones de sobre-abono y errores de RPC o cupo global a alertas `N1` inline sin `showWarning` ni doble toast, añade banners `N3` fail-closed con **Reintentar** ante fallos de red o carga, y alinea Hero y tarjetas a tokens duales `DESIGN.md` + `font-mono tabular-nums`; cero toques extra añadidos a Top Task #3.
+
+### 4. Higiene de Crecimiento (Qué se consolida o elimina)
+Retira el formulario transaccional de cupo global incrustado en `AdminHubView.vue`, elimina `.reduce()` parcial sobre `pagedClients` en `ClientListView.vue`, retira `bg-slate-800` fijo, patrón radial inline, gradientes (`bg-gradient-to-r`) y `border-l-[6px]`, y mantiene `baselineDebt` intacto sin incremento.
