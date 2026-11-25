@@ -9,10 +9,10 @@ enableAutoUnmount(afterEach);
 
 // Mock Router
 const mockPush = vi.fn();
-const mockRoute: { params: { id: string }; query: Record<string, string> } = {
+const mockRoute = reactive<{ params: { id: string }; query: Record<string, string> }>({
   params: { id: 'cli-001' },
   query: {},
-};
+});
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({
@@ -82,6 +82,7 @@ describe('ClientDetailView.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+    mockRoute.params.id = 'cli-001';
     mockRoute.query = {};
     mockIsAdmin.value = true;
     mockCanFiar.value = true;
@@ -280,7 +281,7 @@ describe('ClientDetailView.vue', () => {
     expect(wrapper.text()).toContain('+20.000');
   });
 
-  it('does NOT redirect if server delete fails (no silent failure)', async () => {
+  it('does NOT redirect and keeps N1 error inside delete modal if server delete fails (no silent failure)', async () => {
     mockIsAdmin.value = true;
     mockGetClientById.mockReturnValue({
       id: 'cli-001',
@@ -310,7 +311,60 @@ describe('ClientDetailView.vue', () => {
 
     expect(mockDeleteClient).toHaveBeenCalledWith('cli-001');
     expect(mockPush).not.toHaveBeenCalledWith('/clients');
-    expect(mockShowError).toHaveBeenCalledWith('No tienes permisos autorizados');
+    expect(wrapper.get('[data-testid="delete-client-error"]').text()).toContain('No tienes permisos autorizados');
+    expect(mockShowError).not.toHaveBeenCalled();
+  });
+
+  it('aisla estado al cambiar de clientId y muestra client-detail-error-card si falla el segundo cliente', async () => {
+    useStatementMock.value = true;
+    mockGetClientById.mockImplementation((id: string) =>
+      id === 'cli-001'
+        ? {
+            id: 'cli-001',
+            name: 'Maria Perez',
+            cc: '10203040',
+            totalDebt: new Decimal(20000),
+            creditLimit: new Decimal(100000),
+            storeId: 'store-uuid-1',
+          }
+        : undefined
+    );
+    mockGetClientStatement
+      .mockResolvedValueOnce({
+        client: {
+          id: 'cli-001',
+          name: 'Maria Perez',
+          cc: '10203040',
+          totalDebt: new Decimal(20000),
+          creditLimit: new Decimal(100000),
+          creditAvailable: new Decimal(80000),
+          storeId: 'store-uuid-1',
+        },
+        movements: [
+          {
+            id: 'tx-001',
+            clientId: 'cli-001',
+            type: 'purchase',
+            amount: new Decimal(20000),
+            description: 'Venta #1001',
+            date: '2026-11-20T12:00:00Z',
+          },
+        ],
+        count: 1,
+        generatedAt: '2026-11-25T10:00:00Z',
+      })
+      .mockRejectedValueOnce(new Error('CLIENT_NOT_FOUND'));
+
+    const wrapper = createWrapper();
+    await flushPromises();
+    expect(wrapper.text()).toContain('Maria Perez');
+
+    mockRoute.params.id = 'cli-002';
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('Maria Perez');
+    expect(wrapper.find('[data-testid="client-detail-hero"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="client-detail-error-card"]').text()).toContain('CLIENT_NOT_FOUND');
   });
 
   it('valida sobre-abono y error RPC en alerta N1 inline (sin showWarning) y sincroniza caja fail-closed', async () => {

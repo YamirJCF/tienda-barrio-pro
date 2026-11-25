@@ -62,6 +62,12 @@ let fetchSeq = 0;
 const storeId = computed(() => authStore.currentUser?.storeId || authStore.currentStore?.id || '');
 
 const loadClients = async (reset: boolean = true) => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    fetchError.value = 'Sin conexión a internet. La cartera de clientes requiere conexión en línea.';
+    isLoadingPage.value = false;
+    isLoadingMore.value = false;
+    return;
+  }
   if (!storeId.value) return;
 
   const offset = reset ? 0 : pagedClients.value.length;

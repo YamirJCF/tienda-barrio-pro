@@ -39,7 +39,13 @@ const cashRegisterStore = useCashRegisterStore();
 const isAdmin = computed(() => authStore.isAdmin);
 const canOperateFiado = computed(() => authStore.canFiar || authStore.isAdmin);
 const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
-const { showSuccess, showError } = useNotifications();
+const { showSuccess } = useNotifications();
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  efectivo: 'Abono Efectivo',
+  nequi: 'Abono Nequi',
+  llave_bre: 'Abono Llave Bre-B',
+};
 
 // State
 const paymentAmount = ref('');
@@ -51,38 +57,57 @@ const cashSyncError = ref<string | null>(null);
 const paymentSubmitError = ref<string | null>(null);
 const showOptionsMenu = ref(false);
 const showDeleteConfirm = ref(false);
+const deleteError = ref<string | null>(null);
 const showDebtAlert = ref(false);
 const showEditModal = ref(false);
 const isDeleting = ref(false);
 const isLoadingStatement = ref(false);
 const statementError = ref('');
 const statementData = ref<ClientStatement | null>(null);
+let statementSeq = 0;
 
 // Get client ID from route
 const clientId = computed(() => String(route.params.id));
 
-const client = computed(() => statementData.value?.client || clientsStore.getClientById(clientId.value) || null);
+const matchedStatementClient = computed(() =>
+  statementData.value?.client?.id === clientId.value ? statementData.value.client : null
+);
+
+const client = computed(
+  () => matchedStatementClient.value || clientsStore.getClientById(clientId.value) || null
+);
 
 const transactions = ref<(ClientTransaction | ClientStatementMovement)[]>([]);
 
 const loadStatement = async (id: string) => {
   if (!id) return;
+  const seq = ++statementSeq;
+  if (statementData.value?.client?.id !== id) {
+    statementData.value = null;
+    transactions.value = [];
+  }
   isLoadingStatement.value = true;
   statementError.value = '';
   try {
     if (typeof clientsStore.getClientStatement === 'function') {
       const stmt = await clientsStore.getClientStatement(id, 200, 0);
+      if (seq !== statementSeq || id !== clientId.value) return;
       statementData.value = stmt;
       transactions.value = stmt.movements;
     } else {
+      const txs = await clientsStore.getClientTransactions(id);
+      if (seq !== statementSeq || id !== clientId.value) return;
       statementData.value = null;
-      transactions.value = await clientsStore.getClientTransactions(id);
+      transactions.value = txs;
     }
   } catch (err: any) {
+    if (seq !== statementSeq || id !== clientId.value) return;
     statementError.value =
       err?.message || 'No se pudo consultar el estado de cuenta en el servidor.';
   } finally {
-    isLoadingStatement.value = false;
+    if (seq === statementSeq) {
+      isLoadingStatement.value = false;
+    }
   }
 };
 
@@ -113,7 +138,7 @@ const filteredTransactions = computed(() => {
 });
 
 const availableCredit = computed(
-  () => statementData.value?.client?.creditAvailable ?? clientsStore.getAvailableCredit(clientId.value)
+  () => matchedStatementClient.value?.creditAvailable ?? clientsStore.getAvailableCredit(clientId.value)
 );
 
 const creditUsagePercent = computed(() => {
@@ -200,6 +225,7 @@ const closeOptionsMenu = () => {
 
 const confirmDelete = () => {
   showOptionsMenu.value = false;
+  deleteError.value = null;
 
   if (client.value && client.value.totalDebt.gt(0)) {
     showDebtAlert.value = true;
@@ -212,14 +238,15 @@ const confirmDelete = () => {
 const deleteClient = async () => {
   if (isDeleting.value) return;
   isDeleting.value = true;
+  deleteError.value = null;
   try {
     const result = await clientsStore.deleteClient(clientId.value);
     if (!result?.success) {
-      showDeleteConfirm.value = false;
       if (result?.code === 'CLIENT_HAS_DEBT' || result?.code === 'DEBT_PENDING') {
+        showDeleteConfirm.value = false;
         showDebtAlert.value = true;
       } else {
-        showError(result?.error || 'No se pudo eliminar el cliente.');
+        deleteError.value = result?.error || 'No se pudo eliminar el cliente.';
       }
       return;
     }
@@ -227,8 +254,7 @@ const deleteClient = async () => {
     showSuccess('Cliente eliminado correctamente');
     router.push('/clients');
   } catch (err: any) {
-    showDeleteConfirm.value = false;
-    showError(err?.message || 'Error inesperado al eliminar el cliente.');
+    deleteError.value = err?.message || 'Error inesperado al eliminar el cliente.';
   } finally {
     isDeleting.value = false;
   }
@@ -311,10 +337,11 @@ const registerPayment = async () => {
   isSubmittingPayment.value = true;
   paymentSubmitError.value = null;
   try {
+    const paymentLabel = PAYMENT_METHOD_LABELS[paymentMethod.value] || 'Abono';
     await clientsStore.registerPayment(
       clientId.value,
       parsedPaymentAmount.value,
-      'Abono ' + (paymentMethod.value.charAt(0).toUpperCase() + paymentMethod.value.slice(1)),
+      paymentLabel,
       paymentMethod.value
     );
     showSuccess('Abono registrado exitosamente');
@@ -778,6 +805,14 @@ const handleClientEdited = async () => {
           Esta acción retirará al cliente de la cartera activa de tu tienda.
         </p>
         <p class="text-red-500 font-bold text-sm">No se puede deshacer.</p>
+        <div
+          v-if="deleteError"
+          role="alert"
+          data-testid="delete-client-error"
+          class="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs font-semibold text-red-700 dark:text-red-300 text-left"
+        >
+          {{ deleteError }}
+        </div>
       </div>
 
       <template #footer>

@@ -56,6 +56,7 @@ describe('ClientListView.vue — C4 Autoridad de Deuda Global y Política de Cup
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
     const authStore = useAuthStore();
     authStore.currentUser = {
@@ -167,5 +168,18 @@ describe('ClientListView.vue — C4 Autoridad de Deuda Global y Política de Cup
     await flushPromises();
 
     expect(wrapper.get('[data-testid="clients-error-banner"]').text()).toContain('Fallo de red C4');
+  });
+
+  it('bloquea carga sin internet con guardia fail-closed N3 sin mostrar $0 silencioso', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    const clientsStore = useClientsStore();
+    const fetchSpy = vi.spyOn(clientsStore, 'fetchClientsPage');
+
+    const wrapper = mount(ClientListView, { global: { stubs: globalStubs } });
+    await flushPromises();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="clients-error-banner"]').text()).toContain('Sin conexión a internet');
+    expect(wrapper.find('[data-testid="portfolio-total-debt-badge"]').exists()).toBe(false);
   });
 });
