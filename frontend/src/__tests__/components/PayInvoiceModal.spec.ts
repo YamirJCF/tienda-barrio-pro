@@ -71,7 +71,7 @@ const modalStubs = {
   },
   BaseButton: {
     props: ['disabled', 'loading'],
-    template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+    template: '<button :disabled="disabled"><slot /></button>',
   },
 };
 
@@ -106,7 +106,7 @@ describe('PayInvoiceModal.vue (WO-OLA2-C5-001)', () => {
     });
     await flushPromises();
 
-    expect(mockSyncFromBackend).toHaveBeenCalledWith('store-1');
+    expect(mockSyncFromBackend).toHaveBeenCalledWith('store-1', { throwOnError: true });
     expect(wrapper.text()).toContain('42.000');
 
     // Al elegir Nequi ($12.000) e ingresar $20.000 muestra bloqueo N1 por sobregiro de canal
@@ -168,5 +168,37 @@ describe('PayInvoiceModal.vue (WO-OLA2-C5-001)', () => {
     await flushPromises();
 
     expect(paySpy).toHaveBeenCalledWith('inv-100', 50000, 'externo', undefined);
+  });
+
+  it('falla cerrado con banner N3 si syncFromBackend lanza error y no muestra falsamente "Turno de caja cerrado"', async () => {
+    mockSyncFromBackend.mockRejectedValueOnce(new Error('TIMEOUT_CAJA'));
+
+    const wrapper = mount(PayInvoiceModal, {
+      props: { show: true, invoice: baseInvoice },
+      global: { stubs: modalStubs },
+    });
+    await flushPromises();
+
+    expect(mockSyncFromBackend).toHaveBeenCalledWith('store-1', { throwOnError: true });
+    const syncBanner = wrapper.get('[data-testid="pay-modal-cash-sync-error"]');
+    expect(syncBanner.text()).toContain('TIMEOUT_CAJA');
+    expect(wrapper.find('[data-testid="pay-modal-cash-closed-banner"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Turno de caja cerrado.');
+
+    // Aunque seleccione canal interno con error de sincronización, Confirmar Abono queda bloqueado (fail-closed)
+    await wrapper.find('input[type="number"]').setValue(10000);
+    await wrapper.get('[data-testid="pay-method-efectivo"]').trigger('click');
+    await wrapper.get('[data-testid="pay-invoice-description-input"]').setValue('Intento bloqueado');
+    const confirmBlockedBtn = wrapper.findAll('button').find((b) => b.text().includes('Confirmar Abono'))!;
+    expect((confirmBlockedBtn.element as HTMLButtonElement).disabled).toBe(true);
+
+    // Reintentar vuelve a consultar y limpia el banner N3 al resolverse
+    mockSyncFromBackend.mockResolvedValueOnce(true);
+    await wrapper.get('[data-testid="pay-modal-cash-sync-retry-btn"]').trigger('click');
+    await flushPromises();
+
+    expect(mockSyncFromBackend).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[data-testid="pay-modal-cash-sync-error"]').exists()).toBe(false);
+    expect((confirmBlockedBtn.element as HTMLButtonElement).disabled).toBe(false);
   });
 });

@@ -11,6 +11,22 @@ export type Supplier = Database['public']['Tables']['suppliers']['Row'] & {
 };
 type SupplierInsert = Database['public']['Tables']['suppliers']['Insert'];
 
+function mapSuppliersError(err: any, fallback: string): string {
+    const code = String(err?.code || '');
+    const raw = String(err?.message || err || '');
+
+    if (code === '23503' || /foreign key|violates foreign key constraint/i.test(raw)) {
+        return 'No se puede eliminar este proveedor porque tiene facturas, productos o entradas asociadas en el historial.';
+    }
+    if (code === '23505' || /duplicate key|unique constraint/i.test(raw)) {
+        return 'Ya existe un proveedor con ese nombre en la tienda.';
+    }
+    if (code === '42501' || raw.includes('ADMIN_ONLY_ACTION') || raw.includes('UNAUTHORIZED') || raw.includes('42501')) {
+        return 'Acción restringida exclusivamente al Administrador de la tienda.';
+    }
+    return raw || fallback;
+}
+
 export const useSuppliersStore = defineStore(
     'suppliers',
     () => {
@@ -46,7 +62,7 @@ export const useSuppliersStore = defineStore(
                 }));
             } catch (e: any) {
                 logger.error('[SuppliersStore] Fetch with payables failed', e);
-                error.value = e?.message || 'Error al cargar proveedores';
+                error.value = mapSuppliersError(e, 'Error al cargar proveedores');
             } finally {
                 isLoading.value = false;
             }
@@ -83,7 +99,7 @@ export const useSuppliersStore = defineStore(
                 }));
             } catch (e: any) {
                 logger.error('[SuppliersStore] Fetch failed', e);
-                error.value = e?.message || 'Error al cargar proveedores';
+                error.value = mapSuppliersError(e, 'Error al cargar proveedores');
             } finally {
                 isLoading.value = false;
             }
@@ -109,7 +125,7 @@ export const useSuppliersStore = defineStore(
                 return { success: false, error: 'No data returned' };
             } catch (e: any) {
                 logger.error('[SuppliersStore] Create failed', e);
-                return { success: false, error: e.message || 'Error al crear proveedor' };
+                return { success: false, error: mapSuppliersError(e, 'Error al crear proveedor') };
             }
         };
 
@@ -140,7 +156,7 @@ export const useSuppliersStore = defineStore(
                 return { success: true };
             } catch (e: any) {
                 logger.error('[SuppliersStore] Update failed', e);
-                return { success: false, error: e.message || 'Error al actualizar proveedor' };
+                return { success: false, error: mapSuppliersError(e, 'Error al actualizar proveedor') };
             }
         };
 
@@ -165,7 +181,7 @@ export const useSuppliersStore = defineStore(
                 return { success: true };
             } catch (e: any) {
                 logger.error('[SuppliersStore] Delete failed', e);
-                return { success: false, error: e.message || 'Error al eliminar proveedor' };
+                return { success: false, error: mapSuppliersError(e, 'Error al eliminar proveedor') };
             }
         };
 

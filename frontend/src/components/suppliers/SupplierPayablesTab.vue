@@ -368,7 +368,7 @@ const emit = defineEmits<{
 }>();
 
 const { formatCurrency } = useCurrencyFormat();
-const { showSuccess, showError } = useNotifications();
+const { showSuccess } = useNotifications();
 const authStore = useAuthStore();
 const payablesStore = usePayablesStore();
 const suppliersStore = useSuppliersStore();
@@ -515,7 +515,6 @@ const submitCreateInvoice = async () => {
 
   if (!result.success) {
     createError.value = result.error || 'No se pudo crear la factura.';
-    showError(createError.value);
     return;
   }
 

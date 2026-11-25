@@ -26,9 +26,36 @@
         </p>
       </div>
 
+      <!-- Banner N3 Error de Sincronización de Caja (Fail-closed, Regla 3) -->
+      <div
+        v-if="cashSyncError"
+        role="alert"
+        data-testid="pay-modal-cash-sync-error"
+        class="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 rounded-xl space-y-2"
+      >
+        <div class="flex items-start gap-2.5">
+          <AlertTriangle :size="16" class="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+          <p class="text-xs text-red-700 dark:text-red-300 font-medium">
+            No se pudo verificar el estado de caja ({{ cashSyncError }}). Puedes reintentar o registrar un <strong>Pago externo / fuera de caja</strong> ($0 en caja).
+          </p>
+        </div>
+        <BaseButton
+          type="button"
+          size="sm"
+          variant="danger"
+          data-testid="pay-modal-cash-sync-retry-btn"
+          :disabled="isSyncingCash"
+          :loading="isSyncingCash"
+          @click="syncCashState"
+        >
+          Reintentar
+        </BaseButton>
+      </div>
+
       <!-- Banner N3 Turno Cerrado / Expirado +24h -->
       <div
-        v-if="(!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession) && paymentMethod !== 'externo'"
+        v-else-if="!isSyncingCash && (!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession) && paymentMethod !== 'externo'"
+        data-testid="pay-modal-cash-closed-banner"
         class="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-start gap-2.5"
       >
         <Info :size="16" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -188,7 +215,7 @@ import { useNotifications } from '@/composables/useNotifications';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import BaseInput from '@/components/ui/BaseInput.vue';
 import BaseButton from '@/components/ui/BaseButton.vue';
-import { Banknote, Smartphone, CreditCard, Wallet, Info, Ban } from 'lucide-vue-next';
+import { Banknote, Smartphone, CreditCard, Wallet, Info, Ban, AlertTriangle } from 'lucide-vue-next';
 
 const props = defineProps<{
   show: boolean;
@@ -211,17 +238,34 @@ const paymentMethod = ref(cashRegisterStore.isOpen && !cashRegisterStore.isStale
 const description = ref('');
 const isSubmitting = ref(false);
 const errorMessage = ref<string | null>(null);
+const isSyncingCash = ref(false);
+const cashSyncError = ref<string | null>(null);
+
+const syncCashState = async () => {
+  cashSyncError.value = null;
+  const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
+  if (storeId && typeof (cashRegisterStore as any).syncFromBackend === 'function') {
+    isSyncingCash.value = true;
+    try {
+      await (cashRegisterStore as any).syncFromBackend(storeId, { throwOnError: true });
+      paymentMethod.value = cashRegisterStore.isOpen && !cashRegisterStore.isStaleSession ? 'efectivo' : 'externo';
+    } catch (e: any) {
+      cashSyncError.value = e?.message || 'Error consultando turno de caja';
+      paymentMethod.value = 'externo';
+    } finally {
+      isSyncingCash.value = false;
+    }
+    return;
+  }
+  paymentMethod.value = cashRegisterStore.isOpen && !cashRegisterStore.isStaleSession ? 'efectivo' : 'externo';
+};
 
 watch(
   () => props.show,
   async (isOpen) => {
     if (!isOpen) return;
     errorMessage.value = null;
-    const storeId = authStore.currentUser?.storeId || authStore.currentStore?.id;
-    if (storeId && typeof (cashRegisterStore as any).syncFromBackend === 'function') {
-      await (cashRegisterStore as any).syncFromBackend(storeId);
-    }
-    paymentMethod.value = cashRegisterStore.isOpen && !cashRegisterStore.isStaleSession ? 'efectivo' : 'externo';
+    await syncCashState();
   },
   { immediate: true }
 );
@@ -273,6 +317,7 @@ const canSubmit = computed(() => {
   const amount = Number(amountToPay.value);
   if (amount <= 0 || amountExceedsPending.value) return false;
   if (!isInternalPayment.value) return true;
+  if (isSyncingCash.value || Boolean(cashSyncError.value)) return false;
   if (!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession) return false;
   if (!description.value.trim()) return false;
   if (amountExceedsChannel.value) return false;
@@ -288,6 +333,8 @@ const resetForm = () => {
   description.value = '';
   paymentMethod.value = cashRegisterStore.isOpen && !cashRegisterStore.isStaleSession ? 'efectivo' : 'externo';
   errorMessage.value = null;
+  cashSyncError.value = null;
+  isSyncingCash.value = false;
 };
 
 const close = () => {

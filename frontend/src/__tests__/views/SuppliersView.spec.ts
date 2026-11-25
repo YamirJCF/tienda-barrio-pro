@@ -316,4 +316,26 @@ describe('SuppliersView.vue — Workspace Consolidado C5 (WO-OLA2-C5-001)', () =
     expect(confirmSpy).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  it('traduce error SQL 23503 al eliminar proveedor y muestra alerta N1 inline sin doble toast N2', async () => {
+    const deleteChain = {
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockResolvedValue({
+        error: { code: '23503', message: 'update or delete on table "suppliers" violates foreign key constraint' },
+      }),
+    };
+    mockFrom.mockReturnValue(deleteChain);
+    mockRpc.mockResolvedValue({ data: { success: true, data: sampleSuppliers }, error: null });
+
+    const wrapper = mount(SuppliersView, { global: { stubs: globalStubs } });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="delete-supplier-btn-sup-1"]').trigger('click');
+    await wrapper.get('[data-testid="confirm-delete-supplier-btn"]').trigger('click');
+    await flushPromises();
+
+    const inlineError = wrapper.get('[data-testid="supplier-delete-error"]');
+    expect(inlineError.text()).toContain('No se puede eliminar este proveedor porque tiene facturas, productos o entradas asociadas en el historial.');
+    expect(mockShowError).not.toHaveBeenCalled();
+  });
 });

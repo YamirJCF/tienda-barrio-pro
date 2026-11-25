@@ -289,7 +289,7 @@ const emit = defineEmits<{
 const suppliersStore = useSuppliersStore();
 const authStore = useAuthStore();
 const { formatCurrency } = useCurrencyFormat();
-const { showSuccess, showError } = useNotifications();
+const { showSuccess } = useNotifications();
 
 const searchQuery = ref('');
 const showSupplierModal = ref(false);
@@ -388,7 +388,6 @@ const handleSave = async () => {
 
     if (!res.success) {
       formError.value = res.error || 'Error al actualizar proveedor.';
-      showError(formError.value);
       return;
     }
 
@@ -416,7 +415,6 @@ const handleSave = async () => {
   isSaving.value = false;
   if (!res.success) {
     formError.value = res.error || 'Error al crear proveedor.';
-    showError(formError.value);
     return;
   }
 
@@ -441,7 +439,6 @@ const confirmDelete = async () => {
 
   if (!res.success) {
     deleteError.value = res.error || 'No se pudo eliminar el proveedor.';
-    showError(deleteError.value);
     return;
   }
 
