@@ -1,7 +1,7 @@
 # Contexto C4 — Cartera (Clientes & Fiado)
 
-> **Estado:** Cartografía Ola 1 (`Lote 1B` — solo documentación)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-001`)  
+> **Estado:** Consolidado en Ola 2 (`UX-ADR-006`, `WO-OLA2-C4-001`)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-006`)  
 > **Restricción de conectividad:** **Online obligatorio** para todas las operaciones de Cartera y Fiado ([`PRODUCT.md`](../../../PRODUCT.md#L38)).
 
 ---
@@ -13,19 +13,19 @@ Gestionar la cartera de clientes con crédito ("fiado"), su estado de cuenta, cu
 
 ### 1.2 Rutas Actuales vs. Objetivo Canónico
 
-| Ruta | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Destino Objetivo (Ola 2) |
+| Ruta | Vista (`.vue`) | Estado en `ux-manifest.json` | Arquetipo | Estado Consolidado (`UX-ADR-006`) |
 |---|---|---|---|---|
-| `/clients` | [`ClientListView.vue`](../../../frontend/src/views/ClientListView.vue) | `canonica` | `B` (Workspace Lista) | **Se mantiene canónica:** Lista paginada de cartera + **absorbe configuración de `globalCreditLimit`** (solo `Admin`, migrada desde `C7 /admin`). |
-| `/clients/:id` | [`ClientDetailView.vue`](../../../frontend/src/views/ClientDetailView.vue) | `canonica` | `B` (Workspace Ficha) | **Se mantiene canónica:** Ficha única de cliente con saldo, barra de cupo, historial de fiados/abonos y modal de abono (Arquetipo `D`). |
+| `/clients` | [`ClientListView.vue`](../../../frontend/src/views/ClientListView.vue) | `canonica` | `B` (Workspace Lista) | **Canónica:** Lista paginada con `totalPortfolioDebt` del servidor y modal **Cupo Global** (solo `Admin`, reubicado desde `/admin`). |
+| `/clients/:id` | [`ClientDetailView.vue`](../../../frontend/src/views/ClientDetailView.vue) | `canonica` | `B/D` (Workspace Ficha + Hoja Transaccional) | **Canónica:** Ficha hidratada desde `statementData.client`, tokens `DESIGN.md`, y modal de abono (`Arquetipo D`) fail-closed con validación `N1` inline. |
 
 ### 1.3 Matriz de Permisos (`SDD-003-01`)
 
 | Capacidad / Acción | `Admin` | Empleado con `canFiar` | Empleado sin `canFiar` | Evidencia en Código |
 |---|---|---|---|---|
-| Consultar lista de clientes y ficha `/clients/:id` | ✅ | ✅ | ❌ | Guard `!authStore.canFiar` en [`router/index.ts`](../../../frontend/src/router/index.ts#L367) |
-| Registrar abono de cliente | ✅ | ✅ | ❌ | [`ClientDetailView.vue`](../../../frontend/src/views/ClientDetailView.vue#L254-L284) |
-| Crear / editar / eliminar cliente | ✅ | ❌ | ❌ | [`ClientListView.vue`](../../../frontend/src/views/ClientListView.vue#L111) (`canManageClients = authStore.isAdmin`) |
-| Configurar `globalCreditLimit` por defecto | ✅ | ❌ | ❌ | Hoy en [`AdminHubView.vue`](../../../frontend/src/views/AdminHubView.vue#L55-L96); pasa a `/clients` para `isAdmin` |
+| Consultar lista de clientes y ficha `/clients/:id` | ✅ | ✅ | ❌ | Guard `!authStore.canFiar` en [`router/index.ts`](../../../frontend/src/router/index.ts#L344-L346) |
+| Registrar abono de cliente | ✅ | ✅ | ❌ | [`ClientDetailView.vue`](../../../frontend/src/views/ClientDetailView.vue) |
+| Crear / editar / eliminar cliente | ✅ | ❌ | ❌ | [`ClientListView.vue`](../../../frontend/src/views/ClientListView.vue) (`canManageClients = authStore.isAdmin`) |
+| Configurar `globalCreditLimit` por defecto | ✅ | ❌ | ❌ | [`ClientListView.vue`](../../../frontend/src/views/ClientListView.vue) (modal **Cupo Global**, solo `isAdmin`) |
 
 ---
 
@@ -106,11 +106,11 @@ Cliente (1) ──< Movimiento de Cartera [Fiado | Abono] (N)
 
 ---
 
-## §5. Hotspots Contables y de Dominio Verificados para Ola 2 (`FRD/SDD/SQL` antes de UI)
+## §5. Hotspots Contables y de Dominio Cerrados en Ola 2 (`WO-OLA2-C4-001` / `UX-ADR-006`)
 
-| ID | Severidad | Evidencia Verificada en Código | Brecha Contable / UX | Acción Requerida en Ola 2 |
+| ID | Severidad | Evidencia Original Auditada | Estado en Ola 2 | Resolución Implementada (`WO-OLA2-C4-001`) |
 |---|---|---|---|---|
-| **C4-H1** | 🟠 **ALTO** | [`ClientListView.vue`](../../../frontend/src/views/ClientListView.vue#L103-L108) y L197 | `totalDebt` se calcula en cliente con `.reduce()` únicamente sobre `pagedClients` (página parcial de 20 clientes), violando `SPEC_001` y mostrando una deuda total falsa cuando la tienda supera 20 clientes. | Devolver `totalPortfolioDebt` agregado desde RPC/servidor y eliminar el `.reduce()` parcial en cliente. |
-| **C4-H2** | 🟠 **ALTO** | [`AdminHubView.vue`](../../../frontend/src/views/AdminHubView.vue#L55-L96) | La configuración de `globalCreditLimit` vive incrustada en el hub de navegación de `C7` (`AdminHubView.vue`), rompiendo la frontera ORCA de Cartera (`C4`). | Mover la configuración de `globalCreditLimit` a `/clients` (solo `isAdmin`) dejando `AdminHubView` como lanzador puro (`Hub`). |
-| **C4-H3** | 🟡 **MEDIO** | [`ClientDetailView.vue`](../../../frontend/src/views/ClientDetailView.vue#L59) y L293 | `client` se lee solo de `clientsStore.getClientById(clientId.value)` (caché en memoria); al entrar por deep-link (`N4`) o recargar en frío sin lista previa, el Hero `v-if="client"` queda oculto en vez de hidratarse desde `statementData.client`. | Hidratar `client` haciendo fallback a `statementData.value?.client` y mostrar `BaseListSkeleton` mientras carga. |
-| **C4-H4** | 🟡 **MEDIO** | [`ClientDetailView.vue`](../../../frontend/src/views/ClientDetailView.vue#L261-L281), L294, L367, L384, L495 | 1) Validación de sobre-abono y error de RPC en abono se comunican solo por toast efímero (`showWarning`) en lugar de `N1` inline en el modal.<br>2) Faltan clases `font-mono tabular-nums` en el saldo gigante (L367) y en los montos de transacciones (L495).<br>3) El Hero usa `bg-slate-800` fijo y gradiente `bg-gradient-to-r` (L294, L384) fuera de `DESIGN.md`. | Mover validación/errores de abono a `N1` inline, aplicar `font-mono tabular-nums` a todas las cifras y alinear el Hero a tokens sólidos de `DESIGN.md`. |
+| **C4-H1** | ✅ **CERRADO** | [`ClientListView.vue`](../../../frontend/src/views/ClientListView.vue) calculaba `totalDebt` con `.reduce()` parcial sobre `pagedClients` | **Resuelto en SQL + Repositorio + UI** | `rpc_admin_get_clients` devuelve `total_portfolio_debt` y `debtors_count` agregados sobre el 100% de clientes activos; `ClientListView.vue` consume `totalPortfolioDebt` en `font-mono tabular-nums`. |
+| **C4-H2** | ✅ **CERRADO** | [`AdminHubView.vue`](../../../frontend/src/views/AdminHubView.vue) contenía el formulario incrustado de `globalCreditLimit` | **Reubicado a `/clients`** | Formulario retirado de [`AdminHubView.vue`](../../../frontend/src/views/AdminHubView.vue) (ahora tarjeta lanzadora `Hub`) y migrado a modal **Cupo Global** solo `isAdmin` en [`ClientListView.vue`](../../../frontend/src/views/ClientListView.vue) con validación `N1` inline. |
+| **C4-H3** | ✅ **CERRADO** | [`ClientDetailView.vue`](../../../frontend/src/views/ClientDetailView.vue) leía `client` solo de caché en memoria | **Resuelto en Store + UI** | `clientsStore.getClientStatement` inserta el cliente en memoria si no existía y `ClientDetailView.vue` hidrata `statementData.client || getClientById`, mostrando skeleton en carga y tarjeta `N3` fail-closed en error. |
+| **C4-H4** | ✅ **CERRADO** | [`ClientDetailView.vue`](../../../frontend/src/views/ClientDetailView.vue) usaba `showWarning`, `bg-slate-800` fijo y gradientes | **Alineado a `DESIGN.md` + `N1`/`N3`** | Validación de sobre-abono y errores RPC migrados a alertas `N1` inline sin `showWarning`; sincronización fail-closed de caja (`throwOnError: true`) con Reintentar; Hero dual `bg-surface-light dark:bg-surface-dark`, cifras `font-mono tabular-nums` y `border-l-[6px]` eliminado en `/clients`. |

@@ -10,13 +10,14 @@ import { Decimal } from 'decimal.js';
 import BaseModal from '../components/ui/BaseModal.vue';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
+import BaseListSkeleton from '../components/ui/BaseListSkeleton.vue';
 import ClientFormModal from '../components/ClientFormModal.vue';
-import { 
-  MoreVertical, 
-  Trash2, 
-  Receipt, 
-  Banknote, 
-  ShoppingCart, 
+import {
+  MoreVertical,
+  Trash2,
+  Receipt,
+  Banknote,
+  ShoppingCart,
   Plus,
   AlertTriangle,
   ChevronLeft,
@@ -24,7 +25,8 @@ import {
   Smartphone,
   CreditCard,
   Download,
-  RefreshCw
+  RefreshCw,
+  Info
 } from 'lucide-vue-next';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
 import { useNotifications } from '../composables/useNotifications';
@@ -37,13 +39,16 @@ const cashRegisterStore = useCashRegisterStore();
 const isAdmin = computed(() => authStore.isAdmin);
 const canOperateFiado = computed(() => authStore.canFiar || authStore.isAdmin);
 const { formatCurrency: rawFormatCurrency } = useCurrencyFormat();
-const { showWarning, showSuccess, showError } = useNotifications();
+const { showSuccess, showError } = useNotifications();
 
 // State
 const paymentAmount = ref('');
 const paymentMethod = ref('efectivo');
 const showPaymentModal = ref(false);
 const isSubmittingPayment = ref(false);
+const isSyncingCash = ref(false);
+const cashSyncError = ref<string | null>(null);
+const paymentSubmitError = ref<string | null>(null);
 const showOptionsMenu = ref(false);
 const showDeleteConfirm = ref(false);
 const showDebtAlert = ref(false);
@@ -56,7 +61,7 @@ const statementData = ref<ClientStatement | null>(null);
 // Get client ID from route
 const clientId = computed(() => String(route.params.id));
 
-const client = computed(() => clientsStore.getClientById(clientId.value));
+const client = computed(() => statementData.value?.client || clientsStore.getClientById(clientId.value) || null);
 
 const transactions = ref<(ClientTransaction | ClientStatementMovement)[]>([]);
 
@@ -82,9 +87,9 @@ const loadStatement = async (id: string) => {
 };
 
 watch(clientId, async (newId) => {
-    if (newId) {
-        await loadStatement(newId);
-    }
+  if (newId) {
+    await loadStatement(newId);
+  }
 }, { immediate: true });
 
 type ClientDatePreset = 'today' | 'week' | 'month' | 'all';
@@ -92,11 +97,11 @@ const dateFilter = ref<ClientDatePreset>('all');
 
 const filteredTransactions = computed(() => {
   if (dateFilter.value === 'all') return transactions.value;
-  
+
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  
-  return transactions.value.filter(tx => {
+
+  return transactions.value.filter((tx) => {
     const txTime = new Date(tx.date).getTime();
     switch (dateFilter.value) {
       case 'today': return txTime >= todayStart;
@@ -107,11 +112,40 @@ const filteredTransactions = computed(() => {
   });
 });
 
-const availableCredit = computed(() => clientsStore.getAvailableCredit(clientId.value));
+const availableCredit = computed(
+  () => statementData.value?.client?.creditAvailable ?? clientsStore.getAvailableCredit(clientId.value)
+);
 
 const creditUsagePercent = computed(() => {
   if (!client.value || client.value.creditLimit.isZero()) return 0;
   return client.value.totalDebt.div(client.value.creditLimit).times(100).toNumber();
+});
+
+const creditBarColorClass = computed(() => {
+  if (creditUsagePercent.value >= 100) return 'bg-red-500';
+  if (creditUsagePercent.value >= 80) return 'bg-amber-500';
+  return 'bg-emerald-500';
+});
+
+const parsedPaymentAmount = computed(() => {
+  const num = Number(paymentAmount.value);
+  if (!paymentAmount.value || !Number.isFinite(num)) return new Decimal(0);
+  return new Decimal(num);
+});
+
+const isPositivePayment = computed(() => parsedPaymentAmount.value.gt(0));
+
+const isOverpayment = computed(() => {
+  if (!client.value || !isPositivePayment.value) return false;
+  return parsedPaymentAmount.value.gt(client.value.totalDebt);
+});
+
+const canConfirmPayment = computed(() => {
+  if (!client.value) return false;
+  if (!isPositivePayment.value || isOverpayment.value) return false;
+  if (isSubmittingPayment.value || isSyncingCash.value || Boolean(cashSyncError.value)) return false;
+  if (!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession) return false;
+  return true;
 });
 
 // Methods
@@ -166,7 +200,7 @@ const closeOptionsMenu = () => {
 
 const confirmDelete = () => {
   showOptionsMenu.value = false;
-  
+
   if (client.value && client.value.totalDebt.gt(0)) {
     showDebtAlert.value = true;
     return;
@@ -243,32 +277,44 @@ const exportStatementCsv = () => {
   showSuccess('Estado de cuenta exportado');
 };
 
-const openPaymentModal = async () => {
-  showPaymentModal.value = true;
+const syncCashForPayment = async () => {
+  cashSyncError.value = null;
   const storeId = authStore.currentStore?.id || authStore.currentUser?.storeId;
-  if (storeId) {
-    await cashRegisterStore.syncFromBackend(storeId);
+  if (!storeId || typeof (cashRegisterStore as any).syncFromBackend !== 'function') {
+    return;
+  }
+  isSyncingCash.value = true;
+  try {
+    await (cashRegisterStore as any).syncFromBackend(storeId, { throwOnError: true });
+  } catch (err: any) {
+    cashSyncError.value = err?.message || 'No se pudo verificar el estado real de caja en el servidor.';
+  } finally {
+    isSyncingCash.value = false;
   }
 };
 
+const openPaymentModal = async () => {
+  paymentSubmitError.value = null;
+  showPaymentModal.value = true;
+  await syncCashForPayment();
+};
+
+const fillTotalBalance = () => {
+  if (!client.value) return;
+  paymentAmount.value = client.value.totalDebt.toString();
+  paymentSubmitError.value = null;
+};
+
 const registerPayment = async () => {
-  if (isSubmittingPayment.value || !paymentAmount.value || !client.value) return;
-
-  const amount = new Decimal(paymentAmount.value);
-  if (amount.lte(0)) return;
-
-  // Validation: Prevent negative balance (Overpayment)
-  if (amount.gt(client.value.totalDebt)) {
-    showWarning(`El abono no puede superar la deuda actual (${formatCurrency(client.value.totalDebt)}).\nEl sistema no maneja "Saldo a Favor" por defecto.`);
-    return;
-  }
+  if (!canConfirmPayment.value || !client.value) return;
 
   isSubmittingPayment.value = true;
+  paymentSubmitError.value = null;
   try {
     await clientsStore.registerPayment(
-      clientId.value, 
-      amount, 
-      'Abono ' + (paymentMethod.value.charAt(0).toUpperCase() + paymentMethod.value.slice(1)), 
+      clientId.value,
+      parsedPaymentAmount.value,
+      'Abono ' + (paymentMethod.value.charAt(0).toUpperCase() + paymentMethod.value.slice(1)),
       paymentMethod.value
     );
     showSuccess('Abono registrado exitosamente');
@@ -277,68 +323,105 @@ const registerPayment = async () => {
     showPaymentModal.value = false;
     await loadStatement(clientId.value);
   } catch (err: any) {
-    showWarning(err.message || 'Error al registrar el abono');
+    paymentSubmitError.value = err?.message || 'Error al registrar el abono';
   } finally {
     isSubmittingPayment.value = false;
   }
 };
 
-// WO: initializeSampleData eliminada - SPEC-007
+const handleClientEdited = async () => {
+  showEditModal.value = false;
+  await loadStatement(clientId.value);
+};
 </script>
 
 <template>
   <div class="min-h-screen bg-background-light dark:bg-background-dark pb-24">
-    <!-- Hero Header Section -->
-    <div
-      v-if="client"
-      class="relative bg-slate-800 rounded-b-[2rem] shadow-xl overflow-hidden z-10"
-    >
-      <!-- Abstract Pattern Background -->
-      <div
-        class="absolute inset-0 opacity-10 pointer-events-none"
-        style="
-          background-image: radial-gradient(#ffffff 1px, transparent 1px);
-          background-size: 24px 24px;
-        "
-      ></div>
+    <!-- Loading Inicial en Frío / Deep-Link sin caché previa -->
+    <div v-if="isLoadingStatement && !client" data-testid="client-detail-loading" class="p-4 space-y-4">
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          @click="goBack"
+          aria-label="Volver"
+          class="flex items-center justify-center size-10 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          <ChevronLeft :size="24" :stroke-width="1.5" />
+        </button>
+        <div class="h-6 w-48 rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse"></div>
+      </div>
+      <BaseListSkeleton :count="4" type="detail" />
+    </div>
 
-      <div class="relative flex flex-col p-6 pb-8">
+    <!-- Error Fail-Closed en Carga en Frío -->
+    <div
+      v-else-if="statementError && !client"
+      role="alert"
+      data-testid="client-detail-error-card"
+      class="m-4 p-5 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 space-y-3"
+    >
+      <div class="flex items-start gap-2.5">
+        <AlertTriangle :size="20" class="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+        <p class="text-sm font-semibold text-red-700 dark:text-red-200">{{ statementError }}</p>
+      </div>
+      <div class="flex gap-2">
+        <BaseButton type="button" size="sm" variant="secondary" @click="goBack">
+          Volver
+        </BaseButton>
+        <BaseButton type="button" size="sm" variant="danger" @click="loadStatement(clientId)">
+          <RefreshCw :size="14" class="mr-1.5" />
+          Reintentar
+        </BaseButton>
+      </div>
+    </div>
+
+    <!-- Hero Header Section (DESIGN.md tokens duales, sólido sin gradientes ni bg fijo) -->
+    <div
+      v-else-if="client"
+      data-testid="client-detail-hero"
+      class="relative bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 shadow-sm z-10"
+    >
+      <div class="relative flex flex-col p-6 pb-8 max-w-3xl mx-auto">
         <!-- Navigation -->
         <div class="flex items-center justify-between mb-6">
           <button
+            type="button"
             @click="goBack"
             aria-label="Volver"
-            class="flex items-center justify-center size-12 -ml-3 text-white rounded-full hover:bg-white/10 active:bg-white/20 transition-colors"
+            class="flex items-center justify-center size-11 -ml-2 text-slate-700 dark:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <ChevronLeft :size="28" :stroke-width="1.5" />
+            <ChevronLeft :size="26" :stroke-width="1.5" />
           </button>
-          <div class="flex gap-4 relative">
+          <div class="flex gap-2 relative">
             <button
               v-if="isAdmin"
+              type="button"
               @click="toggleOptionsMenu"
               aria-label="Opciones"
-              class="flex items-center justify-center size-10 text-slate-300 rounded-full hover:bg-white/10 active:bg-white/20 transition-colors"
+              class="flex items-center justify-center size-10 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
-              <MoreVertical :size="24" :stroke-width="1.5" />
+              <MoreVertical :size="22" :stroke-width="1.5" />
             </button>
 
             <!-- Dropdown Menu -->
             <Transition name="dropdown">
               <div
                 v-if="showOptionsMenu"
-                class="absolute right-0 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden min-w-[180px] z-50"
+                class="absolute right-0 top-12 bg-surface-light dark:bg-surface-dark rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden min-w-[180px] z-50"
               >
                 <button
                   v-if="isAdmin"
+                  type="button"
                   @click="showEditModal = true; closeOptionsMenu()"
-                  class="w-full px-4 py-3 flex items-center gap-3 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left"
+                  class="w-full px-4 py-3 flex items-center gap-3 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
                 >
                   <Pencil :size="20" :stroke-width="1.5" />
                   <span class="font-medium">Editar cliente</span>
                 </button>
                 <button
+                  type="button"
                   @click="confirmDelete"
-                  class="w-full px-4 py-3 flex items-center gap-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
+                  class="w-full px-4 py-3 flex items-center gap-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-left cursor-pointer"
                 >
                   <Trash2 :size="20" :stroke-width="1.5" />
                   <span class="font-medium">Eliminar cliente</span>
@@ -347,55 +430,53 @@ const registerPayment = async () => {
             </Transition>
           </div>
 
-          <!-- Click outside to close -->
           <div v-if="showOptionsMenu" class="fixed inset-0 z-40" @click="closeOptionsMenu"></div>
         </div>
 
         <!-- Client Info -->
         <div class="flex flex-col items-center text-center">
-          <h2 class="text-white text-xl font-semibold tracking-wide mb-1">{{ client.name }}</h2>
-          <p class="text-slate-400 text-sm font-medium tracking-wide">
+          <h2 class="text-slate-900 dark:text-white text-xl font-bold tracking-tight mb-1">{{ client.name }}</h2>
+          <p class="text-slate-500 dark:text-slate-400 text-sm font-medium tracking-wide font-mono tabular-nums">
             C.C. {{ formatCedula(client.cc) }}
           </p>
         </div>
 
         <!-- Gigantic Balance -->
         <div class="flex flex-col items-center mt-6 mb-8">
-          <span class="text-emerald-400 text-sm font-bold uppercase tracking-widest mb-2"
-            >Saldo Pendiente</span
-          >
-          <h1 class="text-white text-[56px] leading-none font-bold tracking-tight drop-shadow-sm">
+          <span class="text-xs font-bold uppercase tracking-widest mb-2" :class="client.totalDebt.gt(0) ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'">
+            Saldo Pendiente
+          </span>
+          <h1 class="text-slate-900 dark:text-white text-5xl leading-none font-black tracking-tight font-mono tabular-nums">
             {{ formatCurrency(client.totalDebt) }}
           </h1>
         </div>
 
-        <!-- Credit Limit Progress Bar -->
-        <div class="bg-slate-700/50 rounded-xl p-4 border border-white/5 backdrop-blur-sm">
+        <!-- Credit Limit Progress Bar (Sólida DESIGN.md) -->
+        <div class="bg-background-light dark:bg-background-dark rounded-xl p-4 border border-slate-200 dark:border-slate-800">
           <div class="flex justify-between items-end mb-2">
-            <p class="text-slate-200 text-sm font-medium">Cupo de Crédito</p>
-            <p class="text-emerald-400 text-xs font-bold">
+            <p class="text-slate-700 dark:text-slate-200 text-sm font-semibold">Cupo de Crédito</p>
+            <p class="text-emerald-600 dark:text-emerald-400 text-xs font-bold font-mono tabular-nums">
               Disponibles: {{ formatCurrency(availableCredit) }}
             </p>
           </div>
-          <!-- Progress Track -->
-          <div class="relative h-3 w-full bg-slate-900/50 rounded-full overflow-hidden">
-            <!-- Progress Fill -->
+          <div class="relative h-3 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
             <div
-              class="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all"
+              class="absolute top-0 left-0 h-full rounded-full transition-all"
+              :class="creditBarColorClass"
               :style="{ width: `${Math.min(creditUsagePercent, 100)}%` }"
             ></div>
           </div>
-          <div class="flex justify-between mt-2">
-            <p class="text-slate-400 text-xs">Uso: {{ formatCurrency(client.totalDebt) }}</p>
-            <p class="text-slate-400 text-xs">Total: {{ formatCurrency(client.creditLimit) }}</p>
+          <div class="flex justify-between mt-2 font-mono tabular-nums">
+            <p class="text-slate-500 dark:text-slate-400 text-xs">Uso: {{ formatCurrency(client.totalDebt) }}</p>
+            <p class="text-slate-500 dark:text-slate-400 text-xs">Total: {{ formatCurrency(client.creditLimit) }}</p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Main Content: Transaction History -->
-    <main class="relative z-0 px-4 pt-6 pb-32 flex flex-col gap-4">
-      <div class="flex items-center justify-between px-2 gap-2">
+    <main v-if="client || !statementError" class="relative z-0 px-4 pt-6 pb-32 flex flex-col gap-4 max-w-3xl mx-auto">
+      <div class="flex items-center justify-between px-1 gap-2">
         <h3 class="text-slate-800 dark:text-white text-lg font-bold">Historial de Transacciones</h3>
         <button
           v-if="client && canOperateFiado"
@@ -403,7 +484,7 @@ const registerPayment = async () => {
           data-testid="export-client-csv-btn"
           @click="exportStatementCsv"
           :disabled="isLoadingStatement"
-          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
+          class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
         >
           <Download :size="14" />
           Exportar CSV
@@ -411,16 +492,15 @@ const registerPayment = async () => {
       </div>
 
       <!-- Loading Skeleton -->
-      <div v-if="isLoadingStatement" class="space-y-3 px-2 animate-pulse">
-        <div class="h-16 rounded-xl bg-slate-200 dark:bg-slate-800"></div>
-        <div class="h-16 rounded-xl bg-slate-200 dark:bg-slate-800"></div>
+      <div v-if="isLoadingStatement" class="px-1">
+        <BaseListSkeleton :count="3" type="simple" />
       </div>
 
       <!-- Statement Error (No Silent Fallback) -->
       <div
         v-else-if="statementError"
         role="alert"
-        class="mx-2 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 space-y-2.5"
+        class="p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 space-y-2.5"
       >
         <p class="text-xs sm:text-sm text-red-700 dark:text-red-200 font-medium">
           {{ statementError }}
@@ -428,7 +508,7 @@ const registerPayment = async () => {
         <button
           type="button"
           @click="loadStatement(clientId)"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 active:scale-95"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 active:scale-95 cursor-pointer"
         >
           <RefreshCw :size="13" />
           Reintentar
@@ -436,7 +516,7 @@ const registerPayment = async () => {
       </div>
 
       <!-- Filters -->
-      <div v-else class="flex gap-2 px-2 overflow-x-auto no-scrollbar">
+      <div v-else class="flex gap-2 overflow-x-auto no-scrollbar">
         <button
           v-for="preset in [
             { label: 'Todos', value: 'all' },
@@ -445,11 +525,12 @@ const registerPayment = async () => {
             { label: 'Mes', value: 'month' }
           ]"
           :key="preset.value"
+          type="button"
           @click="dateFilter = preset.value as ClientDatePreset"
-          class="px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap transition-colors"
-          :class="dateFilter === preset.value 
-            ? 'bg-blue-600 text-white' 
-            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+          class="px-3 py-1.5 text-xs font-semibold rounded-full whitespace-nowrap transition-colors cursor-pointer"
+          :class="dateFilter === preset.value
+            ? 'bg-primary text-white'
+            : 'bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
         >
           {{ preset.label }}
         </button>
@@ -470,17 +551,17 @@ const registerPayment = async () => {
         <article
           v-for="tx in filteredTransactions"
           :key="tx.id"
-          class="group flex items-center gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 active:scale-[0.98] transition-transform duration-150"
+          class="group flex items-center gap-4 bg-surface-light dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors"
         >
           <div
             class="shrink-0 flex items-center justify-center size-12 rounded-2xl"
             :class="
               tx.type === 'payment'
-                ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400'
+                : 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400'
             "
           >
-             <component :is="tx.type === 'payment' ? Banknote : ShoppingCart" :size="24" :stroke-width="1.5" />
+            <component :is="tx.type === 'payment' ? Banknote : ShoppingCart" :size="24" :stroke-width="1.5" />
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-slate-900 dark:text-white text-base font-bold truncate">
@@ -492,7 +573,7 @@ const registerPayment = async () => {
           </div>
           <div class="shrink-0 text-right">
             <p
-              class="text-lg font-bold"
+              class="text-lg font-bold font-mono tabular-nums"
               :class="
                 tx.type === 'payment'
                   ? 'text-emerald-600 dark:text-emerald-400'
@@ -511,94 +592,177 @@ const registerPayment = async () => {
 
     <!-- Sticky Footer Action -->
     <div
-      v-if="canOperateFiado"
-      class="fixed bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]"
+      v-if="client && canOperateFiado"
+      class="fixed bottom-0 left-0 w-full bg-surface-light dark:bg-surface-dark border-t border-slate-200 dark:border-slate-800 p-4 z-50"
     >
-      <BaseButton
-         @click="openPaymentModal"
-         data-testid="register-payment-btn"
-         variant="success"
-         class="w-full h-14 text-lg font-bold shadow-lg shadow-emerald-200 dark:shadow-none"
-      >
-        <Plus :size="20" class="mr-2" />
-        REGISTRAR ABONO
-      </BaseButton>
+      <div class="max-w-3xl mx-auto">
+        <BaseButton
+          @click="openPaymentModal"
+          data-testid="register-payment-btn"
+          variant="success"
+          class="w-full h-14 text-lg font-bold"
+        >
+          <Plus :size="20" class="mr-2" />
+          REGISTRAR ABONO
+        </BaseButton>
+      </div>
     </div>
 
-    <!-- Payment Modal -->
+    <!-- Payment Modal (Arquetipo D) -->
     <BaseModal
       v-model="showPaymentModal"
       title="Registrar Abono"
+      :showCloseButton="true"
     >
-        <div class="p-6">
-            <div
-              v-if="!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession"
-              class="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 font-medium"
-            >
-              {{ cashRegisterStore.isStaleSession ? 'El turno de caja superó las 24 horas y debe cerrarse antes de registrar abonos.' : 'No hay turno de caja abierto. Abre la caja para poder registrar abonos.' }}
-            </div>
-            <BaseInput
-                v-model="paymentAmount"
-                type="number"
-                inputmode="numeric"
-                label="Monto del abono"
-                placeholder="0"
-                icon="attach_money"
-                autofocus
-            />
-
-            <!-- Método de Pago Selector -->
-            <div class="mt-5">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Método de Pago</label>
-                <div class="grid grid-cols-3 gap-2">
-                    <button
-                        @click="paymentMethod = 'efectivo'"
-                        :class="paymentMethod === 'efectivo' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
-                        class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
-                    >
-                        <Banknote :size="24" :stroke-width="1.5" class="mb-1" />
-                        <span class="text-xs font-semibold">Efectivo</span>
-                    </button>
-                    <button
-                        @click="paymentMethod = 'nequi'"
-                        :class="paymentMethod === 'nequi' ? 'bg-[#4A148C] text-white border-[#4A148C] shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
-                        class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
-                    >
-                        <Smartphone :size="24" :stroke-width="1.5" class="mb-1" />
-                        <span class="text-xs font-semibold">Nequi</span>
-                    </button>
-                    <button
-                        @click="paymentMethod = 'llave_bre'"
-                        :class="paymentMethod === 'llave_bre' ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'"
-                        class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all"
-                    >
-                        <CreditCard :size="24" :stroke-width="1.5" class="mb-1" />
-                        <span class="text-xs font-semibold">Llave Bre-B</span>
-                    </button>
-                </div>
-            </div>
+      <div class="p-5 space-y-4">
+        <!-- Read Model Saldo Pendiente -->
+        <div
+          v-if="client"
+          class="p-3.5 rounded-xl bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-800 flex items-center justify-between"
+        >
+          <div>
+            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Saldo Pendiente
+            </p>
+            <p class="text-lg font-black text-slate-900 dark:text-white font-mono tabular-nums">
+              {{ formatCurrency(client.totalDebt) }}
+            </p>
+          </div>
+          <button
+            v-if="client.totalDebt.gt(0)"
+            type="button"
+            data-testid="payment-full-balance-btn"
+            @click="fillTotalBalance"
+            class="px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 cursor-pointer"
+          >
+            SALDO TOTAL
+          </button>
         </div>
 
-        <template #footer>
-            <div class="p-6 pt-0 flex gap-3">
-                 <BaseButton
-                    @click="showPaymentModal = false"
-                    variant="secondary"
-                    class="flex-1"
-                >
-                    Cancelar
-                </BaseButton>
-                <BaseButton
-                    @click="registerPayment"
-                    :disabled="!paymentAmount || isSubmittingPayment || !cashRegisterStore.isOpen || cashRegisterStore.isStaleSession"
-                    :loading="isSubmittingPayment"
-                    variant="success"
-                    class="flex-1"
-                >
-                    Confirmar
-                </BaseButton>
-            </div>
-        </template>
+        <!-- Banner N3 Error al sincronizar caja (Fail-Closed) -->
+        <div
+          v-if="cashSyncError"
+          role="alert"
+          data-testid="payment-cash-sync-error"
+          class="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 space-y-2"
+        >
+          <p class="text-xs text-red-700 dark:text-red-300 font-medium">
+            No se pudo verificar el estado de caja ({{ cashSyncError }}). Reintenta antes de registrar abonos.
+          </p>
+          <BaseButton
+            type="button"
+            size="sm"
+            variant="danger"
+            data-testid="payment-cash-sync-retry-btn"
+            :loading="isSyncingCash"
+            :disabled="isSyncingCash"
+            @click="syncCashForPayment"
+          >
+            Reintentar
+          </BaseButton>
+        </div>
+
+        <!-- Banner N3 Turno cerrado / +24h (oculto mientras sincroniza o hay error de red) -->
+        <div
+          v-else-if="!isSyncingCash && (!cashRegisterStore.isOpen || cashRegisterStore.isStaleSession)"
+          data-testid="payment-cash-closed-banner"
+          class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 flex items-start gap-2"
+        >
+          <Info :size="16" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <p class="text-xs text-amber-800 dark:text-amber-300 font-medium">
+            {{ cashRegisterStore.isStaleSession ? 'El turno de caja superó las 24 horas y debe cerrarse antes de registrar abonos.' : 'No hay turno de caja abierto. Abre la caja para poder registrar abonos.' }}
+          </p>
+        </div>
+
+        <div>
+          <BaseInput
+            v-model="paymentAmount"
+            type="number"
+            inputmode="numeric"
+            label="Monto del abono"
+            placeholder="0"
+            class="font-mono tabular-nums"
+            autofocus
+          />
+          <p
+            v-if="isOverpayment"
+            role="alert"
+            data-testid="payment-overpayment-alert"
+            class="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-400"
+          >
+            El abono no puede superar la deuda actual ({{ client ? formatCurrency(client.totalDebt) : '$0' }}).
+          </p>
+        </div>
+
+        <!-- Error RPC inline N1 (sin showWarning ni doble toast) -->
+        <div
+          v-if="paymentSubmitError"
+          role="alert"
+          data-testid="payment-modal-error"
+          class="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs font-semibold text-red-700 dark:text-red-300"
+        >
+          {{ paymentSubmitError }}
+        </div>
+
+        <!-- Método de Pago Selector -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Método de Pago</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              @click="paymentMethod = 'efectivo'"
+              :class="paymentMethod === 'efectivo' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-background-light dark:bg-background-dark text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'"
+              class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer"
+            >
+              <Banknote :size="24" :stroke-width="1.5" class="mb-1" />
+              <span class="text-xs font-semibold">Efectivo</span>
+            </button>
+            <button
+              type="button"
+              @click="paymentMethod = 'nequi'"
+              :class="paymentMethod === 'nequi' ? 'bg-[#4A148C] text-white border-[#4A148C] shadow-sm' : 'bg-background-light dark:bg-background-dark text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'"
+              class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer"
+            >
+              <Smartphone :size="24" :stroke-width="1.5" class="mb-1" />
+              <span class="text-xs font-semibold">Nequi</span>
+            </button>
+            <button
+              type="button"
+              @click="paymentMethod = 'llave_bre'"
+              :class="paymentMethod === 'llave_bre' ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'bg-background-light dark:bg-background-dark text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'"
+              class="flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer"
+            >
+              <CreditCard :size="24" :stroke-width="1.5" class="mb-1" />
+              <span class="text-xs font-semibold">Llave Bre-B</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="p-5 pt-2 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+          <BaseButton
+            type="button"
+            @click="showPaymentModal = false"
+            variant="secondary"
+            class="flex-1"
+            :disabled="isSubmittingPayment"
+          >
+            Cancelar
+          </BaseButton>
+          <BaseButton
+            type="button"
+            data-testid="confirm-payment-btn"
+            @click="registerPayment"
+            :disabled="!canConfirmPayment"
+            :loading="isSubmittingPayment"
+            variant="success"
+            class="flex-1"
+          >
+            Confirmar
+          </BaseButton>
+        </div>
+      </template>
     </BaseModal>
 
     <!-- Delete Confirmation Modal -->
@@ -606,38 +770,38 @@ const registerPayment = async () => {
       v-model="showDeleteConfirm"
       title="¿Eliminar cliente?"
     >
-        <div class="p-6 text-center">
-            <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
-              <AlertTriangle :size="28" class="text-red-600" />
-            </div>
-            <p class="text-slate-500 dark:text-slate-400 text-sm mb-2">
-              Esta acción retirará al cliente de la cartera activa de tu tienda.
-            </p>
-            <p class="text-red-500 font-bold text-sm">No se puede deshacer.</p>
+      <div class="p-6 text-center">
+        <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
+          <AlertTriangle :size="28" class="text-red-600" />
         </div>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-2">
+          Esta acción retirará al cliente de la cartera activa de tu tienda.
+        </p>
+        <p class="text-red-500 font-bold text-sm">No se puede deshacer.</p>
+      </div>
 
-        <template #footer>
-            <div class="p-6 pt-0 flex gap-3">
-                 <BaseButton
-                    @click="showDeleteConfirm = false"
-                    variant="secondary"
-                    class="flex-1"
-                    :disabled="isDeleting"
-                >
-                    Cancelar
-                </BaseButton>
-                <BaseButton
-                    @click="deleteClient"
-                    variant="danger"
-                    class="flex-1"
-                    :loading="isDeleting"
-                    :disabled="isDeleting"
-                >
-                    <Trash2 :size="20" class="mr-2" />
-                    {{ isDeleting ? 'Eliminando...' : 'Eliminar' }}
-                </BaseButton>
-            </div>
-        </template>
+      <template #footer>
+        <div class="p-6 pt-0 flex gap-3">
+          <BaseButton
+            @click="showDeleteConfirm = false"
+            variant="secondary"
+            class="flex-1"
+            :disabled="isDeleting"
+          >
+            Cancelar
+          </BaseButton>
+          <BaseButton
+            @click="deleteClient"
+            variant="danger"
+            class="flex-1"
+            :loading="isDeleting"
+            :disabled="isDeleting"
+          >
+            <Trash2 :size="20" class="mr-2" />
+            {{ isDeleting ? 'Eliminando...' : 'Eliminar' }}
+          </BaseButton>
+        </div>
+      </template>
     </BaseModal>
 
     <!-- Debt Blocking Alert Modal -->
@@ -645,53 +809,43 @@ const registerPayment = async () => {
       v-model="showDebtAlert"
       title="Acción Denegada"
     >
-        <div class="p-6 text-center">
-            <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
-              <AlertTriangle :size="28" class="text-red-600" />
-            </div>
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
-               Saldo Pendiente
-            </h3>
-            <p class="text-slate-500 dark:text-slate-400 text-sm mb-1">
-              No se puede eliminar a <strong>{{ client?.name }}</strong> porque tiene una deuda de:
-            </p>
-            <p class="text-2xl font-bold text-red-600 my-3">
-               {{ client ? formatCurrency(client.totalDebt) : '$0' }}
-            </p>
-            <p class="text-slate-400 text-xs">
-              Por favor registre el pago total antes de eliminar la cuenta.
-            </p>
+      <div class="p-6 text-center">
+        <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
+          <AlertTriangle :size="28" class="text-red-600" />
         </div>
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
+          Saldo Pendiente
+        </h3>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-1">
+          No se puede eliminar a <strong>{{ client?.name }}</strong> porque tiene una deuda de:
+        </p>
+        <p class="text-2xl font-bold text-red-600 my-3 font-mono tabular-nums">
+          {{ client ? formatCurrency(client.totalDebt) : '$0' }}
+        </p>
+        <p class="text-slate-400 text-xs">
+          Por favor registre el pago total antes de eliminar la cuenta.
+        </p>
+      </div>
 
-        <template #footer>
-            <div class="p-6 pt-0">
-                 <BaseButton
-                    @click="showDebtAlert = false"
-                    variant="primary"
-                    class="w-full"
-                >
-                    Entendido
-                </BaseButton>
-            </div>
-        </template>
+      <template #footer>
+        <div class="p-6 pt-0">
+          <BaseButton
+            @click="showDebtAlert = false"
+            variant="primary"
+            class="w-full"
+          >
+            Entendido
+          </BaseButton>
+        </div>
+      </template>
     </BaseModal>
 
     <!-- Edit Client Modal -->
-    <ClientFormModal v-model="showEditModal" :client-id="clientId" @saved="showEditModal = false" />
+    <ClientFormModal v-model="showEditModal" :client-id="clientId" @saved="handleClientEdited" />
   </div>
 </template>
 
 <style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: all 0.15s ease;
@@ -701,21 +855,5 @@ const registerPayment = async () => {
 .dropdown-leave-to {
   opacity: 0;
   transform: translateY(-8px);
-}
-
-.animate-scale-in {
-  animation: scaleIn 0.2s ease-out;
-}
-
-@keyframes scaleIn {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
 }
 </style>

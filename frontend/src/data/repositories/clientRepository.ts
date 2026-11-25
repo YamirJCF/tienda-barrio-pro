@@ -209,6 +209,8 @@ export interface ClientPageParams {
 export interface PaginatedClientsResult {
     data: Client[];
     count: number;
+    totalPortfolioDebt: Decimal;
+    debtorsCount: number;
 }
 
 export interface ClientRepository extends EntityRepository<Client> {
@@ -319,6 +321,8 @@ export const clientRepository: ClientRepository = {
             return {
                 data: mapped,
                 count: typeof payload.count === 'number' ? payload.count : mapped.length,
+                totalPortfolioDebt: new Decimal(Number(payload.total_portfolio_debt ?? 0)),
+                debtorsCount: Number(payload.debtors_count ?? 0),
             };
         }
 
@@ -349,6 +353,8 @@ export const clientRepository: ClientRepository = {
         return {
             data: filtered.slice(offset, offset + limit).map(clientMapper.toDomain),
             count: filtered.length,
+            totalPortfolioDebt: new Decimal(0),
+            debtorsCount: 0,
         };
     },
 

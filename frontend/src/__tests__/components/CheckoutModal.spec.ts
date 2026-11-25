@@ -75,9 +75,16 @@ describe('CheckoutModal - Paginated 5-by-5 Fiado Client Selector', () => {
     });
     const limit = params.limit ?? 5;
     const offset = params.offset ?? 0;
+    const totalDebt = dataset.reduce(
+      (sum, c) => sum.plus(c.totalDebt && c.totalDebt.gt(0) ? c.totalDebt : new Decimal(0)),
+      new Decimal(0)
+    );
+    const debtorsCount = dataset.filter((c) => c.totalDebt && c.totalDebt.gt(0)).length;
     return {
       data: filtered.slice(offset, offset + limit),
       count: filtered.length,
+      totalPortfolioDebt: totalDebt,
+      debtorsCount,
     };
   };
 

@@ -238,53 +238,35 @@ export const useClientsStore = defineStore(
     };
 
     const registerPayment = async (clientId: string, amount: Decimal, description = 'Abono', paymentMethod: string = 'efectivo') => {
-      // Online path: delegate entirely to the registrar_abono RPC (Backend Authority)
-      // The RPC validates balance, updates clients.balance, and writes to client_ledger atomically.
-      if (isSupabaseConfigured() && navigator.onLine) {
-        const supabase = getSupabaseClient()!;
-        const { data, error } = await supabase.rpc('rpc_registrar_abono', {
-          p_client_id: clientId,
-          p_amount: amount.toNumber(),
-          p_payment_method: paymentMethod,
-          p_notes: description
-        });
-
-        if (error || !data?.success) {
-          const rawMsg = String(data?.error || error?.message || 'Error al registrar el abono');
-          if (rawMsg.includes('PERMISSION_DENIED')) {
-            throw new Error('No tienes permiso autorizado (canFiar) o tu pase diario expiró para cobrar abonos.');
-          }
-          if (rawMsg.includes('CLIENT_NOT_FOUND')) {
-            throw new Error('El cliente no existe o fue archivado de la cartera.');
-          }
-          throw new Error(rawMsg);
-        }
-
-        // Update local Pinia state with backend calculated new_balance
-        const txStub: ClientTransaction = {
-          id: generateUUID(),
-          clientId,
-          type: 'payment',
-          amount,
-          description,
-          date: new Date().toISOString()
-        };
-        const client = getClientById(clientId);
-        if (client) {
-          if (data.data?.new_balance !== undefined) {
-            client.totalDebt = new Decimal(data.data.new_balance);
-          } else {
-            client.totalDebt = client.totalDebt.minus(amount);
-          }
-          client.updatedAt = new Date().toISOString();
-        }
-        transactions.value.push(txStub);
-        return txStub;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('Sin conexión a internet. Registrar abonos requiere conexión en línea.');
+      }
+      if (!isSupabaseConfigured()) {
+        throw new Error('No hay conexión activa con el servidor.');
       }
 
-      // Offline path: optimistic local write (will sync when back online)
-      const success = await clientRepository.updateDebt(clientId, -amount.toNumber());
-      if (!success) throw new Error('Failed to register payment');
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error('No hay conexión activa con el servidor.');
+      }
+
+      const { data, error } = await supabase.rpc('rpc_registrar_abono', {
+        p_client_id: clientId,
+        p_amount: amount.toNumber(),
+        p_payment_method: paymentMethod,
+        p_notes: description
+      });
+
+      if (error || !data?.success) {
+        const rawMsg = String(data?.error || error?.message || 'Error al registrar el abono');
+        if (rawMsg.includes('PERMISSION_DENIED')) {
+          throw new Error('No tienes permiso autorizado (canFiar) o tu pase diario expiró para cobrar abonos.');
+        }
+        if (rawMsg.includes('CLIENT_NOT_FOUND')) {
+          throw new Error('El cliente no existe o fue archivado de la cartera.');
+        }
+        throw new Error(rawMsg);
+      }
 
       const txStub: ClientTransaction = {
         id: generateUUID(),
@@ -294,11 +276,13 @@ export const useClientsStore = defineStore(
         description,
         date: new Date().toISOString()
       };
-      await clientRepository.addTransaction({ ...txStub, amount: amount.toNumber() });
-
       const client = getClientById(clientId);
       if (client) {
-        client.totalDebt = client.totalDebt.minus(amount);
+        if (data.data?.new_balance !== undefined) {
+          client.totalDebt = new Decimal(data.data.new_balance);
+        } else {
+          client.totalDebt = client.totalDebt.minus(amount);
+        }
         client.updatedAt = new Date().toISOString();
       }
       transactions.value.push(txStub);
@@ -326,6 +310,8 @@ export const useClientsStore = defineStore(
           creditLimit: statement.client.creditLimit,
           totalDebt: statement.client.totalDebt,
         };
+      } else {
+        clients.value.push(statement.client);
       }
       return statement;
     };
