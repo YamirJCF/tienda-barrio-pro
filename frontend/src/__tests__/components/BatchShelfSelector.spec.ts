@@ -67,6 +67,8 @@ describe('BatchShelfSelector.vue (WO-OLA2-C3-001)', () => {
     const text = wrapper.text();
     expect(text).toContain('Lote anterior (adelante en estantería)');
     expect(text).toContain('Lote reciente (atrás en estantería)');
+    expect(text).toContain('Precio: $ 3.500');
+    expect(text).toContain('Costo: $ 1.800');
     expect(text).toContain('Vence: 2026-12-01');
     expect(text).toContain('Vence: 2027-01-15');
 

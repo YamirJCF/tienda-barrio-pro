@@ -40,9 +40,12 @@
             </span>
           </div>
 
-          <div class="flex items-center gap-3 flex-wrap text-xs text-slate-600 dark:text-slate-300">
-            <span class="font-mono tabular-nums">
-              Costo: <strong class="text-slate-900 dark:text-white">{{ formatWithSign(batch.cost_unit) }}</strong>
+          <div class="flex items-center gap-3 flex-wrap text-xs">
+            <span class="font-mono tabular-nums font-semibold text-slate-900 dark:text-white">
+              Precio: {{ formatWithSign(batch.sale_price) }}
+            </span>
+            <span class="font-mono tabular-nums text-slate-400">
+              Costo: {{ formatWithSign(batch.cost_unit) }}
             </span>
             <span v-if="batch.expiration_date" class="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-mono tabular-nums">
               <Calendar :size="11" />

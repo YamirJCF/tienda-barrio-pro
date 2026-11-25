@@ -120,6 +120,18 @@ watch(
   }
 );
 
+watch(showProductModal, (isOpen) => {
+  if (!isOpen && (route.query.product !== undefined || route.query.tab !== undefined)) {
+    router.replace({
+      query: {
+        ...route.query,
+        product: undefined,
+        tab: undefined,
+      },
+    });
+  }
+});
+
 const goToDashboard = () => {
   router.push('/');
 };

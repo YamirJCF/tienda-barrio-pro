@@ -10,13 +10,14 @@ import { useBatchStore } from '../../stores/batches';
 
 enableAutoUnmount(afterEach);
 
-const { mockPush, mockRouteQuery } = vi.hoisted(() => ({
+const { mockPush, mockReplace, mockRouteQuery } = vi.hoisted(() => ({
   mockPush: vi.fn(),
+  mockReplace: vi.fn(),
   mockRouteQuery: { value: {} as Record<string, string> },
 }));
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: mockPush, back: vi.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, back: vi.fn() }),
   useRoute: () => reactive({ params: {}, get query() { return mockRouteQuery.value; } }),
 }));
 
@@ -188,5 +189,28 @@ describe('InventoryView.vue & Ficha Unificada de 3 Pestañas (WO-OLA2-C3-001)', 
         batchId: 'batch-new',
       })
     );
+  });
+
+  it('al cerrar la Ficha Unificada limpia ?product y ?tab con router.replace para evitar reapertura', async () => {
+    mockRouteQuery.value = { product: 'prod-1', tab: 'batches' };
+    const wrapper = mount(InventoryView, {
+      global: { stubs: globalStubs },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="ficha-tab-batches"]').exists()).toBe(true);
+
+    // Cerrar Ficha haciendo click en el botón Cerrar del footer
+    const closeBtn = wrapper.findAll('button').find((b) => b.text().trim() === 'Cerrar');
+    expect(closeBtn).toBeDefined();
+    await closeBtn!.trigger('click');
+    await flushPromises();
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      query: expect.objectContaining({
+        product: undefined,
+        tab: undefined,
+      }),
+    });
   });
 });

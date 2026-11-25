@@ -16,7 +16,7 @@
 | :--- | :--- | :--- |
 | **POL-LOG-03** | Logística | **Salidas Logísticas `$0` en Caja Dedicada POS:** Mermas, Consumo del Negocio, Ajustes por Conteo Físico (`+/-`) y Devolución Física a Proveedor operan directamente sobre `inventory_movements` con impacto **`$0` en la Caja Dedicada POS** (no exigen caja abierta ni generan movimientos en `cash_movements`), y la devolución física a proveedor **no altera automáticamente** Cuentas por Pagar (`supplier_invoices`). |
 | **POL-FIN-05** | Financiero | **Separación Consumo del Negocio vs. Consumo/Retiro Personal:** El **Consumo del Negocio** (insumos usados para operar la tienda) se registra aquí con `$0` en POS; el **Consumo/Retiro Personal** se opera literalmente como una venta en el carrito del POS (`SDD_007_01`, `$0` en caja, auto-asignado al perfil propio o elegido por Admin) y ambos se valorizan al costo de adquisición en `SDD_018`. |
-| **POL-SEG-03** | Seguridad | **Capacidades Base vs. `canManageInventory`:** **Merma** y **Consumo del Negocio** están abiertos a **cualquier usuario activo** (Admin o empleado con Pase Diario vigente, sin requerir `canManageInventory` ni caja abierta), ocultando el costo unitario a quien no tenga `canManageInventory`. **Ajustes por Conteo Físico (`+/-`)** y **Devolución Física a Proveedor (`$0` POS)** exigen **`canManageInventory`** o rol Admin. |
+| **POL-SEG-03** | Seguridad | **Permiso Único `canManageInventory` en Contexto C3 (Enmienda `UX-ADR-003`):** Los 4 tipos de salida/ajuste (**Merma**, **Consumo del Negocio**, **Ajustes por Conteo Físico `+/-`** y **Devolución Física a Proveedor `$0` POS**) exigen **`canManageInventory`** o rol **Admin** (sin requerir caja abierta; ver §8.1). |
 | **POL-LOG-04 / POL-AUD-01** | Auditoría | **Inmutabilidad por Contra-Movimiento y Snapshot de Firma:** Todo movimiento es append-only; ninguna salida o ajuste se edita ni se elimina. Toda corrección se ejecuta mediante un **contra-movimiento** (`reversed_movement_id`) con motivo obligatorio y fotografía histórica inmutable (`actor_name`, `actor_role`). |
 | **POL-AUD-03** | Alertas | Todo **Ajuste por Conteo Físico (`+/-`)** emite alerta automática en `notifications` (`audience = 'admin'`, `type = 'INVENTORY_COUNT_ADJUSTMENT'`). |
 
@@ -34,8 +34,8 @@
 ---
 
 ## 1. Glosario Local
-- **Merma (`merma`):** Mercancía dañada, rota o vencida retirada del stock vendible (Capacidad Base de todo usuario activo, `$0` POS, valorada al costo FIFO en P&L).
-- **Consumo del Negocio (`consumo_negocio`):** Producto tomado del inventario para uso operativo de la tienda (ej. aseo, bolsas) (Capacidad Base de todo usuario activo, `$0` POS, valorado al costo FIFO en P&L).
+- **Merma (`merma`):** Mercancía dañada, rota o vencida retirada del stock vendible (`canManageInventory` o Admin, `$0` POS, valorada al costo FIFO en P&L).
+- **Consumo del Negocio (`consumo_negocio`):** Producto tomado del inventario para uso operativo de la tienda (ej. aseo, bolsas) (`canManageInventory` o Admin, `$0` POS, valorado al costo FIFO en P&L).
 - **Ajuste por Conteo Físico (`ajuste_conteo`):** Corrección positiva (`+cantidad`) o negativa (`-cantidad`) derivada de inventario físico (`canManageInventory` o Admin, motivo obligatorio, alerta automática al Admin).
 - **Devolución Física a Proveedor (`devolucion_proveedor`):** Salida física de mercancía devuelta al proveedor (`canManageInventory` o Admin, `$0` en Caja POS, **sin** modificar `supplier_invoices`).
 - **Contra-Movimiento (`reversed_movement_id`):** Registro inmutable de signo contrario que anula o corrige el efecto de un movimiento previo erróneo sin editar ni borrar la fila original.
@@ -56,11 +56,7 @@ sequenceDiagram
     Op->>UI: Selecciona tipo (merma | consumo_negocio | ajuste_conteo | devolucion_proveedor) + cantidad + motivo
     UI->>RPC: POST intención (sin calcular costos en cliente)
     RPC->>SEC: assert_store_access(v_store_id) + resolve_actor_snapshot()
-    alt tipo IN ('ajuste_conteo', 'devolucion_proveedor')
-        RPC->>SEC: assert_employee_permission(v_store_id, 'canManageInventory')
-    else tipo IN ('merma', 'consumo_negocio')
-        RPC->>SEC: Valida usuario activo (Admin o Empleado con Pase Diario <24h)
-    end
+    RPC->>SEC: assert_employee_permission(v_store_id, 'canManageInventory') para los 4 tipos
     alt Salida de stock o ajuste negativo
         RPC->>DB: consume_stock_fifo(product_id, qty) FOR UPDATE (aborta si STOCK_INSUFFICIENT)
     else Ajuste positivo por conteo físico
@@ -79,8 +75,8 @@ sequenceDiagram
 
 | Operación | Usuario Activo (Base) | `canManageInventory` | Admin | Impacto Caja POS | Impacto CxP | ¿Exige Caja Abierta? | ¿Muestra Costo en UI? |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Merma (`merma`)** | ✅ | ✅ | ✅ | `$0` | Ninguno | NO | Solo Admin / `canManageInventory` |
-| **Consumo del Negocio (`consumo_negocio`)** | ✅ | ✅ | ✅ | `$0` | Ninguno | NO | Solo Admin / `canManageInventory` |
+| **Merma (`merma`)** | ❌ | ✅ | ✅ | `$0` | Ninguno | NO | Sí |
+| **Consumo del Negocio (`consumo_negocio`)** | ❌ | ✅ | ✅ | `$0` | Ninguno | NO | Sí |
 | **Ajuste Conteo Físico `+/-` (`ajuste_conteo`)** | ❌ | ✅ *(alerta Admin)* | ✅ | `$0` | Ninguno | NO | Sí |
 | **Devolución Física a Proveedor (`devolucion_proveedor`)** | ❌ | ✅ | ✅ | `$0` | **Ninguno** | NO | Sí |
 | **Contra-Movimiento de Corrección** | ❌ | ✅ *(alerta Admin)* | ✅ | `$0` | Ninguno | NO | Sí |
@@ -88,7 +84,7 @@ sequenceDiagram
 ---
 
 ## 4. Casos de Uso Técnicos
-1. **Caso A — Empleado estándar registra Merma o Consumo del Negocio:** Sin caja abierta ni `canManageInventory`, registra la salida con motivo obligatorio (`>= 3` chars). El servidor descuenta FIFO, graba `unit_cost` internamente para `SDD_018`, estampa `actor_name`/`actor_role` y retorna `unit_cost: null` al cliente.
+1. **Caso A — Usuario con `canManageInventory` o Admin registra Merma o Consumo del Negocio:** Sin exigir caja abierta y previa validación de `canManageInventory`, registra la salida sobre un lote puntual (`p_batch_id`) o por FIFO automático con motivo obligatorio (`>= 3` chars). El servidor descuenta stock, graba `unit_cost` para `SDD_018` y estampa `actor_name`/`actor_role`.
 2. **Caso B — Ajuste por Conteo Físico Positivo o Negativo:** Usuario con `canManageInventory` (o Admin) corrige sobrante (`p_direction = 'positive'`) o faltante (`p_direction = 'negative'`). El servidor ajusta FIFO/stock, registra motivo obligatorio, estampa snapshot y envía alerta `INVENTORY_COUNT_ADJUSTMENT` al Admin.
 3. **Caso C — Devolución Física a Proveedor (`$0` POS, sin CxP):** Usuario con `canManageInventory` (o Admin) registra la salida de mercancía devuelta al proveedor; descuenta FIFO con `$0` en caja y sin alterar `supplier_invoices`.
 4. **Caso D — Corrección por Contra-Movimiento:** Ante un error de captura, se invoca `rpc_registrar_contra_movimiento(p_original_movement_id, p_reason)` creando un nuevo registro enlazado con `reversed_movement_id` sin mutar la fila original.
