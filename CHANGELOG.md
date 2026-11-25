@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.0] - 2026-11-25
+
+### Added
+- **Ola 2 UX — Consolidación por Contextos C1–C7 (`UX-ADR-002` a `UX-ADR-009`):**
+  - **C1 Mostrador POS:** guardias de crédito/offline en Checkout, Retiro Personal extraído, y Read Model FIFO en Reembolsos (`rpc_buscar_ventas_para_reembolso` con `fifo_batches`); bloqueo de turnos `+24h`.
+  - **C2 Caja y Gastos:** gastos OPEX exclusivos del Admin (`rpc_registrar_gasto_v2`) y Read Model `rpc_obtener_gastos_turno`.
+  - **C3 Inventario:** entrada masiva atómica (`rpc_registrar_entrada_masiva`), salidas logísticas con lote explícito (`p_batch_id`), `inventory_batches.expiration_date`, e inventariado físico con caja cerrada (`rpc_obtener_lotes_activos_tienda`, `rpc_aplicar_inventariado_fisico`).
+  - **C4 Cartera:** resumen global de cartera en SQL (`rpc_admin_get_clients`) y política de cupo global (`rpc_actualizar_cupo_credito_global`).
+  - **C5 Proveedores y CxP:** workspace consolidado en `SuppliersView` con Read Model (`rpc_obtener_cuentas_por_pagar`, `rpc_obtener_proveedores_con_cxp`, `rpc_crear_factura_proveedor`).
+  - **C6 Centro de Inteligencia:** `/reports` como hub único (`ReportsHubView`) y `get_sale_detail` exclusivo Admin con `client_id`/`product_id`.
+  - **C7 Shell Global (`UX-ADR-009`):** árbitro de overlays N5 en `App.vue`, enrutador N4 de notificaciones y deuda `baselineDebt` reducida fuera de C8.
+- **Migraciones SQL de la Ola 2 (`20261124180000` a `20261125100000`):** `20261124180000_ola2_c2_...`, `20261124200000_ola2_c3_...`, `20261125003000_ola2_c3_...`, `20261125020000_ola2_c5_...`, `20261125060000_ola2_c4_...`, `20261125080000_ola2_c1_...`, `20261125100000_ola2_c6_...`.
+
+### Changed
+- Vistas retiradas y absorbidas por rutas canónicas: `PayablesView` (alias `/payables` → `/suppliers`), `FinancialDashboardView` e `HistoryView` (aliases → `/reports`). `ExpensesView` ya no existe como vista independiente.
+- `PRODUCT.md` actualizado a la superficie operativa vigente.
+
+### Fixed
+- **Condición de carrera en `useCriticalAlerts.ts`:** el temporizador de 300 ms de `dismissAlert()` ya no borra una alerta crítica nueva (PR #15).
+
+### Verification
+- `npm run test`: 41 archivos / 276 tests pasando; `npm run build` en verde sobre `master` (`18236cb`).
+
 ## [1.8.0] - 2026-11-19
 
 ### Added
