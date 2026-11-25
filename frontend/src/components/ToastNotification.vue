@@ -5,6 +5,7 @@ import {
   AlertCircle, 
   Info, 
   AlertTriangle, 
+  CloudOff,
   X 
 } from 'lucide-vue-next';
 
@@ -20,15 +21,33 @@ const getTypeClasses = (type: Notification['type']) => {
   return classes[type];
 };
 
+const iconStringMap: Record<string, any> = {
+  check_circle: CheckCircle,
+  CheckCircle,
+  error: AlertCircle,
+  AlertCircle,
+  info: Info,
+  Info,
+  warning: AlertTriangle,
+  AlertTriangle,
+  cloud_off: CloudOff,
+  CloudOff,
+};
+
 const getIcon = (notification: Notification) => {
-  if (notification.icon) return notification.icon; // Assuming icon can be a custom component or ignored if we standardized
+  if (notification.icon && (typeof notification.icon === 'object' || typeof notification.icon === 'function')) {
+    return notification.icon;
+  }
+  if (typeof notification.icon === 'string' && iconStringMap[notification.icon]) {
+    return iconStringMap[notification.icon];
+  }
   const icons = {
     success: CheckCircle,
     error: AlertCircle,
     info: Info,
     warning: AlertTriangle,
   };
-  return icons[notification.type];
+  return icons[notification.type] || Info;
 };
 </script>
 

@@ -10,6 +10,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 // Module-level variable: NOT a ref() to avoid unnecessary reactivity overhead
 // OT-4: Supabase Realtime channel for daily_passes push notifications
 let realtimeChannel: RealtimeChannel | null = null;
+let employeePassChannel: RealtimeChannel | null = null;
 
 export interface DeviceRequest {
     id: string;
@@ -256,6 +257,38 @@ export const useDevicesStore = defineStore('devices', () => {
         realtimeChannel = null;
     };
 
+    const subscribeToEmployeePass = (
+        passId: string,
+        callbacks: {
+            onApproved?: () => void;
+            onTerminal?: (status: 'rejected' | 'expired') => void;
+        }
+    ) => {
+        if (!passId || employeePassChannel) return;
+
+        employeePassChannel = supabase
+            .channel(`employee_pass_${passId}`)
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'daily_passes', filter: `id=eq.${passId}` },
+                (payload) => {
+                    const status = (payload.new as any)?.status;
+                    if (status === 'approved') {
+                        callbacks.onApproved?.();
+                    } else if (status === 'rejected' || status === 'expired') {
+                        callbacks.onTerminal?.(status);
+                        unsubscribeFromEmployeePass();
+                    }
+                }
+            )
+            .subscribe();
+    };
+
+    const unsubscribeFromEmployeePass = async () => {
+        if (!employeePassChannel) return;
+        await supabase.removeChannel(employeePassChannel);
+        employeePassChannel = null;
+    };
 
     return {
         // State
@@ -272,5 +305,7 @@ export const useDevicesStore = defineStore('devices', () => {
         // OT-4: Realtime
         subscribeToDailyPasses,
         unsubscribeFromDailyPasses,
+        subscribeToEmployeePass,
+        unsubscribeFromEmployeePass,
     };
 });

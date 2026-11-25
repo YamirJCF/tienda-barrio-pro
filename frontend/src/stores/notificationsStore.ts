@@ -36,6 +36,8 @@ export interface SystemNotification {
     clientId?: string;
     saleId?: string;
     sessionId?: string;
+    supplierId?: string;
+    invoiceId?: string;
     amount?: number;
     requestId?: string;
     employeeName?: string;
@@ -268,7 +270,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
       isRead: Boolean(row.is_read),
       metadata: {
         ...rawMeta,
+        productId: rawMeta.product_id || rawMeta.productId,
+        clientId: rawMeta.client_id || rawMeta.clientId,
+        saleId: rawMeta.sale_id || rawMeta.saleId,
         sessionId: rawMeta.session_id || rawMeta.sessionId,
+        supplierId: rawMeta.supplier_id || rawMeta.supplierId,
+        invoiceId: rawMeta.invoice_id || rawMeta.invoiceId,
         actorName: rawMeta.actor_name || rawMeta.actorName,
         eventType: rawMeta.event_type || rawMeta.eventType,
         fromDatabase: true,

@@ -1,7 +1,7 @@
 # Contexto C7 — Gobierno de Tienda y Shell Global
 
-> **Estado:** Cartografía Ola 1 (`Lote 1C` — solo documentación)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-001`)  
+> **Estado:** Consolidado Ola 2 (`UX-ADR-009` — 2026-11-25)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-009`)  
 > **Restricción de conectividad:** **Online obligatorio** para todas las acciones de gobierno, permisos, pases diarios y notificaciones ([`PRODUCT.md`](../../../PRODUCT.md#L38)).
 
 ---
@@ -42,24 +42,24 @@ Abarcar el **Shell Global** de navegación y señalización transversal (`Dashbo
 
 ```text
 Shell Global [App.vue + BottomNav.vue + DashboardView.vue]
-  ├── Árbitro N5 [App.vue]: Cola única de overlays globales (6 montados)
+  ├── Árbitro N5 [App.vue]: activeN5Overlay (7 overlays con CriticalAlertModal)
   └── Enrutador N4 [/notifications]: metadata -> deep-links hacia C1..C7
 
 Gobierno de Tienda:
-  ├── Empleado (1) [máx. 5 activos] ── Permisos SDD-003-01 (4 booleanos) + PIN
+  ├── Empleado (1) [máx. 5 operativos activos] ── Permisos SDD-003-01 (4 booleanos) + PIN
   ├── Pase Diario / Dispositivo (1) ── Estado (pending | approved | rejected | expired)
   └── Versión Legal SaaS [SDD-029]  ── Aceptación por tienda / publicación plataforma
 ```
 
 ### 2.2 Matriz Global de CTAs (`Verbo × Objeto`)
 
-| Verbo + Objeto | Rol autorizado | Red | Hogar Actual | Hogar Canónico Objetivo |
+| Verbo + Objeto | Rol autorizado | Red | Estado Anterior | Estado Consolidado (`UX-ADR-009`) |
 |---|---|---|---|---|
-| **Navegar Top Tasks (`BottomNav`)** | Según `SDD-003-01` | N/A | `BottomNav.vue` sin enlace a `/` | `BottomNav.vue` con acceso preservado a `/` y Top Tasks sincronizadas |
-| **Alternar estado Caja desde `DashboardView`** | `Admin`, `canOpenCloseCash` | Online | Toggle visible para todos (rebota en router si no tiene permiso) | Toggle visible/accionable solo para `canOpenCloseCash`; empleado sin permiso ve solo estado informativo |
-| **Gestionar `Empleado` y Permisos** | `Admin` | Online | `/employees` (`EmployeeManagerView.vue`, sin error de carga) | `/employees` con Banner `N3` + Reintentar y aviso `N1` de límite `5/5` |
-| **Enrutar `Notificación N4`** | `Admin` / Empleado | Online | `/notifications` solo marca leída (sin navegar) | `/notifications` marca leída **y** navega al objeto vía `metadata` |
-| **Gestionar `Árbitro N5` y `Toasts N2`** | Sistema / `Admin` | Local + Online | 6 overlays sin cola en `App.vue`, `CriticalAlertModal` sin montar, 2 motores toast | 1 motor toast (`ToastNotification.vue` con Lucide), 1 árbitro `N5` con prioridad fija, cero `alert()`/`material-icons` |
+| **Navegar Top Tasks (`BottomNav`)** | Según `SDD-003-01` | N/A | `BottomNav.vue` sin enlace a `/` | `BottomNav.vue` con botón **Inicio (`/`)** + Top Tasks sincronizadas (`grid-cols-1..6`) |
+| **Alternar estado Caja desde `DashboardView`** | `Admin`, `canOpenCloseCash` | Online | Enlace a `/admin?tab=gestion` | Enlace a `/admin`, logout explícito `/login` y control de Caja alineado |
+| **Gestionar `Empleado` y Permisos** | `Admin` | Online | `/employees` sin error de carga | `/employees` con `BaseListSkeleton`, Banner `N3` + Reintentar y aviso `N1` `5/5` |
+| **Enrutar `Notificación N4`** | `Admin` / Empleado | Online | `/notifications` solo marca leída | `/notifications` marca leída **y** enruta vía `metadata` y permisos |
+| **Gestionar `Árbitro N5` y `Toasts N2`** | Sistema / `Admin` | Local + Online | 6 overlays sin árbitro, `CriticalAlertModal` desconectado, `alert()` y `vue-toastification` fuera de `C8` | 1 motor toast Lucide (`ToastNotification.vue`), árbitro `activeN5Overlay` con 7 overlays, cero `alert()`/`material-icons` fuera de `C8` |
 
 ---
 
@@ -119,7 +119,7 @@ Gobierno de Tienda:
 
 | ID | Severidad | Evidencia Verificada en Código | Brecha Sistémica / UX | Acción Requerida en Ola 2 |
 |---|---|---|---|---|
-| **C7-H1** | 🔴 **CRÍTICO** | [`ToastNotification.vue`](../../../frontend/src/components/ToastNotification.vue#L23-L50); [`App.vue`](../../../frontend/src/App.vue#L10-L33) (L65, L139-198); [`OfflineBanner.vue`](../../../frontend/src/components/common/OfflineBanner.vue#L10-L44); [`ConflictResolver.vue`](../../../frontend/src/components/common/ConflictResolver.vue#L9-L92) (L164, 188, 257, 261) | 1) Bug en `ToastNotification.vue` (`useNotifications` pasa strings Material Icons a `<component :is>`) + motor duplicado `vue-toastification` (8 archivos en `baselineDebt`).<br>2) `CriticalAlertModal` importado/inicializado pero **nunca montado** en `<template>` de `App.vue` (fallo silencioso).<br>3) `OfflineBanner.vue` con botón cerrar inoperante (`dismissed` sin usar en `v-if`), `material-icons` y emoji `📡`.<br>4) `alert()` nativo en `App.vue` (L65) y `ConflictResolver.vue` (4 llamadas + 9 `material-icons`).<br>5) 6 overlays montados en `App.vue` sin árbitro de prioridad. | Saneamiento integral del Shell de Comunicación (N2, N3, N5), montaje/resolución de `CriticalAlertModal` y reducción de `baselineDebt` (con `UX-ADR` cuando toque `App.vue`). |
-| **C7-H2** | 🟠 **ALTO** | [`DashboardView.vue`](../../../frontend/src/views/DashboardView.vue#L116-L120) (L191-210); [`BottomNav.vue`](../../../frontend/src/components/BottomNav.vue#L49-L101); [`AdminHubView.vue`](../../../frontend/src/views/AdminHubView.vue#L177-L184) (L348-405) | 1) Toggle `ABIERTO/CERRADO` en `DashboardView.vue` envía a `/cash-control` a empleados sin `canOpenCloseCash` provocando rebote silencioso en router.<br>2) `BottomNav.vue` no ofrece acceso directo a `Inicio (/)`.<br>3) `AdminHubView.vue` mezcla `globalCreditLimit` de `C4` (L348-395), formatea moneda con `.replace(...)` regex (L177-184), ubica Proveedores bajo `📦 Inventario` (L399-405) y usa emojis. | Alinear permisos del toggle en `DashboardView`, restaurar camino a `/` en Shell (con `UX-ADR` en `BottomNav.vue`), mover `globalCreditLimit` a `C4` y limpiar `AdminHubView`. |
-| **C7-H3** | 🟠 **ALTO** | [`NotificationCenterView.vue`](../../../frontend/src/views/NotificationCenterView.vue#L74-L78) y L198-199 | `handleNotificationClick` solo marca leída la notificación e ignora `metadata` (`productId`, `clientId`, `saleId`, `sessionId`), dejando `/notifications` como callejón sin salida; además usa `border-l-4` prohibido en `DESIGN.md`. | Implementar enrutamiento OOUX desde `metadata` hacia `C1..C7` y retirar `border-l-4`. |
-| **C7-H4** | 🟡 **MEDIO** | [`EmployeeManagerView.vue`](../../../frontend/src/views/EmployeeManagerView.vue#L32-L37) y L100; [`DailyWaitingRoom.vue`](../../../frontend/src/views/DailyWaitingRoom.vue#L18-L69) | 1) `EmployeeManagerView.vue` no expone estado visual de error/Reintentar si falla `initialize` (Regla 3) y comunica el límite `5/5` solo con toast efímero.<br>2) `DailyWaitingRoom.vue` importa `supabase` directamente en la vista (viola One Way Data Flow). | Agregar Banner `N3` + Reintentar y aviso inline `5/5` en `/employees`; encapsular canal Realtime de `daily_passes` en Repository/Store. |
+| **C7-H1** | 🔴 **CRÍTICO** | [`ToastNotification.vue`](../../../frontend/src/components/ToastNotification.vue); [`App.vue`](../../../frontend/src/App.vue); [`OfflineBanner.vue`](../../../frontend/src/components/common/OfflineBanner.vue); [`ConflictResolver.vue`](../../../frontend/src/components/common/ConflictResolver.vue) | 1) `ToastNotification.vue` pasaba strings a `<component :is>` y `useSessionGuard.ts` importaba `vue-toastification`.<br>2) `CriticalAlertModal` sin montar y sin árbitro `N5`.<br>3) `OfflineBanner.vue` ignoraba `dismissed` y usaba `material-icons`/emoji.<br>4) `alert()` y `material-icons` en `App.vue` y `ConflictResolver.vue` (con `ForceSaleModal` fuera de `<template>`). | ✅ **Cerrado (`UX-ADR-009`):** Lucide mapeado en `ToastNotification`, `useSessionGuard` unificado, árbitro `activeN5Overlay` en `App.vue` montando los 7 overlays, `ForceSaleModal` en `<template>` con errores `N1` y `baselineDebt = 0` fuera de `C8`. |
+| **C7-H2** | 🟠 **ALTO** | [`DashboardView.vue`](../../../frontend/src/views/DashboardView.vue); [`BottomNav.vue`](../../../frontend/src/components/BottomNav.vue); [`AdminHubView.vue`](../../../frontend/src/views/AdminHubView.vue) | Faltaba retorno a `/` en `BottomNav`, `DashboardView` apuntaba a `/admin?tab=gestion`, y `AdminHubView` formateaba moneda manualmente y agrupaba Proveedores bajo Inventario con emojis. | ✅ **Cerrado (`UX-ADR-009`):** `Inicio` (`/`) primero en `BottomNav`, `/admin` + logout `/login` en `DashboardView`, `formatWithSign` + Lucide y secciones separadas (`Abastecimiento`, `Inventario`, `Reportes`) en `AdminHubView`. |
+| **C7-H3** | 🟠 **ALTO** | [`NotificationCenterView.vue`](../../../frontend/src/views/NotificationCenterView.vue); [`notificationsStore.ts`](../../../frontend/src/stores/notificationsStore.ts) | `handleNotificationClick` solo marcaba leída sin enrutar por `metadata` y usaba `border-l-4`. | ✅ **Cerrado (`UX-ADR-009`):** `resolveNotificationTarget(n)` con validación de permisos (`C3`, `C4`, `C5`, `C6`, `/cash-control`), `metadata` normalizado y sin `border-l-4`. |
+| **C7-H4** | 🟡 **MEDIO** | [`EmployeeManagerView.vue`](../../../frontend/src/views/EmployeeManagerView.vue); [`employees.ts`](../../../frontend/src/stores/employees.ts); [`DailyWaitingRoom.vue`](../../../frontend/src/views/DailyWaitingRoom.vue); [`devices.ts`](../../../frontend/src/stores/devices.ts) | `/employees` sin `N3`/skeleton ni aviso `N1` `5/5`, conteo con `activeEmployees` en vez de operativos, y `DailyWaitingRoom.vue` importaba `supabase` directamente. | ✅ **Cerrado (`UX-ADR-009`):** Skeleton + Banner `N3` + aviso `N1` `5/5` + `@username`, conteo `activeOperationalEmployees`, y suscripción Realtime encapsulada en `useDevicesStore`. |

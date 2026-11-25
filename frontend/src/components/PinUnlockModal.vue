@@ -1,8 +1,11 @@
 <template>
-  <div v-if="isVisible" class="modal-overlay">
+  <div v-if="effectiveVisible" class="modal-overlay" data-testid="pin-unlock-modal">
     <div class="modal-container pin-unlock-modal" :class="{ 'shake': isShaking }">
       <div class="modal-header">
-        <h2>🔑 Desbloqueo de Seguridad</h2>
+        <h2 class="flex items-center gap-2">
+          <KeyRound :size="20" class="shrink-0" />
+          <span>Desbloqueo de Seguridad</span>
+        </h2>
       </div>
 
       <div class="modal-content">
@@ -27,11 +30,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { KeyRound } from 'lucide-vue-next';
 import PinKeypad from './PinKeypad.vue';
 import { useAuthStore } from '../stores/auth';
 
+const props = defineProps<{
+  suppressed?: boolean;
+}>();
+
 const isVisible = ref(false);
+const effectiveVisible = computed(() => isVisible.value && !props.suppressed);
 const error = ref<string | null>(null);
 const loading = ref(false);
 const isShaking = ref(false);
@@ -41,7 +50,16 @@ const authStore = useAuthStore();
 
 const emit = defineEmits<{
   success: [];
+  'visibility-change': [visible: boolean];
 }>();
+
+watch(
+  isVisible,
+  (val) => {
+    emit('visibility-change', val);
+  },
+  { immediate: true }
+);
 
 const handlePinRequiredEvent = () => {
   if (!authStore.isCryptoKeyReady) {

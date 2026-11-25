@@ -1,8 +1,9 @@
 {
   "schemaVersion": "1.0.0",
-  "adrVersion": "UX-ADR-008",
+  "adrVersion": "UX-ADR-009",
   "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
   "bottomNavRoutes": [
+    "/",
     "/pos",
     "/inventory",
     "/reports",
@@ -15,6 +16,7 @@
     "LegalComplianceGate",
     "GlobalAccessRequestModal",
     "PinUnlockModal",
+    "CriticalAlertModal",
     "ToastNotification"
   ],
   "routes": [
@@ -250,19 +252,12 @@
     }
   ],
   "baselineDebt": {
-    "nativeDialogsAllowed": [
-      "frontend/src/App.vue",
-      "frontend/src/components/common/ConflictResolver.vue"
-    ],
+    "nativeDialogsAllowed": [],
     "legacyToastImportsAllowed": [
-      "frontend/src/composables/useSessionGuard.ts",
       "frontend/src/main.ts",
       "frontend/src/views/CheckEmailView.vue",
       "frontend/src/views/auth/WaitingRoomView.vue"
     ],
-    "materialIconsAllowed": [
-      "frontend/src/components/common/ConflictResolver.vue",
-      "frontend/src/components/common/OfflineBanner.vue"
-    ]
+    "materialIconsAllowed": []
   }
 }

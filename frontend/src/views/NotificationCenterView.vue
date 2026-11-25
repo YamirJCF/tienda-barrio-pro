@@ -64,16 +64,60 @@ const isEmpty = computed(() => notifications.value.length === 0);
 
 // Methods
 const goBack = () => {
-  router.back();
+  if (typeof window !== 'undefined' && window.history.length > 1) {
+    router.back();
+    return;
+  }
+  router.push('/');
 };
 
 const markAllAsRead = () => {
   notificationsStore.markAllAsRead(activeStoreId.value || undefined);
 };
 
+const isForcedSessionEvent = (notification: SystemNotification): boolean => {
+  const eventType = String(notification.metadata?.eventType || '').toUpperCase();
+  const title = (notification.title || '').toLowerCase();
+  return (
+    eventType.includes('FORCE') ||
+    eventType.includes('24H') ||
+    title.includes('forzad') ||
+    title.includes('24h')
+  );
+};
+
+const resolveNotificationTarget = (notification: SystemNotification): string | null => {
+  const meta = notification.metadata;
+  if (!meta) return null;
+
+  if (meta.productId && authStore.canManageInventory) {
+    return `/inventory?productId=${encodeURIComponent(String(meta.productId))}&tab=batches`;
+  }
+  if (meta.clientId && authStore.canFiar) {
+    return `/clients/${encodeURIComponent(String(meta.clientId))}`;
+  }
+  if (meta.saleId && authStore.isAdmin) {
+    return `/reports?tab=history&domain=sales&saleId=${encodeURIComponent(String(meta.saleId))}`;
+  }
+  if (meta.sessionId) {
+    if (isForcedSessionEvent(notification) || !authStore.isAdmin) {
+      return '/cash-control';
+    }
+    return `/reports?tab=history&domain=cash&sessionId=${encodeURIComponent(String(meta.sessionId))}`;
+  }
+  if ((meta.supplierId || meta.invoiceId) && authStore.isAdmin) {
+    return '/suppliers?tab=payables';
+  }
+  return null;
+};
+
 const handleNotificationClick = (notification: SystemNotification) => {
   if (!notification.isRead) {
     notificationsStore.markAsRead(notification.id);
+  }
+  const target = resolveNotificationTarget(notification);
+  if (target) {
+    router.push(target);
   }
 };
 
@@ -191,12 +235,14 @@ const getRelativeTime = (createdAt: string) => {
         <article
           v-for="notification in notifications"
           :key="notification.id"
+          data-testid="notification-card"
           @click="handleNotificationClick(notification)"
-          class="group relative flex flex-col gap-3 p-4 rounded-xl shadow-sm ring-1 ring-black/5 dark:ring-white/5 overflow-hidden transition-all duration-300"
+          class="group relative flex flex-col gap-3 p-4 rounded-xl shadow-sm overflow-hidden transition-all duration-300 border"
           :class="[
             notification.isRead
-              ? 'bg-white dark:bg-[#1e293b] border-l-4 border-transparent opacity-90 hover:opacity-100 cursor-pointer active:scale-[0.99]'
-              : 'bg-blue-50 dark:bg-primary/10 border-l-4 border-primary',
+              ? 'bg-white dark:bg-surface-dark border-slate-200 dark:border-slate-700 opacity-90 hover:opacity-100'
+              : 'bg-blue-50/70 dark:bg-primary/10 border-primary/30 dark:border-primary/40',
+            resolveNotificationTarget(notification) ? 'cursor-pointer active:scale-[0.99]' : '',
           ]"
         >
           <div class="flex gap-4 items-start">
