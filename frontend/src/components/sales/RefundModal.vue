@@ -18,13 +18,17 @@
       </div>
 
       <div
-        v-else-if="!isCashOpen"
+        v-else-if="!isCashUsable"
         role="alert"
         data-testid="refund-cash-closed-alert"
         class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs font-semibold"
       >
         <AlertTriangle :size="16" class="shrink-0" />
-        <span>Debes tener un turno de caja abierto para procesar reembolsos.</span>
+        <span>
+          {{ isCashStale
+            ? 'El turno de caja superó las 24 horas y debe cerrarse antes de procesar reembolsos.'
+            : 'Debes tener un turno de caja abierto para procesar reembolsos.' }}
+        </span>
       </div>
 
       <!-- Búsqueda de Venta o Producto (incluye stock = 0 por CHK-509) -->
@@ -88,7 +92,7 @@
               Ticket #{{ sale.ticket_number }} · {{ translateOriginalChannel(sale.payment_method) }}
             </span>
             <span class="font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
-              {{ formatCurrency(sale.total) }}
+              {{ formatWithSign(sale.total) }}
             </span>
           </div>
 
@@ -130,7 +134,7 @@
             <p class="text-xs font-bold text-slate-500 uppercase">Ticket #{{ selectedSale?.ticket_number }}</p>
             <p class="text-sm font-bold text-slate-900 dark:text-white">{{ selectedItem.product_name }}</p>
             <p class="text-[11px] text-slate-500 font-mono tabular-nums">
-              Máximo reembolsable: {{ selectedItem.remaining_quantity }} · Precio unit.: {{ formatCurrency(selectedItem.unit_price) }}
+              Máximo reembolsable: {{ selectedItem.remaining_quantity }} · Precio unit.: {{ formatWithSign(selectedItem.unit_price) }}
             </p>
           </div>
           <button
@@ -172,7 +176,7 @@
                 Lote #{{ shortBatchId(batch.batch_id) }}
               </span>
               <span class="text-slate-500 dark:text-slate-400 font-mono tabular-nums">
-                Cant. orig: {{ batch.quantity }} · Costo: ${{ formatCurrency(batch.unit_cost) }}
+                Cant. orig: {{ batch.quantity }} · Costo: {{ formatWithSign(batch.unit_cost) }}
               </span>
             </div>
           </div>
@@ -266,11 +270,25 @@
           />
         </div>
 
-        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 flex items-center justify-between text-xs">
-          <span class="text-slate-500">Monto calculado por el servidor al confirmar (~est.)</span>
-          <span class="font-mono tabular-nums font-bold text-base text-rose-600 dark:text-rose-400">
-            {{ formatCurrency(estimatedRefund) }}
-          </span>
+        <div
+          data-testid="refund-server-authority-card"
+          class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 space-y-1.5 text-xs"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-slate-500 dark:text-slate-400">Precio unitario registrado</span>
+            <span class="font-mono tabular-nums font-bold text-slate-900 dark:text-white">
+              {{ formatWithSign(selectedItem.unit_price) }}
+            </span>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-slate-500 dark:text-slate-400">Subtotal original</span>
+            <span class="font-mono tabular-nums font-bold text-slate-900 dark:text-white">
+              {{ formatWithSign(selectedItem.subtotal) }}
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-gray-200/70 dark:border-slate-700/70">
+            El servidor calcula y liquida el valor exacto del reembolso al confirmar.
+          </p>
         </div>
 
         <!-- Error Inline N1 de envío -->
@@ -324,7 +342,7 @@ const isOpen = computed({
 
 const authStore = useAuthStore();
 const cashRegisterStore = useCashRegisterStore();
-const { formatCurrency } = useCurrencyFormat();
+const { formatWithSign } = useCurrencyFormat();
 const { showSuccess } = useNotifications();
 
 const searchQuery = ref('');
@@ -351,7 +369,8 @@ onUnmounted(() => {
   window.removeEventListener('offline', syncOnlineStatus);
 });
 
-const isCashOpen = computed(() => cashRegisterStore.isOpen);
+const isCashStale = computed(() => Boolean(cashRegisterStore.isStaleSession));
+const isCashUsable = computed(() => cashRegisterStore.isOpen && !isCashStale.value);
 
 const refundQty = ref(1);
 const originalChannel = ref<'efectivo' | 'nequi' | 'llave_bre' | 'fiado' | 'transferencia'>('efectivo');
@@ -374,13 +393,8 @@ const shortBatchId = (id: string) => {
   return String(id || '').slice(0, 8);
 };
 
-const estimatedRefund = computed(() => {
-  if (!selectedItem.value) return 0;
-  return Math.round((selectedItem.value.subtotal / Math.max(selectedItem.value.quantity, 0.0001)) * Number(refundQty.value || 0));
-});
-
 const canSubmitRefund = computed(() => {
-  if (!isOnline.value || !isCashOpen.value || !selectedItem.value) return false;
+  if (!isOnline.value || !isCashUsable.value || !selectedItem.value) return false;
   const qty = Number(refundQty.value);
   return (
     qty > 0 &&
@@ -473,8 +487,10 @@ const submitRefund = async () => {
     submitError.value = 'Los reembolsos requieren conexión en línea activa.';
     return;
   }
-  if (!isCashOpen.value) {
-    submitError.value = 'Debes tener un turno de caja abierto para procesar reembolsos.';
+  if (!isCashUsable.value) {
+    submitError.value = isCashStale.value
+      ? 'El turno de caja superó las 24 horas y debe cerrarse antes de procesar reembolsos.'
+      : 'Debes tener un turno de caja abierto para procesar reembolsos.';
     return;
   }
   if (!selectedItem.value || !canSubmitRefund.value || isSubmitting.value) return;
@@ -495,7 +511,7 @@ const submitRefund = async () => {
       await cashRegisterStore.syncFromBackend(storeId);
     }
     showSuccess(
-      `Reembolso aprobado por ${formatCurrency(res.amountRefunded)} (${res.isMerma ? 'Asentado como merma' : 'Devuelto a stock vendible'})`
+      `Reembolso aprobado por ${formatWithSign(res.amountRefunded)} (${res.isMerma ? 'Asentado como merma' : 'Devuelto a stock vendible'})`
     );
     isOpen.value = false;
   } catch (err: any) {

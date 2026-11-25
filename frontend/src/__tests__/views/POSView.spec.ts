@@ -37,6 +37,23 @@ vi.mock('../../data/syncQueue', () => ({
   addToSyncQueue: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock('../../data/supabaseClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../data/supabaseClient')>();
+  return {
+    ...actual,
+    isSupabaseConfigured: () => true,
+    getSupabaseClient: () => ({
+      rpc: vi.fn(),
+      from: vi.fn(),
+      channel: vi.fn(() => ({
+        on: vi.fn().mockReturnThis(),
+        subscribe: vi.fn().mockReturnValue({}),
+      })),
+      removeChannel: vi.fn(),
+    }),
+  };
+});
+
 enableAutoUnmount(afterEach);
 
 describe('POSView.vue, PersonalWithdrawalModal y saleRepository — Hardening C1 (UX-ADR-007)', () => {
@@ -68,6 +85,7 @@ describe('POSView.vue, PersonalWithdrawalModal y saleRepository — Hardening C1
       openingBalance: new Decimal(50000),
       transactions: [],
     } as any;
+    vi.spyOn(cashStore, 'syncFromBackend').mockResolvedValue(true);
   });
 
   const mountPOS = () =>
@@ -149,6 +167,20 @@ describe('POSView.vue, PersonalWithdrawalModal y saleRepository — Hardening C1
       expect(cartStore.items[0].subtotal?.toNumber()).toBe(4000);
       expect(wrapper.find('[data-testid="pos-clear-undo-banner"]').exists()).toBe(false);
 
+      // Limpiar de nuevo y verificar cierre automático al agregar un ítem nuevo
+      await wrapper.get('[data-testid="pos-clear-ticket-btn"]').trigger('click');
+      expect(wrapper.find('[data-testid="pos-clear-undo-banner"]').exists()).toBe(true);
+      cartStore.items.push({
+        id: 'p-1',
+        name: 'Pan',
+        price: new Decimal(2000),
+        quantity: new Decimal(1),
+        measurementUnit: 'un',
+        subtotal: new Decimal(2000),
+      });
+      await flushPromises();
+      expect(wrapper.find('[data-testid="pos-clear-undo-banner"]').exists()).toBe(false);
+
       // Limpiar de nuevo y verificar expiración a los 6000ms
       await wrapper.get('[data-testid="pos-clear-ticket-btn"]').trigger('click');
       expect(wrapper.find('[data-testid="pos-clear-undo-banner"]').exists()).toBe(true);
@@ -211,6 +243,23 @@ describe('POSView.vue, PersonalWithdrawalModal y saleRepository — Hardening C1
     expect(resRetiro.success).toBe(false);
     expect(resRetiro.code).toBe('OFFLINE_NOT_ALLOWED');
 
+    expect(addToSyncQueue).not.toHaveBeenCalled();
+  });
+
+  it('saleRepository.processSale rechaza online paymentMethod "mixed" sin caer a addToSyncQueue (Regla 3)', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+
+    const resMixed = await saleRepository.processSale(
+      {
+        items: [{ productId: 'p-1', productName: 'Pan', quantity: 1, price: 2000, subtotal: 2000 }],
+        total: 2000,
+        paymentMethod: 'mixed',
+      },
+      storeId
+    );
+
+    expect(resMixed.success).toBe(false);
+    expect(resMixed.error).toContain('pago mixto no está permitido');
     expect(addToSyncQueue).not.toHaveBeenCalled();
   });
 });

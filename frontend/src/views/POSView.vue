@@ -157,6 +157,16 @@ const undoClearTicket = () => {
   clearedSnapshot.value = null;
 };
 
+watch(
+  () => cartStore.items.length,
+  (len) => {
+    if (len > 0 && clearedSnapshot.value) {
+      stopClearUndoTimer();
+      clearedSnapshot.value = null;
+    }
+  }
+);
+
 const onHandleTouchStart = (e: TouchEvent) => {
   swipeStartY.value = e.touches[0]?.clientY ?? null;
   didSwipeGesture.value = false;

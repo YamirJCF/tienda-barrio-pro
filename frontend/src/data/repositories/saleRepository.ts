@@ -367,8 +367,17 @@ export const saleRepository: SaleRepository = {
                         }
                     }
 
-                } catch (e) {
+                } catch (e: any) {
                     logger.error('[SaleRepo] RPC V2 exception:', e);
+                    const isNetworkFailure =
+                        !navigator.onLine ||
+                        /FetchError|Network request failed|Failed to fetch/i.test(String(e?.message || e));
+                    if (!isNetworkFailure) {
+                        return {
+                            success: false,
+                            error: e?.message || 'Error al procesar la venta',
+                        };
+                    }
                 }
             }
         }

@@ -116,8 +116,14 @@ describe('RefundModal.vue — Read Model FIFO y Resiliencia N1/N3 (C1-H4)', () =
     expect(fifoCard.text()).toContain('Trazabilidad / Reingreso FIFO');
     expect(fifoCard.text()).toContain('Lote #99999999');
     expect(fifoCard.text()).toContain('Cant. orig: 2');
-    expect(fifoCard.text()).toContain('$1.850');
+    expect(fifoCard.text()).toContain('$ 1.850');
     expect(fifoCard.text()).toContain('Reingreso vendible FIFO');
+
+    const authorityCard = wrapper.find('[data-testid="refund-server-authority-card"]');
+    expect(authorityCard.exists()).toBe(true);
+    expect(authorityCard.text()).toContain('$ 3.000');
+    expect(authorityCard.text()).toContain('$ 6.000');
+    expect(wrapper.text()).not.toContain('~est.');
 
     await wrapper.find('input[type="checkbox"]').setValue(true);
     expect(fifoCard.text()).toContain('Sin reingreso (Merma)');
@@ -185,5 +191,31 @@ describe('RefundModal.vue — Read Model FIFO y Resiliencia N1/N3 (C1-H4)', () =
     await flushPromises();
     expect(wrapperOffline.find('[data-testid="refund-offline-alert"]').exists()).toBe(true);
     expect(wrapperOffline.find('[data-testid="refund-search-error"]').exists()).toBe(true);
+  });
+
+  it('bloquea envío con mensaje específico cuando la sesión de caja superó 24h (isStaleSession = true)', async () => {
+    vi.spyOn(saleRepository, 'searchRefundCandidates').mockResolvedValue(makeCandidates());
+    const cashStore = useCashRegisterStore();
+    cashStore.currentSession = {
+      id: 'session-stale-1',
+      storeId,
+      employeeId: 'owner-1',
+      status: 'open',
+      isExpired24h: true,
+      openingTime: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+      openingBalance: new Decimal(100000),
+      transactions: [],
+    } as any;
+
+    const wrapperStale = mountRefundModal();
+    await flushPromises();
+
+    const alert = wrapperStale.find('[data-testid="refund-cash-closed-alert"]');
+    expect(alert.exists()).toBe(true);
+    expect(alert.text()).toContain('superó las 24 horas');
+
+    await wrapperStale.findAll('button').find((b) => b.text().trim() === 'Reembolsar')!.trigger('click');
+    await wrapperStale.find('textarea').setValue('Motivo válido reembolso');
+    expect((wrapperStale.get('[data-testid="refund-confirm-btn"]').element as HTMLButtonElement).disabled).toBe(true);
   });
 });
