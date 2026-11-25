@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "adrVersion": "UX-ADR-002",
+  "adrVersion": "UX-ADR-003",
   "authorizedToastEngine": "frontend/src/components/ToastNotification.vue",
   "bottomNavRoutes": [
     "/pos",
@@ -281,13 +281,10 @@
       "frontend/src/views/SuppliersView.vue"
     ],
     "legacyToastImportsAllowed": [
-      "frontend/src/components/ProductFormModal.vue",
-      "frontend/src/components/inventory/KardexModal.vue",
       "frontend/src/components/suppliers/PayInvoiceModal.vue",
       "frontend/src/composables/useSessionGuard.ts",
       "frontend/src/main.ts",
       "frontend/src/views/CheckEmailView.vue",
-      "frontend/src/views/InventoryView.vue",
       "frontend/src/views/auth/WaitingRoomView.vue"
     ],
     "materialIconsAllowed": [

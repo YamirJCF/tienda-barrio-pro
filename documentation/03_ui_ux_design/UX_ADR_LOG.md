@@ -84,3 +84,22 @@ Mantiene Arquetipo `B/D` (Workspace + Hoja Transaccional `BaseModal` para gasto 
 
 ### 4. Higiene de Crecimiento (Qué se consolida o elimina)
 Se retiran 2 rutas y 2 vistas redundantes: `/expenses` (`ExpensesView.vue`, `LF-003`) y `/my-shift-movements` (`MyShiftMovementsView.vue`). Se eliminan violaciones de `DESIGN.md` en `C2` (emoji `⚠️`, `bg-gray-50`, `border-2`, modal custom, spinner genérico) sin aumentar `baselineDebt`.
+
+---
+
+## UX-ADR-003: Consolidación de Ficha de Producto C3, Entrada Masiva Atómica y Retiro de vue-toastification
+- **Fecha:** 2026-11-24
+- **Estado:** Aprobado (`[UX-ARCH-APPROVED]` `[LOCKFILE-APPROVED]`)
+- **Contexto(s) / Rutas afectadas:** `C3` (`/inventory`, `/stock-entry`; retiro de modales huérfanos `BatchHistoryModal.vue` y `KardexModal.vue`)
+
+### 1. Contexto y Objeto (ORCA)
+Unifica el objeto `Producto` en `/inventory` mediante Ficha con 3 pestañas (`Datos | Lotes | Historial`) para edición de catálogo, gestión de lotes FIFO, bajas/mermas `$0` contextuales y Kardex; alinea todo el Contexto C3 al permiso único `canManageInventory` (o `Admin`), manteniendo `/stock-outputs` intacto hasta Parte 2 (`PR 2.1B-2`).
+
+### 2. Verdad Contable (Read Model / Invariante)
+Agrega `inventory_batches.expiration_date DATE`, amplía `rpc_registrar_salida_logistica(..., p_batch_id UUID DEFAULT NULL)` con selección explícita de lote o FIFO + permiso único `canManageInventory` + protección anti-doble-consumo en `bridge_movement_to_batch` (`LF-009`), y eleva `rpc_registrar_entrada_masiva` a operación atómica todo-o-nada con totales calculados exclusivamente en PostgreSQL (`total_entry_cost`, cero `qty * cost` o `.reduce()` en cliente).
+
+### 3. Arquetipo, Señalización y Top Tasks
+Mantiene Arquetipo `B` en `/inventory` con Ficha unificada + Hoja Transaccional `D` (`BaseModal`) para Merma/Salida por lote y Arquetipo `C` en `/stock-entry` con paleta dual `DESIGN.md` y `font-mono tabular-nums`; validaciones inline `N1`, confirmaciones unificadas `N2` vía `useNotifications()` (`ToastNotification.vue`), `BaseListSkeleton` en Kardex y cero fricción sobre Top Tasks.
+
+### 4. Higiene de Crecimiento (Qué se consolida o elimina)
+Se eliminan 2 modales redundantes (`BatchHistoryModal.vue` y `KardexModal.vue`), el bloque duplicado de lotes al final de `ProductFormModal.vue`, los 3 mini-botones en tarjetas de `InventoryView.vue` y 3 archivos de `baselineDebt.legacyToastImportsAllowed` (bajando de 8 a 5: retiro de `ProductFormModal.vue`, `KardexModal.vue` e `InventoryView.vue`).

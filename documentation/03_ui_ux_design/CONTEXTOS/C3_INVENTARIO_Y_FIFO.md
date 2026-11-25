@@ -1,7 +1,7 @@
 # Contexto C3 — Catálogo e Inventario (Stock & FIFO)
 
-> **Estado:** Cartografía Ola 1 (`Lote 1A` — solo documentación)  
-> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-001`)  
+> **Estado:** Ola 2 Parte 1 (`UX-ADR-003` — SQL FIFO atómico, Ficha Unificada en `/inventory`, `/stock-entry` atómico y retiro de `vue-toastification` en C3; `/inventory-count` y absorción final de `/stock-outputs` diferidos a Parte 2 `PR 2.1B-2`)  
+> **Marco rector:** [`UX_ARQUITECTURA_SISTEMA.md`](../UX_ARQUITECTURA_SISTEMA.md) · [`ux-manifest.json`](../ux-manifest.json) (`UX-ADR-003`)  
 > **Restricción de conectividad:** **Online obligatorio** en todas las mutaciones de inventario ([`PRODUCT.md`](../../../PRODUCT.md#L38), [`productRepository.ts`](../../../frontend/src/data/repositories/productRepository.ts#L757-L760)).
 
 ---
@@ -28,7 +28,7 @@ Administrar el ciclo completo del catálogo de productos, las capas de lotes FIF
 | Entrada masiva de compras (`/stock-entry`) | ✅ | ✅ | ❌ | Requiere `canManageInventory` (`router/index.ts` L362). |
 | Editar `sale_price` o `cost_unit` de lote FIFO | ✅ | ✅ | ❌ | `BatchHistoryModal.vue` L101 (`canManageInventory`). |
 | Registrar `devolucion_proveedor` o `ajuste_conteo` | ✅ | ✅ | ❌ | Control interno `hasFullInventoryAccess` (`StockOutputsView.vue` L248). |
-| Registrar `merma` o `consumo_negocio` | ✅ | ✅ | ✅ *(capacidad operativa base)* | **Invariante:** el empleado puede reportar merma/consumo en mostrador **sin revelar `cost_unit`** ni costos de compra del lote. |
+| **Permiso único C3 (`UX-ADR-003`)** | ✅ | ✅ | ❌ | Todas las operaciones C3 (catálogo, lotes, entradas masivas, mermas/salidas y ajustes) exigen `canManageInventory` o `Admin`. |
 
 ---
 
