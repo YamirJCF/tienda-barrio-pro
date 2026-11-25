@@ -71,6 +71,7 @@ Antes de modificar **cualquier** función, archivo o componente listado en este 
 | 2026-11-21 | LF-013..LF-016 | WO-UX-GOV-000 (Ola 0): Blindaje UX en 5 anillos, actualización de `LOCKFILE.md` y Regla 12 en `AGENTS.md` | Usuario (Aprobación explícita Ola 0) | `[LOCKFILE-APPROVED] [UX-ARCH-APPROVED]` (rama `chore/ux-governance-ola0`) |
 | 2026-11-24 | LF-003, LF-004, LF-013, LF-014 | WO-OLA2-C2-001 (UX-ADR-002): Consolidación de C2 en `/cash-control`, gastos OPEX exclusivos Admin (`assert_store_admin`) y cierre de C2-H1..C2-H4 | Usuario (Aprobación explícita WO-OLA2-C2-001) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c2-caja-turnos-gastos`) |
 | 2026-11-24 | LF-009, LF-013 | WO-OLA2-C3-001 (UX-ADR-003): Guardia transaccional en `bridge_movement_to_batch` para soporte `p_batch_id` en `rpc_registrar_salida_logistica`, entrada masiva atómica y reducción de `baselineDebt` (`vue-toastification` 8→5) | Usuario (Aprobación explícita WO-OLA2-C3-001) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c3-ficha-fifo-entrada-atomica`) |
+| 2026-11-25 | LF-013, LF-014 | WO-OLA2-C3-002 (UX-ADR-004): Alta de ruta canónica `/inventory-count` (`InventoryCountView.vue`) con compuerta de caja cerrada y retiro definitivo de `/stock-outputs` (`StockOutputsView.vue`) | Usuario (Aprobación explícita WO-OLA2-C3-002) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c3-inventariado-fisico`) |
 
 ---
 

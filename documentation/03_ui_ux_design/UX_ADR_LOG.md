@@ -103,3 +103,22 @@ Mantiene Arquetipo `B` en `/inventory` con Ficha unificada + Hoja Transaccional 
 
 ### 4. Higiene de Crecimiento (Qué se consolida o elimina)
 Se eliminan 2 modales redundantes (`BatchHistoryModal.vue` y `KardexModal.vue`), el bloque duplicado de lotes al final de `ProductFormModal.vue`, los 3 mini-botones en tarjetas de `InventoryView.vue` y 3 archivos de `baselineDebt.legacyToastImportsAllowed` (bajando de 8 a 5: retiro de `ProductFormModal.vue`, `KardexModal.vue` e `InventoryView.vue`).
+
+---
+
+## UX-ADR-004: Creación de Ruta Canónica /inventory-count con Compuerta de Caja Cerrada y Retiro de /stock-outputs
+- **Fecha:** 2026-11-25
+- **Estado:** Aprobado (`[UX-ARCH-APPROVED]` `[LOCKFILE-APPROVED]`)
+- **Contexto(s) / Rutas afectadas:** `C3` (alta de `/inventory-count` con `InventoryCountView.vue`; retiro de `/stock-outputs` y `StockOutputsView.vue`)
+
+### 1. Contexto y Objeto (ORCA)
+Establece `/inventory-count` (`InventoryCountView.vue`, Arquetipo `C`) como superficie masiva dedicada al conteo físico de estantería dentro de `C3` bajo guardia `canManageInventory`, y retira `/stock-outputs` (`StockOutputsView.vue`) dado que las mermas y salidas puntuales ya viven en la Ficha de Producto (`/inventory`).
+
+### 2. Verdad Contable (Read Model / Invariante)
+Introduce `rpc_obtener_lotes_activos_tienda` (1 sola consulta sin N+1 + verificación en servidor de caja cerrada) y `rpc_aplicar_inventariado_fisico` atómico todo-o-nada que exige caja cerrada (`CASH_REGISTER_MUST_BE_CLOSED`), calcula `delta = contado - current_stock` en PostgreSQL con bloqueo `FOR UPDATE` ordenado por UUID, impacta `$0` en caja/CxP y emite 1 sola notificación resumen al Admin.
+
+### 3. Arquetipo, Señalización y Top Tasks
+Instancia Arquetipo `C` precedido por Compuerta `F` (`N5`: bloquea si la caja está abierta o si existen operaciones pendientes en `syncQueue`), guía rápida colapsable de 3 pasos, botón `✓ Igual` de 1 toque, `BatchShelfSelector` solo cuando hay 2+ lotes activos, borrador local y errores `N3` fail-closed; cero toques añadidos a las 5 Top Tasks.
+
+### 4. Higiene de Crecimiento (Qué se consolida o elimina)
+Elimina la ruta `/stock-outputs` y `StockOutputsView.vue` (que tenía `bg-gray-900` fijo y carecía de lotes FIFO), retira el acceso de mermas para empleados sin `canManageInventory` en `DashboardView.vue` y mantiene `baselineDebt` sin incremento.
