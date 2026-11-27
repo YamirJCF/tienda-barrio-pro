@@ -31,6 +31,12 @@ export interface CashControlEvent {
     created_at?: string;
 }
 
+export interface AdminExpectedCashSummary {
+    efectivo: number;
+    nequi: number;
+    llave_bre: number;
+}
+
 export interface StoreCashStatus {
     isOpen: boolean;
     openingAmount: number;
@@ -41,6 +47,7 @@ export interface StoreCashStatus {
     closingAttempts?: number;
     isExpired24h?: boolean;
     lifecycleState?: 'open' | 'Expirado/Bloqueado' | 'closed';
+    adminExpectedSummary?: AdminExpectedCashSummary | null;
     pendingForcedSession?: {
         sessionId: string;
         openedBy?: string;
@@ -252,6 +259,15 @@ export const cashRepository: CashRepository = {
                     status.closingAttempts = Number(result.closingAttempts ?? 0);
                     status.isExpired24h = Boolean(result.isExpired24h);
                     status.lifecycleState = result.lifecycleState || (status.isExpired24h ? 'Expirado/Bloqueado' : 'open');
+                    if (result.adminExpectedSummary && typeof result.adminExpectedSummary === 'object') {
+                        status.adminExpectedSummary = {
+                            efectivo: Number(result.adminExpectedSummary.efectivo ?? 0),
+                            nequi: Number(result.adminExpectedSummary.nequi ?? 0),
+                            llave_bre: Number(result.adminExpectedSummary.llave_bre ?? 0),
+                        };
+                    } else {
+                        status.adminExpectedSummary = null;
+                    }
                     status.lastEvent = {
                         id: result.sessionId,
                         store_id: storeId,

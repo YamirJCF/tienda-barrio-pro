@@ -3,15 +3,16 @@ import { ref, watch, onMounted, computed } from 'vue';
 import { useCurrencyFormat } from '../../composables/useCurrencyFormat';
 
 const props = defineProps<{
-  modelValue: number;
+  modelValue: number | null;
   placeholder?: string;
   autofocus?: boolean;
   disabled?: boolean;
   readonly?: boolean;
+  allowNull?: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: number): void;
+  (e: 'update:modelValue', value: number | null): void;
 }>();
 
 const { formatCurrency } = useCurrencyFormat();
@@ -20,12 +21,17 @@ const isFocused = ref(false);
 
 const displayValue = computed({
   get: () => {
-    if (isFocused.value) {
-      return props.modelValue === 0 ? '' : props.modelValue.toString();
+    if (props.modelValue === null || props.modelValue === undefined) {
+      return '';
     }
-    return props.modelValue === 0 ? '' : formatCurrency(props.modelValue);
+    if (isFocused.value) {
+      if (!props.allowNull && props.modelValue === 0) return '';
+      return props.modelValue.toString();
+    }
+    if (!props.allowNull && props.modelValue === 0) return '';
+    return formatCurrency(props.modelValue);
   },
-  set: (val: string) => {
+  set: (_val: string) => {
     // Handled by handleInput
   }
 });
@@ -33,10 +39,15 @@ const displayValue = computed({
 const handleInput = (event: Event) => {
   const target = event.target as HTMLInputElement;
   const rawValue = target.value.replace(/[^0-9.]/g, '');
+
+  if (rawValue === '') {
+    emit('update:modelValue', props.allowNull ? null : 0);
+    return;
+  }
+
   const numericValue = parseFloat(rawValue);
-  
   if (isNaN(numericValue)) {
-    emit('update:modelValue', 0);
+    emit('update:modelValue', props.allowNull ? null : 0);
   } else {
     emit('update:modelValue', numericValue);
   }

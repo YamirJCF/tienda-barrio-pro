@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import Decimal from 'decimal.js';
 import { logger } from '../utils/logger';
-import { cashRepository } from '../data/repositories/cashRepository';
+import { cashRepository, type AdminExpectedCashSummary } from '../data/repositories/cashRepository';
 import { isSupabaseConfigured, requireSupabase } from '../data/supabaseClient';
 import { useNotificationsStore } from './notificationsStore';
 import { useAuthStore } from './auth';
@@ -14,6 +14,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
     const currentSession = ref<CashSession | null>(null);
     const sessionHistory = ref<CashSession[]>([]);
     const lastSyncError = ref<string | null>(null);
+    const adminExpectedSummary = ref<AdminExpectedCashSummary | null>(null);
     const pendingForcedSessionInfo = ref<{
         sessionId: string;
         openedBy?: string;
@@ -153,7 +154,8 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     (Date.now() - new Date(openingTime).getTime() >= 24 * 60 * 60 * 1000)
                 );
 
-                // Reconstruct session from server truth (sin exponer expected_balance ni difference)
+                // Reconstruct session from server truth (sin exponer expected_balance ni difference a empleados)
+                adminExpectedSummary.value = status.adminExpectedSummary ?? null;
                 currentSession.value = {
                     id: status.sessionId,
                     storeId: storeId,
@@ -240,6 +242,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
                     console.warn('⚠️ [CashRegisterStore] Backend says closed — clearing stale local session');
                 }
                 currentSession.value = null;
+                adminExpectedSummary.value = null;
                 lastSyncError.value = null;
                 return false;
             }
@@ -349,6 +352,9 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         sealedWithAlert?: boolean;
         closedByName?: string;
         closedByRole?: string;
+        expectedEfectivo?: number;
+        actualEfectivo?: number;
+        difference?: number;
     }> => {
         const targetSession = currentSession.value;
         const targetPendingForced = !targetSession ? pendingForcedSessionInfo.value : null;
@@ -429,6 +435,9 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
             sealedWithAlert: Boolean(serverData.sealed_with_alert),
             closedByName: serverData.closed_by_name,
             closedByRole: serverData.closed_by_role,
+            expectedEfectivo: typeof serverData.expected_efectivo === 'number' ? serverData.expected_efectivo : undefined,
+            actualEfectivo: typeof serverData.actual_efectivo === 'number' ? serverData.actual_efectivo : undefined,
+            difference: typeof serverData.difference === 'number' ? serverData.difference : undefined,
         };
     };
 
@@ -536,6 +545,7 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         sessionHistory,
         pendingForcedSessionInfo,
         lastSyncError,
+        adminExpectedSummary,
         isOpen,
         currentBalance,
         balancesByMethod,
