@@ -11,7 +11,7 @@
           <ArrowLeft :size="22" />
         </button>
         <div>
-          <h1 class="text-lg font-bold text-slate-900 dark:text-white leading-tight">Nueva Entrada Atómica</h1>
+          <h1 class="text-lg font-bold text-slate-900 dark:text-white leading-tight">Registrar Entrada</h1>
           <p class="text-xs text-slate-500 dark:text-slate-400 capitalize">{{ currentDate }}</p>
         </div>
       </div>
@@ -28,14 +28,14 @@
           <div class="flex items-center justify-between gap-2 flex-wrap">
             <div class="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
               <CheckCircle2 :size="18" />
-              <span>Entrada Atómica Confirmada</span>
+              <span>Entrada Registrada</span>
             </div>
             <span class="font-mono tabular-nums text-base font-bold text-emerald-700 dark:text-emerald-300">
-              Total factura (SQL): {{ formatWithSign(confirmedReceipt.totalEntryCost) }}
+              Total de la entrada: {{ formatWithSign(confirmedReceipt.totalEntryCost) }}
             </span>
           </div>
           <p class="text-xs text-emerald-800 dark:text-emerald-200 font-mono tabular-nums">
-            {{ confirmedReceipt.itemsProcessed }} producto(s) · {{ confirmedReceipt.totalUnits }} unidad(es) ingresadas a inventario FIFO.
+            {{ confirmedReceipt.itemsProcessed }} producto(s) · {{ confirmedReceipt.totalUnits }} unidad(es) ingresadas al inventario.
           </p>
           <div class="pt-1 flex gap-2">
             <BaseButton type="button" size="sm" variant="primary" @click="router.push('/inventory')">
@@ -152,7 +152,7 @@
               </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
               <div class="space-y-1">
                 <label class="text-[10px] font-bold text-slate-500 uppercase">Cantidad</label>
                 <input
@@ -161,15 +161,6 @@
                   min="0.01"
                   step="0.01"
                   class="w-full h-9 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 text-right text-slate-900 dark:text-white font-mono tabular-nums text-sm focus:border-primary outline-none"
-                />
-              </div>
-
-              <div class="space-y-1">
-                <label class="text-[10px] font-bold text-slate-500 uppercase">Vencimiento</label>
-                <input
-                  v-model="item.expirationDate"
-                  type="date"
-                  class="w-full h-9 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 text-slate-900 dark:text-white font-mono tabular-nums text-xs focus:border-primary outline-none"
                 />
               </div>
 
@@ -220,7 +211,7 @@
             {{ entryItems.length }} producto(s) · {{ totalUnitsFormatted }} unidad(es)
           </div>
           <div class="text-[11px] text-slate-400">
-            Total monetario validado por servidor al confirmar
+            El total se calcula al guardar la entrada
           </div>
         </div>
 
@@ -263,7 +254,7 @@
         >
           <div class="flex items-center justify-center gap-2">
             <Save :size="20" />
-            GUARDAR ENTRADA ATÓMICA
+            GUARDAR ENTRADA
           </div>
         </BaseButton>
       </div>
@@ -332,7 +323,6 @@ interface EntryItem {
   unitCost: number;
   salePrice: number;
   measurementUnit: string;
-  expirationDate?: string;
 }
 
 const entryItems = ref<EntryItem[]>([]);
@@ -400,7 +390,6 @@ const addItem = (product: Product) => {
     unitCost: product.cost ? new Decimal(product.cost).toNumber() : 0,
     salePrice: product.price ? new Decimal(product.price).toNumber() : 0,
     measurementUnit: product.measurementUnit,
-    expirationDate: '',
   });
 
   searchQuery.value = '';
@@ -430,7 +419,7 @@ const saveEntry = async () => {
             quantity: Number(item.quantity),
             unitCost: Number(item.unitCost),
             salePrice: Number(item.salePrice),
-            expirationDate: item.expirationDate || null,
+            expirationDate: null,
           })),
           reason: reason.value,
           supplierId: selectedSupplierId.value || null,

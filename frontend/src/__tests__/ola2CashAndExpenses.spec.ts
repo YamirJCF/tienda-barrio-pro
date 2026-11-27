@@ -460,7 +460,7 @@ describe('Fase 3 Ola 2 — Control de Caja, Cierre Asistido, +24h, Notificacione
     await flushPromises();
 
     // Lista de gastos OPEX solo muestra tx-gasto ('Bolsas'), nunca 'pago_proveedor' ('Factura leche')
-    expect(wrapper.text()).toContain('Total Gastos OPEX del Turno');
+    expect(wrapper.text()).toContain('Total Gastos de Caja del Turno');
     expect(wrapper.text()).toContain('Bolsas');
     expect(wrapper.text()).not.toContain('Factura leche');
 

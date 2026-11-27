@@ -271,7 +271,7 @@ const openerDisplayName = computed(() => cashRegisterStore.currentSession?.opene
 
 const title = computed(() => {
   if (!canOpenCloseCash.value) return 'Mis Movimientos del Turno';
-  if (activeTab.value === 'expenses') return 'Gastos OPEX del Turno';
+  if (activeTab.value === 'expenses') return 'Gastos de Caja';
   if (activeTab.value === 'movements') return 'Mis Movimientos del Turno';
   if (isLoadingWorkspace.value || syncError.value) return 'Control de Caja';
   if (isStale.value) return 'Turno Expirado (+24h)';

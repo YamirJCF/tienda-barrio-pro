@@ -196,7 +196,7 @@ onUnmounted(() => {
             </div>
             
             <div class="bg-white dark:bg-surface-dark p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gastos Operativos (OPEX)</p>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gastos Operativos</p>
               <p class="text-lg font-bold font-mono tabular-nums text-red-500 dark:text-red-400">
                 {{ formatWithSign(store.summary.operational_expenses) }}
               </p>
@@ -292,7 +292,7 @@ onUnmounted(() => {
           <div v-if="store.summary.opex_breakdown" class="mt-4 bg-white dark:bg-surface-dark p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-2.5">
             <div class="flex items-center justify-between">
               <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Desglose OPEX del Período (Cero Doble Conteo)
+                Desglose de Gastos del Período
               </h4>
               <span class="text-xs font-bold font-mono tabular-nums text-rose-600 dark:text-rose-400">
                 {{ formatWithSign(store.summary.opex_breakdown.total) }}

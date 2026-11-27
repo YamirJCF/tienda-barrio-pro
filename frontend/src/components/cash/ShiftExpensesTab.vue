@@ -75,7 +75,7 @@ const translateExpenseError = (err: any): string => {
   const code = String(err?.code || rawMessage.split(':')[0] || '').trim();
 
   if (code === 'ADMIN_ONLY_ACTION' || rawMessage.includes('ADMIN_ONLY_ACTION')) {
-    return 'Solo el Administrador puede registrar o consultar gastos OPEX.';
+    return 'Solo el Administrador puede registrar o consultar gastos de caja.';
   }
   if (code === 'INSUFFICIENT_CHANNEL_FUNDS' || code === 'INSUFFICIENT_FUNDS' || rawMessage.includes('INSUFFICIENT')) {
     return rawMessage.replace(/^INSUFFICIENT_(?:CHANNEL_)?FUNDS:\s*/i, '') || 'Fondos insuficientes en el canal seleccionado.';
@@ -87,14 +87,14 @@ const translateExpenseError = (err: any): string => {
     return 'No existe un turno de caja abierto para registrar gastos.';
   }
   if (code === 'INVALID_OPEX_CATEGORY' || rawMessage.includes('INVALID_OPEX_CATEGORY')) {
-    return 'Categoría OPEX no autorizada.';
+    return 'Categoría del gasto no autorizada.';
   }
-  return rawMessage || 'No se pudo registrar el gasto OPEX.';
+  return rawMessage || 'No se pudo registrar el gasto de caja.';
 };
 
 const loadExpenses = async () => {
   if (!authStore.isAdmin) {
-    loadError.value = 'Solo el Administrador puede consultar gastos OPEX.';
+    loadError.value = 'Solo el Administrador puede consultar gastos de caja.';
     expenses.value = [];
     totalOpexExpenses.value = 0;
     expenseCount.value = 0;
@@ -180,7 +180,7 @@ const handleSubmit = async () => {
         }
 
         showAddModal.value = false;
-        showSuccess('Gasto OPEX registrado correctamente');
+        showSuccess('Gasto de caja registrado correctamente');
         return true;
       } catch (err: any) {
         submitError.value = translateExpenseError(err);
@@ -190,12 +190,12 @@ const handleSubmit = async () => {
     {
       checkConnectivity: true,
       showSuccessToast: false,
-      errorMessage: 'Error al registrar el gasto OPEX',
+      errorMessage: 'Error al registrar el gasto de caja',
     }
   );
 
   if (res === null && !navigator.onLine) {
-    submitError.value = 'Se requiere conexión a internet para registrar gastos OPEX.';
+    submitError.value = 'Se requiere conexión a internet para registrar gastos de caja.';
   }
 };
 
@@ -223,7 +223,7 @@ onMounted(() => {
       <div>
         <h3 class="text-sm font-bold text-amber-900 dark:text-amber-200">Caja Cerrada</h3>
         <p class="text-xs text-amber-800 dark:text-amber-300 mt-1">
-          Abre la caja en la pestaña Turno para registrar o consultar gastos OPEX.
+          Abre la caja en la pestaña Turno para registrar o consultar gastos de caja.
         </p>
       </div>
     </div>
@@ -254,7 +254,7 @@ onMounted(() => {
       <div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between gap-4">
         <div>
           <p class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Total Gastos OPEX del Turno
+            Total Gastos de Caja del Turno
           </p>
           <p
             data-test="total-opex-expenses"
@@ -263,7 +263,7 @@ onMounted(() => {
             {{ formatCurrency(totalOpexExpenses) }}
           </p>
           <p class="text-[11px] text-slate-400 mt-0.5">
-            {{ expenseCount }} registro(s) OPEX verificados en servidor
+            {{ expenseCount }} gasto(s) registrado(s) en este turno
           </p>
         </div>
 
@@ -287,10 +287,10 @@ onMounted(() => {
       >
         <Receipt :size="40" :stroke-width="1.25" class="mx-auto mb-2 opacity-40" />
         <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Sin gastos OPEX en este turno
+          Sin gastos de caja en este turno
         </p>
         <p class="text-xs text-slate-500 mt-1">
-          Usa "Registrar Gasto" para asentar egresos operativos autorizados.
+          Usa "Registrar Gasto" para anotar salidas de dinero del turno.
         </p>
       </div>
 
@@ -331,7 +331,7 @@ onMounted(() => {
     <!-- Hoja Transaccional Arquetipo D (BaseModal) -->
     <BaseModal
       v-model="showAddModal"
-      title="Registrar Gasto OPEX"
+      title="Registrar Gasto de Caja"
       :show-close-button="true"
       data-test="expense-create-modal"
     >
@@ -407,7 +407,7 @@ onMounted(() => {
 
         <div>
           <label class="block text-xs font-bold uppercase text-slate-500 dark:text-slate-400 mb-1.5">
-            Categoría OPEX
+            Categoría del gasto
           </label>
           <div class="flex flex-wrap gap-2">
             <button
@@ -436,7 +436,7 @@ onMounted(() => {
           :loading="isSubmitting"
           @click="handleSubmit"
         >
-          CONFIRMAR GASTO OPEX
+          CONFIRMAR GASTO
         </BaseButton>
       </div>
     </BaseModal>

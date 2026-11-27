@@ -262,4 +262,36 @@ describe('POSView.vue, PersonalWithdrawalModal y saleRepository — Hardening C1
     expect(resMixed.error).toContain('pago mixto no está permitido');
     expect(addToSyncQueue).not.toHaveBeenCalled();
   });
+
+  it('ARQ-005 / FRD-007-01 R6: botón de Pausa en POS se oculta para Admin y se muestra para empleados', async () => {
+    const inventoryStore = useInventoryStore();
+    inventoryStore.products = [
+      { id: 'p-1', name: 'Pan', price: new Decimal(2000), stock: new Decimal(10), measurementUnit: 'un' } as any,
+    ];
+    inventoryStore.initialized = true;
+    inventoryStore.isLoading = false;
+    inventoryStore.error = null;
+    vi.spyOn(inventoryStore, 'initialize').mockResolvedValue(undefined);
+
+    // 1. Admin: no ve el botón de pausa de supervisión
+    const wrapperAdmin = mountPOS();
+    await flushPromises();
+    expect(wrapperAdmin.find('[data-testid="pos-pause-btn"]').exists()).toBe(false);
+    wrapperAdmin.unmount();
+
+    // 2. Empleado: sí ve el botón de pausa de supervisión
+    const authStore = useAuthStore();
+    authStore.currentUser = {
+      id: 'emp-1',
+      employeeId: 'emp-1',
+      name: 'Cajero',
+      email: 'cajero@test.com',
+      type: 'employee',
+      storeId,
+    } as any;
+
+    const wrapperEmp = mountPOS();
+    await flushPromises();
+    expect(wrapperEmp.find('[data-testid="pos-pause-btn"]').exists()).toBe(true);
+  });
 });

@@ -381,7 +381,7 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     await flushPromises();
 
     expect(mockRpc).toHaveBeenCalledWith('rpc_obtener_gastos_turno', { p_session_id: 'sess-admin-1' });
-    expect(wrapper.text()).toContain('Total Gastos OPEX del Turno');
+    expect(wrapper.text()).toContain('Total Gastos de Caja del Turno');
     expect(wrapper.find('[data-test="total-opex-expenses"]').text()).toContain('18.000');
 
     // Abrir modal -> enviar vacío -> errores N1 inline persistentes sin toast

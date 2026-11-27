@@ -486,7 +486,7 @@ describe('FASE 3 · OLA 5 — Inventario canManageInventory, Salidas $0, Reembol
     });
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Desglose OPEX del Período (Cero Doble Conteo)');
+    expect(wrapper.text()).toContain('Desglose de Gastos del Período');
     expect(wrapper.text()).toContain('Consumos / Retiros Personales');
     expect(wrapper.text()).toContain('Carlos Cajero');
     expect(wrapper.text()).toContain('Ref: $ 2.200');
