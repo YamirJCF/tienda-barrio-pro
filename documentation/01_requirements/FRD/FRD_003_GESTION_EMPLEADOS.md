@@ -28,7 +28,7 @@ Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar 
 4. **Capacidades Operativas Base por Defecto (Subordinadas al Pase Diario, `FRD-003-01` R2):**
     - Todo empleado activo con **Pase Diario** aprobado (`FRD-001`) posee de base, bajo su propia cuenta (1 dispositivo por cuenta) y con su **firma individual obligatoria**:
       - Operar el Punto de Venta (POS) y registrar **Consumo/Retiro personal** (como una venta asignada a su propio perfil; solo el Admin puede elegir a otros) cuando la Caja Dedicada POS está abierta.
-      - Registrar **gastos menores** desde la Caja Dedicada POS cuando está abierta (con fondos en el canal, categoría OPEX y motivo).
+      - Registrar **gastos de caja** desde la Caja Dedicada POS cuando está abierta (con fondos en el canal, categoría del gasto y motivo).
       - Registrar **mermas** y **consumo del negocio** ($0 en Caja POS, sin requerir caja abierta).
       - Consultar únicamente **sus propios movimientos del turno actual, con toda su información**.
     - **Restricción de Caja:** Si el turno de caja está cerrado, las operaciones monetarias y ventas del POS quedan bloqueadas.
@@ -37,7 +37,7 @@ Módulo administrativo que permite al Dueño/Manager crear, editar y desactivar 
     - El acceso a funciones delegables se controla estrictamente por 4 interruptores booleanos en el perfil del empleado, todos apagados por defecto y sin jerarquías implícitas (ver alcance completo en `FRD-003-01`):
       1. **`Inventario completo` (`canManageInventory`):** Ver catálogo, stock, costos y Kardex; crear, editar y dar baja lógica a productos; registrar Entradas, **Ajustes por conteo físico** y **Devolución física a proveedor** ($0 en caja y sin tocar Cuentas por Pagar).
       2. **`Fiar y cobrar abonos` (`canFiar`):** Vender a fiado en POS respetando cupo, cobrar abonos con caja abierta y consultar ficha y estado de cuenta de clientes activos. (Crear, editar, cambiar cupos y eliminar clientes es exclusivo del Admin).
-      3. **`Abrir/cerrar caja` (`canOpenCloseCash`):** Abrir turno en la Caja Dedicada POS y cerrar **únicamente el turno que él mismo abrió** bajo **Cierre Asistido** (sin PIN adicional; hasta 3 intentos con aviso si no coincide y alerta al Admin al tercer intento).
+      3. **`Abrir/cerrar caja`:** Abrir turno en la Caja Dedicada POS declarando explícitamente la base inicial y cerrar **únicamente el turno que él mismo abrió** bajo **Cierre Asistido** exclusivamente sobre el efectivo físico del cajón evaluado con `P_MARGEN_DESCUADRE_EFECTIVO` (sin PIN adicional; hasta 3 intentos si supera el margen y alerta al Admin al tercer intento, guardando siempre la diferencia exacta al peso).
       4. **`Reembolsos` (`canManageRefunds`):** Ejecutar devoluciones desde el POS (al lado del buscador) con caja abierta y fondos en el canal, en una sola acción mediante la etiqueta opcional **`"merma"`** cuando el producto regresa dañado.
     - *(Nota: No existe permiso de `Ver inventario` separado ni permiso de `Ver reportes` para empleados; todos los reportes del negocio son 100% exclusivos del Administrador).*
 

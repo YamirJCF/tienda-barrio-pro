@@ -1,7 +1,7 @@
 # 📋 Catálogo Maestro de Documentos — Tienda Barrio Pro
 
-> **Versión:** 2.7  
-> **Fecha:** 2026-11-11  
+> **Versión:** 2.9  
+> **Fecha:** 2026-11-26  
 > **Propósito:** Mapa oficial y único de todos los documentos del proyecto. Sirve como hoja de ruta de implementación y registro de trazabilidad documental.  
 > **Norma:** Todo documento nuevo debe registrarse aquí antes de ser aprobado.
 
@@ -47,7 +47,7 @@
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
 | FRD-003 | [FRD_003_GESTION_EMPLEADOS.md](FRD/FRD_003_GESTION_EMPLEADOS.md) | FRD | 🟢 | ✅ SDD_003 | — |
-| FRD-003-01 | [FRD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md](FRD/FRD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) | FRD | 🟢 | ✅ SDD_003_01 | Matriz unificada de 4 permisos de empleado, capacidades base, propiedad del turno y firma histórica (`ARQ-002` v1.4) |
+| FRD-003-01 | [FRD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md](FRD/FRD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) | FRD | 🟢 | ✅ SDD_003_01 | Matriz unificada de 4 permisos de empleado, capacidades base, propiedad del turno y firma histórica (`ARQ-002` v1.5 / `ARQ-005` v1.0) |
 | FRD-003-ILC | [FRD_003_INDEPENDENCIA_LOGISTICA_CONTABLE.md](FRD/FRD_003_INDEPENDENCIA_LOGISTICA_CONTABLE.md) | FRD | 🟢 | 🔴 SIN SDD | Coexiste con FRD_019 vía modelo cruce de tres vías. **Pendiente Fase 3-P1** |
 | SDD-003 | [SDD_003_GESTION_EMPLEADOS.md](SDD/SDD_003_GESTION_EMPLEADOS.md) | SDD | 🟡 Validado | — | En alineación con `SDD_003_01` (4 permisos + snapshot histórico) |
 | SDD-003-01 | [SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md](SDD/SDD_003_01_MATRIZ_PERMISOS_EMPLEADOS.md) | SDD | 🟢 Aprobado PAC-SDD | — | Contrato marco de 4 permisos, capacidades base, propiedad estricta del turno, Cierre Asistido (3 intentos) y snapshot histórico |
@@ -58,7 +58,7 @@
 
 | # | Documento | Tipo | Estado | SDD Cobertura | Notas |
 |---|-----------|------|--------|---------------|-------|
-| FRD-004 | [FRD_004_CONTROL_DE_CAJA.md](FRD/FRD_004_CONTROL_DE_CAJA.md) | FRD | ⚠️ | ✅ SDD_004 | **Pendiente Fase 2B:** Eliminar referencias a PIN (D-01 resuelto) |
+| FRD-004 | [FRD_004_CONTROL_DE_CAJA.md](FRD/FRD_004_CONTROL_DE_CAJA.md) | FRD | 🟢 | ✅ SDD_004 | v2.3: Alineado con `ARQ-002` v1.5 / `ARQ-005` (arqueo exclusivo de efectivo físico, prohibición de envíos en blanco, cierre abierto para Admin y margen `P_MARGEN_DESCUADRE_EFECTIVO` para empleados) |
 | FRD-004-1 | [FRD_004_1_GESTION_PIN_CAJA.md](FRD/FRD_004_1_GESTION_PIN_CAJA.md) | FRD | 🚫 DEPRECATED | — | PIN erradicado (D-01, 2026-08-07). Conservado para trazabilidad. |
 | FRD-004-MC | [FRD_004_CAJA_ESTRICTA_MULTICANAL.md](FRD/FRD_004_CAJA_ESTRICTA_MULTICANAL.md) | FRD | 🟢 | 🔴 SIN SDD propio | Absorbido parcialmente por SDD_004 y SDD_027. **Revisar tras SDD_020** |
 | SDD-004 | [SDD_004_CONTROL_DE_CAJA.md](SDD/SDD_004_CONTROL_DE_CAJA.md) | SDD | 🟡 Validado | — | **Pendiente Fase 2B:** Agregar referencia formal a D-01 |
@@ -288,6 +288,10 @@
 | # | Documento | Tipo | Estado | Notas |
 |---|-----------|------|--------|-------|
 | ARQ-001 | [FRD_001_AUTORIDAD_DEL_SERVIDOR.md](FRD/FRD_001_AUTORIDAD_DEL_SERVIDOR.md) | FRD/Principio | 🔴 SIN SDD | Principio transversal. Evaluar: ¿SDD o SPEC técnica? **Pendiente Fase 3-P3** |
+| ARQ-002 | [ARQ_002_POLITICAS_GLOBALES_NEGOCIO.md](STANDARDS/ARQ_002_POLITICAS_GLOBALES_NEGOCIO.md) | Estándar | 🟢 | v1.5: 18 Políticas Globales de Negocio (`POL-FIN`, `POL-LOG`, `POL-SEG`, `POL-AUD`, `POL-PRIV`, `POL-PROD`). |
+| ARQ-003 | [ARQ_003_MATRIZ_TRAZABILIDAD_POLITICAS.md](STANDARDS/ARQ_003_MATRIZ_TRAZABILIDAD_POLITICAS.md) | Estándar | 🟢 | v1.6: Matriz bidireccional Política ↔ FRD sincronizada con `ARQ-002` v1.5. |
+| ARQ-004 | [ARQ_004_DICCIONARIO_PARAMETROS_SISTEMA.md](STANDARDS/ARQ_004_DICCIONARIO_PARAMETROS_SISTEMA.md) | Estándar | 🟢 | v1.2: Diccionario de parámetros del sistema (incl. `P_MARGEN_DESCUADRE_EFECTIVO = 1000` COP global). |
+| ARQ-005 | [ARQ_005_BARRERA_LOGICA_Y_GLOSARIO_TENDERO.md](STANDARDS/ARQ_005_BARRERA_LOGICA_Y_GLOSARIO_TENDERO.md) | Estándar | 🟢 | v1.0: Barrera Lógica Anti-Desvío (3 Muros), Zonas Congeladas y Glosario Único del Tendero. |
 
 ---
 
@@ -322,6 +326,7 @@
 | 2.6 | 2026-11-11 | Redacción formal de `SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO.md` bajo PAC-SDD v2.0 (Bloques 0–7, estado 🟠 con deudas D-LEG-01 a D-LEG-07). |
 | 2.7 | 2026-11-11 | Redacción formal de `SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE.md` bajo PAC-SDD v2.0 (Bloques 0–7, estado 🟠 con deudas D-ARCO-01 a D-ARCO-06). Cobertura SDD 48/48 (100%). |
 | 2.8 | 2026-11-11 | Creación y verificación en Docker (`supabase_db_prueba`) de `DSD_029` (`20261111172500`) y `DSD_030` (`20261111173000`); pendiente promoción a Supabase Cloud y capa Frontend (`Opción A`). |
+| 2.9 | 2026-11-26 | Creación de `ARQ-005` (Barrera Lógica y Glosario Único del Tendero), enmienda de `ARQ-002` v1.5 (`POL-SEG-01`, `POL-PROD-01`), `ARQ-003` v1.6, `ARQ-004` v1.2 (`P_MARGEN_DESCUADRE_EFECTIVO = 1000` COP global) y alineación de `FRD-004` v2.3, `FRD-027-01`, `FRD-003-01`, `FRD-017`, `FRD-006`, `FRD-006-01-01`, `FRD-007-01` y `FRD-026`. |
 
 ---
 

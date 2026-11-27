@@ -63,7 +63,7 @@ Si un turno de la Caja Dedicada POS permanece abierto exactamente `P_MAX_HORAS_T
 
 ### RN-017-03: Propiedad Estricta del Turno y Resolución de Turno Expirado (`POL-SEG-02`, `POL-SEG-03`)
 1. **Propiedad estricta al cerrar:** Tanto en cierre ordinario como al vencer las 24 horas, **únicamente el empleado específico que abrió ese turno o el Administrador** tienen potestad para cerrarlo. Cualquier otro empleado, aunque tenga activado el permiso `Abrir/cerrar caja`, tiene **estrictamente bloqueado** cerrar un turno ajeno.
-2. **Cierre Asistido del titular:** Cuando cierra quien abrió el turno, opera el Cierre Asistido (`POL-SEG-01`: si no coincide, solo avisa dando hasta 3 intentos y al tercero sella y notifica al Administrador).
+2. **Cierre del titular según rol (`POL-SEG-01`):** Cuando cierra el empleado titular que abrió el turno, opera el Arqueo Ciego con Cierre Asistido exclusivamente sobre el efectivo físico del cajón evaluado contra `P_MARGEN_DESCUADRE_EFECTIVO` (hasta 3 intentos y alerta al Administrador si al tercero supera el margen, guardando siempre la diferencia exacta al peso); cuando cierra el Administrador, visualiza el efectivo esperado y el resumen digital del turno y sella en un paso.
 3. **Cierre Forzoso del Administrador (`FRD-027-02`):** Si quien abrió el turno no está disponible tras vencer las 24 horas, el Administrador ejecuta el Cierre Forzoso, en el cual **no siempre es obligatorio declarar conteo físico**, registrando el evento de máxima severidad en auditoría.
 
 ### RN-017-04: Inmutabilidad de la Asignación Contable y Firma Individual con Fotografía Histórica

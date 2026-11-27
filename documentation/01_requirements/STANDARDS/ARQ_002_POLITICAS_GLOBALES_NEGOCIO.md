@@ -1,7 +1,7 @@
 # 📐 Estándar ARQ-002: Políticas Globales de Negocio y Parámetros del Sistema
 
-**Versión:** 1.4  
-**Fecha:** 2026-11-18  
+**Versión:** 1.5  
+**Fecha:** 2026-11-26  
 **Autor:** Arquitecto de Producto  
 **Estado:** ✅ Activo
 
@@ -179,15 +179,24 @@ Una Política es una directiva estratégica del negocio que permanece estable au
 
 ## Dominio de Seguridad
 
-### POL-SEG-01: Política de Arqueo Ciego con Cierre Asistido
+### POL-SEG-01: Política de Arqueo Físico de Efectivo, Cierre Diferenciado por Rol y Margen de Monedas
 
-- **Objetivo:** Prevenir la manipulación del conteo físico de dinero durante el turno y, al mismo tiempo, asistir al cajero de confianza al momento de cerrar para evitar descuadres por errores involuntarios de conteo o gastos olvidados.
-- **Declaración:** Durante el transcurso de un turno activo y en el formulario de cierre, el sistema TIENE PROHIBIDO mostrar al cajero cuál es el saldo total esperado o la diferencia exacta. El operario DEBE contar el dinero y declarar la suma real. Al confirmar el cierre opera el **Cierre Asistido**: si el monto declarado no coincide con el cálculo interno del servidor, el sistema **solo avisa que no coincide** (sin revelar el monto esperado) y otorga hasta **3 intentos** para revisar o recontar; si al **tercer intento** persiste la diferencia, el sistema sella el cierre y dispara una **notificación/alerta inmediata al Administrador**.
+- **Objetivo:** Alinear la apertura y el cierre de turno con la realidad física del mostrador de una tienda de barrio —donde solo se cuenta a mano el efectivo del cajón—, evitando bloqueos artificiales al dueño y protegiendo al mismo tiempo el control de efectivo frente a empleados sin caer en fatiga de alertas por monedas sueltas.
+- **Declaración:**
+  1. **Declaración explícita obligatoria (Prohibición de envíos en blanco):** Tanto al abrir turno (base inicial en efectivo) como al cerrarlo (efectivo contado en cajón), el usuario DEBE digitar explícitamente un monto numérico mayor o igual a cero (`$0` solo es válido si el usuario escribe `0` deliberadamente). Un formulario sin diligenciar (`vacío`) TIENE PROHIBIDO procesarse o convertirse silenciosamente en `$0`.
+  2. **Alcance estrictamente físico del arqueo (Solo Efectivo del Cajón):** El conteo manual al cerrar un turno recae **única y exclusivamente sobre los billetes y monedas del cajón físico (Efectivo)**. Los canales digitales (**Nequi y Llave BRE**) NO se cuentan manualmente en el cierre (sus fondos ingresan a cuentas externas a la gaveta física); el servidor calcula y conserva su saldo segregado (`POL-FIN-02`) como **resumen informativo de transferencias del turno** para el Administrador.
+  3. **Cierre directo con visibilidad para el Administrador (Dueño):** Cuando quien cierra el turno es el Administrador, el sistema DEBE mostrarle en pantalla el **efectivo esperado en cajón** junto con el resumen informativo de movimientos por Nequi y Llave BRE del turno, permitiéndole declarar el efectivo contado y sellar el cierre en un único paso (sin intentos a ciegas ni auto-alertas).
+  4. **Arqueo Ciego con Cierre Asistido y Margen Global para Empleados:** Cuando quien cierra es el empleado titular del turno, el sistema TIENE PROHIBIDO mostrarle el saldo esperado o la diferencia antes, durante y después del cierre. El empleado declara únicamente el **efectivo físico contado en el cajón** y el servidor evalúa la diferencia absoluta frente al efectivo esperado usando el parámetro global fijo del sistema `P_MARGEN_DESCUADRE_EFECTIVO`:
+     - Si la diferencia absoluta en efectivo (sobrante o faltante) es **menor o igual** a `P_MARGEN_DESCUADRE_EFECTIVO`, el servidor sella el cierre de inmediato en ese intento sin rebote ni alerta crítica.
+     - Si la diferencia absoluta **supera** `P_MARGEN_DESCUADRE_EFECTIVO`, el sistema **solo avisa que no coincide** (sin revelar el monto esperado) y otorga hasta **3 intentos** para revisar o recontar; si al **tercer intento** persiste una diferencia superior al margen, sella el cierre y dispara una **notificación/alerta inmediata al Administrador**.
+  5. **Registro íntegro al peso (Cero ocultamiento o redondeo de diferencias):** Dentro o fuera de `P_MARGEN_DESCUADRE_EFECTIVO`, y sin importar si cerró el Administrador o un empleado, el servidor DEBE guardar siempre de forma inmutable la diferencia matemática exacta al peso (`Efectivo Contado - Efectivo Esperado`) en la sesión de caja y en los reportes exclusivos del Administrador. El margen gobierna únicamente el rebote de reconteo y el disparo de alerta crítica, jamás borra ni redondea el dato contable.
+- **Parámetro asociado:** `P_MARGEN_DESCUADRE_EFECTIVO` (fijo global del sistema, registrado en `ARQ-004`).
 - **Reglas que gobierna:**
-  - FRD-004, Regla 6 y Caso B: Cierre Asistido de hasta 3 intentos
-  - FRD-027-01, Reglas 2 y 5: Ceguera del monto esperado y alerta al tercer intento
-  - FRD-003-01, Regla 6: Alcance de `Abrir/cerrar caja`
-- **Consecuencia de violación:** Mostrar el saldo esperado permitiría cuadrar artificialmente la gaveta; no asistir con aviso en los primeros intentos castigaría errores inocentes de conteo sin dar oportunidad de corrección.
+  - FRD-004, Regla 6 y Casos A y B: Apertura explícita, arqueo exclusivo de efectivo, cierre abierto para Admin y Cierre Asistido con margen para empleados
+  - FRD-027-01, Reglas 2 y 5: Ceguera del empleado sobre efectivo esperado, registro exacto al peso y alerta al tercer intento fuera de margen
+  - FRD-003-01, Regla 4 y Caso B: Alcance de `Abrir/cerrar caja` para empleados frente al Administrador
+  - FRD-017, RN-017-03: Cierre del titular del turno
+- **Consecuencia de violación:** Permitir formularios en blanco genera aperturas/cierres accidentales en `$0`; exigir "conteo" de Nequi/Llave BRE obliga a inventar cifras de cuentas ajenas al cajón; exigir `$0` exacto en monedas físicas genera fatiga de alertas en turnos honestos; mostrar el esperado al empleado facilita retener sobrantes de efectivo.
 
 ---
 
@@ -304,6 +313,24 @@ Una Política es una directiva estratégica del negocio que permanece estable au
 
 ---
 
+## Dominio de Producto y Experiencia del Tendero
+
+### POL-PROD-01: Política de Barrera Lógica, Voluntariedad y Lenguaje Único del Tendero
+
+- **Objetivo:** Preservar la esencia de **Tienda Barrio Pro** como una *Libreta Inteligente Voluntaria con Respaldo y Orden*, impidiendo la sobre-ingeniería de minisupermercado, la jerga técnica en pantalla y los ciclos de refactorización sin sustento empírico.
+- **Declaración:**
+  1. **Voluntariedad y fidelidad física (`ARQ-005`, Muro 1):** El sistema gobierna con rigor matemático únicamente las operaciones que el tendero registra en él, sin secuestrar el mostrador físico ni inventar pasos que no existan en la operación real de la tienda.
+  2. **Filtro de fricción (`ARQ-005`, Muro 2 y `SYSTEM_BOUNDARIES.md`):** Solo se admite fricción deliberada cuando aporta respaldo legal bilateral, control real de caja/cartera o disciplina de turno. Queda prohibido reintroducir exclusiones estratégicas (como fechas de vencimiento de productos en entradas de inventario) o exponer controles exclusivos de supervisión de personal (como la pausa operativa del POS) al propio Administrador.
+  3. **Glosario Único del Tendero (`ARQ-005`, Sección III):** Toda interfaz operativa y todo documento funcional DEBE emplear vocabulario natural de tienda de barrio, quedando prohibidas siglas técnicas o contables corporativas en etiquetas de usuario (`SQL`, `OPEX`, `Atómica`, `RPC`) y mensajes al Administrador redactados como si reportara ante otro Administrador.
+  4. **Inmutabilidad funcional de zonas congeladas (`ARQ-005`, Muro 3):** Los módulos declarados en zona congelada NO PUEDEN rediseñarse en su funcionamiento salvo defecto comprobado de integridad contable/seguridad o bloqueo real verificado en mostrador.
+- **Reglas que gobierna:**
+  - FRD-004, FRD-026 y FRD-027-01: Lenguaje de caja/gastos y fidelidad física del arqueo
+  - FRD-006 y FRD-006-01-01: Lenguaje de entradas de mercancía y prohibición de fecha de vencimiento por producto
+  - FRD-007-01 y FRD-003-01: Pausa operativa acotada a empleados y distinción clara de rol
+- **Consecuencia de violación:** Rechazo del sistema por parte del tendero tradicional debido a complejidad artificial, contradicciones con `SYSTEM_BOUNDARIES.md` y desgaste del proyecto en refactorizaciones interminables.
+
+---
+
 # Documentos Complementarios
 
 Las siguientes secciones han sido extraídas a documentos independientes para mantener la separación de responsabilidades:
@@ -312,6 +339,7 @@ Las siguientes secciones han sido extraídas a documentos independientes para ma
 |---------|-----------|----------|
 | Matriz de Trazabilidad Política → Regla | `ARQ_003_MATRIZ_TRAZABILIDAD_POLITICAS.md` | Mapeo bidireccional entre Políticas y FRDs |
 | Diccionario de Parámetros del Sistema | `ARQ_004_DICCIONARIO_PARAMETROS_SISTEMA.md` | Valores configurables que las reglas consumen |
+| Barrera Lógica y Glosario Único del Tendero | `ARQ_005_BARRERA_LOGICA_Y_GLOSARIO_TENDERO.md` | Filtro anti-desvío, zonas congeladas y vocabulario oficial |
 
 ---
 
@@ -344,8 +372,9 @@ Las siguientes secciones han sido extraídas a documentos independientes para ma
 | 1.2 | 2026-11-08 | Arquitecto de Producto | Incorporación de POL-PRIV-01 (Trazabilidad de Consentimiento y Alta de Datos Personales) tras validación de FRD-029. |
 | 1.3 | 2026-11-10 | Arquitecto de Producto | Incorporación de POL-PRIV-02 (Eliminación Protegida y Resguardo Contable Interno) tras validación de FRD-030. |
 | 1.4 | 2026-11-18 | Arquitecto de Producto | Alineación integral del Acuerdo Maestro: Caja Dedicada POS y pagos externos (`POL-FIN-01/02/05`), salidas logísticas `$0`, consumo separado por perfil/negocio, ajustes bajo `Inventario completo` y etiqueta única `"merma"` en reembolsos (`POL-LOG-01/02/03`), Cierre Asistido de 3 intentos (`POL-SEG-01`), continuidad nocturna (<24h) (`POL-SEG-02`), 4 permisos delegables, 1 dispositivo por cuenta, propiedad estricta del turno y reportes exclusivos del Admin (`POL-SEG-03`, `POL-AUD-01/02/03`, `POL-PRIV-01/02`). |
+| 1.5 | 2026-11-26 | Arquitecto de Producto | Enmienda de realismo operativo en `POL-SEG-01` (prohibición de apertura/cierre en blanco, arqueo físico exclusivo sobre Efectivo del cajón con canales digitales como resumen informativo, cierre con visibilidad para el Admin y Arqueo Ciego Asistido con margen global `P_MARGEN_DESCUADRE_EFECTIVO` para empleados conservando diferencia exacta al peso) e incorporación de `POL-PROD-01` vinculada al nuevo estándar `ARQ-005` (Barrera Lógica y Glosario Único del Tendero). |
 
 ---
 
 **Firmado:** Arquitecto de Producto  
-**Fecha:** 2026-11-18
+**Fecha:** 2026-11-26

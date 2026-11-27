@@ -154,10 +154,9 @@ El catálogo de inventario y cualquier listado asociado (movimientos Kardex, his
 - **Actor:** Admin o Empleado con permiso de gestión de inventario
 - **Precondición:** Producto existe en catálogo.
 - **Flujo Principal:**
-    1. Usuario selecciona producto → "Movimientos" → "Nueva Entrada".
-    2. Ingresa cantidad y razón (ej: "Proveedor XYZ").
-    3. Opcionalmente ingresa fecha de vencimiento.
-    4. Sistema suma cantidad al stock y registra en historial.
+    1. Usuario selecciona la opción para registrar entrada de mercancía.
+    2. Ingresa cantidad, costo unitario referencial, precio de venta y motivo (ej: compra o reposición de proveedor), sin solicitar fecha de vencimiento del producto (`SYSTEM_BOUNDARIES.md`, `POL-PROD-01`).
+    3. Sistema suma cantidad al stock y registra en historial.
 - **Postcondición:** Stock actualizado, movimiento auditable.
 
 **Caso C: Búsqueda Rápida por PLU**

@@ -31,6 +31,9 @@ Este documento rige las reglas del Punto de Venta (POS) como **Caja Dedicada** d
    - Subtotales redondeados al múltiplo de $50.
    - Vueltas (Cambio) calculadas mediante algoritmo de empate hacia abajo a favor del cliente.
 
+6. **Pausa Operativa Exclusiva para Empleados (`POL-PROD-01`, `ARQ-005`):**
+   - El control de pausa de actividad del turno dentro del POS (diseñado para reportar estado de presencia ante el supervisor) DEBE presentarse únicamente cuando quien opera la sesión es un **empleado**, permaneciendo oculto cuando quien opera es el propio **Administrador**.
+
 ---
 
 ## Casos de Uso
@@ -63,3 +66,4 @@ Este documento rige las reglas del Punto de Venta (POS) como **Caja Dedicada** d
 - [ ] **CA-FRD-007-01-02:** Los cierres de carrito bajo **"Fiado"** (exclusivo para Admin o permiso `Fiar y cobrar abonos`) o **"Consumo / Retiro Personal"** (asignado al propio perfil del empleado; solo Admin elige a otros) registran **$0** de ingreso en la Caja Dedicada POS.
 - [ ] **CA-FRD-007-01-03:** El botón de **Reembolsos** se encuentra en el POS al lado del buscador y opera según `FRD-006-02`.
 - [ ] **CA-FRD-007-01-04:** Toda transacción es atómica en base de datos y estampa la firma individual inmutable de la cuenta ejecutora.
+- [ ] **CA-FRD-007-01-05:** El botón y estado de pausa de supervisión en el POS se muestran exclusivamente a perfiles de empleado y nunca al propio Administrador.

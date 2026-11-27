@@ -17,6 +17,7 @@ Este documento detalla y restringe el comportamiento de los "Movimientos de Entr
 5. **Motivos de Entrada Permitidos (Trazabilidad):** Toda entrada DEBE registrar un "Motivo" y la **firma individual** del usuario con `Inventario completo` (o Administrador) en el historial de movimientos de inventario. Las entradas se reservan exclusivamente para ingresos reales de mercancía (**Compra / Reposición de Proveedor**). Toda corrección por encontrar más o menos unidades físicas durante un conteo se procesa como **Ajuste por Conteo Físico** (`FRD-006`, `FRD-006-01-02`), nunca como entrada de compra.
 
 6. **Normalización de Datos del Proveedor:** El campo referencial "Datos del Proveedor" en el formulario de entrada DEBE aplicar normalización automática (trim + formato título) al guardar, idéntica a la especificada en FRD-019, Regla 22. El sistema DEBE sugerir nombres de proveedores ya utilizados en entradas anteriores o facturas por pagar de la misma tienda.
+7. **Exclusión de Fecha de Vencimiento y Lenguaje Único del Tendero (`POL-PROD-01`, `ARQ-005`, `SYSTEM_BOUNDARIES.md`):** El formulario de entrada de mercancía TIENE PROHIBIDO solicitar fechas de vencimiento por producto o lote, y sus títulos y mensajes de confirmación DEBEN emplear el Glosario Único del Tendero (sin siglas ni términos técnicos como *"Entrada Atómica"* o *"SQL"*).
 
 ---
 
@@ -56,3 +57,4 @@ Este documento detalla y restringe el comportamiento de los "Movimientos de Entr
 - [ ] CA-FRD-006-01-01-04: El registro de una entrada de inventario NO DEBE crear registros en el módulo de cuentas por pagar.
 - [ ] CA-FRD-006-01-01-05: El costo de adquisición registrado en una entrada de inventario NO DEBE generar movimientos de caja.
 - [ ] CA-FRD-006-01-01-06: El campo de proveedor en el formulario de entrada aplica normalización automática y sugiere proveedores existentes.
+- [ ] CA-FRD-006-01-01-07: La interfaz de entrada de mercancía no solicita fecha de vencimiento por producto y utiliza únicamente vocabulario natural del Glosario Único del Tendero (`ARQ-005`).
