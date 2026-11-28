@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between gap-2">
       <label class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
         <Layers :size="14" class="text-primary" />
-        Lote en Estantería (FIFO)
+        Lote en Estantería
       </label>
       <span class="text-[11px] text-slate-400">
         {{ activeBatches.length }} lotes activos
