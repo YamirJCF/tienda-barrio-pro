@@ -524,8 +524,13 @@ export const useCashRegisterStore = defineStore('cashRegister', () => {
         return await cashRepository.getPendingForcedSessions(storeId);
     };
 
-    const reconcileForcedClose = async (sessionId: string, employeeId: string, actualBalance: number | null) => {
-        await cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance);
+    const reconcileForcedClose = async (
+        sessionId: string,
+        employeeId: string,
+        actualBalance: number,
+        notes?: string
+    ) => {
+        await cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance, notes);
         if (pendingForcedSessionInfo.value?.sessionId === sessionId) {
             pendingForcedSessionInfo.value = null;
         }

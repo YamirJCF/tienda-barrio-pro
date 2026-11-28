@@ -88,7 +88,8 @@ const fetchPendingForcedSessions = async () => {
 const translateReconciliationError = (message?: string): string => {
   const code = (message || '').split(':')[0].trim();
   const messages: Record<string, string> = {
-    INVALID_BALANCE: 'El monto contado no es válido.',
+    INVALID_BALANCE: 'Debes declarar explícitamente el efectivo físico recuperado (0 o mayor).',
+    OBSERVATION_REQUIRED: 'Debes escribir una observación breve (mínimo 5 caracteres) al cerrar un turno vencido abierto por otro usuario.',
     SESSION_NOT_FOUND: 'El turno ya no existe. Actualiza e intenta de nuevo.',
     SESSION_NOT_RECONCILABLE: 'Este turno ya fue reconciliado. Actualiza para continuar.',
     STORE_ACCESS_DENIED: 'No tienes acceso a esta tienda.',
@@ -229,7 +230,7 @@ onMounted(() => {
   syncWorkspace();
 });
 
-const handleAuditConfirm = async (sessionId: string, actualBalance: number | null) => {
+const handleAuditConfirm = async (sessionId: string, actualBalance: number, forcedNotes?: string) => {
   const employeeId = authStore.currentUser?.employeeId || authStore.currentUser?.id;
   if (!employeeId) {
     forcedReconcileError.value = 'No se encontró el ID del usuario para la reconciliación.';
@@ -240,7 +241,7 @@ const handleAuditConfirm = async (sessionId: string, actualBalance: number | nul
   isReconcilingForced.value = true;
   forcedReconcileError.value = null;
   try {
-    await cashRegisterStore.reconcileForcedClose(sessionId, employeeId, actualBalance);
+    await cashRegisterStore.reconcileForcedClose(sessionId, employeeId, actualBalance, forcedNotes);
 
     pendingForcedSessions.value = pendingForcedSessions.value.filter(s => s.id !== sessionId);
     if (pendingForcedSessions.value.length === 0 && authStore.currentStore?.id) {
@@ -250,11 +251,7 @@ const handleAuditConfirm = async (sessionId: string, actualBalance: number | nul
         // La reconciliación ya quedó confirmada en BD
       }
     }
-    showSuccess(
-      actualBalance === null
-        ? 'Turno cerrado sin conteo físico. Se generó alerta crítica de auditoría.'
-        : 'Turno reconciliado correctamente.'
-    );
+    showSuccess('Turno vencido cerrado y conciliado correctamente.');
   } catch (e: any) {
     console.error('🚫 [CashControl] Reconciliation failed:', e);
     const translated = translateReconciliationError(e?.message);
@@ -688,11 +685,10 @@ const goBack = () => {
       />
     </main>
 
-    <!-- FRD-017 / FRD-027-02: Forced Close Audit Modal (Admin-only con conteo opcional) -->
+    <!-- FRD-027-02 R5: Forced Close Audit Modal (Admin-only con declaración obligatoria de efectivo) -->
     <ForcedCloseAuditModal
       :isVisible="showAuditModal"
       :pendingSessions="pendingForcedSessions"
-      :allowSkipCount="authStore.isAdmin"
       :isSubmitting="isReconcilingForced"
       :errorMessage="forcedReconcileError"
       @confirm="handleAuditConfirm"

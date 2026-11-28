@@ -118,7 +118,7 @@ Este documento regula el ciclo de vida operativo de la caja registradora por tur
     1. Usuario inicia sesión.
     2. Sistema detecta turno caducado (+24h) y bloquea operaciones monetarias.
     3. Si el usuario es el empleado que abrió ese turno: el sistema lo dirige al cierre con **Cierre Asistido** (hasta 3 intentos) para contar el dinero real y cerrar el turno vencido.
-    4. Si el empleado titular no está disponible: el **Administrador** ejecuta el **Cierre Forzoso** (donde **no siempre es obligatorio declarar conteo físico**).
+    4. Si el empleado titular no está disponible (o si el turno vencido fue del propio Administrador): el **Administrador** ejecuta el **Cierre Forzoso**, visualizando el resumen del turno vencido (efectivo esperado en cajón y resumen digital) y **declarando obligatoriamente el efectivo físico recuperado** (más una observación breve obligatoria si el turno había sido abierto por otro usuario).
     5. Sistema cierra el turno antiguo con alerta de caducidad y libera el bloqueo para abrir un Nuevo Turno.
 - **Flujo Alternativo:** Si otro empleado (distinto al que abrió el turno) intenta cerrarlo, el servidor rechaza la acción estrictamente.
 - **Postcondición:** Turno viejo cerrado, sistema listo para operar hoy.

@@ -208,35 +208,68 @@ describe('Fase 3 Ola 2 — Control de Caja, Cierre Asistido, +24h, Notificacione
   });
 
   // =========================================================================
-  // CHK-208: ForcedCloseAuditModal permite conteo opcional NULL (Admin) y
-  // router/index.ts no atrapa a empleados no-abridores cuando hay turno +24h
+  // CHK-208 (Actualizado POL-SEG-02): ForcedCloseAuditModal exige conteo físico
+  // obligatorio (prohibido omitir conteo), muestra resumen autoritativo al Admin
+  // y exige observación breve (>= 5 caracteres) cuando el turno es de otro usuario.
   // =========================================================================
-  it('[CHK-208] ForcedCloseAuditModal exige confirmación explícita para omitir conteo físico y emite null', async () => {
+  it('[CHK-208] ForcedCloseAuditModal prohíbe cerrar sin conteo, muestra resumen Admin y exige observación para turno ajeno', async () => {
     const ForcedCloseAuditModal = (await import('../components/ForcedCloseAuditModal.vue')).default;
 
     const wrapper = mount(ForcedCloseAuditModal, {
       props: {
         isVisible: true,
-        allowSkipCount: true,
-        pendingSessions: [{ id: 'sess-24h', openedAt: '2026-11-18T10:00:00Z', channels: ['efectivo'] }],
+        pendingSessions: [
+          {
+            id: 'sess-24h',
+            openedAt: '2026-11-18T10:00:00Z',
+            openedBy: 'emp-other',
+            openedByName: 'Cajero Tarde',
+            openingBalance: 50000,
+            expectedEfectivo: 65000,
+            nequiSummary: 35000,
+            llaveBreSummary: 0,
+            isOpenedByOther: true,
+            channels: ['efectivo'],
+          },
+        ],
       },
       global: {
         stubs: {
           Teleport: true,
-          FormInputCurrency: { template: '<input />', props: ['modelValue'] },
+          FormInputCurrency: {
+            props: ['modelValue', 'allowNull'],
+            emits: ['update:modelValue'],
+            template:
+              '<input data-test="forced-cash-input" :value="modelValue ?? \'\'" @input="$emit(\'update:modelValue\', $event.target.value === \'\' ? null : Number($event.target.value))" />',
+          },
         },
       },
     });
 
-    await wrapper.find('[data-test="skip-count-toggle"]').setValue(true);
+    // No existe opción de omitir conteo físico
+    expect(wrapper.find('[data-test="skip-count-toggle"]').exists()).toBe(false);
+
+    // Muestra resumen autoritativo del servidor para el Admin
+    const summary = wrapper.find('[data-test="forced-close-session-summary"]');
+    expect(summary.exists()).toBe(true);
+    expect(summary.text()).toContain('Cajero Tarde');
+    expect(summary.text()).toContain('65.000');
+    expect(summary.text()).toContain('35.000');
+
+    // Con monto vacío (null), botón deshabilitado
     const btn = wrapper.find('#btn-confirm-forced-close-audit');
     expect((btn.element as HTMLButtonElement).disabled).toBe(true);
 
-    await wrapper.find('[data-test="confirm-skip-count"]').setValue(true);
+    // Al digitar monto sin observación (turno de otro usuario), sigue deshabilitado
+    await wrapper.find('input').setValue('64000');
+    expect((btn.element as HTMLButtonElement).disabled).toBe(true);
+
+    // Con observación >= 5 caracteres se habilita y emite (sessionId, monto, observación)
+    await wrapper.find('[data-test="forced-close-notes-input"]').setValue('Empleado salió sin cerrar');
     expect((btn.element as HTMLButtonElement).disabled).toBe(false);
 
     await btn.trigger('click');
-    expect(wrapper.emitted('confirm')?.[0]).toEqual(['sess-24h', null]);
+    expect(wrapper.emitted('confirm')?.[0]).toEqual(['sess-24h', 64000, 'Empleado salió sin cerrar']);
   });
 
   it('[CHK-208] router guard +24h redirige al abridor/Admin pero deja operar inventario/pos a otro empleado', async () => {
