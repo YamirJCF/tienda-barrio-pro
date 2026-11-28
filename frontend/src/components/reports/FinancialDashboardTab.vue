@@ -18,7 +18,6 @@ import {
   Wallet,
   Activity,
   Flame,
-  Lightbulb,
   ChevronRight,
   WifiOff,
 } from 'lucide-vue-next';
@@ -182,7 +181,7 @@ onUnmounted(() => {
           <!-- Sub-KPIs: Flujo Financiero -->
           <div class="grid grid-cols-2 gap-3">
             <div class="bg-white dark:bg-surface-dark p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Costo de Ventas (FIFO)</p>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Costo de Mercancía</p>
               <p class="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-300">
                 {{ formatWithSign(store.summary.cogs) }}
               </p>
@@ -196,7 +195,7 @@ onUnmounted(() => {
             </div>
             
             <div class="bg-white dark:bg-surface-dark p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gastos Operativos (OPEX)</p>
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gastos</p>
               <p class="text-lg font-bold font-mono tabular-nums text-red-500 dark:text-red-400">
                 {{ formatWithSign(store.summary.operational_expenses) }}
               </p>
@@ -292,7 +291,7 @@ onUnmounted(() => {
           <div v-if="store.summary.opex_breakdown" class="mt-4 bg-white dark:bg-surface-dark p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-2.5">
             <div class="flex items-center justify-between">
               <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Desglose OPEX del Período (Cero Doble Conteo)
+                Desglose de Gastos del Período
               </h4>
               <span class="text-xs font-bold font-mono tabular-nums text-rose-600 dark:text-rose-400">
                 {{ formatWithSign(store.summary.opex_breakdown.total) }}
@@ -322,14 +321,14 @@ onUnmounted(() => {
           <div v-if="store.summary.personal_consumptions_summary" class="mt-4 bg-white dark:bg-surface-dark p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-3">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Consumos / Retiros Personales (Consolidado & Perfil)
+                Consumos / Retiros Personales
               </h4>
               <div class="flex items-center gap-3 text-xs">
                 <span class="text-slate-500">
-                  Costo P&L: <strong class="font-mono tabular-nums text-indigo-600 dark:text-indigo-400">{{ formatWithSign(store.summary.personal_consumptions_summary.total_cost) }}</strong>
+                  Costo: <strong class="font-mono tabular-nums text-indigo-600 dark:text-indigo-400">{{ formatWithSign(store.summary.personal_consumptions_summary.total_cost) }}</strong>
                 </span>
                 <span class="text-slate-500">
-                  Val. Ref. Venta: <strong class="font-mono tabular-nums text-slate-800 dark:text-slate-200">{{ formatWithSign(store.summary.personal_consumptions_summary.total_reference_sale_price) }}</strong>
+                  Ref.: <strong class="font-mono tabular-nums text-slate-800 dark:text-slate-200">{{ formatWithSign(store.summary.personal_consumptions_summary.total_reference_sale_price) }}</strong>
                 </span>
               </div>
             </div>
@@ -418,14 +417,6 @@ onUnmounted(() => {
             </div>
           </div>
         </section>
-
-        <!-- 5. Info Footer -->
-        <div class="p-4 bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800/30 rounded-xl text-center">
-          <p class="text-xs font-medium text-violet-600 dark:text-violet-400 inline-flex items-center justify-center gap-1.5">
-            <Lightbulb :size="15" class="shrink-0" />
-            <span>Los costos se calculan de manera exacta por el método FIFO basándose en el inventario despachado y los gastos de operación.</span>
-          </p>
-        </div>
       </div>
 
       <!-- Empty State (no summary at all) -->

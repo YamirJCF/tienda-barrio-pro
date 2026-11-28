@@ -380,9 +380,9 @@ onUnmounted(() => {
     <NoPermissionOverlay v-if="blockingState" :title="blockingState.title" :message="blockingState.message"
       :buttonText="blockingState.buttonText" @go-back="blockingState.action" />
 
-    <!-- Pause Overlay (Heartbeat) -->
+    <!-- Pause Overlay (Heartbeat — exclusivo de empleados, ARQ-005 / FRD-007-01 R6) -->
     <div 
-      v-if="isPaused" 
+      v-if="isPaused && !authStore.isAdmin" 
       class="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white"
     >
       <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center">
@@ -426,9 +426,11 @@ onUnmounted(() => {
           <!-- Sync Indicator -->
           <SyncIndicator />
           
-          <!-- Botón de Pausa (Heartbeat) -->
+          <!-- Botón de Pausa (Heartbeat — exclusivo de empleados, ARQ-005 / FRD-007-01 R6) -->
           <BaseButton 
-            aria-label="Pause Session"
+            v-if="!authStore.isAdmin"
+            data-testid="pos-pause-btn"
+            aria-label="Pausar turno"
             variant="ghost"
             size="icon"
             class="text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"

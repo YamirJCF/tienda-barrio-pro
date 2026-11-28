@@ -71,6 +71,7 @@ Guarda tus definiciones en la carpeta **[03] UI_UX_DESIGN**.
 |-----------|-------------|
 | **Consistencia** | Utiliza componentes que se repitan en toda la App para crear familiaridad |
 | **Eficiencia** | Si una tarea se puede hacer en 2 clics en lugar de 4, propón la ruta más corta |
+| **Economía Verbal (Estándar POS)** | En operación normal muestra solo **Dato + Campo + Acción** (`Regla 12.3`): cero cajas fijas de protocolo/servidor, 1 idea = 1 lugar, botones de 1–3 palabras, títulos/labels de 1–4 palabras y alertas/párrafos de ≤ 25 palabras |
 | **Accesibilidad** | Asegura contrastes adecuados y tamaños de fuente legibles |
 
 ---

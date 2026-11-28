@@ -3,43 +3,42 @@
     <div class="modal-card">
       <!-- Header -->
       <div class="modal-header">
-        <h2>⚠️ Venta Forzada (Excepción Admin)</h2>
-        <button class="close-btn" @click="handleCancel" aria-label="Cerrar">×</button>
+        <h2 class="flex items-center gap-2">
+          <AlertTriangle :size="20" class="shrink-0" />
+          <span>Stock Insuficiente</span>
+        </h2>
+        <button class="close-btn" @click="handleCancel" aria-label="Cerrar">
+          <X :size="20" />
+        </button>
       </div>
 
       <!-- Body -->
       <div class="modal-body">
         <div class="warning-banner">
-          <p><strong>Stock insuficiente detectado.</strong></p>
-          <p>Faltan <strong>{{ totalDeficit }}</strong> unidades en total.</p>
+          <p>Faltan <strong>{{ totalDeficit }}</strong> unidades en sistema.</p>
         </div>
 
         <div class="affected-items">
-          <h3>Productos afectados:</h3>
           <ul>
             <li v-for="item in items" :key="item.productId">
               <strong>{{ item.name }}</strong>
-              — Solicitado: {{ item.requested }} {{ item.unit }}
-              | Disponible: {{ item.available }} {{ item.unit }}
+              — Pedidos: {{ item.requested }} {{ item.unit }}
+              | Stock: {{ item.available }} {{ item.unit }}
               | Faltan: <strong>{{ item.deficit }}</strong>
             </li>
           </ul>
         </div>
 
         <div class="justification-section">
-          <label for="justification">Justificación (mínimo 10 caracteres):</label>
+          <label for="justification">Motivo (mín. 10 caracteres)</label>
           <textarea
             id="justification"
             v-model="justification"
-            placeholder="Ej: Cliente VIP, ajuste de inventario pendiente, etc."
-            rows="3"
+            placeholder="Ej: Mercancía recién llegada sin ingresar..."
+            rows="2"
             :class="{ 'invalid': showError }"
           ></textarea>
-          <p v-if="showError" class="error-text">La justificación debe tener al menos 10 caracteres.</p>
-        </div>
-
-        <div class="audit-notice">
-          <p>🔒 Esta acción quedará registrada en el log de auditoría.</p>
+          <p v-if="showError" class="error-text">Escribe al menos 10 caracteres.</p>
         </div>
       </div>
 
@@ -60,6 +59,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { AlertTriangle, X } from 'lucide-vue-next'
 import type { ForceSaleItemInfo } from '../composables/useSaleProcessor'
 
 interface Props {
@@ -171,10 +171,10 @@ const handleCancel = () => {
 
 .warning-banner {
   background: #fef3c7;
-  border-left: 4px solid #f59e0b;
-  padding: 1rem;
-  margin-bottom: 1.5rem;
-  border-radius: 4px;
+  border: 1px solid #fcd34d;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
 }
 
 .warning-banner p {
@@ -241,19 +241,6 @@ const handleCancel = () => {
   color: #dc2626;
   font-size: 0.85rem;
   margin-top: 0.25rem;
-}
-
-.audit-notice {
-  background: #eff6ff;
-  border-left: 4px solid #3b82f6;
-  padding: 0.75rem;
-  border-radius: 4px;
-}
-
-.audit-notice p {
-  margin: 0;
-  color: #1e40af;
-  font-size: 0.9rem;
 }
 
 .modal-footer {

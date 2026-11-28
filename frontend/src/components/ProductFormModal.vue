@@ -570,9 +570,6 @@ watch(
               Gramos
             </button>
           </div>
-          <p class="text-[10px] text-slate-500 mt-1">
-            El precio y stock se manejarán en la unidad seleccionada
-          </p>
         </div>
 
         <div v-if="canManageInventory" class="col-span-6">
@@ -601,14 +598,9 @@ watch(
         <div v-if="marginLoss > 0" class="col-span-12 -mt-1">
           <div class="flex items-center gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-lg">
             <Banknote class="text-amber-600 dark:text-amber-400 shrink-0" :size="18" />
-            <div class="flex flex-col">
-              <span class="text-xs font-bold text-amber-800 dark:text-amber-300">
-                Alerta de Eficiencia
-              </span>
-              <span class="text-[10px] font-medium text-amber-700 dark:text-amber-300 leading-tight">
-                Perderás <b>${{ marginLoss }}</b> por unidad en ventas en efectivo debido al redondeo obligatorio.
-              </span>
-            </div>
+            <span class="text-xs font-medium text-amber-800 dark:text-amber-300 leading-tight">
+              Pierdes <b>${{ marginLoss }}</b> por unidad en efectivo por redondeo.
+            </span>
           </div>
         </div>
 
@@ -664,7 +656,7 @@ watch(
           class="col-span-12 mt-2 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
         >
           <span class="text-xs text-slate-500 dark:text-slate-400">
-            Archivar producto del catálogo activo
+            Archivar producto
           </span>
           <BaseButton
             type="button"
@@ -736,7 +728,7 @@ watch(
           <Trash2 :size="24" :stroke-width="1.5" class="text-red-500" />
         </div>
         <p class="text-sm text-slate-600 dark:text-slate-300">
-          <span class="font-semibold">{{ editingProduct?.name }}</span> será archivado del catálogo activo. Solo es posible si su stock total es cero.
+          Se archivará <span class="font-semibold">{{ editingProduct?.name }}</span> (requiere stock en 0).
         </p>
         <div
           v-if="deleteError"

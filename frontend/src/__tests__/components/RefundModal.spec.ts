@@ -113,11 +113,11 @@ describe('RefundModal.vue — Read Model FIFO y Resiliencia N1/N3 (C1-H4)', () =
 
     const fifoCard = wrapper.find('[data-testid="refund-fifo-read-model"]');
     expect(fifoCard.exists()).toBe(true);
-    expect(fifoCard.text()).toContain('Trazabilidad / Reingreso FIFO');
+    expect(fifoCard.text()).toContain('Producto dañado (Merma)');
     expect(fifoCard.text()).toContain('Lote #99999999');
-    expect(fifoCard.text()).toContain('Cant. orig: 2');
+    expect(fifoCard.text()).toContain('2 un');
     expect(fifoCard.text()).toContain('$ 1.850');
-    expect(fifoCard.text()).toContain('Reingreso vendible FIFO');
+    expect(fifoCard.text()).toContain('Vuelve al estante');
 
     const authorityCard = wrapper.find('[data-testid="refund-server-authority-card"]');
     expect(authorityCard.exists()).toBe(true);
@@ -126,8 +126,7 @@ describe('RefundModal.vue — Read Model FIFO y Resiliencia N1/N3 (C1-H4)', () =
     expect(wrapper.text()).not.toContain('~est.');
 
     await wrapper.find('input[type="checkbox"]').setValue(true);
-    expect(fifoCard.text()).toContain('Sin reingreso (Merma)');
-    expect(fifoCard.text()).toContain('0 unidades reingresan a stock vendible');
+    expect(fifoCard.text()).toContain('No vuelve al estante');
   });
 
   it('muestra banner N3 con Reintentar si falla la búsqueda sin falsos vacíos ni toast de error', async () => {

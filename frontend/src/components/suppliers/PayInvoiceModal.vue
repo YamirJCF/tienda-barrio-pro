@@ -2,7 +2,7 @@
   <BaseModal
     :modelValue="show"
     @update:modelValue="(val) => { if (!val) close(); }"
-    title="Registrar Abono a Proveedor"
+    title="Abonar Factura"
     :showCloseButton="true"
     maxHeight="90vh"
   >
@@ -10,16 +10,16 @@
       <!-- Read Model Factura (Autoridad SQL) -->
       <div class="text-sm text-slate-600 dark:text-slate-300 bg-background-light dark:bg-background-dark p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
         <p class="font-semibold text-slate-800 dark:text-slate-100">
-          Factura de: {{ invoice?.supplier?.name || 'Desconocido' }}
+          {{ invoice?.supplier?.name || 'Proveedor' }}
         </p>
         <p class="flex items-center justify-between text-xs">
-          <span>Total de la factura</span>
+          <span>Total factura</span>
           <span class="font-mono tabular-nums font-medium text-slate-700 dark:text-slate-200">
             {{ formatCurrency(invoice?.total_amount || 0) }}
           </span>
         </p>
         <p class="flex items-center justify-between pt-1.5 border-t border-slate-200 dark:border-slate-800">
-          <span class="text-sm font-bold text-slate-700 dark:text-slate-200">Saldo Pendiente</span>
+          <span class="text-sm font-bold text-slate-700 dark:text-slate-200">Pendiente</span>
           <span class="font-mono tabular-nums text-base font-black text-slate-900 dark:text-white">
             {{ formatCurrency(pendingBalance) }}
           </span>
@@ -36,7 +36,7 @@
         <div class="flex items-start gap-2.5">
           <AlertTriangle :size="16" class="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
           <p class="text-xs text-red-700 dark:text-red-300 font-medium">
-            No se pudo verificar el estado de caja ({{ cashSyncError }}). Puedes reintentar o registrar un <strong>Pago externo / fuera de caja</strong> ($0 en caja).
+            No se pudo verificar la caja ({{ cashSyncError }}). Reintenta o elige <strong>Fuera de caja</strong>.
           </p>
         </div>
         <BaseButton
@@ -60,7 +60,7 @@
       >
         <Info :size="16" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <p class="text-xs text-amber-800 dark:text-amber-300 font-medium">
-          {{ cashRegisterStore.isStaleSession ? 'El turno de caja superó 24 horas.' : 'Turno de caja cerrado.' }} Puedes registrar el abono seleccionando <strong>Pago externo / fuera de caja</strong> ($0 en caja).
+          {{ cashRegisterStore.isStaleSession ? 'Turno vencido (+24h).' : 'Caja cerrada.' }} Elige <strong>Fuera de caja</strong> para abonar.
         </p>
       </div>
 
@@ -68,10 +68,10 @@
       <div class="relative">
         <BaseInput
           v-model.number="amountToPay"
-          label="¿Cuánto deseas abonar?"
+          label="Monto"
           type="number"
           placeholder="0"
-          class="pr-24 font-mono tabular-nums"
+          class="pr-20 font-mono tabular-nums"
           :max="pendingBalance"
           min="0"
           step="1"
@@ -83,7 +83,7 @@
           class="absolute right-2 top-[34px] text-xs font-bold text-primary hover:text-primary-dark transition-colors px-2 py-1.5 rounded-md hover:bg-primary-light/20 z-10 cursor-pointer"
           :disabled="isSubmitting"
         >
-          TOTALIDAD
+          TODO
         </button>
       </div>
 
@@ -157,7 +157,7 @@
             class="flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all cursor-pointer"
           >
             <Wallet :size="20" :stroke-width="1.5" class="mb-1" />
-            <span class="text-[10px] font-semibold leading-tight text-center">Pago externo / fuera de caja</span>
+            <span class="text-[11px] font-semibold leading-tight text-center">Fuera de caja</span>
           </button>
         </div>
       </div>
@@ -165,7 +165,7 @@
       <!-- Descripción / Nota -->
       <div>
         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-          {{ isInternalPayment ? 'Descripción del egreso en caja (Obligatorio)' : 'Nota o comprobante externo (Opcional)' }}
+          {{ isInternalPayment ? 'Concepto (Obligatorio)' : 'Nota (Opcional)' }}
         </label>
         <input
           v-model="description"

@@ -12,7 +12,7 @@ Este documento rige el ciclo de vida temporal del núcleo de caja. Para garantiz
 2. **Bloqueo Operativo Automático:** Al cruzarse el umbral de las 24 horas, el sistema servidor DEBE transicionar automáticamente el estado del turno a "Expirado/Bloqueado". El servidor rechazará inmediatamente cualquier inyección o extracción de liquidez que intente asociarse a dicho turno.
 3. **Resolución por el Titular que Abrió el Turno (`POL-SEG-02`, `POL-SEG-03`):** Sobre un turno "Expirado/Bloqueado", el **único empleado** autorizado para ejecutar el proceso de Cierre de Caja (bajo Cierre Asistido de hasta 3 intentos) es **quien abrió originalmente ese turno**. Cualquier otro empleado, aunque tenga permiso de caja, tiene estrictamente bloqueado cerrar ese turno ajeno.
 4. **Bandera de Anomalía Administrativa:** Todo turno que alcance el límite de 24 horas y caiga en estado expirado DEBE ser marcado permanentemente en el Reporte de Auditoría Interna con una etiqueta de "Cierre por Caducidad" o "Negligencia de Cierre", sirviendo como alerta administrativa para el propietario.
-5. **Intervención Administrativa (Cierre Forzoso):** Si el empleado original que abrió el turno no se encuentra disponible para cerrar su turno caducado, el sistema DEBE permitir exclusivamente al **Administrador** realizar un "Cierre Forzoso". En este cierre forzoso **no siempre es obligatorio declarar conteo físico** (el Administrador puede cerrar sin conteo asumiendo el saldo esperado, o declararlo cuando corresponda), registrando una alerta de máxima severidad en la auditoría interna detallando qué administrador forzó la clausura.
+5. **Intervención Administrativa (Cierre Forzoso con Declaración Obligatoria):** Si un turno caducado (+24h) debe ser cerrado por el **Administrador** (sea propio o abierto por un empleado ausente), el sistema DEBE mostrarle exclusivamente al Administrador la ficha resumen del turno vencido (quién lo abrió, base inicial, efectivo esperado en cajón y resumen informativo de Nequi y Llave BRE) y **exigirle obligatoriamente declarar explícitamente el efectivo físico recuperado** (`0` o mayor, prohibiendo envíos en blanco o cierres sin conteo). Cuando el turno vencido fue abierto por otro usuario (empleado), el Administrador DEBE registrar además una observación breve obligatoria explicando la intervención. El servidor guarda siempre la diferencia exacta al peso (`Efectivo Declarado - Efectivo Esperado`), marca el cierre con bandera de caducidad (`+24h`) y registra el evento de auditoría.
 
 ---
 
@@ -30,16 +30,16 @@ Este documento rige el ciclo de vida temporal del núcleo de caja. Para garantiz
 - **Flujo Alternativo:** Ninguno.
 - **Postcondición:** Se preserva la pureza contable del lunes, impidiendo que el dinero del martes contamine el reporte del día anterior.
 
-**Caso B: Cierre Forzoso Administrativo ante Abandono**
+**Caso B: Cierre Forzoso Administrativo ante Olvido o Abandono (+24h)**
 - **Actor:** Administrador / Propietario.
-- **Precondición:** Un empleado abrió turno, trabajó, pero abandonó su puesto de trabajo de manera definitiva sin cerrar caja ni cuadrar el dinero. El turno alcanza las 24 horas y se bloquea.
+- **Precondición:** Un turno (abierto por el propio Administrador o por un empleado ausente) supera las 24 horas y queda bloqueado para operar.
 - **Flujo Principal:**
-  1. El Administrador ingresa al sistema y detecta que las operaciones están detenidas por el turno caducado del empleado ausente.
-  2. Al no poder contar con el empleado para el arqueo ciego, el Administrador selecciona la opción de "Cierre Forzoso de Emergencia".
-  3. El servidor cierra el turno, asumiendo matemáticamente que el dinero físico en la gaveta es exactamente el que el sistema esperaba, dejando el descuadre operativo en cero.
-  4. El servidor inyecta una advertencia de auditoría indeleble indicando que los fondos reales son desconocidos debido al cierre forzoso, responsabilizando administrativamente al evento.
-- **Flujo Alternativo:** Ninguno.
-- **Postcondición:** La tienda se desbloquea para abrir nuevos turnos, pero el historial forense guarda la prueba del quiebre de seguridad.
+  1. El Administrador ingresa al sistema y visualiza la ficha resumen del turno vencido (quién abrió, fecha/hora, base inicial, efectivo esperado en cajón y resumen informativo de transferencias digitales).
+  2. El Administrador verifica el efectivo físico real del cajón y digita obligatoriamente el monto recuperado (`0` o mayor; el sistema prohíbe confirmar en blanco o sin conteo).
+  3. Si el turno vencido fue abierto por un empleado, el Administrador digita además una observación breve obligatoria (ej. *"Empleado no asistió hoy, conté gaveta"*).
+  4. El servidor sella el cierre con la diferencia exacta al peso (`Efectivo Declarado - Efectivo Esperado`), estampa la marca de caducidad (`+24h`) y registra el evento de auditoría bajo la firma del Administrador.
+- **Flujo Alternativo:** Si el Administrador intenta confirmar con el monto vacío o (en turno ajeno) sin observación, el sistema rechaza la operación.
+- **Postcondición:** La tienda queda desbloqueada para abrir un nuevo turno y el historial contable conserva el saldo físico real declarado sin cifras asumidas.
 
 ---
 

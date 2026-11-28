@@ -1,6 +1,6 @@
-# 🗺️ Mapa de Lógica Global (v3.7)
+# 🗺️ Mapa de Lógica Global (v3.8)
 
-> **Módulos documentados:** 49 FRDs (48 con SDD + `FRD-003-01` validado pendiente de SDD/implementación) — `SDD_029_CONSENTIMIENTO_LEGAL_VERSIONADO` y `SDD_030_DERECHOS_TITULAR_Y_ARCHIVO_CONTABLE` aprobados con deuda (`🟠`)
+> **Módulos documentados:** 49 FRDs + 5 Estándares Estratégicos `ARQ-001..005` (`ARQ-002` v1.5, `ARQ-003` v1.6, `ARQ-004` v1.2, `ARQ-005` v1.0 — Barrera Lógica y Glosario Único del Tendero) — `FRD-004` v2.3, `FRD-027-01`, `FRD-003-01`, `FRD-017`, `FRD-006`, `FRD-006-01-01`, `FRD-007-01` y `FRD-026` validados contra políticas (pendiente sincronización SDD/código de Frentes 1–3)
 
 ---
 
@@ -119,6 +119,10 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | `SECURITY_STANDARDS.md` | Especificación Técnica de Seguridad y Encriptación | ✅ Vigente |
 | `MONETARY_STANDARD.md` | Estandarización de redondeo, decimales y moneda | ✅ Vigente |
 | `RLS_POLICIES.md` | Reglas y validaciones Row Level Security (Supabase) | ✅ Vigente |
+| `ARQ_002_POLITICAS_GLOBALES_NEGOCIO.md` | 18 Políticas Globales de Negocio (v1.5) | ✅ Vigente |
+| `ARQ_003_MATRIZ_TRAZABILIDAD_POLITICAS.md` | Matriz bidireccional Política ↔ FRD (v1.6) | ✅ Vigente |
+| `ARQ_004_DICCIONARIO_PARAMETROS_SISTEMA.md` | Diccionario de Parámetros del Sistema (v1.2 — incl. `P_MARGEN_DESCUADRE_EFECTIVO`) | ✅ Vigente |
+| `ARQ_005_BARRERA_LOGICA_Y_GLOSARIO_TENDERO.md` | Barrera Lógica Anti-Desvío, Zonas Congeladas y Glosario Único del Tendero (v1.0) | ✅ Vigente |
 
 ---
 
@@ -142,10 +146,10 @@ Documentos transversales que rigen la calidad y arquitectura (Ubicados en `01_re
 | **Seguridad Diaria** | FRD-001 / SDD-001 | 🟢 Validado |
 | **Registro y Autenticación** | FRD-002 / SDD-002 | 🟢 Validado |
 | **Gestión Empleados** | FRD-003 / FRD-003-01 / SDD-003 | 🟡 FRD-003-01 Validado (`/validate-policy` — Pendiente SDD/Fase 3) |
-| **Control de Caja** | FRD-004 / SDD-004 | 🟢 Validado |
+| **Control de Caja** | FRD-004 (v2.3) / FRD-027-01 / SDD-004 | 🟡 FRD v2.3 Validado (`ARQ-002` v1.5 / `ARQ-005` — Pendiente SDD/Código Frente 1: efectivo exclusivo + bloqueo vacío + margen) |
 | **Auditoría (Inviolable/Trazable)** | FRD-005 | 🟢 Validado |
-| **Inventario (Núcleo, Mov, Reembolso)**| FRD-006 / SDD-006 | 🟢 Validado |
-| **Ventas y POS** | FRD-007 / SDD-007 | 🟡 Aprobado (Plan Anulación H-A/B listos) |
+| **Inventario (Núcleo, Mov, Reembolso)**| FRD-006 / FRD-006-01-01 / SDD-006 | 🟡 FRD Validado (`ARQ-005` — Pendiente Código Frente 2: Glosario Único y retiro de `Vencimiento` en `StockEntryView.vue`) |
+| **Ventas y POS** | FRD-007 / FRD-007-01 / SDD-007 | 🟡 FRD Validado (`ARQ-005` — Pendiente Código Frente 3: botón `Pausa` solo empleados) |
 | **Reportes** | FRD-008 / SDD-008 | 🟢 Validado |
 | **Clientes** | FRD-009 / SDD-009 | 🟢 Validado |
 | **Valoración FIFO / Costo Ventas** | FRD-010 / SDD-010 | 🟢 Validado |

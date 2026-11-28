@@ -149,9 +149,8 @@ const showProfileSidebar = ref(false);
             </div>
             <div class="mb-5">
               <h4 class="text-lg font-bold text-slate-900 dark:text-white leading-tight">
-                Gastos del Día
+                Gastos de Caja
               </h4>
-              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Registrar Salida/Gasto</p>
             </div>
             <button
               @click="navigateTo('/cash-control?tab=expenses')"
@@ -169,23 +168,18 @@ const showProfileSidebar = ref(false);
       <section>
         <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1 flex items-center gap-2">
           <Activity :size="18" class="text-emerald-600 dark:text-emerald-400" />
-          <span>Supervisión en Vivo</span>
-          <span 
-            class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider"
-          >
-            Beta
-          </span>
+          <span>Equipo en Vivo</span>
         </h3>
         
         <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden mb-6">
           <div class="p-4 border-b border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
-            <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Estado de Conexión</h4>
+            <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Actividad</h4>
             <div class="flex gap-2">
               <span class="flex items-center gap-1 text-[10px] text-slate-500">
-                <span class="w-2 h-2 rounded-full bg-green-500"></span> Online
+                <span class="w-2 h-2 rounded-full bg-green-500"></span> Activo
               </span>
               <span class="flex items-center gap-1 text-[10px] text-slate-500">
-                <span class="w-2 h-2 rounded-full bg-slate-300"></span> Offline
+                <span class="w-2 h-2 rounded-full bg-slate-300"></span> Inactivo
               </span>
               <span class="flex items-center gap-1 text-[10px] text-slate-500">
                  <span class="w-2 h-2 rounded-full bg-blue-400"></span> Pausa
@@ -195,9 +189,9 @@ const showProfileSidebar = ref(false);
           
           <div class="divide-y divide-slate-50 dark:divide-slate-700/50">
             <!-- Empty State -->
-            <div v-if="presenceStore.activeSessions.size === 0" class="p-8 text-center flex flex-col items-center">
-               <WifiOff :size="32" class="text-slate-300 mb-2" />
-               <p class="text-xs text-slate-400">No hay empleados reportando actividad reciente.</p>
+            <div v-if="presenceStore.activeSessions.size === 0" class="p-6 text-center flex flex-col items-center">
+               <WifiOff :size="28" class="text-slate-300 mb-1.5" />
+               <p class="text-xs text-slate-400">Sin empleados conectados ahora.</p>
             </div>
 
             <!-- Listado de Empleados Detectados -->
@@ -288,9 +282,9 @@ const showProfileSidebar = ref(false);
         </div>
       </section>
 
-      <!-- Reportes e Inteligencia (C6 — Admin Only) -->
+      <!-- Reportes (C6 — Admin Only) -->
       <section v-if="isAdmin">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Reportes e Inteligencia</h3>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Reportes</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700"
         >
@@ -306,10 +300,10 @@ const showProfileSidebar = ref(false);
               </div>
               <div>
                 <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  Dashboard Financiero y Auditoría
+                  Resumen e Historial
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
-                  Rentabilidad P&amp;L, ventas e historial transversal
+                  Ganancias, ventas y movimientos
                 </p>
               </div>
             </div>
@@ -320,7 +314,7 @@ const showProfileSidebar = ref(false);
 
       <!-- Cartera y Fiados (UX-ADR-006: Hub lanzador hacia C4 /clients) -->
       <section v-if="isAdmin">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Cartera y Fiados</h3>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Clientes</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700"
         >
@@ -336,10 +330,10 @@ const showProfileSidebar = ref(false);
               </div>
               <div>
                 <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  Cartera y Política de Cupo
+                  Fiados y Cupo Inicial
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
-                  Clientes, fiados y cupo global por defecto
+                  Saldos pendientes y abonos
                 </p>
               </div>
             </div>
@@ -350,7 +344,7 @@ const showProfileSidebar = ref(false);
 
       <!-- Abastecimiento (C5 — Proveedores y Cuentas por Pagar) -->
       <section v-if="isAdmin">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Abastecimiento</h3>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 px-1">Proveedores</h3>
         <div
           class="flex flex-col overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700"
         >
@@ -368,10 +362,10 @@ const showProfileSidebar = ref(false);
               </div>
               <div>
                 <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  Proveedores y Cuentas por Pagar
+                  Proveedores y Facturas
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
-                  Directorio, facturas pendientes y abonos
+                  Cuentas por pagar y abonos
                 </p>
               </div>
             </div>
@@ -401,10 +395,10 @@ const showProfileSidebar = ref(false);
               </div>
               <div>
                 <p class="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  Catálogo y Lotes FIFO
+                  Productos y Entradas
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
-                  Productos, stock, precios y entradas de mercancía
+                  Precios, lotes y compras
                 </p>
               </div>
             </div>
@@ -427,7 +421,7 @@ const showProfileSidebar = ref(false);
                   Inventariado Físico
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400">
-                  Conteo físico de estantería con caja cerrada
+                  Conteo de estantería
                 </p>
               </div>
             </div>

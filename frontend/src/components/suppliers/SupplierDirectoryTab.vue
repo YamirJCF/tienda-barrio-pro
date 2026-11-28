@@ -72,7 +72,7 @@
         <!-- Deuda CxP del Servidor + Acciones -->
         <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div>
-            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Deuda CxP Pendiente</p>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Por Pagar</p>
             <p
               class="text-sm font-black font-mono tabular-nums"
               :class="Number(supplier.pending_debt ?? 0) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'"
@@ -92,7 +92,7 @@
               @click="emit('view-payables', supplier.id)"
             >
               <Receipt :size="14" class="mr-1" />
-              Ver CxP
+              Facturas
             </BaseButton>
 
             <button
@@ -229,10 +229,10 @@
           <AlertTriangle :size="18" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div class="text-xs text-amber-900 dark:text-amber-200 space-y-1">
             <p>
-              ¿Confirmas eliminar al proveedor <strong>{{ supplierToDelete?.name }}</strong>? Esta acción no se puede deshacer.
+              ¿Eliminar a <strong>{{ supplierToDelete?.name }}</strong>? No se puede deshacer.
             </p>
             <p v-if="Number(supplierToDelete?.pending_debt ?? 0) > 0" class="font-semibold text-red-700 dark:text-red-300">
-              Tiene deuda CxP activa ({{ formatCurrency(Number(supplierToDelete?.pending_debt ?? 0)) }}). El servidor bloqueará la eliminación si posee facturas vinculadas.
+              Tiene {{ formatCurrency(Number(supplierToDelete?.pending_debt ?? 0)) }} pendientes por pagar.
             </p>
           </div>
         </div>

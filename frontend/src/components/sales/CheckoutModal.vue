@@ -571,19 +571,19 @@ watch(currentMethod, (newMethod) => {
             </div>
 
             <!-- Scenario B: Nequi/Digital -->
-            <div v-else-if="isNequi" class="flex flex-col items-center justify-center gap-6 h-full py-8 text-center">
-                <div class="w-24 h-24 bg-pink-100 dark:bg-pink-900/20 rounded-full flex items-center justify-center mb-2">
-                    <QrCode :size="48" class="text-pink-600 dark:text-pink-400" />
+            <div v-else-if="isNequi" class="flex flex-col items-center justify-center gap-4 h-full py-6 text-center">
+                <div class="w-20 h-20 bg-pink-100 dark:bg-pink-900/20 rounded-full flex items-center justify-center">
+                    <QrCode :size="40" class="text-pink-600 dark:text-pink-400" />
                 </div>
                 <div>
-                    <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                      {{ currentMethod === 'llave_bre' ? 'Pago con Llave Bre-B' : 'Pago con Nequi' }}
+                    <h4 class="text-base font-bold text-gray-900 dark:text-white mb-1">
+                      {{ currentMethod === 'llave_bre' ? 'Llave Bre-B' : 'Nequi' }}
                     </h4>
-                    <p class="text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto text-sm leading-relaxed">
-                        Solicita al cliente el pago exacto de <strong class="text-gray-900 dark:text-white">$ {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : total) }}</strong>.
+                    <p class="text-2xl font-black font-mono tabular-nums text-gray-900 dark:text-white">
+                        $ {{ formatCurrency(remainingBalance.gt(0) ? remainingBalance : total) }}
                     </p>
                 </div>
-                <div class="w-full max-w-xs mt-4">
+                <div class="w-full max-w-xs mt-2">
                     <label class="block text-left mb-1 text-xs font-semibold text-gray-500 uppercase">Referencia (Opcional)</label>
                     <input 
                         v-model="reference"
@@ -864,16 +864,11 @@ watch(currentMethod, (newMethod) => {
                 :disabled="!canComplete"
                 class="w-full h-[52px] bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-100 disabled:text-gray-400 disabled:dark:bg-gray-800 disabled:dark:text-gray-600 disabled:cursor-not-allowed rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none flex flex-col items-center justify-center transition-all duration-200 cursor-pointer"
             >
-                <div class="flex flex-col items-center leading-none">
-                    <span class="text-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-0.5">
-                        Completar Venta
+                <div class="flex items-center gap-2">
+                    <span class="text-white text-xl font-black tracking-wide">CONFIRMAR</span>
+                    <span v-if="change.gt(0)" class="bg-emerald-800/40 text-emerald-50 text-xs px-2 py-0.5 rounded font-bold font-mono tabular-nums ml-1">
+                        ${{ formatCurrency(change) }}
                     </span>
-                    <div class="flex items-center gap-2">
-                        <span class="text-white text-xl font-black tracking-wide">CONFIRMAR</span>
-                        <span v-if="change.gt(0)" class="bg-emerald-800/40 text-emerald-50 text-[10px] px-1.5 py-0.5 rounded font-bold font-mono tabular-nums ml-1">
-                            ${{ formatCurrency(change) }}
-                        </span>
-                    </div>
                 </div>
             </button>
         </footer>

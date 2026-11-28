@@ -11,7 +11,7 @@
           <ArrowLeft :size="22" />
         </button>
         <div>
-          <h1 class="text-lg font-bold text-slate-900 dark:text-white leading-tight">Nueva Entrada Atómica</h1>
+          <h1 class="text-lg font-bold text-slate-900 dark:text-white leading-tight">Registrar Entrada</h1>
           <p class="text-xs text-slate-500 dark:text-slate-400 capitalize">{{ currentDate }}</p>
         </div>
       </div>
@@ -28,14 +28,14 @@
           <div class="flex items-center justify-between gap-2 flex-wrap">
             <div class="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-sm">
               <CheckCircle2 :size="18" />
-              <span>Entrada Atómica Confirmada</span>
+              <span>Entrada Registrada</span>
             </div>
             <span class="font-mono tabular-nums text-base font-bold text-emerald-700 dark:text-emerald-300">
-              Total factura (SQL): {{ formatWithSign(confirmedReceipt.totalEntryCost) }}
+              Total: {{ formatWithSign(confirmedReceipt.totalEntryCost) }}
             </span>
           </div>
           <p class="text-xs text-emerald-800 dark:text-emerald-200 font-mono tabular-nums">
-            {{ confirmedReceipt.itemsProcessed }} producto(s) · {{ confirmedReceipt.totalUnits }} unidad(es) ingresadas a inventario FIFO.
+            {{ confirmedReceipt.itemsProcessed }} producto(s) · {{ confirmedReceipt.totalUnits }} unidad(es)
           </p>
           <div class="pt-1 flex gap-2">
             <BaseButton type="button" size="sm" variant="primary" @click="router.push('/inventory')">
@@ -58,16 +58,16 @@
             <p class="text-xs font-bold text-red-700 dark:text-red-300">No se pudo registrar la entrada</p>
             <p class="text-xs text-red-600 dark:text-red-200 mt-0.5">{{ submitError }}</p>
             <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Tus productos siguen en la lista (operación todo-o-nada: no se guardaron registros parciales).
+              Tus productos siguen en la lista.
             </p>
           </div>
         </section>
 
-        <!-- Movement Reason & Link to Salidas -->
+        <!-- Movement Reason & Link to Conteo -->
         <section class="bg-surface-light dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-4 items-start md:items-end">
           <div class="flex-1 space-y-1 w-full">
             <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">
-              Motivo de Entrada (Compra / Reposición)
+              Motivo
             </label>
             <select
               v-model="reason"
@@ -82,30 +82,22 @@
             @click="router.push('/inventory-count')"
             class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-background-light dark:bg-background-dark text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors shrink-0 cursor-pointer"
           >
-            ¿Conteo físico de estantería? Ir a Inventariado →
+            Ir a Inventariado →
           </button>
         </section>
 
-        <!-- Supplier Section (Informativo, desacoplado de CxP) -->
+        <!-- Supplier Section -->
         <section class="bg-surface-light dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
-          <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
-            <h2 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Datos del Proveedor (Opcional)
-            </h2>
-            <span class="text-[11px] text-slate-400">
-              Registro logístico independiente de Cuentas por Pagar
-            </span>
-          </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="space-y-1">
               <label class="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">
-                Proveedor
+                Proveedor (Opcional)
               </label>
               <select
                 v-model="selectedSupplierId"
                 class="w-full h-10 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-primary"
               >
-                <option value="">-- Sin asignar --</option>
+                <option value="">Sin asignar</option>
                 <option v-for="supplier in suppliers" :key="supplier.id" :value="supplier.id">
                   {{ supplier.name }}
                 </option>
@@ -114,8 +106,8 @@
             <div class="space-y-1">
               <BaseInput
                 v-model="invoiceRef"
-                label="Ref. Remisión / Factura (Informativo)"
-                placeholder="Ej: REM-2026-001"
+                label="Remisión / Factura (Opcional)"
+                placeholder="Ej: REM-001"
               />
             </div>
           </div>
@@ -128,7 +120,7 @@
             class="text-center py-10 text-slate-400 bg-surface-light dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-slate-800"
           >
             <ListPlus class="mx-auto mb-2" :size="36" />
-            <p class="text-sm font-medium">Busca productos abajo para agregarlos a la factura</p>
+            <p class="text-sm font-medium">Busca y agrega productos abajo</p>
           </div>
 
           <div
@@ -152,7 +144,7 @@
               </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
               <div class="space-y-1">
                 <label class="text-[10px] font-bold text-slate-500 uppercase">Cantidad</label>
                 <input
@@ -161,15 +153,6 @@
                   min="0.01"
                   step="0.01"
                   class="w-full h-9 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 text-right text-slate-900 dark:text-white font-mono tabular-nums text-sm focus:border-primary outline-none"
-                />
-              </div>
-
-              <div class="space-y-1">
-                <label class="text-[10px] font-bold text-slate-500 uppercase">Vencimiento</label>
-                <input
-                  v-model="item.expirationDate"
-                  type="date"
-                  class="w-full h-9 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 text-slate-900 dark:text-white font-mono tabular-nums text-xs focus:border-primary outline-none"
                 />
               </div>
 
@@ -215,12 +198,9 @@
     <div class="bg-surface-light/95 dark:bg-surface-dark/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 p-3 pb-6 z-40 shrink-0">
       <div class="max-w-3xl mx-auto space-y-3">
         <!-- Resumen operativo (SIN cálculos monetarios en cliente — autoridad servidor) -->
-        <div class="flex justify-between items-center px-2">
+        <div v-if="entryItems.length > 0" class="flex justify-between items-center px-1">
           <div class="text-xs font-semibold text-slate-600 dark:text-slate-300 font-mono tabular-nums">
             {{ entryItems.length }} producto(s) · {{ totalUnitsFormatted }} unidad(es)
-          </div>
-          <div class="text-[11px] text-slate-400">
-            Total monetario validado por servidor al confirmar
           </div>
         </div>
 
@@ -263,7 +243,7 @@
         >
           <div class="flex items-center justify-center gap-2">
             <Save :size="20" />
-            GUARDAR ENTRADA ATÓMICA
+            GUARDAR ENTRADA
           </div>
         </BaseButton>
       </div>
@@ -332,7 +312,6 @@ interface EntryItem {
   unitCost: number;
   salePrice: number;
   measurementUnit: string;
-  expirationDate?: string;
 }
 
 const entryItems = ref<EntryItem[]>([]);
@@ -400,7 +379,6 @@ const addItem = (product: Product) => {
     unitCost: product.cost ? new Decimal(product.cost).toNumber() : 0,
     salePrice: product.price ? new Decimal(product.price).toNumber() : 0,
     measurementUnit: product.measurementUnit,
-    expirationDate: '',
   });
 
   searchQuery.value = '';
@@ -430,7 +408,7 @@ const saveEntry = async () => {
             quantity: Number(item.quantity),
             unitCost: Number(item.unitCost),
             salePrice: Number(item.salePrice),
-            expirationDate: item.expirationDate || null,
+            expirationDate: null,
           })),
           reason: reason.value,
           supplierId: selectedSupplierId.value || null,

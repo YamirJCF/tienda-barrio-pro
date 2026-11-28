@@ -254,10 +254,10 @@ const navigateToNotifications = () => {
           <div class="flex flex-col gap-1">
             <h3 class="text-blue-900 dark:text-blue-100 font-bold text-sm flex items-center gap-2">
               <Verified :size="20" class="text-blue-600 dark:text-blue-400" />
-              ¡Bienvenido! Tu tienda está lista.
+              Tu tienda está lista
             </h3>
             <p class="text-blue-700 dark:text-blue-300 text-xs leading-relaxed">
-              Paso 1: Agrega tu primer producto para empezar a vender.
+              Agrega tu primer producto para empezar a vender.
             </p>
           </div>
           <button

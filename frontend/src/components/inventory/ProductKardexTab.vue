@@ -17,10 +17,6 @@
             {{ preset.label }}
           </button>
         </div>
-
-        <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-medium text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60">
-          Kardex Inmutable
-        </span>
       </div>
 
       <!-- Actor Filter -->
@@ -71,8 +67,7 @@
       <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
         <History :size="24" :stroke-width="1.5" />
       </div>
-      <p class="text-sm font-semibold text-slate-800 dark:text-white">No hay movimientos registrados</p>
-      <p class="text-xs text-slate-400 mt-1">Prueba seleccionando una ventana temporal más amplia.</p>
+      <p class="text-sm font-semibold text-slate-800 dark:text-white">Sin movimientos</p>
     </div>
 
     <!-- History List -->

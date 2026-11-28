@@ -77,6 +77,7 @@ Antes de modificar **cualquier** función, archivo o componente listado en este 
 | 2026-11-25 | LF-013 | WO-OLA2-C1-001 (UX-ADR-007): Endurecimiento de cupo/offline en Fiado y Retiro Personal ($0), extracción de `PersonalWithdrawalModal`, resiliencia de catálogo y Read Model FIFO en `RefundModal` (`C1-H1..C1-H4`) | Usuario (Aprobación explícita WO-OLA2-C1-001) | `[UX-ARCH-APPROVED] [LOCKFILE-APPROVED]` (rama `feat/ola2-c1-mostrador-pos`) |
 | 2026-11-25 | LF-013, LF-014 | WO-OLA2-C6-001 (UX-ADR-008): Consolidación de C6 en `/reports` (aliases `/admin/financial-dashboard` y `/history`), retiro de `FinancialDashboardView.vue` e `HistoryView.vue` hacia subcomponentes lazy `v-if` y cierre de `C6-H1..C6-H3` | Usuario (Aprobación explícita WO-OLA2-C6-001) | `[UX-ARCH-APPROVED]` `[LOCKFILE-APPROVED]` (rama `feat/ola2-c6-centro-inteligencia`) |
 | 2026-11-25 | LF-013, LF-014 | WO-OLA2-C7-SHELL-001 (UX-ADR-009): Árbitro `N5` en `App.vue` (7 overlays con `CriticalAlertModal`), retorno a `/` en `BottomNav.vue`, Enrutador `N4` en `NotificationCenterView.vue`, resiliencia `C7` y cero deuda `baselineDebt` fuera de `C8` | Usuario (Aprobación explícita WO-OLA2-C7-SHELL-001) | `[UX-ARCH-APPROVED]` `[LOCKFILE-APPROVED]` (rama `feat/ola2-c7-shell-cierre`) |
+| 2026-11-27 | LF-015, LF-016 | Regla 12.3 de Economía Verbal (Estándar POS) en `AGENTS.md` / `ARQ-005` y Fitness Function #8 en `ux-fitness.spec.ts` (bloqueo de jerga/narración de servidor y tope de 25 palabras por `<p>` operativo) | Usuario (Aprobación explícita en sesión) | `[LOCKFILE-APPROVED]` (rama `draft/arq-005-barrera-logica-y-arqueo`) |
 
 ---
 
@@ -95,7 +96,7 @@ Si un agente modifica una funcionalidad protegida SIN aprobación:
 Aplica **únicamente a cambios internos dentro de vistas ya registradas en `ux-manifest.json`** (sin alterar rutas, `App.vue`, `BottomNav.vue`, `baselineDebt` ni crear vistas nuevas):
 
 - Estilos CSS y animaciones dentro de vistas existentes
-- Textos y labels de UI (sin introducir `alert()`, `confirm()`, `prompt()`, `vue-toastification` ni `material-icons`)
+- Textos y labels de UI sujetos a la **Regla 12.3 (Economía Verbal — Estándar POS)** y `ux-fitness.spec.ts` #8 (sin introducir `alert()`, `confirm()`, `prompt()`, `vue-toastification`, `material-icons`, jerga interna ni párrafos operativos `> 25` palabras)
 - Orden de elementos visuales internos que no afecten `App.vue`, `BottomNav.vue` ni las Top Tasks
 - Subcomponentes internos nuevos dentro de un Contexto existente que no alteren los elementos protegidos (`LF-001` a `LF-016`)
 - Documentación fuera de `LF-013` y `.agent/`

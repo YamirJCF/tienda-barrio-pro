@@ -31,6 +31,12 @@ export interface CashControlEvent {
     created_at?: string;
 }
 
+export interface AdminExpectedCashSummary {
+    efectivo: number;
+    nequi: number;
+    llave_bre: number;
+}
+
 export interface StoreCashStatus {
     isOpen: boolean;
     openingAmount: number;
@@ -41,6 +47,7 @@ export interface StoreCashStatus {
     closingAttempts?: number;
     isExpired24h?: boolean;
     lifecycleState?: 'open' | 'Expirado/Bloqueado' | 'closed';
+    adminExpectedSummary?: AdminExpectedCashSummary | null;
     pendingForcedSession?: {
         sessionId: string;
         openedBy?: string;
@@ -187,14 +194,27 @@ export interface SessionOpexExpensesResponse {
     data: SessionOpexExpense[];
 }
 
+export interface PendingForcedSessionDTO {
+    id: string;
+    openedAt: string;
+    openedByName?: string;
+    openedByRole?: string;
+    openingBalance?: number;
+    expectedEfectivo?: number;
+    nequiSummary?: number;
+    llaveBreSummary?: number;
+    isOpenedByOther?: boolean;
+    channels: string[];
+}
+
 export interface CashRepository {
     getStoreStatus(storeId: string): Promise<StoreCashStatus>;
     registerEvent(event: CashControlEvent): Promise<{ success: boolean; data?: any; error?: string; code?: string }>;
     getSessionTransactions(sessionId: string): Promise<CashTransaction[]>;
     getSessionOpexExpenses(sessionId: string): Promise<SessionOpexExpensesResponse>;
     addMovement(transaction: CashTransaction, sessionId: string): Promise<{ success: boolean; data?: any; error?: string; code?: string }>;
-    getPendingForcedSessions(storeId?: string): Promise<{ id: string; openedAt: string; channels: string[] }[]>;
-    reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number | null): Promise<void>;
+    getPendingForcedSessions(storeId?: string): Promise<PendingForcedSessionDTO[]>;
+    reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number, notes?: string): Promise<void>;
     getOwnShiftMovements(
         storeId: string,
         paymentMethod?: OwnShiftPaymentMethodFilter,
@@ -252,6 +272,15 @@ export const cashRepository: CashRepository = {
                     status.closingAttempts = Number(result.closingAttempts ?? 0);
                     status.isExpired24h = Boolean(result.isExpired24h);
                     status.lifecycleState = result.lifecycleState || (status.isExpired24h ? 'Expirado/Bloqueado' : 'open');
+                    if (result.adminExpectedSummary && typeof result.adminExpectedSummary === 'object') {
+                        status.adminExpectedSummary = {
+                            efectivo: Number(result.adminExpectedSummary.efectivo ?? 0),
+                            nequi: Number(result.adminExpectedSummary.nequi ?? 0),
+                            llave_bre: Number(result.adminExpectedSummary.llave_bre ?? 0),
+                        };
+                    } else {
+                        status.adminExpectedSummary = null;
+                    }
                     status.lastEvent = {
                         id: result.sessionId,
                         store_id: storeId,
@@ -551,37 +580,45 @@ export const cashRepository: CashRepository = {
         }
     },
 
-    async getPendingForcedSessions(storeId?: string): Promise<{ id: string; openedAt: string; channels: string[] }[]> {
+    async getPendingForcedSessions(storeId?: string): Promise<PendingForcedSessionDTO[]> {
         const supabase = requireSupabase();
-        let query = supabase
-            .from('cash_sessions')
-            .select('id, opened_at')
-            .eq('status', 'closed')
-            .eq('forced_close', true)
-            .is('actual_balance', null);
-
-        if (storeId) {
-            query = query.eq('store_id', storeId);
+        if (!storeId) {
+            return [];
         }
 
-        const { data: sessions, error } = await query.order('opened_at', { ascending: true });
+        const { data, error } = await supabase.rpc('rpc_obtener_turnos_forzados_pendientes', {
+            p_store_id: storeId,
+        });
 
         if (error) throw error;
 
-        return (sessions ?? []).map((s: any) => ({
+        const rows = Array.isArray((data as any)?.data) ? (data as any).data : [];
+        return rows.map((s: any) => ({
             id: s.id,
             openedAt: s.opened_at,
+            openedByName: s.opened_by_name || 'Usuario',
+            openedByRole: s.opened_by_role || 'employee',
+            openingBalance: Number(s.opening_balance ?? 0),
+            expectedEfectivo: Number(s.expected_efectivo ?? 0),
+            nequiSummary: Number(s.nequi_summary ?? 0),
+            llaveBreSummary: Number(s.llave_bre_summary ?? 0),
+            isOpenedByOther: Boolean(s.is_opened_by_other),
             channels: ['efectivo'],
         }));
     },
 
-    async reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number | null): Promise<void> {
+    async reconcileForcedSession(sessionId: string, employeeId: string, actualBalance: number, notes?: string): Promise<void> {
         const supabase = requireSupabase();
-        const { data, error } = await supabase.rpc('rpc_reconciliar_cierre_forzado', {
+        const rpcPayload: Record<string, any> = {
             p_session_id: sessionId,
             p_employee_id: employeeId,
             p_actual_balance: actualBalance,
-        });
+        };
+        if (notes && notes.trim().length > 0) {
+            rpcPayload.p_notes = notes.trim();
+        }
+
+        const { data, error } = await supabase.rpc('rpc_reconciliar_cierre_forzado', rpcPayload);
 
         if (error) throw error;
         if (!(data as any)?.success) throw new Error('RECONCILIATION_FAILED');

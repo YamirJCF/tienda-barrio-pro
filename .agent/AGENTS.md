@@ -1,5 +1,14 @@
 # Reglas Específicas del Proyecto (Tienda Barrio Pro)
 
+## 1. Autoridad del Backend y Flujo Unidireccional
+
+La arquitectura separa estrictamente **Backend = Autoridad de la Verdad** (Supabase: PostgreSQL, RPCs, RLS) y **Frontend = Consumidor de Experiencia** (Vue + Pinia):
+
+- **Cálculos y Reglas Críticas en Servidor:** Toda operación financiera (totales, impuestos, descuentos, saldos) y validación real de stock o permisos ocurre en PostgreSQL/RPC/RLS. Prohibido calcular totales de negocio o decidir permisos de seguridad en `.vue`/`.ts` (el frontend solo valida formato de entrada y aplica estilo visual, ej. pintar rojo un negativo).
+- **Flujo de Una Sola Vía (`UI → Store → Supabase`):** Los Stores de Pinia son caché temporal, nunca fuente de verdad. Asume que cualquier dato en memoria puede estar obsoleto; toda escritura re-valida invariantes en el Backend.
+- **Espera, Bloqueo y Cero Optimistic UI en Dinero/Stock:** Las lecturas muestran *Skeletons* acordes a la estructura real; las mutaciones (`POST`/RPC) muestran estado de carga y bloquean doble envío hasta resolver la promesa. Prohibido usar *Optimistic UI* en operaciones de dinero, caja o inventario.
+- **Contrato de Esquema:** Prohibido agregar campos "mockeados" en componentes o stores que no existan previamente en el contrato de datos del Backend.
+
 ## 2. Verificación de Esquema Real (Anti-Alucinación de Nombres)
 
 Antes de escribir CUALQUIER línea de SQL, RPC o migración que referencie una tabla o columna que no fue creada en esta misma tarea, es OBLIGATORIO ejecutar primero:
@@ -122,4 +131,13 @@ Toda modificación o adición en la interfaz, rutas, modales globales o alertas 
   - Prohibido aumentar cualquier array de `baselineDebt` en `ux-manifest.json` (solo puede reducirse o mantenerse igual).
   - Prohibido introducir `alert()`, `confirm()`, `prompt()`, importaciones nuevas de `vue-toastification` o usos nuevos de `material-icons`.
 - **Invariante Regla 11:** Las rutas y subvistas del Contexto `C8` marcadas como `blindada` (incluyendo `GatekeeperPending.vue`) no se modifican salvo autorización explícita del usuario.
+
+### 12.3 Economía Verbal e Interfaz Intuitiva (Estándar POS)
+- **Modelo de referencia (`POSView.vue`):** En estado operativo normal (sin error ni bloqueo), toda vista o modal muestra únicamente **Dato clave + Campo + Acción**. Queda prohibido incluir cajas o banners fijos de *"protocolo"*, manuales permanentes o textos que expliquen cómo funciona la pantalla.
+- **1 Idea = 1 Lugar (Cero Repetición):** Si el título, pestaña o etiqueta del campo ya nombra el objeto o la acción, está prohibido repetirlo en subtítulos, párrafos introductorios, placeholders o dentro del botón.
+- **Presupuesto de Palabras:**
+  - Botones y pestañas: **1 a 3 palabras** (ej. `Cobrar`, `Cerrar Caja`, `Fuera de caja`).
+  - Títulos de vista/modal y etiquetas de campo: **1 a 4 palabras** (ej. `Efectivo en Cajón`, `Cupo Inicial`).
+  - Estados vacíos y alertas `N1`/`N3`: **máximo 1 oración directa** (`Causa + Acción`, máximo **25 palabras** estáticas por `<p>`).
+- **Arquitectura Invisible:** Las reglas internas del servidor (`FIFO`, `P&L`, `OPEX`, `SQL`, `RPC`, `Kardex`, *"el servidor calcula/valida"*) gobiernan el código, **nunca** se narran en `<template>` al usuario (auditado automáticamente en `ux-fitness.spec.ts`).
 

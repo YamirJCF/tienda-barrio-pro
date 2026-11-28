@@ -206,7 +206,7 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
         <ArrowLeft :size="24" :stroke-width="1.5" class="text-gray-900 dark:text-white" />
       </button>
       <h1 class="flex-1 text-center text-lg font-bold tracking-tight text-gray-900 dark:text-white">
-        Administrar Empleados
+        Empleados
       </h1>
       <div class="size-10"></div>
     </header>
@@ -221,7 +221,7 @@ const handleEmployeeSaved = (employee: Employee, action: 'create' | 'update') =>
         class="mb-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3.5 py-2.5 flex items-center gap-2.5 text-xs font-medium text-amber-800 dark:text-amber-300"
       >
         <AlertTriangle :size="16" class="shrink-0" />
-        <span>Límite de 5 empleados operativos activos alcanzado (5/5). Desactiva uno existente para crear o reactivar otro.</span>
+        <span>Cupo lleno (5/5 activos). Desactiva uno para agregar otro.</span>
       </div>
 
       <!-- Barra de búsqueda, filtros Activos/Inactivos y cupo 5/5 (sin contar owner_) -->

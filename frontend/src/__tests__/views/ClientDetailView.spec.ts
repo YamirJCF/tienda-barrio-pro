@@ -236,8 +236,8 @@ describe('ClientDetailView.vue', () => {
     expect(deleteBtn).toBeDefined();
     await deleteBtn!.trigger('click');
 
-    expect(wrapper.text()).toContain('Acción Denegada');
-    expect(wrapper.text()).toContain('No se puede eliminar a Maria Perez porque tiene una deuda de:');
+    expect(wrapper.text()).toContain('Tiene Saldo Pendiente');
+    expect(wrapper.text()).toContain('Maria Perez tiene una deuda activa:');
     expect(mockDeleteClient).not.toHaveBeenCalled();
   });
 
@@ -276,7 +276,7 @@ describe('ClientDetailView.vue', () => {
     const wrapper = createWrapper();
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Historial de Transacciones');
+    expect(wrapper.text()).toContain('Movimientos');
     expect(wrapper.text()).toContain('Venta #1001');
     expect(wrapper.text()).toContain('+20.000');
   });

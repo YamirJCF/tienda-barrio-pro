@@ -617,7 +617,7 @@ describe('WO-OLA2-C6-001: Centro de Inteligencia y Auditoría (/reports)', () =>
 
     const opexText = wrapper.get('[data-testid="shift-forensic-opex"]').text();
     const refundsText = wrapper.get('[data-testid="shift-forensic-refunds"]').text();
-    expect(opexText).toContain('Gastos OPEX');
+    expect(opexText).toContain('Gastos de Caja');
     expect(opexText).toContain('-$ 18.000');
     expect(refundsText).toContain('Reembolsos');
     expect(refundsText).toContain('-$ 4.500');

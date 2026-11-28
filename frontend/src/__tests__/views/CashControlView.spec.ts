@@ -44,6 +44,7 @@ vi.mock('../../composables/useNotifications', () => ({
 
 // ---- Stores -------------------------------------------------------------
 const mockOpenRegister = vi.fn();
+const mockCloseRegister = vi.fn();
 const mockSyncFromBackend = vi.fn();
 const mockRegisterExpense = vi.fn();
 
@@ -54,6 +55,7 @@ const cashStoreState = reactive<{
   currentSession: any;
   pendingForcedSessionInfo: any;
   lastSyncError: string | null;
+  adminExpectedSummary: { efectivo: number; nequi: number; llave_bre: number } | null;
 }>({
   isOpen: false,
   isStaleSession: false,
@@ -61,6 +63,7 @@ const cashStoreState = reactive<{
   currentSession: null,
   pendingForcedSessionInfo: null,
   lastSyncError: null,
+  adminExpectedSummary: null,
 });
 
 vi.mock('../../stores/cashRegister', () => ({
@@ -71,13 +74,14 @@ vi.mock('../../stores/cashRegister', () => ({
     get currentSession() { return cashStoreState.currentSession; },
     get pendingForcedSessionInfo() { return cashStoreState.pendingForcedSessionInfo; },
     get lastSyncError() { return cashStoreState.lastSyncError; },
+    get adminExpectedSummary() { return cashStoreState.adminExpectedSummary; },
     syncFromBackend: mockSyncFromBackend,
     openRegister: mockOpenRegister,
-    closeRegister: vi.fn(),
+    closeRegister: mockCloseRegister,
     registerExpense: mockRegisterExpense,
-    fetchPendingForcedSessions: () => cashRepository.getPendingForcedSessions(),
-    reconcileForcedClose: (sessionId: string, employeeId: string, actualBalance: number) =>
-      cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance),
+    fetchPendingForcedSessions: (storeId?: string) => cashRepository.getPendingForcedSessions(storeId),
+    reconcileForcedClose: (sessionId: string, employeeId: string, actualBalance: number, notes?: string) =>
+      cashRepository.reconcileForcedSession(sessionId, employeeId, actualBalance, notes),
   }),
 }));
 
@@ -144,15 +148,27 @@ const mountView = () =>
         BaseButton: BaseButtonStub,
         PinChallengeModal: true,
         FormInputCurrency: {
-          props: ['modelValue', 'disabled', 'placeholder', 'autofocus'],
+          props: ['modelValue', 'disabled', 'placeholder', 'autofocus', 'allowNull'],
           emits: ['update:modelValue'],
-          template: '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', Number($event.target.value))" />',
+          template: '<input :value="modelValue ?? \'\'" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value === \'\' ? (allowNull ? null : 0) : Number($event.target.value))" />',
         },
       },
     },
   });
 
-const PENDING = [{ id: 'sess-1', opened_at: '2026-10-17T20:56:14Z' }];
+const PENDING = [
+  {
+    id: 'sess-1',
+    opened_at: '2026-10-17T20:56:14Z',
+    opened_by: 'emp-other',
+    opened_by_name: 'Cajero Prueba',
+    opening_balance: 50000,
+    expected_efectivo: 103000,
+    nequi_summary: 25000,
+    llave_bre_summary: 10000,
+    is_opened_by_other: true,
+  },
+];
 
 enableAutoUnmount(afterEach);
 
@@ -161,7 +177,7 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     setActivePinia(createPinia());
     vi.clearAllMocks();
     fromCalls.length = 0;
-    state.sessionsResult = { data: [], error: null };
+    state.sessionsResult = { data: { success: true, data: [] }, error: null };
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
     authState.isAdmin = true;
@@ -175,42 +191,63 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     cashStoreState.currentSession = null;
     cashStoreState.pendingForcedSessionInfo = null;
     cashStoreState.lastSyncError = null;
+    cashStoreState.adminExpectedSummary = null;
 
     mockRoute.query = {};
     mockSyncFromBackend.mockResolvedValue(false);
     mockOpenRegister.mockResolvedValue(undefined);
+    mockCloseRegister.mockResolvedValue({ success: true, sealedWithAlert: false });
     mockRegisterExpense.mockResolvedValue(undefined);
-    mockRpc.mockResolvedValue({ data: { success: true, data: [] }, error: null });
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'rpc_obtener_turnos_forzados_pendientes') {
+        return Promise.resolve(state.sessionsResult);
+      }
+      return Promise.resolve({ data: { success: true, data: [] }, error: null });
+    });
   });
 
-  it('consulta solo cash_sessions (nunca cash_session_balances) y no pide expected_balance (Arqueo Ciego)', async () => {
-    state.sessionsResult = { data: PENDING, error: null };
+  it('consulta rpc_obtener_turnos_forzados_pendientes (solo Admin) y nunca toca cash_session_balances', async () => {
+    state.sessionsResult = { data: { success: true, data: PENDING }, error: null };
     mountView();
     await flushPromises();
 
-    expect(fromCalls.map(c => c.table)).toEqual(['cash_sessions']);
-    expect(fromCalls[0].select).not.toContain('expected_balance');
+    expect(mockRpc).toHaveBeenCalledWith('rpc_obtener_turnos_forzados_pendientes', {
+      p_store_id: 'store-1',
+    });
+    expect(fromCalls.map(c => c.table)).not.toContain('cash_session_balances');
   });
 
-  it('entrega al modal la sesiÃ³n pendiente con canal efectivo y sin saldos esperados', async () => {
-    state.sessionsResult = { data: PENDING, error: null };
+  it('entrega al modal la sesión pendiente con resumen autoritativo de efectivo y digitales para Admin', async () => {
+    state.sessionsResult = { data: { success: true, data: PENDING }, error: null };
     const wrapper = mountView();
     await flushPromises();
 
     const modal = wrapper.findComponent({ name: 'ForcedCloseAuditModal' });
     expect(modal.props('isVisible')).toBe(true);
     expect(modal.props('pendingSessions')).toEqual([
-      { id: 'sess-1', openedAt: '2026-10-17T20:56:14Z', channels: ['efectivo'] },
+      {
+        id: 'sess-1',
+        openedAt: '2026-10-17T20:56:14Z',
+        openedByName: 'Cajero Prueba',
+        openedByRole: 'employee',
+        openingBalance: 50000,
+        expectedEfectivo: 103000,
+        nequiSummary: 25000,
+        llaveBreSummary: 10000,
+        isOpenedByOther: true,
+        channels: ['efectivo'],
+      },
     ]);
   });
 
-  it('RAMA ERROR: si falla la verificaciÃ³n de turnos pendientes, bloquea la apertura (falla cerrado)', async () => {
+  it('RAMA ERROR: si falla la verificación de turnos pendientes, bloquea la apertura (falla cerrado)', async () => {
     state.sessionsResult = { data: null, error: { code: 'PGRST205', message: 'Could not find the table' } };
     const wrapper = mountView();
     await flushPromises();
 
     expect(wrapper.text()).toContain('Error al verificar turnos forzados pendientes');
 
+    await wrapper.find('[data-test="cash-amount-input"]').setValue('50000');
     await wrapper.find('[data-test="submit"]').trigger('click');
     await flushPromises();
 
@@ -219,10 +256,11 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
   });
 
   it('RAMA BLOQUEO: con turno forzado pendiente no abre la caja', async () => {
-    state.sessionsResult = { data: PENDING, error: null };
+    state.sessionsResult = { data: { success: true, data: PENDING }, error: null };
     const wrapper = mountView();
     await flushPromises();
 
+    await wrapper.find('[data-test="cash-amount-input"]').setValue('50000');
     await wrapper.find('[data-test="submit"]').trigger('click');
     await flushPromises();
 
@@ -230,9 +268,16 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     expect(mockShowError).toHaveBeenCalledWith(expect.stringContaining('reconciliar'));
   });
 
-  it('RAMA FELIZ: sin turnos pendientes abre la caja', async () => {
+  it('RAMA FELIZ: sin turnos pendientes abre la caja tras digitar base explícita', async () => {
     const wrapper = mountView();
     await flushPromises();
+
+    // Sin digitar nada, el botón debe permanecer bloqueado (prohibido envío en blanco)
+    expect(wrapper.find('[data-test="submit"]').attributes('disabled')).toBeDefined();
+
+    await wrapper.find('[data-test="cash-amount-input"]').setValue('0');
+    await flushPromises();
+    expect(wrapper.find('[data-test="submit"]').attributes('disabled')).toBeUndefined();
 
     await wrapper.find('[data-test="submit"]').trigger('click');
     await flushPromises();
@@ -240,33 +285,39 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     expect(mockOpenRegister).toHaveBeenCalledTimes(1);
   });
 
-  it('reconciliaciÃ³n exitosa: llama al RPC con el conteo y retira la sesiÃ³n de la cola', async () => {
-    state.sessionsResult = { data: PENDING, error: null };
+  it('reconciliación exitosa: llama al RPC con conteo y observación y retira la sesión de la cola', async () => {
+    state.sessionsResult = { data: { success: true, data: PENDING }, error: null };
     const wrapper = mountView();
     await flushPromises();
 
-    wrapper.findComponent({ name: 'ForcedCloseAuditModal' }).vm.$emit('confirm', 'sess-1', 103000);
+    wrapper.findComponent({ name: 'ForcedCloseAuditModal' }).vm.$emit('confirm', 'sess-1', 103000, 'Conté el cajón completo');
     await flushPromises();
 
     expect(mockRpc).toHaveBeenCalledWith('rpc_reconciliar_cierre_forzado', {
       p_session_id: 'sess-1',
       p_employee_id: 'emp-1',
       p_actual_balance: 103000,
+      p_notes: 'Conté el cajón completo',
     });
     expect(wrapper.findComponent({ name: 'ForcedCloseAuditModal' }).props('pendingSessions')).toEqual([]);
     expect(mockShowSuccess).toHaveBeenCalled();
   });
 
   it('RAMA ERROR RPC: traduce el código técnico a mensaje amigable y mantiene la sesión pendiente', async () => {
-    state.sessionsResult = { data: PENDING, error: null };
-    mockRpc.mockResolvedValue({
-      data: null,
-      error: { message: 'INSUFFICIENT_PERMISSIONS: Sin permiso para reconciliar cierres de caja.' },
+    state.sessionsResult = { data: { success: true, data: PENDING }, error: null };
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'rpc_obtener_turnos_forzados_pendientes') {
+        return Promise.resolve(state.sessionsResult);
+      }
+      return Promise.resolve({
+        data: null,
+        error: { message: 'INSUFFICIENT_PERMISSIONS: Sin permiso para reconciliar cierres de caja.' },
+      });
     });
     const wrapper = mountView();
     await flushPromises();
 
-    wrapper.findComponent({ name: 'ForcedCloseAuditModal' }).vm.$emit('confirm', 'sess-1', 100);
+    wrapper.findComponent({ name: 'ForcedCloseAuditModal' }).vm.$emit('confirm', 'sess-1', 100, 'Nota válida');
     await flushPromises();
 
     expect(mockShowError).toHaveBeenCalledWith(expect.stringContaining('No tienes permiso'));
@@ -352,28 +403,33 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     mockRoute.query = { tab: 'expenses' };
 
     // Total servidor (18000) distinto de la suma de items retornados (5000) para probar CERO .reduce() en cliente
-    mockRpc.mockResolvedValueOnce({
-      data: {
-        success: true,
-        session_id: 'sess-admin-1',
-        session_status: 'open',
-        total_opex_expenses: 18000,
-        count: 1,
-        data: [
-          {
-            id: 'exp-1',
-            amount: 5000,
-            description: 'Bolsas biodegradables',
-            category: 'Insumos',
-            payment_method: 'efectivo',
-            voucher_ref: null,
-            actor_name: 'Don Carlos',
-            actor_role: 'owner',
-            created_at: '2026-11-24T12:00:00Z',
-          },
-        ],
-      },
-      error: null,
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'rpc_obtener_turnos_forzados_pendientes') {
+        return Promise.resolve({ data: { success: true, data: [] }, error: null });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          session_id: 'sess-admin-1',
+          session_status: 'open',
+          total_opex_expenses: 18000,
+          count: 1,
+          data: [
+            {
+              id: 'exp-1',
+              amount: 5000,
+              description: 'Bolsas biodegradables',
+              category: 'Insumos',
+              payment_method: 'efectivo',
+              voucher_ref: null,
+              actor_name: 'Don Carlos',
+              actor_role: 'owner',
+              created_at: '2026-11-24T12:00:00Z',
+            },
+          ],
+        },
+        error: null,
+      });
     });
 
     const wrapper = mountView();
@@ -381,7 +437,7 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     await flushPromises();
 
     expect(mockRpc).toHaveBeenCalledWith('rpc_obtener_gastos_turno', { p_session_id: 'sess-admin-1' });
-    expect(wrapper.text()).toContain('Total Gastos OPEX del Turno');
+    expect(wrapper.text()).toContain('Gastos del Turno');
     expect(wrapper.find('[data-test="total-opex-expenses"]').text()).toContain('18.000');
 
     // Abrir modal -> enviar vacío -> errores N1 inline persistentes sin toast
@@ -430,10 +486,70 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     const wrapper = mountView();
     await flushPromises();
 
+    await wrapper.find('[data-test="cash-amount-input"]').setValue('50000');
     await wrapper.find('[data-test="submit"]').trigger('click');
     await flushPromises();
 
     expect(mockOpenRegister).not.toHaveBeenCalled();
     expect(mockShowWarning).toHaveBeenCalledWith(expect.stringContaining('Sin conexión'), 'wifi_off');
+  });
+
+  it('[POL-SEG-01 v1.5] Cierre Admin: muestra efectivo esperado + resumen digital, sin campos de Nequi/Bre-B y bloquea envío en blanco', async () => {
+    authState.isAdmin = true;
+    cashStoreState.isOpen = true;
+    cashStoreState.currentSession = { id: 'sess-admin-open', employeeId: 'emp-1', openedByName: 'Dueño' };
+    cashStoreState.adminExpectedSummary = { efectivo: 120000, nequi: 45000, llave_bre: 15000 };
+    mockSyncFromBackend.mockResolvedValueOnce(true);
+    mockCloseRegister.mockResolvedValueOnce({
+      success: true,
+      sealedWithAlert: false,
+      expectedEfectivo: 120000,
+      actualEfectivo: 119500,
+      difference: -500,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    // Admin ve su resumen esperado (servidor) y NO ve banner de Arqueo Ciego ni casillas Nequi/Bre-B Contado
+    expect(wrapper.find('[data-test="admin-expected-summary"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="admin-expected-summary"]').text()).toContain('120.000');
+    expect(wrapper.find('[data-test="admin-expected-summary"]').text()).toContain('45.000');
+    expect(wrapper.find('[data-test="employee-blind-protocol-banner"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Nequi Contado');
+    expect(wrapper.text()).not.toContain('Llave Bre-B Contado');
+
+    // Bloqueado mientras el campo esté vacío
+    expect(wrapper.find('[data-test="submit"]').attributes('disabled')).toBeDefined();
+
+    // Digita efectivo contado y cierra enviando solo efectivo
+    await wrapper.find('[data-test="cash-amount-input"]').setValue('119500');
+    await flushPromises();
+    await wrapper.find('[data-test="submit"]').trigger('click');
+    await flushPromises();
+
+    expect(mockCloseRegister).toHaveBeenCalledWith({ efectivo: 119500 }, '', 'store-1');
+  });
+
+  it('[POL-SEG-01 v1.5] Cierre Empleado: oculta saldo esperado, solo pide efectivo físico y bloquea envío en blanco', async () => {
+    authState.isAdmin = false;
+    authState.canOpenCloseCash = true;
+    cashStoreState.isOpen = true;
+    cashStoreState.currentSession = { id: 'sess-emp-open', employeeId: 'emp-1', openedByName: 'Cajero' };
+    cashStoreState.adminExpectedSummary = { efectivo: 120000, nequi: 45000, llave_bre: 15000 };
+    mockSyncFromBackend.mockResolvedValueOnce(true);
+
+    const wrapper = mountView();
+    await flushPromises();
+
+    // Empleado solo ve el campo de Efectivo en Cajón y NUNCA ve admin-expected-summary ni Nequi Contado
+    expect(wrapper.text()).toContain('Efectivo en Cajón');
+    expect(wrapper.find('[data-test="admin-expected-summary"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('120.000');
+    expect(wrapper.text()).not.toContain('Nequi Contado');
+    expect(wrapper.text()).not.toContain('Llave Bre-B Contado');
+
+    // Bloqueado mientras esté vacío
+    expect(wrapper.find('[data-test="submit"]').attributes('disabled')).toBeDefined();
   });
 });

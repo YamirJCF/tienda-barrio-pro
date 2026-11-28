@@ -22,7 +22,6 @@ import {
   Store,
   CheckCircle,
   AlertTriangle,
-  ShieldCheck,
   RefreshCw
 } from 'lucide-vue-next';
 
@@ -32,7 +31,7 @@ const route = useRoute();
 const router = useRouter();
 const cashRegisterStore = useCashRegisterStore();
 const authStore = useAuthStore();
-const { formatCurrency: _formatCurrency } = useCurrencyFormat();
+const { formatWithSign } = useCurrencyFormat();
 const { showSuccess, showError, showWarning } = useNotifications();
 const { execute: executeAction, isLoading: isSubmitting } = useAsyncAction();
 
@@ -88,7 +87,8 @@ const fetchPendingForcedSessions = async () => {
 const translateReconciliationError = (message?: string): string => {
   const code = (message || '').split(':')[0].trim();
   const messages: Record<string, string> = {
-    INVALID_BALANCE: 'El monto contado no es válido.',
+    INVALID_BALANCE: 'Debes declarar explícitamente el efectivo físico recuperado (0 o mayor).',
+    OBSERVATION_REQUIRED: 'Debes escribir una observación breve (mínimo 5 caracteres) al cerrar un turno vencido abierto por otro usuario.',
     SESSION_NOT_FOUND: 'El turno ya no existe. Actualiza e intenta de nuevo.',
     SESSION_NOT_RECONCILABLE: 'Este turno ya fue reconciliado. Actualiza para continuar.',
     STORE_ACCESS_DENIED: 'No tienes acceso a esta tienda.',
@@ -100,10 +100,13 @@ const translateReconciliationError = (message?: string): string => {
   return messages[code] || 'No se pudo reconciliar el turno. Intenta de nuevo.';
 };
 
-// Post-Cierre Blind Confirmation State (POL-SEG-01: NUNCA expone expected_balance ni difference)
+// Post-Cierre Confirmation State (POL-SEG-01 v1.5: empleados NUNCA ven esperado/diferencia; Admin sí)
 const closedSealSummary = ref<{
   sealedWithAlert: boolean;
   closedByName?: string;
+  expectedEfectivo?: number;
+  actualEfectivo?: number;
+  difference?: number;
 } | null>(null);
 
 // Assisted Close Retry State (Cierre Asistido 3 intentos)
@@ -226,7 +229,7 @@ onMounted(() => {
   syncWorkspace();
 });
 
-const handleAuditConfirm = async (sessionId: string, actualBalance: number | null) => {
+const handleAuditConfirm = async (sessionId: string, actualBalance: number, forcedNotes?: string) => {
   const employeeId = authStore.currentUser?.employeeId || authStore.currentUser?.id;
   if (!employeeId) {
     forcedReconcileError.value = 'No se encontró el ID del usuario para la reconciliación.';
@@ -237,7 +240,7 @@ const handleAuditConfirm = async (sessionId: string, actualBalance: number | nul
   isReconcilingForced.value = true;
   forcedReconcileError.value = null;
   try {
-    await cashRegisterStore.reconcileForcedClose(sessionId, employeeId, actualBalance);
+    await cashRegisterStore.reconcileForcedClose(sessionId, employeeId, actualBalance, forcedNotes);
 
     pendingForcedSessions.value = pendingForcedSessions.value.filter(s => s.id !== sessionId);
     if (pendingForcedSessions.value.length === 0 && authStore.currentStore?.id) {
@@ -247,11 +250,7 @@ const handleAuditConfirm = async (sessionId: string, actualBalance: number | nul
         // La reconciliación ya quedó confirmada en BD
       }
     }
-    showSuccess(
-      actualBalance === null
-        ? 'Turno cerrado sin conteo físico. Se generó alerta crítica de auditoría.'
-        : 'Turno reconciliado correctamente.'
-    );
+    showSuccess('Turno vencido cerrado y conciliado correctamente.');
   } catch (e: any) {
     console.error('🚫 [CashControl] Reconciliation failed:', e);
     const translated = translateReconciliationError(e?.message);
@@ -271,7 +270,7 @@ const openerDisplayName = computed(() => cashRegisterStore.currentSession?.opene
 
 const title = computed(() => {
   if (!canOpenCloseCash.value) return 'Mis Movimientos del Turno';
-  if (activeTab.value === 'expenses') return 'Gastos OPEX del Turno';
+  if (activeTab.value === 'expenses') return 'Gastos de Caja';
   if (activeTab.value === 'movements') return 'Mis Movimientos del Turno';
   if (isLoadingWorkspace.value || syncError.value) return 'Control de Caja';
   if (isStale.value) return 'Turno Expirado (+24h)';
@@ -280,19 +279,19 @@ const title = computed(() => {
 
 const buttonText = computed(() => {
   if (isStale.value) return 'CERRAR TURNO EXPIRADO';
-  return isOpening.value ? 'ABRIR TURNO' : 'CONFIRMAR CONTEO Y CERRAR';
+  return isOpening.value ? 'ABRIR TURNO' : 'CERRAR CAJA';
 });
 
-// Form State (Multicanal para cierre: Efectivo, Nequi, Llave Bre-B)
-const amount = ref(0);
-const nequiAmount = ref(0);
-const llaveBreAmount = ref(0);
+// Form State (POL-SEG-01 v1.5: Nace vacío = null para prohibir envíos en blanco; solo Efectivo físico del cajón)
+const amount = ref<number | null>(null);
 const notes = ref('');
-const openingAmountError = ref<string | null>(null);
+const amountValidationError = ref<string | null>(null);
+const isAmountEmpty = computed(() => amount.value === null || !Number.isFinite(Number(amount.value)) || Number(amount.value) < 0);
+const adminExpectedSummary = computed(() => (authStore.isAdmin ? cashRegisterStore.adminExpectedSummary : null));
 
 // Ejecución online obligatoria (C2-H2: checkConnectivity: true)
 const handleSubmit = async () => {
-  openingAmountError.value = null;
+  amountValidationError.value = null;
 
   if (!canOpenCloseCash.value) {
     showError('No tienes permisos asignados para operar la caja.');
@@ -309,13 +308,14 @@ const handleSubmit = async () => {
     return;
   }
 
-  if (isOpening.value) {
-    const parsedAmount = Number(amount.value);
-    if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
-      openingAmountError.value = 'Ingresa un monto de base inicial válido (0 o mayor).';
-      return;
-    }
+  if (amount.value === null || !Number.isFinite(Number(amount.value)) || Number(amount.value) < 0) {
+    amountValidationError.value = isOpening.value
+      ? 'Digita la base inicial en efectivo (si abres sin base, escribe 0).'
+      : 'Digita el efectivo físico contado en el cajón (si está vacío, escribe 0).';
+    return;
   }
+
+  const parsedAmount = Number(amount.value);
 
   await executeAction(async () => {
     if (isOpening.value) {
@@ -335,7 +335,6 @@ const handleSubmit = async () => {
         return;
       }
 
-      const parsedAmount = Number(amount.value);
       if (authStore.currentUser?.id) {
         const secureId = authStore.currentUser.employeeId || authStore.currentUser.id;
         await cashRegisterStore.openRegister(
@@ -350,13 +349,11 @@ const handleSubmit = async () => {
       showSuccess('Caja abierta correctamente');
       router.push('/');
     } else {
-      // Closing (Arqueo Ciego con Cierre Asistido 3 Intentos)
+      // Closing (POL-SEG-01 v1.5: Arqueo físico exclusivo sobre Efectivo del cajón)
       assistedRetryNotice.value = null;
       const closeResult = await cashRegisterStore.closeRegister(
         {
-          efectivo: amount.value,
-          nequi: nequiAmount.value,
-          llave_bre: llaveBreAmount.value,
+          efectivo: parsedAmount,
         },
         notes.value,
         authStore.currentStore?.id
@@ -366,7 +363,7 @@ const handleSubmit = async () => {
         assistedRetryNotice.value = {
           attemptsUsed: closeResult.attemptsUsed ?? 1,
           attemptsRemaining: closeResult.attemptsRemaining ?? 2,
-          message: closeResult.message || 'El conteo no coincide con el registro del turno. Revisa y vuelve a intentar.',
+          message: closeResult.message || 'El conteo de efectivo no coincide con el registro del turno. Revisa y vuelve a intentar.',
         };
         showWarning(`${assistedRetryNotice.value.message} (Restan ${assistedRetryNotice.value.attemptsRemaining} intento(s))`);
         return;
@@ -380,6 +377,9 @@ const handleSubmit = async () => {
       closedSealSummary.value = {
         sealedWithAlert: Boolean(closeResult.sealedWithAlert),
         closedByName: closeResult.closedByName,
+        expectedEfectivo: authStore.isAdmin ? closeResult.expectedEfectivo : undefined,
+        actualEfectivo: authStore.isAdmin ? closeResult.actualEfectivo : undefined,
+        difference: authStore.isAdmin ? closeResult.difference : undefined,
       };
     }
   }, {
@@ -507,9 +507,8 @@ const goBack = () => {
               </div>
               <div>
                 <h3 class="font-bold text-amber-800 dark:text-amber-200 text-sm">Turno Sin Cerrar</h3>
-                <p class="text-amber-700 dark:text-amber-300 text-xs mt-1 leading-relaxed">
-                  Existe un turno abierto desde <strong>{{ staleDate }}</strong> que no fue cerrado.
-                  Debes cerrarlo ahora para poder continuar operando.
+                <p class="text-amber-700 dark:text-amber-300 text-xs mt-0.5 leading-relaxed">
+                  Abierto el <strong>{{ staleDate }}</strong>. Ciérralo para continuar.
                 </p>
               </div>
             </div>
@@ -517,57 +516,58 @@ const goBack = () => {
 
           <!-- Opening State: Simple Form -->
           <div v-if="isOpening" class="bg-surface-light dark:bg-surface-dark rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-700 animate-slide-up">
-            <div class="text-center mb-6">
-              <div class="bg-emerald-100 dark:bg-emerald-900/30 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <LockOpen :size="32" class="text-emerald-600 dark:text-emerald-400" />
+            <div class="flex justify-center mb-4">
+              <div class="bg-emerald-100 dark:bg-emerald-900/30 w-14 h-14 rounded-2xl flex items-center justify-center">
+                <LockOpen :size="28" class="text-emerald-600 dark:text-emerald-400" />
               </div>
-              <p class="text-slate-500 dark:text-slate-400 text-sm">Ingresa el dinero base en caja para iniciar operaciones.</p>
             </div>
 
             <div class="space-y-4">
               <div>
-                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Base Inicial</label>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-1.5 text-center">Base Inicial en Efectivo</label>
                 <FormInputCurrency
                   v-model="amount"
+                  :allow-null="true"
                   placeholder="0"
+                  data-test="cash-amount-input"
                   class="text-2xl font-bold text-center font-mono tabular-nums"
                   :autofocus="true"
                   :disabled="!canOpenCloseCash"
-                  @update:modelValue="openingAmountError = null"
+                  @update:modelValue="amountValidationError = null"
                 />
                 <p
-                  v-if="openingAmountError"
+                  v-if="amountValidationError"
                   data-test="opening-amount-error"
                   class="mt-1.5 text-xs text-rose-600 dark:text-rose-400 text-center"
                 >
-                  {{ openingAmountError }}
+                  {{ amountValidationError }}
                 </p>
               </div>
 
               <div>
-                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Notas (Opcional)</label>
-                <textarea v-model="notes" rows="2" class="w-full p-3 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm" placeholder="Observaciones..." :disabled="!canOpenCloseCash"></textarea>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Nota (Opcional)</label>
+                <textarea v-model="notes" rows="2" class="w-full p-3 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm" placeholder="Opcional..." :disabled="!canOpenCloseCash"></textarea>
               </div>
             </div>
           </div>
 
-          <!-- Closing State: Arqueo Ciego + Cierre Asistido 3 Intentos + Propiedad Estricta -->
+          <!-- Closing State: Efectivo en Cajón -->
           <div v-else class="space-y-4 animate-slide-up">
             <!-- Banner Propiedad Estricta del Turno (POL-SEG-03) -->
             <div v-if="isShiftOwnedByOther" class="bg-rose-50 dark:bg-rose-900/30 border border-rose-400 dark:border-rose-600 rounded-2xl p-4">
               <div class="flex items-start gap-3">
                 <AlertTriangle :size="22" class="text-rose-600 dark:text-rose-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 class="font-bold text-rose-800 dark:text-rose-200 text-sm">Turno Pertenece a Otro Usuario</h4>
-                  <p class="text-rose-700 dark:text-rose-300 text-xs mt-1 leading-relaxed">
-                    Este turno fue abierto por <strong>{{ openerDisplayName }}</strong>. Solo quien abrió el turno o el Administrador pueden cerrarlo.
+                  <h4 class="font-bold text-rose-800 dark:text-rose-200 text-sm">Turno de {{ openerDisplayName }}</h4>
+                  <p class="text-rose-700 dark:text-rose-300 text-xs mt-0.5 leading-relaxed">
+                    Solo quien lo abrió o el Administrador pueden cerrarlo.
                   </p>
                 </div>
               </div>
             </div>
 
-            <!-- Banner Cierre Asistido (Intentos 1 y 2 sin revelar esperado) -->
-            <div v-if="assistedRetryNotice" class="bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 rounded-2xl p-4" data-test="assisted-retry-banner">
+            <!-- Banner Cierre Asistido (Solo Empleados — Intentos 1 y 2 sin revelar esperado) -->
+            <div v-if="!authStore.isAdmin && assistedRetryNotice" class="bg-amber-50 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-600 rounded-2xl p-4" data-test="assisted-retry-banner">
               <div class="flex items-start justify-between gap-2">
                 <div>
                   <h4 class="font-bold text-amber-800 dark:text-amber-200 text-sm">Revisa tu conteo</h4>
@@ -581,38 +581,61 @@ const goBack = () => {
               </div>
             </div>
 
-            <!-- Protocolo de Arqueo Ciego -->
-            <div class="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40">
-              <ShieldCheck :size="24" class="text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 class="text-sm font-bold text-blue-900 dark:text-blue-100">Protocolo de Arqueo Ciego</h4>
-                <p class="text-xs text-blue-700 dark:text-blue-300 mt-1 leading-relaxed">
-                  Cuenta el dinero físico en gaveta y valida los saldos en Nequi y Llave Bre-B. El servidor validará el cuadre por canal sin revelar saldos esperados.
-                </p>
+            <!-- Resumen del Turno (EXCLUSIVO ADMINISTRADOR — Autoridad del Servidor) -->
+            <div
+              v-if="authStore.isAdmin && adminExpectedSummary"
+              data-test="admin-expected-summary"
+              class="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 p-4 space-y-3"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+                  Efectivo esperado
+                </span>
+                <span class="text-xl font-black font-mono tabular-nums text-emerald-900 dark:text-emerald-200">
+                  {{ formatWithSign(adminExpectedSummary.efectivo) }}
+                </span>
+              </div>
+              <div class="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50 grid grid-cols-2 gap-2 text-xs">
+                <div class="rounded-xl bg-white/70 dark:bg-slate-900/40 px-3 py-2">
+                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Nequi</p>
+                  <p class="font-mono tabular-nums font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {{ formatWithSign(adminExpectedSummary.nequi) }}
+                  </p>
+                </div>
+                <div class="rounded-xl bg-white/70 dark:bg-slate-900/40 px-3 py-2">
+                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Llave Bre-B</p>
+                  <p class="font-mono tabular-nums font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {{ formatWithSign(adminExpectedSummary.llave_bre) }}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <!-- Counting Inputs Multicanal -->
+            <!-- Counting Input (Solo Efectivo Físico del Cajón) -->
             <div class="bg-surface-light dark:bg-surface-dark rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-700 space-y-4">
               <div>
-                <label class="block text-xs font-bold uppercase text-slate-400 mb-2 text-center">Efectivo Total Contado</label>
-                <FormInputCurrency v-model="amount" placeholder="0" class="text-3xl font-black text-center font-mono tabular-nums text-blue-900 dark:text-blue-100" :disabled="!canOpenCloseCash || isShiftOwnedByOther" />
-              </div>
-
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1 text-center">Nequi Contado</label>
-                  <FormInputCurrency v-model="nequiAmount" placeholder="0" class="text-base font-bold text-center font-mono tabular-nums" :disabled="!canOpenCloseCash || isShiftOwnedByOther" />
-                </div>
-                <div>
-                  <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1 text-center">Llave Bre-B Contado</label>
-                  <FormInputCurrency v-model="llaveBreAmount" placeholder="0" class="text-base font-bold text-center font-mono tabular-nums" :disabled="!canOpenCloseCash || isShiftOwnedByOther" />
-                </div>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-2 text-center">Efectivo en Cajón</label>
+                <FormInputCurrency
+                  v-model="amount"
+                  :allow-null="true"
+                  placeholder="0"
+                  data-test="cash-amount-input"
+                  class="text-3xl font-black text-center font-mono tabular-nums text-blue-900 dark:text-blue-100"
+                  :disabled="!canOpenCloseCash || isShiftOwnedByOther"
+                  @update:modelValue="amountValidationError = null"
+                />
+                <p
+                  v-if="amountValidationError"
+                  data-test="closing-amount-error"
+                  class="mt-1.5 text-xs text-rose-600 dark:text-rose-400 text-center"
+                >
+                  {{ amountValidationError }}
+                </p>
               </div>
 
               <div>
-                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Notas del Cierre</label>
-                <textarea v-model="notes" rows="2" class="w-full p-3 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm" placeholder="Observaciones sobre el conteo..." :disabled="!canOpenCloseCash || isShiftOwnedByOther"></textarea>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Nota (Opcional)</label>
+                <textarea v-model="notes" rows="2" class="w-full p-3 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm" placeholder="Opcional..." :disabled="!canOpenCloseCash || isShiftOwnedByOther"></textarea>
               </div>
             </div>
           </div>
@@ -621,7 +644,7 @@ const goBack = () => {
           <BaseButton
             @click="handleSubmit"
             :loading="isSubmitting"
-            :disabled="isSubmitting || !canOpenCloseCash || isShiftOwnedByOther || Boolean(syncError)"
+            :disabled="isSubmitting || !canOpenCloseCash || isShiftOwnedByOther || Boolean(syncError) || isAmountEmpty"
             :variant="isOpening ? 'success' : 'dark'"
             class="w-full h-14 text-lg shadow-lg"
             :class="isOpening ? 'shadow-emerald-500/30' : 'shadow-slate-500/30'"
@@ -641,11 +664,10 @@ const goBack = () => {
       />
     </main>
 
-    <!-- FRD-017 / FRD-027-02: Forced Close Audit Modal (Admin-only con conteo opcional) -->
+    <!-- FRD-027-02 R5: Forced Close Audit Modal (Admin-only con declaración obligatoria de efectivo) -->
     <ForcedCloseAuditModal
       :isVisible="showAuditModal"
       :pendingSessions="pendingForcedSessions"
-      :allowSkipCount="authStore.isAdmin"
       :isSubmitting="isReconcilingForced"
       :errorMessage="forcedReconcileError"
       @confirm="handleAuditConfirm"
@@ -674,10 +696,33 @@ const goBack = () => {
           <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
             {{
               closedSealSummary.sealedWithAlert
-                ? 'El turno fue sellado tras completar los 3 intentos y se envió una notificación al Administrador para revisión.'
-                : 'Tu arqueo fue registrado correctamente y sellado en la bitácora del servidor.'
+                ? 'Cerrado en el 3.er intento. Se notificó al Administrador.'
+                : 'Conteo guardado.'
             }}
           </p>
+          <div
+            v-if="authStore.isAdmin && typeof closedSealSummary.difference === 'number'"
+            data-test="admin-close-diff-summary"
+            class="mt-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-3 text-xs space-y-1 font-mono tabular-nums"
+          >
+            <div class="flex justify-between">
+              <span class="text-slate-500">Esperado en cajón:</span>
+              <span class="font-bold text-slate-800 dark:text-white">{{ formatWithSign(closedSealSummary.expectedEfectivo ?? 0) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Contado en cajón:</span>
+              <span class="font-bold text-slate-800 dark:text-white">{{ formatWithSign(closedSealSummary.actualEfectivo ?? 0) }}</span>
+            </div>
+            <div class="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
+              <span class="text-slate-500">Diferencia exacta:</span>
+              <span
+                class="font-bold"
+                :class="(closedSealSummary.difference ?? 0) === 0 ? 'text-emerald-600' : (closedSealSummary.difference ?? 0) > 0 ? 'text-blue-600' : 'text-rose-600'"
+              >
+                {{ formatWithSign(closedSealSummary.difference ?? 0) }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <BaseButton @click="finishClosing" class="w-full">

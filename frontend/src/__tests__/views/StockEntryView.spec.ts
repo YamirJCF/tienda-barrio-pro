@@ -70,7 +70,7 @@ describe('StockEntryView.vue — Entrada Atómica y Autoridad SQL (WO-OLA2-C3-00
     ];
   });
 
-  it('usa paleta dual DESIGN.md, omite totales monetarios locales y envía expirationDate estructurado al RPC atómico', async () => {
+  it('usa paleta dual DESIGN.md, aplica Glosario Único sin Vencimiento, omite totales locales y envía expirationDate: null', async () => {
     const inventoryStore = useInventoryStore();
     const bulkSpy = vi.spyOn(inventoryStore, 'registerBulkStockEntry').mockResolvedValue({
       itemsProcessed: 1,
@@ -82,9 +82,11 @@ describe('StockEntryView.vue — Entrada Atómica y Autoridad SQL (WO-OLA2-C3-00
     const wrapper = mount(StockEntryView);
     await flushPromises();
 
-    // Paleta dual DESIGN.md (sin fondo dark forzado bg-gray-900)
+    // Paleta dual DESIGN.md (sin fondo dark forzado bg-gray-900) y Glosario Único (ARQ-005)
     expect(wrapper.html()).toContain('bg-background-light');
     expect(wrapper.html()).not.toContain('bg-gray-900');
+    expect(wrapper.text()).toContain('Registrar Entrada');
+    expect(wrapper.text()).not.toContain('Atómica');
 
     // Agregar producto desde búsqueda
     await wrapper.find('input[placeholder="Buscar producto..."]').setValue('Leche');
@@ -92,10 +94,11 @@ describe('StockEntryView.vue — Entrada Atómica y Autoridad SQL (WO-OLA2-C3-00
     await wrapper.find('[data-testid="stock-entry-search-result-prod-1"]').trigger('click');
     await flushPromises();
 
-    // Asignar cantidad = 6 y fecha de vencimiento
+    // Asignar cantidad = 6 y verificar que NO existe campo de fecha de vencimiento (SYSTEM_BOUNDARIES / ARQ-005)
     const numberInputs = wrapper.findAll('input[type="number"]');
     await numberInputs[0].setValue(6);
-    await wrapper.find('input[type="date"]').setValue('2026-12-30');
+    expect(wrapper.find('input[type="date"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Vencimiento');
     await flushPromises();
 
     // Antes de confirmar NO debe mostrar subtotales ni "Total Entrada" calculado en cliente
@@ -103,8 +106,8 @@ describe('StockEntryView.vue — Entrada Atómica y Autoridad SQL (WO-OLA2-C3-00
     expect(wrapper.text()).not.toContain('Subtotal:');
     expect(wrapper.text()).not.toContain('19.200');
 
-    // Confirmar entrada atómica
-    const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('GUARDAR ENTRADA ATÓMICA'));
+    // Confirmar entrada
+    const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('GUARDAR ENTRADA'));
     expect(submitBtn).toBeDefined();
     await submitBtn!.trigger('click');
     await flushPromises();
@@ -119,14 +122,16 @@ describe('StockEntryView.vue — Entrada Atómica y Autoridad SQL (WO-OLA2-C3-00
             quantity: 6,
             unitCost: 3200,
             salePrice: 4500,
-            expirationDate: '2026-12-30',
+            expirationDate: null,
           }),
         ],
       })
     );
 
-    // Tras confirmar muestra el total autoritativo calculado en PostgreSQL
-    expect(wrapper.find('[data-testid="bulk-entry-confirmed-banner"]').text()).toContain('$ 19.200');
+    // Tras confirmar muestra el total autoritativo sin siglas técnicas (SQL)
+    const receiptText = wrapper.find('[data-testid="bulk-entry-confirmed-banner"]').text();
+    expect(receiptText).toContain('$ 19.200');
+    expect(receiptText).not.toContain('(SQL)');
   });
 
   it('muestra alerta N3 persistente y preserva los ítems capturados si el RPC atómico falla', async () => {
@@ -143,7 +148,7 @@ describe('StockEntryView.vue — Entrada Atómica y Autoridad SQL (WO-OLA2-C3-00
     await wrapper.find('[data-testid="stock-entry-search-result-prod-1"]').trigger('click');
     await flushPromises();
 
-    const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('GUARDAR ENTRADA ATÓMICA'));
+    const submitBtn = wrapper.findAll('button').find((b) => b.text().includes('GUARDAR ENTRADA'));
     await submitBtn!.trigger('click');
     await flushPromises();
 

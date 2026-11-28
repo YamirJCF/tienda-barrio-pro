@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     v-model="isOpen"
-    title="Gestión de Reembolsos y Devoluciones"
+    title="Reembolsos"
     max-height="90vh"
     :show-close-button="true"
   >
@@ -14,7 +14,7 @@
         class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs font-semibold"
       >
         <WifiOff :size="16" class="shrink-0" />
-        <span>Los reembolsos requieren conexión en línea activa con el servidor.</span>
+        <span>Sin conexión. Conéctate para procesar reembolsos.</span>
       </div>
 
       <div
@@ -26,31 +26,27 @@
         <AlertTriangle :size="16" class="shrink-0" />
         <span>
           {{ isCashStale
-            ? 'El turno de caja superó las 24 horas y debe cerrarse antes de procesar reembolsos.'
-            : 'Debes tener un turno de caja abierto para procesar reembolsos.' }}
+            ? 'El turno de caja superó las 24 horas y debe cerrarse primero.'
+            : 'Abre la caja antes de procesar reembolsos.' }}
         </span>
       </div>
 
       <!-- Búsqueda de Venta o Producto (incluye stock = 0 por CHK-509) -->
-      <div class="space-y-2">
-        <label class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Buscar Ticket #, Producto o PLU (incluye agotados stock = 0)
-        </label>
-        <div class="flex gap-2">
-          <div class="relative flex-1">
-            <Search class="absolute left-3 top-2.5 text-slate-400" :size="16" />
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Ej: 104, Leche, 1002..."
-              @keyup.enter="searchTickets"
-              class="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-            />
-          </div>
-          <BaseButton variant="primary" @click="searchTickets" :loading="isSearching" :disabled="!isOnline">
-            Buscar
-          </BaseButton>
+      <div class="flex gap-2">
+        <div class="relative flex-1">
+          <Search class="absolute left-3 top-2.5 text-slate-400" :size="16" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            aria-label="Buscar ticket, producto o código"
+            placeholder="Ticket #, producto o código..."
+            @keyup.enter="searchTickets"
+            class="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+          />
         </div>
+        <BaseButton variant="primary" @click="searchTickets" :loading="isSearching" :disabled="!isOnline">
+          Buscar
+        </BaseButton>
       </div>
 
       <!-- Listado de Tickets Candidatos -->
@@ -129,71 +125,31 @@
 
       <!-- Formulario de Reembolso de Ítem Seleccionado -->
       <div v-else class="space-y-4">
-        <div class="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 flex items-center justify-between gap-2">
-          <div>
-            <p class="text-xs font-bold text-slate-500 uppercase">Ticket #{{ selectedSale?.ticket_number }}</p>
-            <p class="text-sm font-bold text-slate-900 dark:text-white">{{ selectedItem.product_name }}</p>
-            <p class="text-[11px] text-slate-500 font-mono tabular-nums">
-              Máximo reembolsable: {{ selectedItem.remaining_quantity }} · Precio unit.: {{ formatWithSign(selectedItem.unit_price) }}
-            </p>
-          </div>
-          <button
-            type="button"
-            @click="clearSelectedItem"
-            class="text-xs font-semibold text-primary hover:underline cursor-pointer"
-          >
-            Cambiar ítem
-          </button>
-        </div>
-
-        <!-- Read Model C1-H4: Trazabilidad / Reingreso FIFO -->
         <div
-          data-testid="refund-fifo-read-model"
-          class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-2"
+          data-testid="refund-server-authority-card"
+          class="bg-slate-100 dark:bg-slate-800 rounded-xl p-3 space-y-1.5"
         >
-          <div class="flex items-center justify-between gap-2">
-            <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">
-              <Layers :size="14" class="text-indigo-500" />
-              Trazabilidad / Reingreso FIFO
-            </span>
-            <span
-              class="text-[11px] font-bold px-2 py-0.5 rounded-full"
-              :class="isMerma
-                ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300'
-                : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'"
-            >
-              {{ isMerma ? 'Sin reingreso (Merma)' : 'Reingreso vendible FIFO' }}
-            </span>
-          </div>
-
-          <div v-if="selectedItemFifoBatches.length > 0" class="space-y-1">
-            <div
-              v-for="batch in selectedItemFifoBatches"
-              :key="batch.batch_id"
-              class="flex items-center justify-between gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-700/80"
-            >
-              <span class="font-mono tabular-nums font-semibold text-slate-700 dark:text-slate-200">
-                Lote #{{ shortBatchId(batch.batch_id) }}
-              </span>
-              <span class="text-slate-500 dark:text-slate-400 font-mono tabular-nums">
-                Cant. orig: {{ batch.quantity }} · Costo: {{ formatWithSign(batch.unit_cost) }}
-              </span>
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p class="text-xs font-bold text-slate-500 uppercase">Ticket #{{ selectedSale?.ticket_number }}</p>
+              <p class="text-sm font-bold text-slate-900 dark:text-white">{{ selectedItem.product_name }}</p>
             </div>
+            <button
+              type="button"
+              @click="clearSelectedItem"
+              class="text-xs font-semibold text-primary hover:underline cursor-pointer shrink-0"
+            >
+              Cambiar
+            </button>
           </div>
-          <p v-else class="text-[11px] text-slate-500 dark:text-slate-400">
-            Sin capas FIFO detalladas en esta venta; se aplicará el costo unitario registrado del ítem.
-          </p>
-
-          <p class="text-[11px] text-slate-600 dark:text-slate-300">
-            {{ isMerma
-              ? 'Asiento directo de merma en P&L (0 unidades reingresan a stock vendible).'
-              : `Reingreso a lote FIFO vendible (+${refundQty || 0} unid. al costo original).` }}
+          <p class="text-[11px] text-slate-600 dark:text-slate-300 font-mono tabular-nums">
+            Disponible: <strong>{{ selectedItem.remaining_quantity }}</strong> · Unit.: {{ formatWithSign(selectedItem.unit_price) }} · Subtotal: {{ formatWithSign(selectedItem.subtotal) }}
           </p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="text-xs font-bold text-slate-500 block mb-1">Cantidad a devolver</label>
+            <label class="text-xs font-bold text-slate-500 block mb-1">Cantidad</label>
             <input
               v-model.number="refundQty"
               type="number"
@@ -205,7 +161,7 @@
           </div>
 
           <div>
-            <label class="text-xs font-bold text-slate-500 block mb-1">Canal Original de Venta</label>
+            <label class="text-xs font-bold text-slate-500 block mb-1">Pago original</label>
             <select
               v-model="originalChannel"
               class="w-full h-10 px-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white"
@@ -219,7 +175,7 @@
           </div>
 
           <div class="sm:col-span-2">
-            <label class="text-xs font-bold text-slate-500 block mb-1">Canal de Egreso del Dinero</label>
+            <label class="text-xs font-bold text-slate-500 block mb-1">Devolver por</label>
             <div class="grid grid-cols-3 gap-2">
               <button
                 v-for="ch in refundChannels"
@@ -237,58 +193,60 @@
           </div>
         </div>
 
-        <!-- Switch único "merma" (CHK-508 / CHK-509) -->
-        <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors"
+        <!-- Destino de Stock + Switch "merma" unificado (Read Model C1-H4 + CHK-508/509) -->
+        <div
+          data-testid="refund-fifo-read-model"
+          class="p-3 rounded-xl border transition-colors space-y-2"
           :class="isMerma
             ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-700'
             : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'"
         >
-          <input
-            v-model="isMerma"
-            type="checkbox"
-            class="mt-0.5 h-4 w-4 rounded accent-orange-600 cursor-pointer"
-          />
-          <div>
-            <span class="text-sm font-bold block" :class="isMerma ? 'text-orange-700 dark:text-orange-300' : 'text-emerald-700 dark:text-emerald-300'">
-              Etiqueta "merma" (Producto dañado o no apto para reventa)
+          <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <span class="flex items-center gap-2.5">
+              <input
+                v-model="isMerma"
+                type="checkbox"
+                class="h-4 w-4 rounded accent-orange-600 cursor-pointer"
+              />
+              <span class="text-sm font-bold" :class="isMerma ? 'text-orange-700 dark:text-orange-300' : 'text-emerald-800 dark:text-emerald-200'">
+                Producto dañado (Merma)
+              </span>
             </span>
-            <span class="text-[11px] text-slate-600 dark:text-slate-300 block mt-0.5">
-              {{ isMerma
-                ? 'Asienta pérdida directa en P&L sin reingresar unidades a inventario vendible.'
-                : 'Desactivado: El producto reingresará a un lote FIFO disponible para volver a vender.' }}
+            <span
+              class="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
+              :class="isMerma
+                ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-200'
+                : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200'"
+            >
+              {{ isMerma ? 'No vuelve al estante' : 'Vuelve al estante' }}
             </span>
+          </label>
+
+          <div v-if="selectedItemFifoBatches.length > 0" class="space-y-1 pt-1 border-t border-black/5 dark:border-white/10">
+            <div
+              v-for="batch in selectedItemFifoBatches"
+              :key="batch.batch_id"
+              class="flex items-center justify-between gap-2 text-xs px-2.5 py-1 rounded-lg bg-white/80 dark:bg-slate-900/70"
+            >
+              <span class="inline-flex items-center gap-1 font-mono tabular-nums font-semibold text-slate-700 dark:text-slate-200">
+                <Layers :size="12" class="text-indigo-500" />
+                Lote #{{ shortBatchId(batch.batch_id) }}
+              </span>
+              <span class="text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+                {{ batch.quantity }} un · {{ formatWithSign(batch.unit_cost) }}
+              </span>
+            </div>
           </div>
-        </label>
+        </div>
 
         <div>
-          <label class="text-xs font-bold text-slate-500 block mb-1">Motivo del Reembolso (mín. 5 car.)</label>
+          <label class="text-xs font-bold text-slate-500 block mb-1">Motivo (mín. 5 car.)</label>
           <textarea
             v-model="refundReason"
             rows="2"
-            placeholder="Ej: Empaque abierto al destapar, cliente cambia referencia..."
+            placeholder="Ej: Empaque abierto, cambio de referencia..."
             class="w-full p-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary"
           />
-        </div>
-
-        <div
-          data-testid="refund-server-authority-card"
-          class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 space-y-1.5 text-xs"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-slate-500 dark:text-slate-400">Precio unitario registrado</span>
-            <span class="font-mono tabular-nums font-bold text-slate-900 dark:text-white">
-              {{ formatWithSign(selectedItem.unit_price) }}
-            </span>
-          </div>
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-slate-500 dark:text-slate-400">Subtotal original</span>
-            <span class="font-mono tabular-nums font-bold text-slate-900 dark:text-white">
-              {{ formatWithSign(selectedItem.subtotal) }}
-            </span>
-          </div>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-gray-200/70 dark:border-slate-700/70">
-            El servidor calcula y liquida el valor exacto del reembolso al confirmar.
-          </p>
         </div>
 
         <!-- Error Inline N1 de envío -->

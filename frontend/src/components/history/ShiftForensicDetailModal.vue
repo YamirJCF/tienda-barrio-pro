@@ -217,7 +217,7 @@ const channelLabel = (channel: string) => {
               <p class="font-bold font-mono tabular-nums text-emerald-600 text-sm mt-0.5">{{ formatWithSign(report.financial_summary.total_client_abonos) }}</p>
             </div>
             <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800" data-testid="shift-forensic-opex">
-              <p class="text-slate-400">Gastos OPEX</p>
+              <p class="text-slate-400">Gastos de Caja</p>
               <p class="font-bold font-mono tabular-nums text-rose-600 text-sm mt-0.5">
                 -{{ formatWithSign(report.financial_summary.total_opex_expenses) }}
               </p>

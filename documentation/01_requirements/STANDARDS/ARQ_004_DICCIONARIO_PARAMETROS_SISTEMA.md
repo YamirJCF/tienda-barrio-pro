@@ -1,7 +1,7 @@
 # 📐 Estándar ARQ-004: Diccionario de Parámetros del Sistema
 
-**Versión:** 1.1  
-**Fecha:** 2026-10-24  
+**Versión:** 1.2  
+**Fecha:** 2026-11-26  
 **Autor:** Arquitecto de Producto  
 **Estado:** ✅ Activo  
 **Documento Padre:** `ARQ_002_POLITICAS_GLOBALES_NEGOCIO.md`
@@ -49,6 +49,7 @@ Los valores numéricos (límites, porcentajes, umbrales) tienden a quedar enterr
 | `P_WAIT_TIME_RETRY_1` | Tiempo de espera en sala antes de permitir 1er reintento | 2 | Minutos | POL-SEG-03 | FRD-001 | 1 - 15 |
 | `P_WAIT_TIME_RETRY_2` | Tiempo de espera en sala antes de permitir 2do reintento | 5 | Minutos | POL-SEG-03 | FRD-001 | 2 - 30 |
 | `P_INTERVALO_VERIFICACION_SESION` | Intervalo periódico de verificación de sesión activa | 5 | Minutos | POL-SEG-03 | FRD-013 | 1 - 30 |
+| `P_MARGEN_DESCUADRE_EFECTIVO` | Margen fijo global del sistema para monedas sueltas en el arqueo ciego de efectivo de empleados (rige solo el rebote de reconteo y la alerta crítica; la diferencia exacta al peso se guarda siempre) | 1000 | Pesos (COP) — Global del sistema | POL-SEG-01 | FRD-004, FRD-027-01, FRD-003-01, FRD-017 | 0 - 10000 |
 
 > [!NOTE]
 > **Alcance Diferido:** A medida que se formalicen nuevos FRDs o se descubran valores numéricos enterrados en las reglas existentes, este diccionario DEBE actualizarse. *Condición de revisión:* "Si un FRD contiene un número que podría cambiar por decisión del dueño sin alterar la lógica del software, ese número debe extraerse aquí". *Trade-off:* Se acepta iniciar con 3 parámetros porque el sistema aún está en fase de especificación y los restantes valores aún no han sido formalmente decretados por el Arquitecto. *Revisión futura:* Al finalizar la fase de FRDs y antes de iniciar la implementación técnica (DSD), se debe hacer un barrido exhaustivo de todos los FRDs para extraer parámetros pendientes.
@@ -71,8 +72,9 @@ Los valores numéricos (límites, porcentajes, umbrales) tienden a quedar enterr
 |---------|-------|-------|--------|
 | 1.0 | 2026-07-31 | Arquitecto de Producto | Creación inicial. Extraída desde la Sección III de ARQ-002. Agregados Rango Válido y Protocolo de Actualización. |
 | 1.1 | 2026-10-24 | Arquitecto de Producto | Sincronización de consumidores de `P_MAX_HORAS_TURNO` y `P_MAX_EMPLOYEES_PER_STORE` con FRD-012-01, FRD-013 y FRD-017. |
+| 1.2 | 2026-11-26 | Arquitecto de Producto | Incorporación de `P_MARGEN_DESCUADRE_EFECTIVO` (`1000` COP, alcance fijo global del sistema, solo modificable a nivel de sistema) conforme a `POL-SEG-01` (`ARQ-002` v1.5). |
 
 ---
 
 **Firmado:** Arquitecto de Producto  
-**Fecha:** 2026-10-24
+**Fecha:** 2026-11-26
