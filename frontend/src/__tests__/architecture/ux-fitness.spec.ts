@@ -673,4 +673,103 @@ describe('Architectural Fitness Functions — Gobernanza UX (WO-UX-GOV-000)', ()
       ).toBe(true);
     }
   });
+
+  it('8. Economía Verbal (Estándar POS — Regla 12.3): cero narración de servidor/jerga prohibida y tope de 25 palabras por <p> operativo', () => {
+    const excludedViews = new Set<string>([
+      ...manifest.routes
+        .filter(
+          (r) =>
+            r.status === 'blindada' ||
+            r.status === 'dev_only' ||
+            r.name === 'privacy-policy' ||
+            r.name === 'platform-legal'
+        )
+        .map((r) => r.view),
+      ...manifest.embeddedViews.filter((e) => e.status === 'blindada').map((e) => e.view),
+      'frontend/src/components/legal/LegalComplianceGate.vue',
+      'frontend/src/components/LegalComplianceGate.vue',
+    ]);
+
+    const bannedCopyRules: Array<{ label: string; regex: RegExp }> = [
+      { label: 'Sigla OPEX visible', regex: /\bOPEX\b/ },
+      { label: 'Sigla P&L visible', regex: /\bP&(?:amp;)?L\b/ },
+      { label: 'Etiqueta (SQL) visible', regex: /\(SQL\)/i },
+      { label: 'Etiqueta (FIFO) visible', regex: /\(FIFO\)/i },
+      { label: 'Jerga "Kardex Inmutable"', regex: /\bKardex Inmutable\b/i },
+      { label: 'Jerga "Entrada Atómica"', regex: /\b(?:Nueva )?Entrada Atómica\b/i },
+      { label: 'Caja instructiva "Protocolo de..."', regex: /\bprotocolo de\b/i },
+      {
+        label: 'Narración interna "el servidor calculará/validará..."',
+        regex: /\bel servidor (?:calculará|calcula|validará|valida|asumirá|liquidará|liquida)\b/i,
+      },
+      {
+        label: 'Narración interna "calculado/validado por el servidor"',
+        regex: /\b(?:calculad[oa]s?|validad[oa]s?) por (?:el )?servidor\b/i,
+      },
+      {
+        label: 'Nota arquitectónica "independiente de Cuentas por Pagar"',
+        regex: /\bindependiente de Cuentas por Pagar\b/i,
+      },
+      {
+        label: 'Nota arquitectónica "impacto $0 en Caja"',
+        regex: /\bimpacto \$0 en Caja\b/i,
+      },
+    ];
+
+    const MAX_OPERATIONAL_PARAGRAPH_WORDS = 25;
+    const jargonViolations: string[] = [];
+    const densityViolations: string[] = [];
+
+    const vueFiles = walkFiles(FRONTEND_SRC, ['.vue']).filter((absPath) => {
+      const rel = toRepoRelative(absPath);
+      if (isTestFile(rel)) return false;
+      if (excludedViews.has(rel) || rel.includes('/views/auth/')) return false;
+      return rel.startsWith('frontend/src/views/') || rel.startsWith('frontend/src/components/');
+    });
+
+    for (const absPath of vueFiles) {
+      const rel = toRepoRelative(absPath);
+      const raw = fs.readFileSync(absPath, 'utf8');
+      const { template } = extractCodeWithoutComments(absPath, raw);
+      if (!template) continue;
+
+      const visibleText = template
+        .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\{\{[\s\S]*?\}\}/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      for (const rule of bannedCopyRules) {
+        if (rule.regex.test(visibleText)) {
+          jargonViolations.push(`${rel}: ${rule.label}`);
+        }
+      }
+
+      for (const pMatch of template.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)) {
+        const pText = pMatch[1]
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\{\{[\s\S]*?\}\}/g, 'X')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!pText) continue;
+        const wordCount = pText.split(' ').filter(Boolean).length;
+        if (wordCount > MAX_OPERATIONAL_PARAGRAPH_WORDS) {
+          densityViolations.push(
+            `${rel} (${wordCount} palabras > máx ${MAX_OPERATIONAL_PARAGRAPH_WORDS}): "${pText.slice(0, 80)}..."`
+          );
+        }
+      }
+    }
+
+    expect(
+      jargonViolations,
+      `Violaciones de Glosario/Arquitectura Invisible en plantillas operativas:\n${jargonViolations.join('\n')}`
+    ).toEqual([]);
+
+    expect(
+      densityViolations,
+      `Párrafos operativos (<p>) que exceden el presupuesto de ${MAX_OPERATIONAL_PARAGRAPH_WORDS} palabras (Regla 12.3 Estándar POS):\n${densityViolations.join('\n')}`
+    ).toEqual([]);
+  });
 });

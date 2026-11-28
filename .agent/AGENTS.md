@@ -132,3 +132,12 @@ Toda modificación o adición en la interfaz, rutas, modales globales o alertas 
   - Prohibido introducir `alert()`, `confirm()`, `prompt()`, importaciones nuevas de `vue-toastification` o usos nuevos de `material-icons`.
 - **Invariante Regla 11:** Las rutas y subvistas del Contexto `C8` marcadas como `blindada` (incluyendo `GatekeeperPending.vue`) no se modifican salvo autorización explícita del usuario.
 
+### 12.3 Economía Verbal e Interfaz Intuitiva (Estándar POS)
+- **Modelo de referencia (`POSView.vue`):** En estado operativo normal (sin error ni bloqueo), toda vista o modal muestra únicamente **Dato clave + Campo + Acción**. Queda prohibido incluir cajas o banners fijos de *"protocolo"*, manuales permanentes o textos que expliquen cómo funciona la pantalla.
+- **1 Idea = 1 Lugar (Cero Repetición):** Si el título, pestaña o etiqueta del campo ya nombra el objeto o la acción, está prohibido repetirlo en subtítulos, párrafos introductorios, placeholders o dentro del botón.
+- **Presupuesto de Palabras:**
+  - Botones y pestañas: **1 a 3 palabras** (ej. `Cobrar`, `Cerrar Caja`, `Fuera de caja`).
+  - Títulos de vista/modal y etiquetas de campo: **1 a 4 palabras** (ej. `Efectivo en Cajón`, `Cupo Inicial`).
+  - Estados vacíos y alertas `N1`/`N3`: **máximo 1 oración directa** (`Causa + Acción`, máximo **25 palabras** estáticas por `<p>`).
+- **Arquitectura Invisible:** Las reglas internas del servidor (`FIFO`, `P&L`, `OPEX`, `SQL`, `RPC`, `Kardex`, *"el servidor calcula/valida"*) gobiernan el código, **nunca** se narran en `<template>` al usuario (auditado automáticamente en `ux-fitness.spec.ts`).
+

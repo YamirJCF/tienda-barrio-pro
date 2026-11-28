@@ -1,7 +1,7 @@
 # 📐 Estándar ARQ-005: Barrera Lógica Anti-Desvío y Glosario Único del Tendero
 
-**Versión:** 1.0  
-**Fecha:** 2026-11-26  
+**Versión:** 1.1  
+**Fecha:** 2026-11-27  
 **Autor:** Arquitecto de Producto  
 **Estado:** ✅ Activo  
 **Documentos Relacionados:** `ARQ_002_POLITICAS_GLOBALES_NEGOCIO.md` (`POL-PROD-01`), `SYSTEM_BOUNDARIES.md`, `PRODUCT.md`
@@ -68,8 +68,14 @@ Toda etiqueta visible al usuario en la aplicación y todo texto funcional en doc
 | *"Fecha de vencimiento"* (en entradas/productos) | *(Eliminado de la interfaz de inventario)* | Excluido permanentemente por `SYSTEM_BOUNDARIES.md` (solo existe fecha de vencimiento en facturas por pagar a proveedores de `FRD-019`). |
 
 ### 3.2 Regla de Verificación Lingüística
-1. Ninguna pantalla operativa puede mostrar siglas de arquitectura o base de datos (`SQL`, `RPC`, `UUID`, `JSON`, `OPEX`, `FIFO` como requisito para entender una acción básica, `Atómica`, `Idempotencia`).
+1. Ninguna pantalla operativa puede mostrar siglas de arquitectura o base de datos (`SQL`, `RPC`, `UUID`, `JSON`, `OPEX`, `P&L`, `Kardex`, `FIFO` como requisito para entender una acción básica, `Atómica`, `Idempotencia`).
 2. Ningún texto dirigido al **Administrador (Dueño)** puede hablarle en tercera persona como si tuviera un jefe superior (ej. *"El administrador verá tu estado como En Pausa"* o *"Se envió alerta al Administrador"* cuando es el propio Administrador quien ejecuta la acción).
+
+### 3.3 Economía Verbal (Estándar POS)
+Tomando `POSView.vue` como referencia de intuición en mostrador, toda modificación o pantalla nueva debe cumplir:
+1. **Cero Cajas de Protocolo o Ayuda Fija:** En operación normal, la pantalla solo presenta **Dato clave + Campo + Acción**. Prohibidos los recuadros estáticos que explican reglas internas (*"El servidor validará..."*, *"Protocolo de..."*, *"Independiente de..."*).
+2. **1 Idea = 1 Lugar:** Prohibido repetir en subtítulos, párrafos introductorios o botones lo que el título o la etiqueta del campo ya expresa.
+3. **Tope de Palabras:** Botones/pestañas **1–3 palabras**; títulos/etiquetas **1–4 palabras**; estados vacíos y alertas **1 sola oración directa** (≤ 25 palabras por `<p>` operativo, verificado en `ux-fitness.spec.ts`).
 
 ---
 
@@ -78,6 +84,7 @@ Toda etiqueta visible al usuario en la aplicación y todo texto funcional en doc
 | Versión | Fecha | Autor | Cambio |
 |---------|-------|-------|--------|
 | 1.0 | 2026-11-26 | Arquitecto de Producto | Creación inicial de la Barrera Lógica (3 Muros), Matriz de Zonas Congeladas y Glosario Único del Tendero. |
+| 1.1 | 2026-11-27 | Arquitecto de Producto | Incorporación de la sección 3.3 Economía Verbal (Estándar POS) sincronizada con Regla 12.3 y `ux-fitness.spec.ts`. |
 
 ---
 
