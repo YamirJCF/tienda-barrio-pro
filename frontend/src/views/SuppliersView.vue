@@ -15,11 +15,8 @@
           </button>
           <div class="min-w-0">
             <h1 class="text-slate-900 dark:text-white text-lg sm:text-xl font-bold truncate">
-              Proveedores y Cuentas por Pagar
+              Proveedores
             </h1>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              Abastecimiento, facturas y abonos
-            </p>
           </div>
         </div>
       </div>

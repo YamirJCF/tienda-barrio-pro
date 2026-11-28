@@ -22,7 +22,6 @@ import {
   Store,
   CheckCircle,
   AlertTriangle,
-  ShieldCheck,
   RefreshCw
 } from 'lucide-vue-next';
 
@@ -280,7 +279,7 @@ const title = computed(() => {
 
 const buttonText = computed(() => {
   if (isStale.value) return 'CERRAR TURNO EXPIRADO';
-  return isOpening.value ? 'ABRIR TURNO' : 'CONFIRMAR CONTEO Y CERRAR';
+  return isOpening.value ? 'ABRIR TURNO' : 'CERRAR CAJA';
 });
 
 // Form State (POL-SEG-01 v1.5: Nace vacío = null para prohibir envíos en blanco; solo Efectivo físico del cajón)
@@ -508,9 +507,8 @@ const goBack = () => {
               </div>
               <div>
                 <h3 class="font-bold text-amber-800 dark:text-amber-200 text-sm">Turno Sin Cerrar</h3>
-                <p class="text-amber-700 dark:text-amber-300 text-xs mt-1 leading-relaxed">
-                  Existe un turno abierto desde <strong>{{ staleDate }}</strong> que no fue cerrado.
-                  Debes cerrarlo ahora para poder continuar operando.
+                <p class="text-amber-700 dark:text-amber-300 text-xs mt-0.5 leading-relaxed">
+                  Abierto el <strong>{{ staleDate }}</strong>. Ciérralo para continuar.
                 </p>
               </div>
             </div>
@@ -518,20 +516,19 @@ const goBack = () => {
 
           <!-- Opening State: Simple Form -->
           <div v-if="isOpening" class="bg-surface-light dark:bg-surface-dark rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-700 animate-slide-up">
-            <div class="text-center mb-6">
-              <div class="bg-emerald-100 dark:bg-emerald-900/30 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <LockOpen :size="32" class="text-emerald-600 dark:text-emerald-400" />
+            <div class="flex justify-center mb-4">
+              <div class="bg-emerald-100 dark:bg-emerald-900/30 w-14 h-14 rounded-2xl flex items-center justify-center">
+                <LockOpen :size="28" class="text-emerald-600 dark:text-emerald-400" />
               </div>
-              <p class="text-slate-500 dark:text-slate-400 text-sm">Ingresa el dinero base en caja para iniciar operaciones.</p>
             </div>
 
             <div class="space-y-4">
               <div>
-                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Base Inicial en Efectivo</label>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-1.5 text-center">Base Inicial en Efectivo</label>
                 <FormInputCurrency
                   v-model="amount"
                   :allow-null="true"
-                  placeholder="Digita el monto"
+                  placeholder="0"
                   data-test="cash-amount-input"
                   class="text-2xl font-bold text-center font-mono tabular-nums"
                   :autofocus="true"
@@ -548,22 +545,22 @@ const goBack = () => {
               </div>
 
               <div>
-                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Notas (Opcional)</label>
-                <textarea v-model="notes" rows="2" class="w-full p-3 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm" placeholder="Observaciones..." :disabled="!canOpenCloseCash"></textarea>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Nota (Opcional)</label>
+                <textarea v-model="notes" rows="2" class="w-full p-3 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm" placeholder="Opcional..." :disabled="!canOpenCloseCash"></textarea>
               </div>
             </div>
           </div>
 
-          <!-- Closing State: Arqueo Físico Exclusivo de Efectivo (Abierto para Admin / Ciego Asistido con Margen para Empleados) -->
+          <!-- Closing State: Efectivo en Cajón -->
           <div v-else class="space-y-4 animate-slide-up">
             <!-- Banner Propiedad Estricta del Turno (POL-SEG-03) -->
             <div v-if="isShiftOwnedByOther" class="bg-rose-50 dark:bg-rose-900/30 border border-rose-400 dark:border-rose-600 rounded-2xl p-4">
               <div class="flex items-start gap-3">
                 <AlertTriangle :size="22" class="text-rose-600 dark:text-rose-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 class="font-bold text-rose-800 dark:text-rose-200 text-sm">Turno Pertenece a Otro Usuario</h4>
-                  <p class="text-rose-700 dark:text-rose-300 text-xs mt-1 leading-relaxed">
-                    Este turno fue abierto por <strong>{{ openerDisplayName }}</strong>. Solo quien abrió el turno o el Administrador pueden cerrarlo.
+                  <h4 class="font-bold text-rose-800 dark:text-rose-200 text-sm">Turno de {{ openerDisplayName }}</h4>
+                  <p class="text-rose-700 dark:text-rose-300 text-xs mt-0.5 leading-relaxed">
+                    Solo quien lo abrió o el Administrador pueden cerrarlo.
                   </p>
                 </div>
               </div>
@@ -592,7 +589,7 @@ const goBack = () => {
             >
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
-                  Efectivo esperado en cajón
+                  Efectivo esperado
                 </span>
                 <span class="text-xl font-black font-mono tabular-nums text-emerald-900 dark:text-emerald-200">
                   {{ formatWithSign(adminExpectedSummary.efectivo) }}
@@ -600,46 +597,28 @@ const goBack = () => {
               </div>
               <div class="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50 grid grid-cols-2 gap-2 text-xs">
                 <div class="rounded-xl bg-white/70 dark:bg-slate-900/40 px-3 py-2">
-                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Movimientos Nequi</p>
+                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Nequi</p>
                   <p class="font-mono tabular-nums font-bold text-slate-800 dark:text-slate-200 mt-0.5">
                     {{ formatWithSign(adminExpectedSummary.nequi) }}
                   </p>
                 </div>
                 <div class="rounded-xl bg-white/70 dark:bg-slate-900/40 px-3 py-2">
-                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Movimientos Llave Bre-B</p>
+                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Llave Bre-B</p>
                   <p class="font-mono tabular-nums font-bold text-slate-800 dark:text-slate-200 mt-0.5">
                     {{ formatWithSign(adminExpectedSummary.llave_bre) }}
                   </p>
                 </div>
-              </div>
-              <p class="text-[11px] text-emerald-700/90 dark:text-emerald-300/80">
-                Nequi y Llave Bre-B son solo informativos; aquí solo cuentas los billetes y monedas del cajón.
-              </p>
-            </div>
-
-            <!-- Protocolo de Arqueo Ciego (EXCLUSIVO EMPLEADOS) -->
-            <div
-              v-else-if="!authStore.isAdmin"
-              data-test="employee-blind-protocol-banner"
-              class="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40"
-            >
-              <ShieldCheck :size="24" class="text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 class="text-sm font-bold text-blue-900 dark:text-blue-100">Conteo de Efectivo en Cajón</h4>
-                <p class="text-xs text-blue-700 dark:text-blue-300 mt-1 leading-relaxed">
-                  Cuenta únicamente los billetes y monedas físicos del cajón. El servidor validará el cuadre sin mostrar el saldo esperado.
-                </p>
               </div>
             </div>
 
             <!-- Counting Input (Solo Efectivo Físico del Cajón) -->
             <div class="bg-surface-light dark:bg-surface-dark rounded-2xl shadow-sm p-6 border border-slate-200 dark:border-slate-700 space-y-4">
               <div>
-                <label class="block text-xs font-bold uppercase text-slate-400 mb-2 text-center">Efectivo Contado en Cajón</label>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-2 text-center">Efectivo en Cajón</label>
                 <FormInputCurrency
                   v-model="amount"
                   :allow-null="true"
-                  placeholder="Digita el monto"
+                  placeholder="0"
                   data-test="cash-amount-input"
                   class="text-3xl font-black text-center font-mono tabular-nums text-blue-900 dark:text-blue-100"
                   :disabled="!canOpenCloseCash || isShiftOwnedByOther"
@@ -655,8 +634,8 @@ const goBack = () => {
               </div>
 
               <div>
-                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Notas del Cierre</label>
-                <textarea v-model="notes" rows="2" class="w-full p-3 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm" placeholder="Observaciones sobre el conteo..." :disabled="!canOpenCloseCash || isShiftOwnedByOther"></textarea>
+                <label class="block text-xs font-bold uppercase text-slate-400 mb-1">Nota (Opcional)</label>
+                <textarea v-model="notes" rows="2" class="w-full p-3 bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm" placeholder="Opcional..." :disabled="!canOpenCloseCash || isShiftOwnedByOther"></textarea>
               </div>
             </div>
           </div>
@@ -717,8 +696,8 @@ const goBack = () => {
           <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
             {{
               closedSealSummary.sealedWithAlert
-                ? 'El turno fue sellado tras completar los 3 intentos y se envió una notificación al Administrador para revisión.'
-                : 'Tu conteo de efectivo fue registrado correctamente y sellado en la bitácora del servidor.'
+                ? 'Cerrado en el 3.er intento. Se notificó al Administrador.'
+                : 'Conteo guardado.'
             }}
           </p>
           <div

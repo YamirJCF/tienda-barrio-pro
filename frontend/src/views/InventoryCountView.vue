@@ -13,9 +13,6 @@
         </button>
         <div class="min-w-0">
           <h1 class="text-lg font-bold leading-tight truncate">Inventariado Físico</h1>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400">
-            Conteo de estantería · Caja cerrada · Impacto $0 en Caja
-          </p>
         </div>
       </div>
 
@@ -47,10 +44,7 @@
             <CheckCircle2 :size="28" />
           </div>
           <div>
-            <h2 class="text-lg font-bold text-slate-900 dark:text-white">Inventariado Físico Aplicado</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Los saldos FIFO fueron conciliados en servidor con impacto $0 en Caja y CxP.
-            </p>
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white">Inventariado Aplicado</h2>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
             <div class="p-3 rounded-xl bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-800">
@@ -113,9 +107,9 @@
           class="bg-surface-light dark:bg-surface-dark border border-amber-300 dark:border-amber-800 rounded-2xl p-6 text-center space-y-3"
         >
           <WifiOff :size="32" class="mx-auto text-amber-600 dark:text-amber-400" />
-          <h2 class="text-base font-bold">Conexión a Internet Requerida</h2>
+          <h2 class="text-base font-bold">Sin Conexión</h2>
           <p class="text-xs text-slate-600 dark:text-slate-300 max-w-md mx-auto">
-            El inventariado físico valida el estado de caja y ajusta capas FIFO directamente en el servidor. Conéctate a internet para continuar.
+            Conéctate a internet para continuar.
           </p>
           <BaseButton type="button" variant="primary" size="sm" @click="verifyPreconditions">
             Reintentar
@@ -129,9 +123,9 @@
           class="bg-surface-light dark:bg-surface-dark border border-amber-300 dark:border-amber-800 rounded-2xl p-6 text-center space-y-3"
         >
           <RefreshCw :size="32" class="mx-auto text-amber-600 dark:text-amber-400" />
-          <h2 class="text-base font-bold">Sincroniza Ventas Pendientes Primero</h2>
+          <h2 class="text-base font-bold">Sincroniza Ventas Pendientes</h2>
           <p class="text-xs text-slate-600 dark:text-slate-300 max-w-md mx-auto">
-            Hay <strong class="font-mono tabular-nums">{{ pendingSyncCount }}</strong> operación(es) offline esperando sincronización. Sincronízalas antes de contar estantería para evitar descuadres de stock.
+            Tienes <strong class="font-mono tabular-nums">{{ pendingSyncCount }}</strong> venta(s) pendiente(s) por enviar antes de contar.
           </p>
           <div v-if="syncGateError" class="text-xs text-red-600 dark:text-red-400">
             {{ syncGateError }}
@@ -160,7 +154,7 @@
           <Lock :size="32" class="mx-auto text-rose-600 dark:text-rose-400" />
           <h2 class="text-base font-bold">Cierra la Caja Antes de Inventariar</h2>
           <p class="text-xs text-slate-600 dark:text-slate-300 max-w-md mx-auto">
-            Hay un turno de caja abierto en la tienda. El inventariado físico debe realizarse con la caja cerrada para evitar diferencias con ventas en curso.
+            El conteo de estantería requiere la caja cerrada.
           </p>
           <div class="flex flex-wrap gap-2 justify-center pt-1">
             <BaseButton
@@ -180,27 +174,26 @@
 
         <!-- 7. Superficie Operativa de Conteo Físico (Arquetipo C) -->
         <template v-else>
-          <!-- Guía rápida colapsable -->
+          <!-- Guía rápida colapsable (cerrada por defecto) -->
           <section class="bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
             <button
               type="button"
               @click="toggleGuide"
-              class="w-full px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+              class="w-full px-4 py-2.5 flex items-center justify-between gap-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
             >
-              <span class="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
-                <BookOpen :size="15" class="text-primary" />
-                Cómo hacer inventariado con el sistema
+              <span class="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <BookOpen :size="14" class="text-primary" />
+                ¿Cómo contar?
               </span>
               <ChevronDown
-                :size="16"
+                :size="15"
                 class="text-slate-400 transition-transform"
                 :class="{ 'rotate-180': !isGuideCollapsed }"
               />
             </button>
-            <div v-if="!isGuideCollapsed" class="px-4 pb-3.5 pt-1 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
-              <p><strong>1.</strong> Recorre la estantería por categoría y toca <strong>✓ Igual</strong> si el stock real coincide con el sistema.</p>
-              <p><strong>2.</strong> Si encuentras más o menos unidades, escribe la cantidad exacta que ves en <strong>En estante</strong>.</p>
-              <p><strong>3.</strong> Tu avance se guarda automáticamente como borrador local hasta confirmar el envío final.</p>
+            <div v-if="!isGuideCollapsed" class="px-4 pb-3 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+              <p><strong>1.</strong> Toca <strong>Igual</strong> si la cantidad coincide con el estante.</p>
+              <p><strong>2.</strong> Si cambia, escribe cuánto hay en <strong>En estante</strong>.</p>
             </div>
           </section>
 
@@ -343,7 +336,7 @@
                 v-if="hasNonZeroDiff(product) && (getProductDelta(product) ?? 0) > 0 && getSystemStock(product) === 0"
                 class="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 rounded-xl border border-amber-200 dark:border-amber-800/50"
               >
-                El sobrante creará un nuevo lote FIFO con el precio de venta actual ({{ formatWithSign(product.price) }}).
+                Creará un lote nuevo a {{ formatWithSign(product.price) }}.
               </p>
             </article>
           </div>
@@ -377,7 +370,7 @@
     </footer>
 
     <!-- Modal Confirmación (BaseModal) -->
-    <BaseModal v-model="showConfirmModal" title="Confirmar Inventariado Físico">
+    <BaseModal v-model="showConfirmModal" title="Confirmar Inventariado">
       <div class="p-4 space-y-4">
         <div class="grid grid-cols-3 gap-2.5 text-center">
           <div class="p-3 rounded-xl bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-800">
@@ -398,18 +391,14 @@
           </div>
         </div>
 
-        <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-200">
-          Los ajustes por conteo impactan las capas FIFO con <strong>$0 en Caja POS y CxP</strong>. El sistema emitirá 1 sola notificación resumen para administración.
-        </div>
-
         <div class="space-y-1">
           <label class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 block">
-            Nota del conteo (Opcional)
+            Nota (Opcional)
           </label>
           <textarea
             v-model="countNotes"
             rows="2"
-            placeholder="Ej. Conteo cierre semanal de estantería..."
+            placeholder="Ej. Conteo semanal..."
             class="w-full p-2.5 rounded-xl text-sm bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:border-primary resize-none"
           />
         </div>
@@ -518,7 +507,7 @@ const searchQuery = ref('');
 const selectedCategory = ref('all');
 const progressFilter = ref<'all' | 'uncounted' | 'diff'>('all');
 
-const isGuideCollapsed = ref(localStorage.getItem(GUIDE_STORAGE_KEY) === 'true');
+const isGuideCollapsed = ref(localStorage.getItem(GUIDE_STORAGE_KEY) !== 'false');
 const showConfirmModal = ref(false);
 const countNotes = ref('');
 const submitError = ref<string | null>(null);

@@ -222,8 +222,8 @@ onMounted(() => {
       <Lock :size="20" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
       <div>
         <h3 class="text-sm font-bold text-amber-900 dark:text-amber-200">Caja Cerrada</h3>
-        <p class="text-xs text-amber-800 dark:text-amber-300 mt-1">
-          Abre la caja en la pestaña Turno para registrar o consultar gastos de caja.
+        <p class="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+          Abre turno para registrar gastos.
         </p>
       </div>
     </div>
@@ -254,7 +254,7 @@ onMounted(() => {
       <div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between gap-4">
         <div>
           <p class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Total Gastos de Caja del Turno
+            Gastos del Turno
           </p>
           <p
             data-test="total-opex-expenses"
@@ -262,8 +262,8 @@ onMounted(() => {
           >
             {{ formatCurrency(totalOpexExpenses) }}
           </p>
-          <p class="text-[11px] text-slate-400 mt-0.5">
-            {{ expenseCount }} gasto(s) registrado(s) en este turno
+          <p class="text-[11px] text-slate-400 mt-0.5 font-mono tabular-nums">
+            {{ expenseCount }} {{ expenseCount === 1 ? 'gasto' : 'gastos' }}
           </p>
         </div>
 
@@ -275,7 +275,7 @@ onMounted(() => {
         >
           <span class="flex items-center gap-1.5 text-xs font-bold">
             <Plus :size="16" />
-            Registrar Gasto
+            Nuevo Gasto
           </span>
         </BaseButton>
       </div>
@@ -285,12 +285,9 @@ onMounted(() => {
         v-if="expenses.length === 0"
         class="bg-surface-light dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-700 p-8 text-center text-slate-400"
       >
-        <Receipt :size="40" :stroke-width="1.25" class="mx-auto mb-2 opacity-40" />
+        <Receipt :size="36" :stroke-width="1.25" class="mx-auto mb-2 opacity-40" />
         <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Sin gastos de caja en este turno
-        </p>
-        <p class="text-xs text-slate-500 mt-1">
-          Usa "Registrar Gasto" para anotar salidas de dinero del turno.
+          Sin gastos en este turno
         </p>
       </div>
 
@@ -331,7 +328,7 @@ onMounted(() => {
     <!-- Hoja Transaccional Arquetipo D (BaseModal) -->
     <BaseModal
       v-model="showAddModal"
-      title="Registrar Gasto de Caja"
+      title="Nuevo Gasto"
       :show-close-button="true"
       data-test="expense-create-modal"
     >

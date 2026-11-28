@@ -98,7 +98,7 @@ onMounted(() => {
           <span class="text-sm font-medium">Volver</span>
         </button>
         <h1 class="text-base font-bold text-slate-900 dark:text-white tracking-tight">
-          Reportes e Inteligencia
+          Reportes
         </h1>
         <div class="w-16"></div>
       </div>
@@ -107,7 +107,7 @@ onMounted(() => {
       <div class="px-4 pb-3 pt-1 max-w-3xl mx-auto w-full">
         <div
           role="tablist"
-          aria-label="Secciones de reportes e inteligencia"
+          aria-label="Secciones de reportes"
           class="flex h-10 w-full items-center justify-center rounded-xl bg-slate-200 dark:bg-slate-800 p-1"
         >
           <button
@@ -122,7 +122,7 @@ onMounted(() => {
             @click="switchTab('dashboard')"
           >
             <BarChart3 :size="15" />
-            <span>Dashboard Financiero</span>
+            <span>Resumen</span>
           </button>
 
           <button
@@ -137,7 +137,7 @@ onMounted(() => {
             @click="switchTab('history')"
           >
             <History :size="15" />
-            <span>Historial y Auditoría</span>
+            <span>Historial</span>
           </button>
         </div>
       </div>

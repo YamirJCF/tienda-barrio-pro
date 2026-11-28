@@ -2,12 +2,7 @@
   <div class="space-y-4">
     <!-- Top Bar + CTA Nueva Factura -->
     <div class="flex items-center justify-between gap-3">
-      <div>
-        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Obligaciones con Proveedores</h3>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-          Saldos y vencimientos calculados por el servidor
-        </p>
-      </div>
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white">Facturas</h3>
       <BaseButton
         v-if="authStore.isAdmin"
         size="sm"

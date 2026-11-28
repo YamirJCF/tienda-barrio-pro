@@ -504,7 +504,7 @@ const handleClientEdited = async () => {
     <!-- Main Content: Transaction History -->
     <main v-if="client || !statementError" class="relative z-0 px-4 pt-6 pb-32 flex flex-col gap-4 max-w-3xl mx-auto">
       <div class="flex items-center justify-between px-1 gap-2">
-        <h3 class="text-slate-800 dark:text-white text-lg font-bold">Historial de Transacciones</h3>
+        <h3 class="text-slate-800 dark:text-white text-lg font-bold">Movimientos</h3>
         <button
           v-if="client && canOperateFiado"
           type="button"
@@ -514,7 +514,7 @@ const handleClientEdited = async () => {
           class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
         >
           <Download :size="14" />
-          Exportar CSV
+          Exportar
         </button>
       </div>
 
@@ -697,7 +697,7 @@ const handleClientEdited = async () => {
         >
           <Info :size="16" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <p class="text-xs text-amber-800 dark:text-amber-300 font-medium">
-            {{ cashRegisterStore.isStaleSession ? 'El turno de caja superó las 24 horas y debe cerrarse antes de registrar abonos.' : 'No hay turno de caja abierto. Abre la caja para poder registrar abonos.' }}
+            {{ cashRegisterStore.isStaleSession ? 'Cierra primero el turno vencido (+24h).' : 'Abre la caja antes de registrar abonos.' }}
           </p>
         </div>
 
@@ -801,10 +801,9 @@ const handleClientEdited = async () => {
         <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
           <AlertTriangle :size="28" class="text-red-600" />
         </div>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mb-2">
-          Esta acción retirará al cliente de la cartera activa de tu tienda.
+        <p class="text-slate-600 dark:text-slate-300 text-sm">
+          Se retirará a <strong>{{ client?.name }}</strong>. No se puede deshacer.
         </p>
-        <p class="text-red-500 font-bold text-sm">No se puede deshacer.</p>
         <div
           v-if="deleteError"
           role="alert"
@@ -842,23 +841,20 @@ const handleClientEdited = async () => {
     <!-- Debt Blocking Alert Modal -->
     <BaseModal
       v-model="showDebtAlert"
-      title="Acción Denegada"
+      title="Tiene Saldo Pendiente"
     >
       <div class="p-6 text-center">
         <div class="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 mx-auto mb-4">
           <AlertTriangle :size="28" class="text-red-600" />
         </div>
-        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
-          Saldo Pendiente
-        </h3>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mb-1">
-          No se puede eliminar a <strong>{{ client?.name }}</strong> porque tiene una deuda de:
+        <p class="text-slate-600 dark:text-slate-300 text-sm">
+          <strong>{{ client?.name }}</strong> tiene una deuda activa:
         </p>
         <p class="text-2xl font-bold text-red-600 my-3 font-mono tabular-nums">
           {{ client ? formatCurrency(client.totalDebt) : '$0' }}
         </p>
         <p class="text-slate-400 text-xs">
-          Por favor registre el pago total antes de eliminar la cuenta.
+          Registra el pago total antes de eliminarlo.
         </p>
       </div>
 

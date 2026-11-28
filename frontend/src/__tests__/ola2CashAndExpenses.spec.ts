@@ -201,8 +201,7 @@ describe('Fase 3 Ola 2 — Control de Caja, Cierre Asistido, +24h, Notificacione
     });
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Turno Pertenece a Otro Usuario');
-    expect(wrapper.text()).toContain('Cajero A');
+    expect(wrapper.text()).toContain('Turno de Cajero A');
     expect(wrapper.html()).not.toContain('Esperado en Sistema');
     expect(wrapper.findComponent({ name: 'PinChallengeModal' }).exists()).toBe(false);
   });
@@ -493,7 +492,7 @@ describe('Fase 3 Ola 2 — Control de Caja, Cierre Asistido, +24h, Notificacione
     await flushPromises();
 
     // Lista de gastos OPEX solo muestra tx-gasto ('Bolsas'), nunca 'pago_proveedor' ('Factura leche')
-    expect(wrapper.text()).toContain('Total Gastos de Caja del Turno');
+    expect(wrapper.text()).toContain('Gastos del Turno');
     expect(wrapper.text()).toContain('Bolsas');
     expect(wrapper.text()).not.toContain('Factura leche');
 

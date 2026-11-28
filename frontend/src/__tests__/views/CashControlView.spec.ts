@@ -437,7 +437,7 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     await flushPromises();
 
     expect(mockRpc).toHaveBeenCalledWith('rpc_obtener_gastos_turno', { p_session_id: 'sess-admin-1' });
-    expect(wrapper.text()).toContain('Total Gastos de Caja del Turno');
+    expect(wrapper.text()).toContain('Gastos del Turno');
     expect(wrapper.find('[data-test="total-opex-expenses"]').text()).toContain('18.000');
 
     // Abrir modal -> enviar vacío -> errores N1 inline persistentes sin toast
@@ -542,8 +542,8 @@ describe('CashControlView — cierre forzado pendiente y Workspace C2 (UX-ADR-00
     const wrapper = mountView();
     await flushPromises();
 
-    // Empleado ve protocolo de conteo ciego de efectivo y NUNCA ve admin-expected-summary ni Nequi Contado
-    expect(wrapper.find('[data-test="employee-blind-protocol-banner"]').exists()).toBe(true);
+    // Empleado solo ve el campo de Efectivo en Cajón y NUNCA ve admin-expected-summary ni Nequi Contado
+    expect(wrapper.text()).toContain('Efectivo en Cajón');
     expect(wrapper.find('[data-test="admin-expected-summary"]').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('120.000');
     expect(wrapper.text()).not.toContain('Nequi Contado');

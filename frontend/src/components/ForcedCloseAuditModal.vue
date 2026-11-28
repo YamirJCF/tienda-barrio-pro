@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { AlertTriangle, ShieldCheck } from 'lucide-vue-next';
+import { AlertTriangle } from 'lucide-vue-next';
 import BaseButton from './ui/BaseButton.vue';
 import FormInputCurrency from './ui/FormInputCurrency.vue';
 import { useCurrencyFormat } from '../composables/useCurrencyFormat';
@@ -118,16 +118,16 @@ const handleConfirm = () => {
         <div class="relative z-10 w-full max-w-md bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
 
           <!-- Header -->
-          <div class="flex items-start gap-4">
-            <div class="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
-              <AlertTriangle :size="24" class="text-amber-600 dark:text-amber-400" />
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <AlertTriangle :size="22" class="text-amber-600 dark:text-amber-400" />
             </div>
             <div>
               <h2 id="audit-modal-title" class="font-bold text-gray-900 dark:text-white text-lg leading-tight">
-                Cierre Obligatorio de Turno Vencido
+                Turno Vencido (+24h)
               </h2>
-              <p class="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-                {{ remainingCount > 1 ? `${remainingCount} turnos vencidos (+24h)` : '1 turno vencido (+24h)' }}
+              <p v-if="remainingCount > 1" class="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+                {{ remainingCount }} turnos pendientes
               </p>
             </div>
           </div>
@@ -135,14 +135,14 @@ const handleConfirm = () => {
           <!-- Ficha Resumen del Turno Vencido (Exclusivo Admin — Autoridad del Servidor) -->
           <div
             data-test="forced-close-session-summary"
-            class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-4 space-y-2.5"
+            class="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-4 space-y-2"
           >
             <div class="flex items-center justify-between text-xs">
-              <span class="text-emerald-800 dark:text-emerald-300 font-semibold">Abierto por:</span>
+              <span class="text-emerald-800 dark:text-emerald-300 font-semibold">Abierto por</span>
               <span class="font-bold text-slate-900 dark:text-white">{{ currentSession.openedByName || 'Usuario' }}</span>
             </div>
             <div class="flex items-center justify-between text-xs">
-              <span class="text-emerald-800 dark:text-emerald-300 font-semibold">Apertura:</span>
+              <span class="text-emerald-800 dark:text-emerald-300 font-semibold">Apertura</span>
               <span class="text-slate-700 dark:text-slate-200 capitalize text-right">{{ formattedOpenedAt }}</span>
             </div>
 
@@ -151,14 +151,14 @@ const handleConfirm = () => {
               class="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50 space-y-2"
             >
               <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-600 dark:text-slate-300">Base inicial en efectivo:</span>
+                <span class="text-slate-600 dark:text-slate-300">Base inicial</span>
                 <span class="font-mono tabular-nums font-semibold text-slate-800 dark:text-slate-200">
                   {{ formatWithSign(currentSession.openingBalance ?? 0) }}
                 </span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
-                  Efectivo esperado en cajón
+                  Efectivo esperado
                 </span>
                 <span class="text-lg font-black font-mono tabular-nums text-emerald-900 dark:text-emerald-200">
                   {{ formatWithSign(currentSession.expectedEfectivo) }}
@@ -166,13 +166,13 @@ const handleConfirm = () => {
               </div>
               <div class="grid grid-cols-2 gap-2 pt-1 text-xs">
                 <div class="rounded-lg bg-white/70 dark:bg-slate-900/40 px-2.5 py-1.5">
-                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Nequi (informativo)</p>
+                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Nequi</p>
                   <p class="font-mono tabular-nums font-bold text-slate-800 dark:text-slate-200">
                     {{ formatWithSign(currentSession.nequiSummary ?? 0) }}
                   </p>
                 </div>
                 <div class="rounded-lg bg-white/70 dark:bg-slate-900/40 px-2.5 py-1.5">
-                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Llave Bre-B (informativo)</p>
+                  <p class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Llave Bre-B</p>
                   <p class="font-mono tabular-nums font-bold text-slate-800 dark:text-slate-200">
                     {{ formatWithSign(currentSession.llaveBreSummary ?? 0) }}
                   </p>
@@ -181,24 +181,16 @@ const handleConfirm = () => {
             </div>
           </div>
 
-          <!-- Nota de responsabilidad contable -->
-          <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40">
-            <ShieldCheck :size="18" class="text-blue-500 mt-0.5 flex-shrink-0" />
-            <p class="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-              Toda caja debe cerrarse con declaración real. Cuenta y escribe cuánto efectivo físico quedó de este turno (si no quedó efectivo, escribe <strong>0</strong>).
-            </p>
-          </div>
-
           <!-- Physical count input (solo efectivo físico, obligatorio digitar) -->
           <div class="space-y-3 px-1">
             <div v-for="method in currentSession.channels" :key="method" class="space-y-1.5">
               <label class="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
-                Efectivo físico recuperado en cajón
+                Efectivo en cajón
               </label>
               <FormInputCurrency
                 v-model="physicalCounts[method]"
                 :allow-null="true"
-                placeholder="Digita el monto"
+                placeholder="0"
                 data-test="forced-close-amount-input"
                 class="text-2xl font-black text-center font-mono tabular-nums"
               />
@@ -207,20 +199,20 @@ const handleConfirm = () => {
             <!-- Observación obligatoria si el turno vencido lo abrió otro usuario -->
             <div class="space-y-1">
               <label class="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
-                {{ requiresObservation ? 'Motivo de intervención (Obligatorio)' : 'Observación (Opcional)' }}
+                {{ requiresObservation ? 'Motivo (Obligatorio)' : 'Nota (Opcional)' }}
               </label>
               <textarea
                 v-model="observationNotes"
                 data-test="forced-close-notes-input"
                 rows="2"
                 class="w-full p-2.5 bg-background-light dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100"
-                :placeholder="requiresObservation ? 'Ej: El empleado no asistió hoy, conté el efectivo del cajón...' : 'Ej: Olvidé cerrar anoche al bajar la reja...'"
+                :placeholder="requiresObservation ? 'Ej: Empleado ausente, conté cajón...' : 'Opcional...'"
               />
               <p
                 v-if="requiresObservation && observationNotes.trim().length > 0 && observationNotes.trim().length < 5"
                 class="text-[11px] text-amber-600 dark:text-amber-400"
               >
-                Escribe al menos 5 caracteres explicando la intervención.
+                Mínimo 5 caracteres.
               </p>
             </div>
           </div>
@@ -239,7 +231,7 @@ const handleConfirm = () => {
             :disabled="!isValid || isSubmitting"
             @click="handleConfirm"
           >
-            Confirmar Conteo y Cerrar Turno
+            Cerrar Turno
           </BaseButton>
 
         </div>
@@ -255,7 +247,7 @@ const handleConfirm = () => {
 }
 .audit-modal-enter-active .relative,
 .audit-modal-leave-active .relative {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .audit-modal-enter-from,
 .audit-modal-leave-to {

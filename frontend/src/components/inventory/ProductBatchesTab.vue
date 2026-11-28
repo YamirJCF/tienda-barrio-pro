@@ -3,7 +3,7 @@
     <!-- Summary Header + CTA Merma / Salida -->
     <div class="bg-background-light dark:bg-background-dark p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-wrap justify-between items-center gap-3">
       <div>
-        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock Total FIFO</p>
+        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock Total</p>
         <p class="font-mono tabular-nums text-lg font-bold text-slate-900 dark:text-white">
           {{ formatQuantity(totalStock) }} {{ product.measurementUnit || 'un' }}
         </p>
@@ -19,7 +19,7 @@
       >
         <span class="flex items-center gap-1.5">
           <PackageMinus :size="15" />
-          Merma / Salida ($0)
+          Registrar Salida
         </span>
       </BaseButton>
     </div>
@@ -170,23 +170,12 @@
       </p>
     </div>
 
-    <p class="text-[11px] text-slate-400 text-center">
-      Orden FIFO (Primero en entrar, primero en salir). El sistema consume automáticamente el lote más antiguo en ventas.
-    </p>
-
-    <!-- Hoja Transaccional Arquetipo D: Merma / Salida ($0) por Lote -->
+    <!-- Hoja Transaccional Arquetipo D: Salida por Lote -->
     <BaseModal
       v-model="showExitModal"
-      :title="`Merma / Salida ($0): ${product.name}`"
+      :title="`Salida: ${product.name}`"
     >
       <div class="p-4 space-y-4">
-        <div class="rounded-xl p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 flex items-start gap-2.5">
-          <AlertCircle :size="18" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <p class="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-            Impacto financiero <strong>$0 en Caja POS</strong> y sin cambios en Cuentas por Pagar (CxP). El costo real FIFO del lote pasa a gastos operativos (P&amp;L).
-          </p>
-        </div>
-
         <!-- Selector de Lote en Estantería (oculto si <= 1 lote, visible si >= 2) -->
         <BatchShelfSelector
           v-model="exitForm.batchId"
@@ -197,15 +186,15 @@
         <!-- Tipo de Salida -->
         <div class="space-y-1.5">
           <label class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 block">
-            Tipo de Salida
+            Motivo de Salida
           </label>
           <select
             v-model="exitForm.movementType"
             class="w-full h-10 px-3 rounded-xl text-sm bg-background-light dark:bg-background-dark border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:border-primary"
           >
-            <option value="merma">Merma / Daño o Vencimiento</option>
-            <option value="consumo_negocio">Consumo del Negocio (Insumo)</option>
-            <option value="devolucion_proveedor">Devolución Física a Proveedor ($0)</option>
+            <option value="merma">Merma / Daño</option>
+            <option value="consumo_negocio">Consumo del Negocio</option>
+            <option value="devolucion_proveedor">Devolución a Proveedor</option>
           </select>
         </div>
 
@@ -316,7 +305,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { Pencil, Check, X, Layers, PackageMinus, AlertCircle, ArrowRight } from 'lucide-vue-next';
+import { Pencil, Check, X, Layers, PackageMinus, ArrowRight } from 'lucide-vue-next';
 import { useBatchStore, type InventoryBatch } from '../../stores/batches';
 import { useInventoryStore } from '../../stores/inventory';
 import { useAuthStore } from '../../stores/auth';

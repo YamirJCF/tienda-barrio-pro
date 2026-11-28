@@ -236,7 +236,7 @@ const handleClientSaved = async (client: { id: string }, action: 'create' | 'upd
           >
             <ArrowLeft :size="24" :stroke-width="1.5" />
           </button>
-          <h2 class="text-slate-900 dark:text-white text-xl font-bold truncate">Cartera de Clientes</h2>
+          <h2 class="text-slate-900 dark:text-white text-xl font-bold truncate">Clientes</h2>
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
@@ -332,7 +332,7 @@ const handleClientSaved = async (client: { id: string }, action: 'create' | 'upd
     <!-- Client List -->
     <main v-else-if="filteredClients.length > 0" class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
       <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1 font-mono tabular-nums">
-        <span>Mostrando {{ filteredClients.length }} de {{ totalClientsCount }} clientes</span>
+        <span>{{ filteredClients.length }} de {{ totalClientsCount }}</span>
         <span v-if="debtorsCount > 0">{{ debtorsCount }} con saldo</span>
       </div>
 
@@ -429,13 +429,13 @@ const handleClientSaved = async (client: { id: string }, action: 'create' | 'upd
     <!-- Política de Cupo Global Modal (Admin-only, C4) -->
     <BaseModal
       v-model="showGlobalCreditModal"
-      title="Cupo de Crédito Global por Defecto"
+      title="Cupo Inicial"
       :showCloseButton="true"
       maxHeight="70vh"
     >
       <div class="p-4 space-y-4">
         <p class="text-xs text-slate-600 dark:text-slate-300">
-          Se precarga únicamente al registrar clientes nuevos. No altera el cupo individual de clientes existentes.
+          Aplica solo a clientes nuevos.
         </p>
 
         <div
@@ -449,7 +449,7 @@ const handleClientSaved = async (client: { id: string }, action: 'create' | 'upd
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-            Cupo por defecto (COP)
+            Monto por defecto
           </label>
           <div class="relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>

@@ -118,15 +118,9 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Nota de Privacidad / Arqueo Ciego -->
-    <div class="rounded-xl border border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-950/30 p-3 text-xs text-blue-800 dark:text-blue-200 space-y-1">
-      <p>
-        Visualizas únicamente tus propias operaciones registradas durante el turno abierto actual. Los arqueos esperados de gaveta están protegidos.
-      </p>
-      <p v-if="hasOpenShift && openedAtFormatted" class="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
-        Turno abierto desde {{ openedAtFormatted }}
-      </p>
-    </div>
+    <p v-if="hasOpenShift && openedAtFormatted" class="px-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
+      Turno desde {{ openedAtFormatted }}
+    </p>
 
     <!-- Loading (BaseListSkeleton — sin spinner genérico) -->
     <BaseListSkeleton v-if="isLoading" :count="5" type="simple" />
@@ -148,10 +142,7 @@ onMounted(() => {
       class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-6 text-center space-y-2"
     >
       <Lock :size="30" class="text-amber-500 mx-auto" />
-      <h2 class="text-sm font-bold text-slate-900 dark:text-white">No hay un turno abierto</h2>
-      <p class="text-xs text-slate-500 dark:text-slate-400">
-        Cuando exista un turno de caja abierto en la tienda, aquí verás tus movimientos propios.
-      </p>
+      <h2 class="text-sm font-bold text-slate-900 dark:text-white">Sin turno abierto</h2>
     </div>
 
     <!-- Lista vacía -->
@@ -160,8 +151,7 @@ onMounted(() => {
       class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-surface-light dark:bg-surface-dark p-8 text-center space-y-2"
     >
       <ClipboardList :size="30" class="text-slate-400 mx-auto" />
-      <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100">Sin movimientos registrados</h2>
-      <p class="text-xs text-slate-500">Aún no registras operaciones con este filtro en el turno actual.</p>
+      <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100">Sin movimientos</h2>
     </div>
 
     <!-- Lista de Movimientos Propios -->

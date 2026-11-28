@@ -531,7 +531,7 @@ describe('Fase 3 Ola 4 — POS, Retiro Personal $0, Clientes canFiar y CxP Admin
       },
     });
 
-    expect(modal.text()).toContain('Pago externo / fuera de caja');
+    expect(modal.text()).toContain('Fuera de caja');
     // Canal Nequi solo tiene $5,000 aunque Efectivo tenga $100,000 -> pagar $20,000 debe mostrar bloqueo de liquidez
     await modal.get('[data-testid="pay-method-nequi"]').trigger('click');
     await modal.find('input[type="number"]').setValue(20000);
