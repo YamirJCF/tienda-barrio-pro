@@ -1,5 +1,14 @@
 # Reglas Específicas del Proyecto (Tienda Barrio Pro)
 
+## 1. Autoridad del Backend y Flujo Unidireccional
+
+La arquitectura separa estrictamente **Backend = Autoridad de la Verdad** (Supabase: PostgreSQL, RPCs, RLS) y **Frontend = Consumidor de Experiencia** (Vue + Pinia):
+
+- **Cálculos y Reglas Críticas en Servidor:** Toda operación financiera (totales, impuestos, descuentos, saldos) y validación real de stock o permisos ocurre en PostgreSQL/RPC/RLS. Prohibido calcular totales de negocio o decidir permisos de seguridad en `.vue`/`.ts` (el frontend solo valida formato de entrada y aplica estilo visual, ej. pintar rojo un negativo).
+- **Flujo de Una Sola Vía (`UI → Store → Supabase`):** Los Stores de Pinia son caché temporal, nunca fuente de verdad. Asume que cualquier dato en memoria puede estar obsoleto; toda escritura re-valida invariantes en el Backend.
+- **Espera, Bloqueo y Cero Optimistic UI en Dinero/Stock:** Las lecturas muestran *Skeletons* acordes a la estructura real; las mutaciones (`POST`/RPC) muestran estado de carga y bloquean doble envío hasta resolver la promesa. Prohibido usar *Optimistic UI* en operaciones de dinero, caja o inventario.
+- **Contrato de Esquema:** Prohibido agregar campos "mockeados" en componentes o stores que no existan previamente en el contrato de datos del Backend.
+
 ## 2. Verificación de Esquema Real (Anti-Alucinación de Nombres)
 
 Antes de escribir CUALQUIER línea de SQL, RPC o migración que referencie una tabla o columna que no fue creada en esta misma tarea, es OBLIGATORIO ejecutar primero:
